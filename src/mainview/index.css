@@ -1,14 +1,60 @@
-body {
-	margin: 0;
-	font-family: -apple-system, sans-serif;
-	background: #1e1e2e;
-	color: #cdd6f4;
-	display: flex;
-	min-height: 100vh;
-	align-items: center;
-	justify-content: center;
+:root {
+	--term-font: "SF Mono", Menlo, Monaco, monospace;
+	--term-font-size: 13px;
+	--term-line-height: 18px;
+	--term-fg: #cdd6f4;
+	--term-bg: #1e1e2e;
 }
 
-.container {
-	text-align: center;
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html,
+body {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--term-bg);
+}
+
+#screen {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	padding: 4px;
+	cursor: text;
+}
+
+/* フォーマッタ出力はinline styleでfont-family: monospaceを持つため上書きする */
+#term,
+#term *,
+#measure {
+	font-family: var(--term-font) !important;
+	font-size: var(--term-font-size) !important;
+	line-height: var(--term-line-height) !important;
+}
+
+#term {
+	color: var(--term-fg);
+	height: 100%;
+	overflow: hidden;
+}
+
+#measure {
+	position: absolute;
+	top: 0;
+	left: -9999px;
+	visibility: hidden;
+	white-space: pre;
+}
+
+#cursor {
+	position: absolute;
+	background: #f5e0dc;
+	opacity: 0.8;
+	pointer-events: none;
+	display: none;
 }

@@ -11,7 +11,7 @@ const shim = dlopen(join(libDir, "libniwashim.dylib"), {
 		returns: FFIType.i32,
 	},
 	niwa_formatter_new: {
-		args: [FFIType.ptr, FFIType.ptr],
+		args: [FFIType.ptr, FFIType.ptr, FFIType.i32],
 		returns: FFIType.i32,
 	},
 });
@@ -76,7 +76,7 @@ console.log("✅ terminal state:", results);
 
 // 4. 画面内容をplain textで取り出す
 const fmtHandleBuf = new BigUint64Array(1);
-rc = shim.symbols.niwa_formatter_new(ptr(fmtHandleBuf), term);
+rc = shim.symbols.niwa_formatter_new(ptr(fmtHandleBuf), term, 0); // 0=plain
 if (rc !== 0) throw new Error(`formatter_new failed: ${rc}`);
 const fmt = read.ptr(ptr(fmtHandleBuf)) as Pointer;
 

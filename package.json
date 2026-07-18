@@ -4,7 +4,8 @@
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
 	"scripts": {
 		"start": "electrobun dev",
-		"dev": "electrobun dev --watch"
+		"dev": "electrobun dev --watch",
+		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib"
 	},
 	"dependencies": {
 		"electrobun": "latest"
