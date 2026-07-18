@@ -1,0 +1,8 @@
+node_modules/
+build/
+dist/
+artifacts/
+*.tsbuildinfo
+
+# libghostty-vt ビルド成果物（zig build -Demit-lib-vt で再現）
+vendor/
