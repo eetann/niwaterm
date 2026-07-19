@@ -1,6 +1,37 @@
-import { BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
+import {
+	ApplicationMenu,
+	BrowserView,
+	BrowserWindow,
+	type RPCSchema,
+} from "electrobun/bun";
 import { GhosttyTerminal } from "./ghostty";
 import { Pty } from "./pty";
+
+// メニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する
+ApplicationMenu.setApplicationMenu([
+	{
+		label: "niwaterm",
+		submenu: [
+			{ role: "hide", accelerator: "Command+H" },
+			{ role: "hideOthers" },
+			{ role: "showAll" },
+			{ type: "divider" },
+			{ role: "quit", accelerator: "Command+Q" },
+		],
+	},
+	{
+		label: "Edit",
+		submenu: [
+			{ role: "undo", accelerator: "Command+Z" },
+			{ role: "redo", accelerator: "Command+Shift+Z" },
+			{ type: "divider" },
+			{ role: "cut", accelerator: "Command+X" },
+			{ role: "copy", accelerator: "Command+C" },
+			{ role: "paste", accelerator: "Command+V" },
+			{ role: "selectAll", accelerator: "Command+A" },
+		],
+	},
+]);
 
 export type NiwaRPC = {
 	bun: RPCSchema<{
@@ -9,6 +40,7 @@ export type NiwaRPC = {
 			log: { msg: string };
 			ready: {};
 			input: { data: string };
+			paste: { data: string };
 			resize: {
 				cols: number;
 				rows: number;
@@ -40,6 +72,13 @@ const shell = new Pty({ cols, rows });
 // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
 term.onWritePty((data) => {
 	shell.write(data);
+});
+
+// OSC 52によるクリップボード書き込みをシステムクリップボードへ流す
+term.onClipboardWrite((data) => {
+	const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
+	proc.stdin.write(data);
+	proc.stdin.end();
 });
 
 // 描画は16msでコアレス（連続出力時のRPC洪水を防ぐ）
@@ -108,6 +147,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
 			},
 			input: ({ data }: { data: string }) => {
 				shell.write(data);
+			},
+			paste: ({ data }: { data: string }) => {
+				shell.write(term.encodePaste(data));
 			},
 			resize: (p: {
 				cols: number;

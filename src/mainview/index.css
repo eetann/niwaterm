@@ -1,5 +1,7 @@
 :root {
-	--term-font: "SF Mono", Menlo, Monaco, monospace;
+	--term-font: "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN",
+		"Hiragino Sans", monospace;
+	--cell-w: 8px;
 	--term-font-size: 13px;
 	--term-line-height: 18px;
 	--term-fg: #cdd6f4;
@@ -31,7 +33,9 @@ body {
 /* フォーマッタ出力はinline styleでfont-family: monospaceを持つため上書きする */
 #term,
 #term *,
-#measure {
+#measure,
+#composition,
+#ime-input {
 	font-family: var(--term-font) !important;
 	font-size: var(--term-font-size) !important;
 	line-height: var(--term-line-height) !important;
@@ -41,6 +45,12 @@ body {
 	color: var(--term-fg);
 	height: 100%;
 	overflow: hidden;
+}
+
+/* 全角文字を必ず2セル幅に揃える（CJKフォールバックグリフの実幅は2×セル幅と一致しないため） */
+.wide {
+	display: inline-block;
+	width: calc(2 * var(--cell-w));
 }
 
 #measure {
@@ -57,4 +67,33 @@ body {
 	opacity: 0.8;
 	pointer-events: none;
 	display: none;
+}
+
+/* IME入力を受けるための不可視textarea。候補ウィンドウ位置のためカーソルに追従する */
+#ime-input {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 2px;
+	height: var(--term-line-height);
+	opacity: 0;
+	border: none;
+	outline: none;
+	resize: none;
+	padding: 0;
+	background: transparent;
+	overflow: hidden;
+}
+
+/* IME変換中の未確定文字列をカーソル位置に表示する */
+#composition {
+	position: absolute;
+	display: none;
+	white-space: pre;
+	color: var(--term-fg);
+	background: var(--term-bg);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	z-index: 1;
+	pointer-events: none;
 }

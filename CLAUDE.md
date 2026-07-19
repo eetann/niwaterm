@@ -36,6 +36,7 @@ PTY(shim.c forkpty) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → w
 - electrobun.config.ts の `copy` の出力先は `Resources/app/` 基準の相対パス
 - bundlerは依存の `__dirname` をリポジトリ絶対パス（node_modules内）に焼き込む。実行時のファイル解決に注意
 - devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-dev.app'`
+- **アプリメニューが無いとCmd+C/Cmd+V等がWebViewに届かない**（macOSのkey equivalentはメニュー経由）。`ApplicationMenu.setApplicationMenu` でEditメニューを `role: "copy"/"paste"` + `accelerator: "Command+C"` 形式で設定する（実装済み、src/bun/index.ts冒頭）
 
 ## bun:ffiのハマりどころ
 
@@ -44,6 +45,5 @@ PTY(shim.c forkpty) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → w
 
 ## 既知の未対応（roadmap参照）
 
-- 日本語IME入力（IME ON時はkeydownがcomposing扱いで入力が飲まれる）
-- 日本語混じり行でのカーソル位置ズレ（cellWidth × cursor_x の単純計算のため）
-- PTY出力のUTF-8チャンク境界（現状バイト列をそのままvt_writeしており問題ないが、描画側の扱いは日本語対応セッションで見直す）
+- 全角文字は描画後に `<span class="wide">` ラップで2セル幅を強制している（src/mainview/index.ts fixWideChars）。絵文字のグラフェムクラスタ（結合絵文字）は未対応
+- 描画中（連続出力中）のinnerHTML置換でマウス選択が消える（アイドル時の選択コピーは動く）
