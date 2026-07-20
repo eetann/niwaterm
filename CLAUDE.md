@@ -5,7 +5,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 - コンセプト: docs/mvp.md
 - 進行計画: .mywork/tmp/roadmap.md（h2セクション1つ = 1セッションの作業単位。完了したらチェックを付ける）
-- アーキテクチャ決定の経緯: .mywork/work-log/
+- アーキテクチャ決定の経緯: .mywork/work-log/、意思決定記録: docs/adr/
 
 ## セットアップ・コマンド
 
