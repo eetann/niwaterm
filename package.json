@@ -5,12 +5,18 @@
 	"scripts": {
 		"start": "electrobun dev",
 		"dev": "electrobun dev --watch",
-		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib"
+		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib",
+		"lint": "oxlint src",
+		"lint:fix": "oxlint --fix src",
+		"format": "oxfmt src",
+		"format:check": "oxfmt --check src"
 	},
 	"dependencies": {
 		"electrobun": "latest"
 	},
 	"devDependencies": {
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"oxfmt": "^0.59.0",
+		"oxlint": "^1.74.0"
 	}
 }
