@@ -11,6 +11,8 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 - `bun run start` — devモードでアプリ起動（GUIアプリなのでbackgroundで実行する）
 - `bun run build:native` — Cシム（src/native/shim.c）をビルド
+- `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
+- `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
 - `vendor/libghostty/` はgitignore。再現手順:
   `mise exec zig@0.15.2 -- zig build -Demit-lib-vt --prefix <repo>/vendor/libghostty`（ghosttyソースは `opensrc path ghostty-org/ghostty` で取得）
 
