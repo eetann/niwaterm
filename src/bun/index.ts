@@ -1,6 +1,5 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
-import { GhosttyTerminal } from "./ghostty";
-import { Pty } from "./pty";
+import { createTerminalSession, type TerminalRenderState } from "./terminal-session";
 
 // メニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する
 ApplicationMenu.setApplicationMenu([
@@ -47,34 +46,10 @@ export type NiwaRPC = {
   webview: RPCSchema<{
     requests: {};
     messages: {
-      render: {
-        html: string;
-        cursorX: number;
-        cursorY: number;
-        cursorVisible: boolean;
-      };
+      render: TerminalRenderState;
     };
   }>;
 };
-
-let cols = 80;
-let rows = 24;
-
-const term = new GhosttyTerminal(cols, rows);
-
-const shell = new Pty({ cols, rows });
-
-// DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
-term.onWritePty((data) => {
-  shell.write(data);
-});
-
-// OSC 52によるクリップボード書き込みをシステムクリップボードへ流す
-term.onClipboardWrite((data) => {
-  const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
-  proc.stdin.write(data);
-  proc.stdin.end();
-});
 
 // 描画は16msでコアレス（連続出力時のRPC洪水を防ぐ）
 let renderScheduled = false;
@@ -90,35 +65,27 @@ function scheduleRender() {
 function render() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  const cursor = term.cursor();
-  rpcSend.render({
-    html: term.dumpHtml(),
-    cursorX: cursor.x,
-    cursorY: cursor.y,
-    cursorVisible: cursor.visible,
-  });
+  rpcSend.render(session.renderState());
 }
-
-shell.onData((data) => {
-  term.write(data);
-  scheduleRender();
-});
-
-shell.onExit((exitCode) => {
-  console.log(`shell exited with code ${exitCode}`);
-  cleanup();
-  process.exit(0);
-});
 
 let cleaned = false;
 function cleanup() {
   if (cleaned) return;
   cleaned = true;
-  try {
-    shell.kill();
-  } catch {}
-  term.free();
+  session.dispose();
 }
+
+const session = createTerminalSession({
+  cols: 80,
+  rows: 24,
+  onOutput: () => scheduleRender(),
+  onExit: (code) => {
+    console.log(`shell exited with code ${code}`);
+    cleanup();
+    process.exit(0);
+  },
+});
+
 process.on("exit", cleanup);
 process.on("SIGINT", () => {
   cleanup();
@@ -141,19 +108,15 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         scheduleRender();
       },
       input: ({ data }: { data: string }) => {
-        shell.write(data);
+        session.write(data);
       },
       paste: ({ data }: { data: string }) => {
-        shell.write(term.encodePaste(data));
+        session.paste(data);
       },
       resize: (p: { cols: number; rows: number; cellWidth: number; cellHeight: number }) => {
-        if (p.cols === cols && p.rows === rows) return;
-        if (p.cols <= 0 || p.rows <= 0) return;
-        cols = p.cols;
-        rows = p.rows;
-        term.resize(cols, rows, p.cellWidth, p.cellHeight);
-        shell.resize(cols, rows);
-        scheduleRender();
+        if (session.resize(p.cols, p.rows, p.cellWidth, p.cellHeight)) {
+          scheduleRender();
+        }
       },
     },
   },

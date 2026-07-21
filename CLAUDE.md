@@ -23,8 +23,9 @@ PTY(shim.c forkpty) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → w
 キー入力: webview keydown → RPC(input) → PTY
 ```
 
-- src/bun/ghostty.ts — libghostty-vtのFFIラッパー（GhosttyTerminalクラス）
-- src/bun/pty.ts — シムベースのPTY（Ptyクラス）
+- src/bun/ghostty.ts — libghostty-vtのFFIラッパー（createGhosttyTerminalファクトリ関数）
+- src/bun/pty.ts — シムベースのPTY（createPtyファクトリ関数）
+- src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）

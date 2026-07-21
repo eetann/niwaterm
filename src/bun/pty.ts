@@ -36,76 +36,84 @@ export interface PtyOptions {
   term?: string;
 }
 
-export class Pty {
+export interface Pty {
   readonly pid: number;
   readonly fd: number;
-  #onData: ((data: Uint8Array) => void) | null = null;
-  #onExit: ((code: number) => void) | null = null;
-  #closed = false;
-  #readBuf = Buffer.alloc(64 * 1024);
+  onData(fn: (data: Uint8Array) => void): void;
+  onExit(fn: (code: number) => void): void;
+  write(data: string | Uint8Array): void;
+  resize(cols: number, rows: number): void;
+  kill(): void;
+}
 
-  constructor(opts: PtyOptions) {
-    const fdBuf = new Int32Array(1);
-    const pid = shim.symbols.niwa_pty_spawn(
-      ptr(fdBuf),
-      opts.cols,
-      opts.rows,
-      ptr(cstr(opts.shell ?? "/bin/zsh")),
-      ptr(cstr(opts.cwd ?? process.env["HOME"] ?? "/")),
-      ptr(cstr(opts.term ?? "xterm-256color")),
-    );
-    if (pid < 0) throw new Error("niwa_pty_spawn failed");
-    this.pid = pid;
-    this.fd = fdBuf[0] ?? -1;
-    this.#readLoop();
+export function createPty(opts: PtyOptions): Pty {
+  const fdBuf = new Int32Array(1);
+  const pid = shim.symbols.niwa_pty_spawn(
+    ptr(fdBuf),
+    opts.cols,
+    opts.rows,
+    ptr(cstr(opts.shell ?? "/bin/zsh")),
+    ptr(cstr(opts.cwd ?? process.env["HOME"] ?? "/")),
+    ptr(cstr(opts.term ?? "xterm-256color")),
+  );
+  if (pid < 0) throw new Error("niwa_pty_spawn failed");
+  const fd = fdBuf[0] ?? -1;
+
+  let onDataFn: ((data: Uint8Array) => void) | null = null;
+  let onExitFn: ((code: number) => void) | null = null;
+  let closed = false;
+  const readBuf = Buffer.alloc(64 * 1024);
+
+  function onData(fn: (data: Uint8Array) => void): void {
+    onDataFn = fn;
   }
 
-  onData(fn: (data: Uint8Array) => void): void {
-    this.#onData = fn;
+  function onExit(fn: (code: number) => void): void {
+    onExitFn = fn;
   }
 
-  onExit(fn: (code: number) => void): void {
-    this.#onExit = fn;
-  }
-
-  write(data: string | Uint8Array): void {
-    if (this.#closed) return;
+  function write(data: string | Uint8Array): void {
+    if (closed) return;
     const buf = typeof data === "string" ? Buffer.from(data, "utf8") : Buffer.from(data);
-    fsWrite(this.fd, buf, (err) => {
+    fsWrite(fd, buf, (err) => {
       if (err) console.error("pty write error:", err.message);
     });
   }
 
-  resize(cols: number, rows: number): void {
-    if (this.#closed) return;
-    shim.symbols.niwa_pty_resize(this.fd, cols, rows);
+  function resize(cols: number, rows: number): void {
+    if (closed) return;
+    shim.symbols.niwa_pty_resize(fd, cols, rows);
   }
 
-  kill(): void {
-    if (this.#closed) return;
-    shim.symbols.niwa_pty_kill(this.pid);
+  function kill(): void {
+    if (closed) return;
+    shim.symbols.niwa_pty_kill(pid);
   }
 
-  #readLoop(): void {
-    fsRead(this.fd, this.#readBuf, 0, this.#readBuf.length, null, (err, n) => {
-      if (this.#closed) return;
+  function readLoop(): void {
+    fsRead(fd, readBuf, 0, readBuf.length, null, (err, n) => {
+      if (closed) return;
       if (err || n === 0) {
         // シェル終了時はEIOで読み取りが失敗する
-        this.#handleExit();
+        handleExit();
         return;
       }
-      this.#onData?.(new Uint8Array(this.#readBuf.subarray(0, n)));
-      this.#readLoop();
+      onDataFn?.(new Uint8Array(readBuf.subarray(0, n)));
+      readLoop();
     });
   }
 
-  #handleExit(attempt = 0): void {
-    const code = shim.symbols.niwa_pty_check_exit(this.pid);
+  function handleExit(attempt = 0): void {
+    const code = shim.symbols.niwa_pty_check_exit(pid);
     if (code < 0 && attempt < 20) {
-      setTimeout(() => this.#handleExit(attempt + 1), 50);
+      setTimeout(() => handleExit(attempt + 1), 50);
       return;
     }
-    this.#closed = true;
-    this.#onExit?.(code < 0 ? 0 : code);
+    closed = true;
+    onExitFn?.(code < 0 ? 0 : code);
   }
+
+  readLoop();
+
+  return { pid, fd, onData, onExit, write, resize, kill };
 }

@@ -91,30 +91,26 @@ export interface CursorState {
   visible: boolean;
 }
 
-export class GhosttyTerminal {
-  #term: Pointer;
-  #formatter: Pointer;
-  #writePtyCallback: JSCallback | null = null;
-  #clipboardCallback: JSCallback | null = null;
-  #formatBuf = new Uint8Array(256 * 1024);
-  #writtenBuf = new BigUint64Array(1);
-  #u16Out = new Uint16Array(1);
-  #u8Out = new Uint8Array(1);
+export function createGhosttyTerminal(cols: number, rows: number, maxScrollback = 10_000) {
+  const handle = new BigUint64Array(1);
+  let rc = shim.symbols.niwa_terminal_new(ptr(handle), cols, rows, BigInt(maxScrollback));
+  if (rc !== 0) throw new Error(`ghostty_terminal_new failed: ${rc}`);
+  const term = read.ptr(ptr(handle)) as Pointer;
 
-  constructor(cols: number, rows: number, maxScrollback = 10_000) {
-    const handle = new BigUint64Array(1);
-    let rc = shim.symbols.niwa_terminal_new(ptr(handle), cols, rows, BigInt(maxScrollback));
-    if (rc !== 0) throw new Error(`ghostty_terminal_new failed: ${rc}`);
-    this.#term = read.ptr(ptr(handle)) as Pointer;
+  rc = shim.symbols.niwa_formatter_new(ptr(handle), term, FORMAT_HTML);
+  if (rc !== 0) throw new Error(`ghostty_formatter_new failed: ${rc}`);
+  const formatter = read.ptr(ptr(handle)) as Pointer;
 
-    rc = shim.symbols.niwa_formatter_new(ptr(handle), this.#term, FORMAT_HTML);
-    if (rc !== 0) throw new Error(`ghostty_formatter_new failed: ${rc}`);
-    this.#formatter = read.ptr(ptr(handle)) as Pointer;
-  }
+  let writePtyCallback: JSCallback | null = null;
+  let clipboardCallback: JSCallback | null = null;
+  let formatBuf = new Uint8Array(256 * 1024);
+  const writtenBuf = new BigUint64Array(1);
+  const u16Out = new Uint16Array(1);
+  const u8Out = new Uint8Array(1);
 
   /** DSR等のクエリ応答をPTYへ書き戻すコールバックを登録する */
-  onWritePty(fn: (data: Uint8Array) => void): void {
-    this.#writePtyCallback = new JSCallback(
+  function onWritePty(fn: (data: Uint8Array) => void): void {
+    writePtyCallback = new JSCallback(
       (_term: Pointer, _userdata: Pointer, data: Pointer, len: number | bigint) => {
         const n = Number(len);
         if (n > 0) fn(new Uint8Array(toArrayBuffer(data, 0, n)).slice());
@@ -124,17 +120,17 @@ export class GhosttyTerminal {
         returns: FFIType.void,
       },
     );
-    vt.symbols.ghostty_terminal_set(this.#term, OPT_WRITE_PTY, this.#writePtyCallback.ptr);
+    vt.symbols.ghostty_terminal_set(term, OPT_WRITE_PTY, writePtyCallback.ptr);
   }
 
   /**
    * OSC 52等によるクリップボード書き込みを受けるコールバックを登録する。
    * fnにはtext/plain表現のバイト列を渡す（text/plainがなければ先頭の表現）。
    */
-  onClipboardWrite(fn: (data: Uint8Array) => void): void {
+  function onClipboardWrite(fn: (data: Uint8Array) => void): void {
     // GhosttyClipboardWrite { size_t size; i32 location; GhosttyClipboardContent* contents; size_t contents_len }
     // GhosttyClipboardContent { GhosttyString mime; GhosttyString data } / GhosttyString { ptr; size_t len } = 32バイト
-    this.#clipboardCallback = new JSCallback(
+    clipboardCallback = new JSCallback(
       (_term: Pointer, _userdata: Pointer, writePtr: Pointer) => {
         const contents = read.ptr(writePtr, 16) as Pointer;
         const len = Number(read.u64(writePtr, 24));
@@ -162,23 +158,19 @@ export class GhosttyTerminal {
         returns: FFIType.i32,
       },
     );
-    vt.symbols.ghostty_terminal_set(this.#term, OPT_CLIPBOARD_WRITE, this.#clipboardCallback.ptr);
+    vt.symbols.ghostty_terminal_set(term, OPT_CLIPBOARD_WRITE, clipboardCallback.ptr);
   }
 
   /** bracketed pasteモード（DEC 2004）が有効か */
-  bracketedPaste(): boolean {
-    const rc = vt.symbols.ghostty_terminal_mode_get(
-      this.#term,
-      MODE_BRACKETED_PASTE,
-      ptr(this.#u8Out),
-    );
-    return rc === 0 && this.#u8Out[0] !== 0;
+  function bracketedPaste(): boolean {
+    const rc = vt.symbols.ghostty_terminal_mode_get(term, MODE_BRACKETED_PASTE, ptr(u8Out));
+    return rc === 0 && u8Out[0] !== 0;
   }
 
   /** ペースト文字列をPTY書き込み用に整形する（危険バイト除去 + bracketed paste包み） */
-  encodePaste(text: string): Uint8Array {
+  function encodePaste(text: string): Uint8Array {
     if (text.length === 0) return new Uint8Array(0);
-    const bracketed = this.bracketedPaste();
+    const bracketed = bracketedPaste();
     // ghostty_paste_encodeは入力をin-placeで書き換えるため毎回コピーを渡す
     const src = new TextEncoder().encode(text);
     let buf = new Uint8Array(src.length + 16);
@@ -190,9 +182,9 @@ export class GhosttyTerminal {
         bracketed,
         ptr(buf),
         BigInt(buf.length),
-        ptr(this.#writtenBuf),
+        ptr(writtenBuf),
       );
-      const written = Number(this.#writtenBuf[0]);
+      const written = Number(writtenBuf[0]);
       if (rc === 0) return buf.subarray(0, written);
       if (written > buf.length) {
         buf = new Uint8Array(written);
@@ -202,14 +194,14 @@ export class GhosttyTerminal {
     }
   }
 
-  write(data: Uint8Array): void {
+  function write(data: Uint8Array): void {
     if (data.length === 0) return;
-    vt.symbols.ghostty_terminal_vt_write(this.#term, ptr(data), BigInt(data.length));
+    vt.symbols.ghostty_terminal_vt_write(term, ptr(data), BigInt(data.length));
   }
 
-  resize(cols: number, rows: number, cellWidthPx: number, cellHeightPx: number): void {
+  function resize(cols: number, rows: number, cellWidthPx: number, cellHeightPx: number): void {
     vt.symbols.ghostty_terminal_resize(
-      this.#term,
+      term,
       cols,
       rows,
       Math.round(cellWidthPx),
@@ -217,40 +209,54 @@ export class GhosttyTerminal {
     );
   }
 
-  cursor(): CursorState {
-    vt.symbols.ghostty_terminal_get(this.#term, DATA_CURSOR_X, ptr(this.#u16Out));
-    const x = this.#u16Out[0] ?? 0;
-    vt.symbols.ghostty_terminal_get(this.#term, DATA_CURSOR_Y, ptr(this.#u16Out));
-    const y = this.#u16Out[0] ?? 0;
-    vt.symbols.ghostty_terminal_get(this.#term, DATA_CURSOR_VISIBLE, ptr(this.#u8Out));
-    return { x, y, visible: this.#u8Out[0] !== 0 };
+  function cursor(): CursorState {
+    vt.symbols.ghostty_terminal_get(term, DATA_CURSOR_X, ptr(u16Out));
+    const x = u16Out[0] ?? 0;
+    vt.symbols.ghostty_terminal_get(term, DATA_CURSOR_Y, ptr(u16Out));
+    const y = u16Out[0] ?? 0;
+    vt.symbols.ghostty_terminal_get(term, DATA_CURSOR_VISIBLE, ptr(u8Out));
+    return { x, y, visible: u8Out[0] !== 0 };
   }
 
   /** 現在の画面をHTML文字列として取り出す */
-  dumpHtml(): string {
+  function dumpHtml(): string {
     for (;;) {
       const rc = vt.symbols.ghostty_formatter_format_buf(
-        this.#formatter,
-        ptr(this.#formatBuf),
-        BigInt(this.#formatBuf.length),
-        ptr(this.#writtenBuf),
+        formatter,
+        ptr(formatBuf),
+        BigInt(formatBuf.length),
+        ptr(writtenBuf),
       );
-      const written = Number(this.#writtenBuf[0]);
+      const written = Number(writtenBuf[0]);
       if (rc === 0) {
-        return new TextDecoder().decode(this.#formatBuf.subarray(0, written));
+        return new TextDecoder().decode(formatBuf.subarray(0, written));
       }
-      if (written > this.#formatBuf.length) {
-        this.#formatBuf = new Uint8Array(written + 1024);
+      if (written > formatBuf.length) {
+        formatBuf = new Uint8Array(written + 1024);
         continue;
       }
       throw new Error(`ghostty_formatter_format_buf failed: ${rc}`);
     }
   }
 
-  free(): void {
-    vt.symbols.ghostty_formatter_free(this.#formatter);
-    vt.symbols.ghostty_terminal_free(this.#term);
-    this.#writePtyCallback?.close();
-    this.#clipboardCallback?.close();
+  function free(): void {
+    vt.symbols.ghostty_formatter_free(formatter);
+    vt.symbols.ghostty_terminal_free(term);
+    writePtyCallback?.close();
+    clipboardCallback?.close();
   }
+
+  return {
+    onWritePty,
+    onClipboardWrite,
+    bracketedPaste,
+    encodePaste,
+    write,
+    resize,
+    cursor,
+    dumpHtml,
+    free,
+  };
 }
+
+export type GhosttyTerminal = ReturnType<typeof createGhosttyTerminal>;
