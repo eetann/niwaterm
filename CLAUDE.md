@@ -19,12 +19,12 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 ## アーキテクチャ
 
 ```
-PTY(shim.c forkpty) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → webview表示
+PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → webview表示
 キー入力: webview keydown → RPC(input) → PTY
 ```
 
 - src/bun/ghostty.ts — libghostty-vtのFFIラッパー（createGhosttyTerminalファクトリ関数）
-- src/bun/pty.ts — シムベースのPTY（createPtyファクトリ関数）
+- src/bun/pty.ts — Bun.Terminal（Bun 1.3.5+）ベースのPTY（createPtyファクトリ関数）
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/mainview/ — webview側（描画・キー入力・セル計測）
@@ -32,7 +32,7 @@ PTY(shim.c forkpty) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → w
 
 ## Electrobunのハマりどころ（実測済み）
 
-- **アプリコードはBun Workerで実行される**。node-ptyはWorker内でonDataが発火しないため使えない → シムのforkpty + node:fsのread/writeで自前実装済み。ネイティブモジュール全般はWorkerでの動作確認が必要
+- **アプリコードはBun Workerで実行される**。node-ptyはWorker内でonDataが発火しないため使えない → `Bun.Terminal`はWorker内でも`data`/`exit`コールバックが正常発火する（src/bun/pty.ts）。ネイティブモジュール全般はWorkerでの動作確認が必要
 - **`index.html` に `<script type="module" src="index.js"></script>` を自分で書く**。electrobun.config.tsのviews設定だけではJSが実行されない（hello-worldテンプレはこれが抜けている）
 - **webviewのconsole.logはdev出力に出ない**。デバッグはRPCの `log` メッセージでbun側consoleへ転送する（実装済み）
 - **キーボード入力には明示的なフォーカスが必要**: bun側 `mainWindow.activate()` + webview側 `tabIndex=-1` と `focus()`（実装済み）
