@@ -53,6 +53,14 @@ export function createPty(opts: PtyOptions): Pty {
 
   function write(data: string | Uint8Array): void {
     terminal.write(data);
+    // Bun.Terminal.write()はptyのline discipline処理（ISIG検知によるシグナル生成）を
+    // バイパスするため、Ctrl+C(ETX, 0x03)を書き込むだけではSIGINTが生成されない。
+    // フォアグラウンドプロセスグループへ直接送ることで代替する。
+    if (data === "\x03") {
+      try {
+        process.kill(-proc.pid, "SIGINT");
+      } catch {}
+    }
   }
 
   function resize(cols: number, rows: number): void {
