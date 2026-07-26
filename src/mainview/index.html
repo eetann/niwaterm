@@ -15,6 +15,20 @@
     </div>
     <template id="tile-template">
       <div class="tile">
+        <div class="tab-bar">
+          <button class="tab-add-btn" type="button" tabindex="-1">+</button>
+        </div>
+        <div class="tile-content"></div>
+      </div>
+    </template>
+    <template id="tab-button-template">
+      <button class="tab-button" type="button" tabindex="-1">
+        <span class="tab-label"></span>
+        <span class="tab-close-btn">×</span>
+      </button>
+    </template>
+    <template id="tab-content-template">
+      <div class="tab-content">
         <div class="term"></div>
         <div class="cursor"></div>
       </div>

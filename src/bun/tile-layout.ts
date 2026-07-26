@@ -130,6 +130,113 @@ export function closeTile(tree: TileNode, targetTileId: TileId): CloseResult {
   return { tree: result.node, closedTabIds: result.closed };
 }
 
+/** targetTileIdのleafの末尾にnewTabIdを追加し、activeTabIdを新タブへ切り替える */
+export function addTabToTile(
+  tree: TileNode,
+  targetTileId: TileId,
+  newTabId: TabId,
+): TileNode | null {
+  let found = false;
+
+  function recurse(node: TileNode): TileNode {
+    if (node.kind === "leaf") {
+      if (node.id !== targetTileId) return node;
+      found = true;
+      return { ...node, tabIds: [...node.tabIds, newTabId], activeTabId: newTabId };
+    }
+    const first = recurse(node.first);
+    const second = recurse(node.second);
+    if (first === node.first && second === node.second) return node;
+    return { ...node, first, second };
+  }
+
+  const newTree = recurse(tree);
+  return found ? newTree : null;
+}
+
+/** targetTileIdのleaf内でactiveTabIdをtabIdへ切り替える。tabIdがそのleafに存在しない場合はnull */
+export function switchActiveTab(
+  tree: TileNode,
+  targetTileId: TileId,
+  tabId: TabId,
+): TileNode | null {
+  const target = findNode(tree, targetTileId);
+  if (!target || target.kind !== "leaf" || !target.tabIds.includes(tabId)) return null;
+  if (target.activeTabId === tabId) return tree;
+
+  function recurse(node: TileNode): TileNode {
+    if (node.kind === "leaf") {
+      if (node.id !== targetTileId) return node;
+      return { ...node, activeTabId: tabId };
+    }
+    const first = recurse(node.first);
+    const second = recurse(node.second);
+    if (first === node.first && second === node.second) return node;
+    return { ...node, first, second };
+  }
+
+  return recurse(tree);
+}
+
+export interface CloseTabResult {
+  /** nullは「最後のtileだった（closeTileと同じく最後の1枚は閉じられない）」を表す */
+  tree: TileNode | null;
+  closedTabId: TabId;
+  /** trueの場合、tileごと閉じられた（そのtileの最後の1タブだった） */
+  tileClosed: boolean;
+}
+
+/**
+ * targetTileId内のtargetTabIdを閉じる。
+ * leafに複数タブがあれば該当タブだけ除去し、activeTabIdだった場合は隣（除去位置の前、無ければ次）へ付け替える。
+ * 最後の1タブだった場合はcloseTile()へ委譲しtile自体を畳む。
+ * targetTileIdが存在しない・leafでない・tabIdがそのleafに含まれない場合はnullを返す。
+ */
+export function closeTabInTile(
+  tree: TileNode,
+  targetTileId: TileId,
+  targetTabId: TabId,
+): CloseTabResult | null {
+  const target = findNode(tree, targetTileId);
+  if (!target || target.kind !== "leaf" || !target.tabIds.includes(targetTabId)) {
+    return null;
+  }
+
+  if (target.tabIds.length === 1) {
+    const result = closeTile(tree, targetTileId);
+    return { tree: result.tree, closedTabId: targetTabId, tileClosed: true };
+  }
+
+  const index = target.tabIds.indexOf(targetTabId);
+  const newTabIds = target.tabIds.filter((id) => id !== targetTabId);
+  const newActiveTabId =
+    target.activeTabId === targetTabId
+      ? index > 0
+        ? newTabIds[index - 1]
+        : newTabIds[0]
+      : target.activeTabId;
+
+  function recurse(node: TileNode): TileNode {
+    if (node.kind === "leaf") {
+      if (node.id !== targetTileId) return node;
+      return { ...node, tabIds: newTabIds, activeTabId: newActiveTabId };
+    }
+    const first = recurse(node.first);
+    const second = recurse(node.second);
+    if (first === node.first && second === node.second) return node;
+    return { ...node, first, second };
+  }
+
+  return { tree: recurse(tree), closedTabId: targetTabId, tileClosed: false };
+}
+
+/** leaf内でactiveTabIdからdelta方向へ巡回移動した次/前のtabIdを返す */
+export function nextTabId(leaf: TileLeaf, delta: 1 | -1): TabId {
+  const index = leaf.tabIds.indexOf(leaf.activeTabId);
+  const len = leaf.tabIds.length;
+  return leaf.tabIds[(index + delta + len) % len];
+}
+
 export function findNode(tree: TileNode, id: TileId): TileNode | undefined {
   if (tree.id === id) return tree;
   if (tree.kind === "split") {

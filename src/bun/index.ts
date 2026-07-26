@@ -1,6 +1,7 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
+import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
-import { createWorkspace, type WorkspaceRenderState } from "./workspace";
+import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
 
 // メニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する
 ApplicationMenu.setApplicationMenu([
@@ -44,16 +45,21 @@ export type NiwaRPC = {
         cellHeight: number;
       };
       splitTile: { tileId: TileId; orientation: SplitOrientation };
-      closeTile: { tileId: TileId };
+      newTab: { tileId: TileId };
+      switchTab: { tileId: TileId; tabId: TabId };
+      closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
       focusDirection: { direction: "up" | "down" | "left" | "right" };
       resizeSplit: { splitId: TileId; ratio: number };
+      newWorkspace: {};
+      switchWorkspace: { workspaceId: WorkspaceId };
+      closeWorkspace: { workspaceId: WorkspaceId };
     };
   }>;
   webview: RPCSchema<{
     requests: {};
     messages: {
-      render: WorkspaceRenderState;
+      render: AppRenderState;
     };
   }>;
 };
@@ -72,22 +78,51 @@ function scheduleRender() {
 function render() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.render(workspace.snapshot());
+  const snap = workspaceManager.snapshot();
+  mainWindow.setTitle(
+    snap.workspaceIds.length === 1
+      ? "niwaterm"
+      : `niwaterm — Workspace ${snap.workspaceIds.indexOf(snap.activeWorkspaceId) + 1}/${snap.workspaceIds.length}`,
+  );
+  rpcSend.render(snap);
+}
+
+// レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
+let persistScheduled = false;
+function schedulePersist() {
+  if (persistScheduled) return;
+  persistScheduled = true;
+  setTimeout(() => {
+    persistScheduled = false;
+    savePersistedState(persistedFilePath(), workspaceManager.serializeForPersistence()).catch(
+      (err: unknown) => {
+        console.log(`[bun] failed to save persisted state: ${String(err)}`);
+      },
+    );
+  }, 500);
+}
+
+function onDirty() {
+  scheduleRender();
+  schedulePersist();
 }
 
 let cleaned = false;
 function cleanup() {
   if (cleaned) return;
   cleaned = true;
-  workspace.dispose();
+  workspaceManager.dispose();
 }
 
-const workspace = createWorkspace({
+const restoreFrom = await loadPersistedState(persistedFilePath());
+
+const workspaceManager = createWorkspaceManager({
   initialCols: 80,
   initialRows: 24,
-  onDirty: () => scheduleRender(),
-  onAllTabsClosed: () => {
-    console.log("all tabs closed, exiting");
+  onDirty,
+  restoreFrom,
+  onAllWorkspacesClosed: () => {
+    console.log("all workspaces closed, exiting");
     cleanup();
     process.exit(0);
   },
@@ -115,10 +150,10 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         scheduleRender();
       },
       input: ({ tabId, data }: { tabId: TabId; data: string }) => {
-        workspace.handleInput(tabId, data);
+        workspaceManager.handleInput(tabId, data);
       },
       paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
-        workspace.handlePaste(tabId, data);
+        workspaceManager.handlePaste(tabId, data);
       },
       resize: (p: {
         tabId: TabId;
@@ -127,22 +162,37 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         cellWidth: number;
         cellHeight: number;
       }) => {
-        workspace.handleResize(p.tabId, p.cols, p.rows, p.cellWidth, p.cellHeight);
+        workspaceManager.handleResize(p.tabId, p.cols, p.rows, p.cellWidth, p.cellHeight);
       },
       splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
-        workspace.splitTile(tileId, orientation);
+        workspaceManager.splitTile(tileId, orientation);
       },
-      closeTile: ({ tileId }: { tileId: TileId }) => {
-        workspace.closeTile(tileId);
+      newTab: ({ tileId }: { tileId: TileId }) => {
+        workspaceManager.newTab(tileId);
+      },
+      switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
+        workspaceManager.switchTab(tileId, tabId);
+      },
+      closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
+        workspaceManager.closeTab(tileId, tabId);
       },
       focusTile: ({ tileId }: { tileId: TileId }) => {
-        workspace.focusTile(tileId);
+        workspaceManager.focusTile(tileId);
       },
       focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
-        workspace.focusDirection(direction);
+        workspaceManager.focusDirection(direction);
       },
       resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {
-        workspace.resizeSplit(splitId, ratio);
+        workspaceManager.resizeSplit(splitId, ratio);
+      },
+      newWorkspace: () => {
+        workspaceManager.newWorkspace();
+      },
+      switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
+        workspaceManager.switchWorkspace(workspaceId);
+      },
+      closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
+        workspaceManager.closeWorkspace(workspaceId);
       },
     },
   },

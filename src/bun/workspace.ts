@@ -1,12 +1,14 @@
 // tile-layout.ts（純粋な木構造）と TerminalSession（I/O）を束ねる、状態を持つ層。
 // bun/index.tsはこのモジュールだけを通してタイル・タブ・PTYを操作する。
 import {
-  closeTile,
+  addTabToTile,
+  closeTabInTile,
   findNode,
   focusNeighbor,
   listLeaves,
   resizeSplit,
   splitTile,
+  switchActiveTab,
   toFlexDirection,
   type SplitOrientation,
   type TabId,
@@ -28,6 +30,11 @@ export interface WorkspaceRenderState {
 export type WorkspaceOptions = {
   initialCols: number;
   initialRows: number;
+  /** tile/tabのid採番。複数Workspaceインスタンス間でのid衝突を避けるため外部（workspace-manager.ts）から注入する */
+  genTileId: () => TileId;
+  genTabId: () => TabId;
+  /** 永続化からの復元時に渡す既存の木構造（tileId/tabIdは採番済み）。省略時は単一leaf・単一タブで新規作成する */
+  initialTree?: TileNode;
   /** 描画すべき変化が生じた時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onDirty: () => void;
   /** 最後の1タブのプロセスが終了した時に呼ばれる。アプリを終了するかどうかの判断は呼び出し側の責務 */
@@ -41,19 +48,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const sessions = new Map<TabId, TerminalSession>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
 
-  let nextId = 1;
-  const genTileId = (): TileId => `tile-${nextId++}`;
-  const genTabId = (): TabId => `tab-${nextId++}`;
-
-  const firstTabId = genTabId();
-  const firstTileId = genTileId();
-  let tree: TileNode = {
-    kind: "leaf",
-    id: firstTileId,
-    tabIds: [firstTabId],
-    activeTabId: firstTabId,
-  };
-  let focusedTileId: TileId = firstTileId;
+  const genTileId = opts.genTileId;
+  const genTabId = opts.genTabId;
 
   function spawnSession(tabId: TabId, cols: number, rows: number): void {
     sizeByTabId.set(tabId, { cols, rows });
@@ -65,7 +61,25 @@ export function createWorkspace(opts: WorkspaceOptions) {
     });
     sessions.set(tabId, session);
   }
-  spawnSession(firstTabId, opts.initialCols, opts.initialRows);
+
+  let tree: TileNode;
+  let focusedTileId: TileId;
+  if (opts.initialTree) {
+    tree = opts.initialTree;
+    const leaves = listLeaves(tree);
+    focusedTileId = leaves[0].id;
+    for (const leaf of leaves) {
+      for (const tabId of leaf.tabIds) {
+        spawnSession(tabId, opts.initialCols, opts.initialRows);
+      }
+    }
+  } else {
+    const firstTabId = genTabId();
+    const firstTileId = genTileId();
+    tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
+    focusedTileId = firstTileId;
+    spawnSession(firstTabId, opts.initialCols, opts.initialRows);
+  }
 
   function disposeSessions(tabIds: TabId[]): void {
     for (const tabId of tabIds) {
@@ -84,18 +98,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
     opts.onDirty();
   }
 
-  // シェルが1つ終了した時の挙動。そのタブが属するタイルだけ閉じる。
-  // ただし最後の1枚だった場合は今日と同じ「アプリごと終了」を維持する。
+  // シェルが1つ終了した時の挙動。そのタブだけ閉じる（同じタイルに他のタブが残っていればタイルは維持）。
+  // タイル内最後のタブで、かつワークスペース最後の1枚だった場合のみ「アプリごと終了」を維持する。
   function handleTabProcessExit(tabId: TabId): void {
     const leaf = listLeaves(tree).find((l) => l.tabIds.includes(tabId));
     if (!leaf) return;
-    const result = closeTile(tree, leaf.id);
+    const result = closeTabInTile(tree, leaf.id, tabId);
+    if (!result) return;
     if (result.tree === null) {
-      disposeSessions(result.closedTabIds);
+      disposeSessions([tabId]);
       opts.onAllTabsClosed();
       return;
     }
-    applyCloseResult(result.tree, result.closedTabIds);
+    applyCloseResult(result.tree, [tabId]);
   }
 
   function splitTileById(tileId: TileId, orientation: SplitOrientation): void {
@@ -123,10 +138,34 @@ export function createWorkspace(opts: WorkspaceOptions) {
     opts.onDirty();
   }
 
-  function closeTileById(tileId: TileId): void {
-    const result = closeTile(tree, tileId);
-    if (result.tree === null) return; // 最後の1枚は閉じない（誤操作防止）
-    applyCloseResult(result.tree, result.closedTabIds);
+  function newTab(tileId: TileId): void {
+    const target = findNode(tree, tileId);
+    if (!target || target.kind !== "leaf") return;
+    const newTabId = genTabId();
+    const result = addTabToTile(tree, tileId, newTabId);
+    if (!result) return;
+    tree = result;
+    const size = sizeByTabId.get(target.activeTabId) ?? {
+      cols: opts.initialCols,
+      rows: opts.initialRows,
+    };
+    spawnSession(newTabId, size.cols, size.rows);
+    opts.onDirty();
+  }
+
+  function switchTab(tileId: TileId, tabId: TabId): void {
+    const result = switchActiveTab(tree, tileId, tabId);
+    if (!result) return;
+    tree = result;
+    opts.onDirty();
+  }
+
+  // タイルに複数タブがあればアクティブタブだけ閉じる。最後の1タブだった場合はタイルごと閉じる
+  // （そのタイルがワークスペース最後の1枚だった場合のみ、誤操作防止のため何もしない）
+  function closeTab(tileId: TileId, tabId: TabId): void {
+    const result = closeTabInTile(tree, tileId, tabId);
+    if (!result || result.tree === null) return;
+    applyCloseResult(result.tree, [result.closedTabId]);
   }
 
   function focusTileById(tileId: TileId): void {
@@ -179,6 +218,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return { layout: tree, focusedTileId, tabs };
   }
 
+  /** workspace-managerがtileId/tabIdの所属先を判定するための軽量な参照。renderStateは計算しない */
+  function getLayout(): TileNode {
+    return tree;
+  }
+
+  function hasTab(tabId: TabId): boolean {
+    return sessions.has(tabId);
+  }
+
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
@@ -186,7 +234,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   return {
     splitTile: splitTileById,
-    closeTile: closeTileById,
+    newTab,
+    switchTab,
+    closeTab,
     focusTile: focusTileById,
     focusDirection: focusDirectionFrom,
     resizeSplit: resizeSplitById,
@@ -194,6 +244,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handlePaste,
     handleResize,
     snapshot,
+    getLayout,
+    hasTab,
     dispose,
   };
 }

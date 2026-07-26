@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  addTabToTile,
+  closeTabInTile,
   closeTile,
   findNode,
   focusNeighbor,
   listLeaves,
+  nextTabId,
   resizeSplit,
   splitTile,
+  switchActiveTab,
   type TileLeaf,
   type TileNode,
   toFlexDirection,
@@ -319,5 +323,169 @@ describe("focusNeighbor", () => {
   test("存在しないfocusedTileIdはnullを返す", () => {
     const tree = leaf("a");
     expect(focusNeighbor(tree, "not-found", "right")).toBeNull();
+  });
+});
+
+describe("addTabToTile", () => {
+  test("leafのtabIds末尾に追加し、activeTabIdが新タブになる", () => {
+    const tree = leaf("a");
+    const result = addTabToTile(tree, "a", "a-tab2");
+    expect(result).toEqual({
+      kind: "leaf",
+      id: "a",
+      tabIds: ["a-tab", "a-tab2"],
+      activeTabId: "a-tab2",
+    });
+  });
+
+  test("存在しないtileIdはnullを返す", () => {
+    const tree = leaf("a");
+    expect(addTabToTile(tree, "not-found", "new-tab")).toBeNull();
+  });
+
+  test("無関係な兄弟部分木は参照が同一（構造共有）", () => {
+    const sibling = leaf("b");
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: sibling,
+    };
+    const result = addTabToTile(tree, "a", "a-tab2") as TileNode & { kind: "split" };
+    expect(result.second).toBe(sibling);
+  });
+});
+
+describe("switchActiveTab", () => {
+  const multiTabLeaf: TileLeaf = {
+    kind: "leaf",
+    id: "a",
+    tabIds: ["t1", "t2", "t3"],
+    activeTabId: "t1",
+  };
+
+  test("tabIdsに存在するtabIdへactiveTabIdが切り替わる", () => {
+    const result = switchActiveTab(multiTabLeaf, "a", "t3");
+    expect(result).toEqual({ ...multiTabLeaf, activeTabId: "t3" });
+  });
+
+  test("存在しないtileIdはnullを返す", () => {
+    expect(switchActiveTab(multiTabLeaf, "not-found", "t2")).toBeNull();
+  });
+
+  test("そのleafのtabIdsに含まれないtabIdはnullを返す", () => {
+    expect(switchActiveTab(multiTabLeaf, "a", "not-a-tab")).toBeNull();
+  });
+
+  test("既にactiveなtabIdを指定すると同一参照を返す", () => {
+    expect(switchActiveTab(multiTabLeaf, "a", "t1")).toBe(multiTabLeaf);
+  });
+});
+
+describe("closeTabInTile", () => {
+  test("複数タブのうちactiveでないタブを閉じてもactiveTabIdは変わらない", () => {
+    const multiTabLeaf: TileLeaf = {
+      kind: "leaf",
+      id: "a",
+      tabIds: ["t1", "t2", "t3"],
+      activeTabId: "t2",
+    };
+    const result = closeTabInTile(multiTabLeaf, "a", "t3");
+    expect(result).toEqual({
+      tree: { kind: "leaf", id: "a", tabIds: ["t1", "t2"], activeTabId: "t2" },
+      closedTabId: "t3",
+      tileClosed: false,
+    });
+  });
+
+  test.each([
+    [["t1", "t2", "t3"], "t1", "t2"],
+    [["t1", "t2", "t3"], "t2", "t1"],
+    [["t1", "t2", "t3"], "t3", "t2"],
+  ] as const)(
+    "activeなタブ%pのうち%pを閉じるとactiveTabIdは%pへ付け替わる（前優先、先頭なら次）",
+    (tabIds, closing, expectedActive) => {
+      const multiTabLeaf: TileLeaf = {
+        kind: "leaf",
+        id: "a",
+        tabIds: [...tabIds],
+        activeTabId: closing,
+      };
+      const result = closeTabInTile(multiTabLeaf, "a", closing);
+      const newTabIds = tabIds.filter((id) => id !== closing);
+      expect(result).toEqual({
+        tree: { kind: "leaf", id: "a", tabIds: newTabIds, activeTabId: expectedActive },
+        closedTabId: closing,
+        tileClosed: false,
+      });
+    },
+  );
+
+  test("最後の1タブを閉じるとtileごと畳まれる（tileClosed: true）", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    const result = closeTabInTile(tree, "a", "a-tab");
+    expect(result).toEqual({ tree: leaf("b"), closedTabId: "a-tab", tileClosed: true });
+  });
+
+  test("最後の1枚のtileの最後のタブを閉じるとtree:nullになる", () => {
+    const tree = leaf("a");
+    const result = closeTabInTile(tree, "a", "a-tab");
+    expect(result).toEqual({ tree: null, closedTabId: "a-tab", tileClosed: true });
+  });
+
+  test("存在しないtileIdはnullを返す", () => {
+    const tree = leaf("a");
+    expect(closeTabInTile(tree, "not-found", "a-tab")).toBeNull();
+  });
+
+  test("そのleafのtabIdsに含まれないtabIdはnullを返す", () => {
+    const tree = leaf("a");
+    expect(closeTabInTile(tree, "a", "not-a-tab")).toBeNull();
+  });
+});
+
+describe("nextTabId", () => {
+  const multiTabLeaf: TileLeaf = {
+    kind: "leaf",
+    id: "a",
+    tabIds: ["t1", "t2", "t3"],
+    activeTabId: "t2",
+  };
+
+  test.each([
+    [1, "t3"],
+    [-1, "t1"],
+  ] as const)("delta=%p のとき %p", (delta, expected) => {
+    expect(nextTabId(multiTabLeaf, delta)).toBe(expected);
+  });
+
+  test("末尾からdelta=1で巡回して先頭へ戻る", () => {
+    const leafAtEnd: TileLeaf = { ...multiTabLeaf, activeTabId: "t3" };
+    expect(nextTabId(leafAtEnd, 1)).toBe("t1");
+  });
+
+  test("先頭からdelta=-1で巡回して末尾へ戻る", () => {
+    const leafAtStart: TileLeaf = { ...multiTabLeaf, activeTabId: "t1" };
+    expect(nextTabId(leafAtStart, -1)).toBe("t3");
+  });
+
+  test("タブが1件のみの場合は常に同じtabIdを返す", () => {
+    const singleTabLeaf: TileLeaf = {
+      kind: "leaf",
+      id: "a",
+      tabIds: ["only"],
+      activeTabId: "only",
+    };
+    expect(nextTabId(singleTabLeaf, 1)).toBe("only");
+    expect(nextTabId(singleTabLeaf, -1)).toBe("only");
   });
 });

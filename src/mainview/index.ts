@@ -1,7 +1,7 @@
 import Electrobun, { Electroview } from "electrobun/view";
 import type { NiwaRPC } from "../bun/index";
-import type { TabId, TileId, TileNode } from "../bun/tile-layout";
-import type { WorkspaceRenderState } from "../bun/workspace";
+import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
+import type { AppRenderState, WorkspaceId } from "../bun/workspace-manager";
 import { keyToBytes } from "./key-to-bytes";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
@@ -12,8 +12,14 @@ const measureEl = document.getElementById("measure") as HTMLSpanElement;
 const imeEl = document.getElementById("ime-input") as HTMLTextAreaElement;
 const compositionEl = document.getElementById("composition") as HTMLDivElement;
 const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
+const tabButtonTemplate = document.getElementById("tab-button-template") as HTMLTemplateElement;
+const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
+const tileElByTileId = new Map<TileId, HTMLElement>();
+const tabBarElByTileId = new Map<TileId, HTMLDivElement>();
+const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
+const tabButtonElByTabId = new Map<TabId, HTMLButtonElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
 const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
@@ -24,6 +30,11 @@ const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 let focusedTileId: TileId | null = null;
 // フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
 let currentTabId: TabId | null = null;
+// 直近のrender()で受け取ったlayout。cycleTab等、キー操作時にDOM待ちせず参照するために保持する
+let lastLayout: TileNode | null = null;
+// ワークスペース切替（Cmd+Option+]/[）の次/前の対象を解決するために保持する
+let activeWorkspaceId: WorkspaceId | null = null;
+let workspaceIds: WorkspaceId[] = [];
 // ドラッグ中のsplitId。reconcile時にflexスタイルを上書きしないようにするためのガード
 let draggingSplitId: TileId | null = null;
 // ドラッグ確定直後、bun側のtreeがまだ古いratioのままのrenderが届く可能性があるため、
@@ -77,13 +88,16 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
   handlers: {
     requests: {},
     messages: {
-      render: (p: WorkspaceRenderState) => {
-        renderLayout(p.layout);
-        focusedTileId = p.focusedTileId;
+      render: (p: AppRenderState) => {
+        activeWorkspaceId = p.activeWorkspaceId;
+        workspaceIds = p.workspaceIds;
+        lastLayout = p.workspace.layout;
+        renderLayout(p.workspace.layout);
+        focusedTileId = p.workspace.focusedTileId;
         currentTabId = (focusedTileId && activeTabByTile.get(focusedTileId)) ?? null;
         updateFocusHighlight();
-        for (const tabId of Object.keys(p.tabs)) {
-          const renderState = p.tabs[tabId];
+        for (const tabId of Object.keys(p.workspace.tabs)) {
+          const renderState = p.workspace.tabs[tabId];
           const termEl = termElByTabId.get(tabId);
           if (!termEl || !renderState) continue;
           termEl.innerHTML = renderState.html;
@@ -180,31 +194,38 @@ function reconcile(
 ): HTMLElement {
   if (node.kind === "leaf") {
     seenTileIds.add(node.id);
-    const tabId = node.activeTabId;
-    seenTabIds.add(tabId);
-    activeTabByTile.set(node.id, tabId);
+    activeTabByTile.set(node.id, node.activeTabId);
 
-    let termEl = termElByTabId.get(tabId);
-    let tileEl: HTMLElement;
-    if (!termEl) {
+    let tileEl = tileElByTileId.get(node.id);
+    let tabBarEl: HTMLDivElement;
+    let tileContentEl: HTMLDivElement;
+    if (!tileEl) {
       const frag = tileTemplate.content.cloneNode(true) as DocumentFragment;
       tileEl = frag.querySelector(".tile") as HTMLElement;
-      termEl = tileEl.querySelector(".term") as HTMLDivElement;
-      const cursorEl = tileEl.querySelector(".cursor") as HTMLDivElement;
-      termElByTabId.set(tabId, termEl);
-      cursorElByTabId.set(tabId, cursorEl);
-      const ro = new ResizeObserver(() => {
-        // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はローカルのflexスタイルが
-        // 一時的に不安定なため、その間のリサイズ計測はスキップする
-        if (draggingSplitId || pendingSplitRatio) return;
-        sendResize(tabId);
-      });
-      ro.observe(termEl);
-      resizeObserverByTabId.set(tabId, ro);
+      tabBarEl = tileEl.querySelector(".tab-bar") as HTMLDivElement;
+      tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
+      tileElByTileId.set(node.id, tileEl);
+      tabBarElByTileId.set(node.id, tabBarEl);
     } else {
-      tileEl = termEl.closest(".tile") as HTMLElement;
+      tabBarEl = tabBarElByTileId.get(node.id) as HTMLDivElement;
+      tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
     }
     tileEl.dataset["tileId"] = node.id;
+    const addBtn = tabBarEl.querySelector(".tab-add-btn") as HTMLButtonElement;
+
+    node.tabIds.forEach((tabId, index) => {
+      seenTabIds.add(tabId);
+      ensureTabContent(tabId, tileContentEl);
+      ensureTabButton(tabId, tabBarEl, addBtn);
+      const isActive = tabId === node.activeTabId;
+      const tabContentEl = tabContentElByTabId.get(tabId);
+      if (tabContentEl) tabContentEl.style.display = isActive ? "block" : "none";
+      const tabButtonEl = tabButtonElByTabId.get(tabId);
+      tabButtonEl?.classList.toggle("active", isActive);
+      const labelEl = tabButtonEl?.querySelector(".tab-label");
+      if (labelEl) labelEl.textContent = String(index + 1);
+    });
+
     return tileEl;
   }
 
@@ -255,19 +276,79 @@ function getOrCreateDivider(splitId: TileId): HTMLDivElement {
   return dividerEl;
 }
 
+/** tabId用の.term/.cursorペア（.tab-content）を必要なら生成し、ResizeObserverを設置する */
+function ensureTabContent(tabId: TabId, tileContentEl: HTMLDivElement): void {
+  if (termElByTabId.has(tabId)) return;
+  const frag = tabContentTemplate.content.cloneNode(true) as DocumentFragment;
+  const tabContentEl = frag.querySelector(".tab-content") as HTMLDivElement;
+  const termEl = tabContentEl.querySelector(".term") as HTMLDivElement;
+  const cursorEl = tabContentEl.querySelector(".cursor") as HTMLDivElement;
+  tabContentElByTabId.set(tabId, tabContentEl);
+  termElByTabId.set(tabId, termEl);
+  cursorElByTabId.set(tabId, cursorEl);
+  tileContentEl.appendChild(tabContentEl);
+  const ro = new ResizeObserver(() => {
+    // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はスキップ。
+    // 非アクティブタブ（display:none）はcontent-boxが0になり誤って2x2等のresizeを
+    // 送ってしまうため、表示中でない限りスキップする（再表示時に正しいサイズで発火し直す）
+    if (draggingSplitId || pendingSplitRatio) return;
+    if (tabContentEl.style.display === "none") return;
+    sendResize(tabId);
+  });
+  ro.observe(termEl);
+  resizeObserverByTabId.set(tabId, ro);
+}
+
+/** tabId用のタブボタンを必要なら生成し、+ボタンの直前に挿入する（tabIds配列の順序を保つ） */
+function ensureTabButton(tabId: TabId, tabBarEl: HTMLDivElement, addBtn: HTMLButtonElement): void {
+  if (tabButtonElByTabId.has(tabId)) return;
+  const frag = tabButtonTemplate.content.cloneNode(true) as DocumentFragment;
+  const btnEl = frag.querySelector(".tab-button") as HTMLButtonElement;
+  btnEl.dataset["tabId"] = tabId;
+  tabButtonElByTabId.set(tabId, btnEl);
+  tabBarEl.insertBefore(btnEl, addBtn);
+}
+
+/** クリック/キー操作でのタブ切替をローカルへ即時反映する（次のrenderを待たず入力送信先を切り替えるため） */
+function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
+  const previousActive = activeTabByTile.get(tileId);
+  if (previousActive === tabId) return;
+  activeTabByTile.set(tileId, tabId);
+  if (previousActive) {
+    const prevContent = tabContentElByTabId.get(previousActive);
+    if (prevContent) prevContent.style.display = "none";
+    tabButtonElByTabId.get(previousActive)?.classList.remove("active");
+  }
+  const nextContent = tabContentElByTabId.get(tabId);
+  if (nextContent) nextContent.style.display = "block";
+  tabButtonElByTabId.get(tabId)?.classList.add("active");
+}
+
 /** 前回登場したが今回登場しなかったtab/split/tileの後始末（DOM除去・ResizeObserver停止） */
 function gcStale(
   seenTabIds: Set<TabId>,
   seenSplitIds: Set<TileId>,
   seenTileIds: Set<TileId>,
 ): void {
-  for (const [tabId, termEl] of termElByTabId) {
+  // 個別に閉じられたタブ（タイル自体は生存）の後始末。.tab-content単位で除去し、
+  // 同じタイルに残る他のタブには影響しない
+  for (const tabId of termElByTabId.keys()) {
     if (seenTabIds.has(tabId)) continue;
     resizeObserverByTabId.get(tabId)?.disconnect();
     resizeObserverByTabId.delete(tabId);
-    termEl.closest(".tile")?.remove();
+    tabContentElByTabId.get(tabId)?.remove();
+    tabContentElByTabId.delete(tabId);
+    tabButtonElByTabId.get(tabId)?.remove();
+    tabButtonElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
+  }
+  // タイルごと閉じられた場合の後始末（配下のタブは上のループで既に個別除去済み）
+  for (const [tileId, tileEl] of tileElByTileId) {
+    if (seenTileIds.has(tileId)) continue;
+    tileEl.remove();
+    tileElByTileId.delete(tileId);
+    tabBarElByTileId.delete(tileId);
   }
   for (const [splitId, splitEl] of splitElBySplitId) {
     if (seenSplitIds.has(splitId)) continue;
@@ -365,7 +446,8 @@ function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
       sendMessage("resizeSplit", { splitId, ratio });
       imeEl.focus({ preventScroll: true });
       // ドラッグ中はResizeObserver経由のresize送信を抑制していたため、確定サイズで送り直す
-      for (const tabId of termElByTabId.keys()) {
+      // （非表示タブはclientWidth/Heightが0になるため、表示中のタブだけを対象にする）
+      for (const tabId of activeTabByTile.values()) {
         sendResize(tabId);
       }
     };
@@ -402,11 +484,36 @@ function handleTileCommand(cmd: TileCommand): void {
       sendMessage("splitTile", { tileId: focusedTileId, orientation: cmd.orientation });
       break;
     case "close":
-      sendMessage("closeTile", { tileId: focusedTileId });
+      if (!currentTabId) return;
+      sendMessage("closeTab", { tileId: focusedTileId, tabId: currentTabId });
       break;
     case "focus":
       sendMessage("focusDirection", { direction: cmd.direction });
       break;
+    case "newTab":
+      sendMessage("newTab", { tileId: focusedTileId });
+      break;
+    case "cycleTab": {
+      if (!lastLayout) return;
+      const leaf = findNode(lastLayout, focusedTileId);
+      if (!leaf || leaf.kind !== "leaf" || leaf.tabIds.length < 2) return;
+      const tabId = nextTabId(leaf, cmd.delta);
+      setActiveTabLocally(focusedTileId, tabId);
+      currentTabId = tabId;
+      sendMessage("switchTab", { tileId: focusedTileId, tabId });
+      break;
+    }
+    case "newWorkspace":
+      sendMessage("newWorkspace");
+      break;
+    case "switchWorkspace": {
+      if (!activeWorkspaceId || workspaceIds.length < 2) return;
+      const index = workspaceIds.indexOf(activeWorkspaceId);
+      const len = workspaceIds.length;
+      const workspaceId = workspaceIds[(index + cmd.delta + len) % len];
+      sendMessage("switchWorkspace", { workspaceId });
+      break;
+    }
   }
 }
 
@@ -449,17 +556,46 @@ document.addEventListener("paste", (e) => {
   if (text && currentTabId) sendMessage("paste", { tabId: currentTabId, data: text });
 });
 
-// ---- フォーカスルーティング（クリックされたタイルへ切り替える）----
+// ---- フォーカスルーティング（クリックされたタイル/タブへ切り替える）----
+function focusTileLocally(tileId: TileId): void {
+  if (tileId === focusedTileId) return;
+  focusedTileId = tileId;
+  currentTabId = activeTabByTile.get(tileId) ?? null;
+  updateFocusHighlight();
+  sendMessage("focusTile", { tileId });
+}
+
 tileTreeEl.addEventListener("mousedown", (e) => {
-  const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  const target = e.target as HTMLElement;
+  const tileEl = target.closest<HTMLElement>(".tile");
   const tileId = tileEl?.dataset["tileId"];
   if (!tileId) return;
-  if (tileId !== focusedTileId) {
-    focusedTileId = tileId;
-    currentTabId = activeTabByTile.get(tileId) ?? null;
-    updateFocusHighlight();
-    sendMessage("focusTile", { tileId });
+
+  const closeBtn = target.closest<HTMLElement>(".tab-close-btn");
+  const tabButtonEl = target.closest<HTMLElement>(".tab-button");
+  const tabId = tabButtonEl?.dataset["tabId"];
+
+  if (closeBtn && tabId) {
+    sendMessage("closeTab", { tileId, tabId });
+    imeEl.focus({ preventScroll: true });
+    return;
   }
+  if (tabButtonEl && tabId) {
+    setActiveTabLocally(tileId, tabId);
+    focusTileLocally(tileId);
+    currentTabId = tabId;
+    sendMessage("switchTab", { tileId, tabId });
+    imeEl.focus({ preventScroll: true });
+    return;
+  }
+  if (target.closest<HTMLElement>(".tab-add-btn")) {
+    focusTileLocally(tileId);
+    sendMessage("newTab", { tileId });
+    imeEl.focus({ preventScroll: true });
+    return;
+  }
+
+  focusTileLocally(tileId);
   // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
   imeEl.focus({ preventScroll: true });
 });
