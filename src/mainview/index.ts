@@ -1,5 +1,7 @@
 import Electrobun, { Electroview } from "electrobun/view";
 import type { NiwaRPC } from "../bun/index";
+import { keyToBytes } from "./key-to-bytes";
+import { isWideChar } from "./wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const termEl = document.getElementById("term") as HTMLDivElement;
@@ -82,31 +84,6 @@ function measureCell() {
 }
 
 // ---- 全角文字の幅補正 ----
-// East Asian Wide / Fullwidth の主要範囲（libghostty-vtのwcwidth=2に合わせる）
-const wideRanges: Array<[number, number]> = [
-  [0x1100, 0x115f], // Hangul Jamo
-  [0x2e80, 0x303e], // CJK部首・記号（〜IDEOGRAPHIC SPACE手前まで含む）
-  [0x3041, 0x33ff], // ひらがな・カタカナ・CJK記号・囲み文字
-  [0x3400, 0x4dbf], // CJK拡張A
-  [0x4e00, 0x9fff], // CJK統合漢字
-  [0xa000, 0xa4cf], // Yi
-  [0xac00, 0xd7a3], // Hangul音節
-  [0xf900, 0xfaff], // CJK互換漢字
-  [0xfe30, 0xfe4f], // CJK互換形
-  [0xff00, 0xff60], // 全角英数・記号
-  [0xffe0, 0xffe6], // 全角記号
-  [0x1f300, 0x1faff], // 絵文字
-  [0x20000, 0x3fffd], // CJK拡張B〜
-];
-
-function isWideChar(cp: number): boolean {
-  if (cp < 0x1100) return false;
-  for (const [lo, hi] of wideRanges) {
-    if (cp >= lo && cp <= hi) return true;
-  }
-  return false;
-}
-
 /**
  * テキストノード中の全角文字を <span class="wide"> でラップして2セル幅に強制する。
  * フォーマッタ出力はプレーンテキストなので、フォント任せだと桁がズレるため。
@@ -183,53 +160,6 @@ function updateCursor(x: number, y: number, visible: boolean) {
 }
 
 // ---- キー入力 → PTYバイト列 ----
-function keyToBytes(e: KeyboardEvent): string | null {
-  // cmd系はアプリ/OSのショートカットに譲る
-  if (e.metaKey) return null;
-
-  switch (e.key) {
-    case "Enter":
-      return "\r";
-    case "Backspace":
-      return "\x7f";
-    case "Tab":
-      return "\t";
-    case "Escape":
-      return "\x1b";
-    case "ArrowUp":
-      return "\x1b[A";
-    case "ArrowDown":
-      return "\x1b[B";
-    case "ArrowRight":
-      return "\x1b[C";
-    case "ArrowLeft":
-      return "\x1b[D";
-    case "Home":
-      return "\x1b[H";
-    case "End":
-      return "\x1b[F";
-    case "Delete":
-      return "\x1b[3~";
-    case "PageUp":
-      return "\x1b[5~";
-    case "PageDown":
-      return "\x1b[6~";
-  }
-
-  if (e.key.length === 1) {
-    // Ctrl+英字 → 制御文字 (Ctrl+A = 0x01)
-    if (e.ctrlKey) {
-      const code = e.key.toUpperCase().charCodeAt(0);
-      if (code >= 64 && code < 128) {
-        return String.fromCharCode(code & 0x1f);
-      }
-      return null;
-    }
-    return e.key;
-  }
-  return null;
-}
-
 document.addEventListener("keydown", (e) => {
   // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）
   if (e.isComposing || e.keyCode === 229) return;
