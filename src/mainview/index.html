@@ -8,12 +8,17 @@
   </head>
   <body>
     <div id="screen">
-      <div id="term"></div>
-      <div id="cursor"></div>
+      <div id="tile-tree"></div>
       <div id="composition"></div>
       <textarea id="ime-input" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
       <span id="measure">W</span>
     </div>
+    <template id="tile-template">
+      <div class="tile">
+        <div class="term"></div>
+        <div class="cursor"></div>
+      </div>
+    </template>
     <script type="module" src="index.js"></script>
   </body>
 </html>

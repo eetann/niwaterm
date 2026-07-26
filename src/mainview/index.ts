@@ -1,14 +1,31 @@
 import Electrobun, { Electroview } from "electrobun/view";
 import type { NiwaRPC } from "../bun/index";
+import type { TabId, TileId, TileNode } from "../bun/tile-layout";
+import type { WorkspaceRenderState } from "../bun/workspace";
 import { keyToBytes } from "./key-to-bytes";
+import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
-const termEl = document.getElementById("term") as HTMLDivElement;
-const cursorEl = document.getElementById("cursor") as HTMLDivElement;
+const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
 const measureEl = document.getElementById("measure") as HTMLSpanElement;
 const imeEl = document.getElementById("ime-input") as HTMLTextAreaElement;
 const compositionEl = document.getElementById("composition") as HTMLDivElement;
+const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
+
+// ---- タイル/タブごとのDOM要素・状態管理 ----
+const termElByTabId = new Map<TabId, HTMLDivElement>();
+const cursorElByTabId = new Map<TabId, HTMLDivElement>();
+const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
+const activeTabByTile = new Map<TileId, TabId>();
+const splitElBySplitId = new Map<TileId, HTMLDivElement>();
+const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
+
+let focusedTileId: TileId | null = null;
+// フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
+let currentTabId: TabId | null = null;
+// ドラッグ中のsplitId。reconcile時にflexスタイルを上書きしないようにするためのガード
+let draggingSplitId: TileId | null = null;
 
 // ---- 256色パレットのCSS変数を定義する（formatter出力が var(--vt-palette-N) を参照する）----
 function setupPalette() {
@@ -56,10 +73,27 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
   handlers: {
     requests: {},
     messages: {
-      render: (p: { html: string; cursorX: number; cursorY: number; cursorVisible: boolean }) => {
-        termEl.innerHTML = p.html;
-        fixWideChars(termEl);
-        updateCursor(p.cursorX, p.cursorY, p.cursorVisible);
+      render: (p: WorkspaceRenderState) => {
+        renderLayout(p.layout);
+        focusedTileId = p.focusedTileId;
+        currentTabId = (focusedTileId && activeTabByTile.get(focusedTileId)) ?? null;
+        updateFocusHighlight();
+        for (const tabId of Object.keys(p.tabs)) {
+          const renderState = p.tabs[tabId];
+          const termEl = termElByTabId.get(tabId);
+          if (!termEl || !renderState) continue;
+          termEl.innerHTML = renderState.html;
+          fixWideChars(termEl);
+          updateCursorForTab(
+            tabId,
+            renderState.cursorX,
+            renderState.cursorY,
+            renderState.cursorVisible,
+          );
+          if (tabId === currentTabId) {
+            updateImePosition(renderState.cursorX, renderState.cursorY);
+          }
+        }
       },
     },
   },
@@ -71,7 +105,7 @@ function sendMessage(name: string, payload?: unknown) {
   (rpc as any)?.send?.[name]?.(payload ?? {});
 }
 
-// ---- セル計測とリサイズ ----
+// ---- セル計測 ----
 let cellWidth = 8;
 let cellHeight = 18;
 
@@ -122,32 +156,123 @@ function fixWideChars(root: HTMLElement) {
   }
 }
 
-function sendResize() {
-  measureCell();
-  const style = getComputedStyle(screenEl);
-  const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-  const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-  const cols = Math.max(2, Math.floor((screenEl.clientWidth - padX) / cellWidth));
-  const rows = Math.max(2, Math.floor((screenEl.clientHeight - padY) / cellHeight));
-  sendMessage("resize", { cols, rows, cellWidth, cellHeight });
+// ---- タイル木構造 → DOM reconciliation ----
+function renderLayout(layout: TileNode): void {
+  const seenTabIds = new Set<TabId>();
+  const seenSplitIds = new Set<TileId>();
+  const seenTileIds = new Set<TileId>();
+  const rootEl = reconcile(layout, seenTabIds, seenSplitIds, seenTileIds);
+  if (rootEl.parentElement !== tileTreeEl) {
+    tileTreeEl.appendChild(rootEl);
+  }
+  gcStale(seenTabIds, seenSplitIds, seenTileIds);
 }
 
-new ResizeObserver(() => sendResize()).observe(screenEl);
+function reconcile(
+  node: TileNode,
+  seenTabIds: Set<TabId>,
+  seenSplitIds: Set<TileId>,
+  seenTileIds: Set<TileId>,
+): HTMLElement {
+  if (node.kind === "leaf") {
+    seenTileIds.add(node.id);
+    const tabId = node.activeTabId;
+    seenTabIds.add(tabId);
+    activeTabByTile.set(node.id, tabId);
 
-// ---- カーソル描画 ----
-let cursorPx = { left: 4, top: 4 };
+    let termEl = termElByTabId.get(tabId);
+    let tileEl: HTMLElement;
+    if (!termEl) {
+      const frag = tileTemplate.content.cloneNode(true) as DocumentFragment;
+      tileEl = frag.querySelector(".tile") as HTMLElement;
+      termEl = tileEl.querySelector(".term") as HTMLDivElement;
+      const cursorEl = tileEl.querySelector(".cursor") as HTMLDivElement;
+      termElByTabId.set(tabId, termEl);
+      cursorElByTabId.set(tabId, cursorEl);
+      const ro = new ResizeObserver(() => sendResize(tabId));
+      ro.observe(termEl);
+      resizeObserverByTabId.set(tabId, ro);
+    } else {
+      tileEl = termEl.closest(".tile") as HTMLElement;
+    }
+    tileEl.dataset["tileId"] = node.id;
+    return tileEl;
+  }
 
-function updateCursor(x: number, y: number, visible: boolean) {
-  const termRect = termEl.getBoundingClientRect();
-  cursorPx = {
-    left: termRect.left + x * cellWidth,
-    top: termRect.top + y * cellHeight,
-  };
-  // IME候補ウィンドウと未確定文字列をカーソルに追従させる
-  imeEl.style.left = `${cursorPx.left}px`;
-  imeEl.style.top = `${cursorPx.top}px`;
-  compositionEl.style.left = `${cursorPx.left}px`;
-  compositionEl.style.top = `${cursorPx.top}px`;
+  seenSplitIds.add(node.id);
+  let splitEl = splitElBySplitId.get(node.id);
+  if (!splitEl) {
+    splitEl = document.createElement("div");
+    splitEl.className = "split";
+    splitElBySplitId.set(node.id, splitEl);
+  }
+  splitEl.dataset["splitId"] = node.id;
+  splitEl.dataset["direction"] = node.direction;
+
+  const firstEl = reconcile(node.first, seenTabIds, seenSplitIds, seenTileIds);
+  const dividerEl = getOrCreateDivider(node.id);
+  const secondEl = reconcile(node.second, seenTabIds, seenSplitIds, seenTileIds);
+
+  // ドラッグ中のsplitはローカルpreviewのflexを保持し、bunからのratioで上書きしない
+  if (node.id !== draggingSplitId) {
+    firstEl.style.flex = `${node.ratio} 0 0%`;
+    secondEl.style.flex = `${1 - node.ratio} 0 0%`;
+  }
+
+  for (const child of [firstEl, dividerEl, secondEl]) {
+    splitEl.appendChild(child);
+  }
+
+  return splitEl;
+}
+
+function getOrCreateDivider(splitId: TileId): HTMLDivElement {
+  let dividerEl = dividerElBySplitId.get(splitId);
+  if (!dividerEl) {
+    dividerEl = document.createElement("div");
+    dividerEl.className = "divider";
+    attachDividerDrag(dividerEl, splitId);
+    dividerElBySplitId.set(splitId, dividerEl);
+  }
+  return dividerEl;
+}
+
+/** 前回登場したが今回登場しなかったtab/split/tileの後始末（DOM除去・ResizeObserver停止） */
+function gcStale(
+  seenTabIds: Set<TabId>,
+  seenSplitIds: Set<TileId>,
+  seenTileIds: Set<TileId>,
+): void {
+  for (const [tabId, termEl] of termElByTabId) {
+    if (seenTabIds.has(tabId)) continue;
+    resizeObserverByTabId.get(tabId)?.disconnect();
+    resizeObserverByTabId.delete(tabId);
+    termEl.closest(".tile")?.remove();
+    termElByTabId.delete(tabId);
+    cursorElByTabId.delete(tabId);
+  }
+  for (const [splitId, splitEl] of splitElBySplitId) {
+    if (seenSplitIds.has(splitId)) continue;
+    splitEl.remove();
+    splitElBySplitId.delete(splitId);
+    dividerElBySplitId.get(splitId)?.remove();
+    dividerElBySplitId.delete(splitId);
+  }
+  for (const tileId of activeTabByTile.keys()) {
+    if (!seenTileIds.has(tileId)) activeTabByTile.delete(tileId);
+  }
+}
+
+function updateFocusHighlight(): void {
+  for (const tileEl of tileTreeEl.querySelectorAll<HTMLElement>(".tile")) {
+    tileEl.classList.toggle("focused", tileEl.dataset["tileId"] === focusedTileId);
+  }
+}
+
+// ---- カーソル描画（タイルごと） ----
+function updateCursorForTab(tabId: TabId, x: number, y: number, visible: boolean): void {
+  const cursorEl = cursorElByTabId.get(tabId);
+  if (!cursorEl) return;
   if (!visible) {
     cursorEl.style.display = "none";
     return;
@@ -155,20 +280,112 @@ function updateCursor(x: number, y: number, visible: boolean) {
   cursorEl.style.display = "block";
   cursorEl.style.width = `${cellWidth}px`;
   cursorEl.style.height = `${cellHeight}px`;
-  cursorEl.style.left = `${cursorPx.left}px`;
-  cursorEl.style.top = `${cursorPx.top}px`;
+  cursorEl.style.left = `${x * cellWidth}px`;
+  cursorEl.style.top = `${y * cellHeight}px`;
 }
 
-// ---- キー入力 → PTYバイト列 ----
+// IME候補ウィンドウと未確定文字列を、フォーカス中タイルのカーソル位置に追従させる
+function updateImePosition(x: number, y: number): void {
+  if (!currentTabId) return;
+  const termEl = termElByTabId.get(currentTabId);
+  if (!termEl) return;
+  const termRect = termEl.getBoundingClientRect();
+  const screenRect = screenEl.getBoundingClientRect();
+  const left = termRect.left - screenRect.left + x * cellWidth;
+  const top = termRect.top - screenRect.top + y * cellHeight;
+  imeEl.style.left = `${left}px`;
+  imeEl.style.top = `${top}px`;
+  compositionEl.style.left = `${left}px`;
+  compositionEl.style.top = `${top}px`;
+}
+
+// ---- リサイズ（タイルごと） ----
+function sendResize(tabId: TabId): void {
+  measureCell();
+  const termEl = termElByTabId.get(tabId);
+  if (!termEl) return;
+  const cols = Math.max(2, Math.floor(termEl.clientWidth / cellWidth));
+  const rows = Math.max(2, Math.floor(termEl.clientHeight / cellHeight));
+  sendMessage("resize", { tabId, cols, rows, cellWidth, cellHeight });
+}
+
+// ---- 境界ドラッグでのリサイズ ----
+const MIN_TILE_PX = 80;
+
+function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
+  dividerEl.addEventListener("pointerdown", (e) => {
+    const splitEl = splitElBySplitId.get(splitId);
+    if (!splitEl) return;
+    // divider自体はフォーカス不可な要素だが、既定動作でフォーカスがbodyへ移ってしまうため
+    // 明示的にpreventDefaultしてimeElへのフォーカスを維持する
+    e.preventDefault();
+    dividerEl.setPointerCapture(e.pointerId);
+    const direction = splitEl.dataset["direction"] === "column" ? "column" : "row";
+    const rect = splitEl.getBoundingClientRect();
+    const total = direction === "row" ? rect.width : rect.height;
+    draggingSplitId = splitId;
+
+    const ratioFromEvent = (ev: PointerEvent): number => {
+      const pos = direction === "row" ? ev.clientX - rect.left : ev.clientY - rect.top;
+      return Math.min(1 - MIN_TILE_PX / total, Math.max(MIN_TILE_PX / total, pos / total));
+    };
+
+    const onMove = (ev: PointerEvent): void => {
+      const ratio = ratioFromEvent(ev);
+      const firstEl = splitEl.children[0] as HTMLElement;
+      const secondEl = splitEl.children[2] as HTMLElement;
+      firstEl.style.flex = `${ratio} 0 0%`;
+      secondEl.style.flex = `${1 - ratio} 0 0%`;
+    };
+
+    const onUp = (ev: PointerEvent): void => {
+      dividerEl.removeEventListener("pointermove", onMove);
+      dividerEl.removeEventListener("pointerup", onUp);
+      const ratio = ratioFromEvent(ev);
+      draggingSplitId = null;
+      sendMessage("resizeSplit", { splitId, ratio });
+      imeEl.focus({ preventScroll: true });
+    };
+
+    dividerEl.addEventListener("pointermove", onMove);
+    dividerEl.addEventListener("pointerup", onUp);
+  });
+}
+
+// ---- キー入力 → タイル操作 or PTYバイト列 ----
 document.addEventListener("keydown", (e) => {
   // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）
   if (e.isComposing || e.keyCode === 229) return;
+
+  const tileCommand = resolveTileCommand(e);
+  if (tileCommand) {
+    e.preventDefault();
+    handleTileCommand(tileCommand);
+    return;
+  }
+
+  if (!currentTabId) return;
   const bytes = keyToBytes(e);
   if (bytes !== null) {
     e.preventDefault();
-    sendMessage("input", { data: bytes });
+    sendMessage("input", { tabId: currentTabId, data: bytes });
   }
 });
+
+function handleTileCommand(cmd: TileCommand): void {
+  if (!focusedTileId) return;
+  switch (cmd.type) {
+    case "split":
+      sendMessage("splitTile", { tileId: focusedTileId, orientation: cmd.orientation });
+      break;
+    case "close":
+      sendMessage("closeTile", { tileId: focusedTileId });
+      break;
+    case "focus":
+      sendMessage("focusDirection", { direction: cmd.direction });
+      break;
+  }
+}
 
 // ---- IME（composition）----
 let composing = false;
@@ -188,16 +405,16 @@ imeEl.addEventListener("compositionend", (e) => {
   compositionEl.style.display = "none";
   compositionEl.textContent = "";
   imeEl.value = "";
-  if (e.data) {
-    sendMessage("input", { data: e.data });
+  if (e.data && currentTabId) {
+    sendMessage("input", { tabId: currentTabId, data: e.data });
   }
 });
 
 // composition外でtextareaに入った入力の保険（dead key等）。二重送信はcomposingフラグで防ぐ
 imeEl.addEventListener("input", (e) => {
   if (composing || (e as InputEvent).isComposing) return;
-  if (imeEl.value) {
-    sendMessage("input", { data: imeEl.value });
+  if (imeEl.value && currentTabId) {
+    sendMessage("input", { tabId: currentTabId, data: imeEl.value });
     imeEl.value = "";
   }
 });
@@ -206,15 +423,22 @@ imeEl.addEventListener("input", (e) => {
 document.addEventListener("paste", (e) => {
   e.preventDefault();
   const text = e.clipboardData?.getData("text/plain");
-  if (text) sendMessage("paste", { data: text });
+  if (text && currentTabId) sendMessage("paste", { tabId: currentTabId, data: text });
 });
 
-// キーボード・IME入力を受け取るためにtextareaへフォーカスを寄せる
-screenEl.addEventListener("mousedown", (e) => {
-  // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
-  if (e.target !== imeEl) {
-    imeEl.focus({ preventScroll: true });
+// ---- フォーカスルーティング（クリックされたタイルへ切り替える）----
+tileTreeEl.addEventListener("mousedown", (e) => {
+  const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  const tileId = tileEl?.dataset["tileId"];
+  if (!tileId) return;
+  if (tileId !== focusedTileId) {
+    focusedTileId = tileId;
+    currentTabId = activeTabByTile.get(tileId) ?? null;
+    updateFocusHighlight();
+    sendMessage("focusTile", { tileId });
   }
+  // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
+  imeEl.focus({ preventScroll: true });
 });
 window.addEventListener("focus", () => imeEl.focus({ preventScroll: true }));
 imeEl.focus({ preventScroll: true });
@@ -222,7 +446,6 @@ imeEl.focus({ preventScroll: true });
 // ---- 起動 ----
 setupPalette();
 measureCell();
-sendResize();
 sendMessage("ready");
 window.addEventListener("error", (e) => {
   sendMessage("log", { msg: `error: ${e.message}` });

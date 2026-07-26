@@ -1,5 +1,6 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
-import { createTerminalSession, type TerminalRenderState } from "./terminal-session";
+import type { SplitOrientation, TabId, TileId } from "./tile-layout";
+import { createWorkspace, type WorkspaceRenderState } from "./workspace";
 
 // メニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する
 ApplicationMenu.setApplicationMenu([
@@ -33,20 +34,26 @@ export type NiwaRPC = {
     messages: {
       log: { msg: string };
       ready: {};
-      input: { data: string };
-      paste: { data: string };
+      input: { tabId: TabId; data: string };
+      paste: { tabId: TabId; data: string };
       resize: {
+        tabId: TabId;
         cols: number;
         rows: number;
         cellWidth: number;
         cellHeight: number;
       };
+      splitTile: { tileId: TileId; orientation: SplitOrientation };
+      closeTile: { tileId: TileId };
+      focusTile: { tileId: TileId };
+      focusDirection: { direction: "up" | "down" | "left" | "right" };
+      resizeSplit: { splitId: TileId; ratio: number };
     };
   }>;
   webview: RPCSchema<{
     requests: {};
     messages: {
-      render: TerminalRenderState;
+      render: WorkspaceRenderState;
     };
   }>;
 };
@@ -65,22 +72,22 @@ function scheduleRender() {
 function render() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.render(session.renderState());
+  rpcSend.render(workspace.snapshot());
 }
 
 let cleaned = false;
 function cleanup() {
   if (cleaned) return;
   cleaned = true;
-  session.dispose();
+  workspace.dispose();
 }
 
-const session = createTerminalSession({
-  cols: 80,
-  rows: 24,
-  onOutput: () => scheduleRender(),
-  onExit: (code) => {
-    console.log(`shell exited with code ${code}`);
+const workspace = createWorkspace({
+  initialCols: 80,
+  initialRows: 24,
+  onDirty: () => scheduleRender(),
+  onAllTabsClosed: () => {
+    console.log("all tabs closed, exiting");
     cleanup();
     process.exit(0);
   },
@@ -107,16 +114,35 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       ready: () => {
         scheduleRender();
       },
-      input: ({ data }: { data: string }) => {
-        session.write(data);
+      input: ({ tabId, data }: { tabId: TabId; data: string }) => {
+        workspace.handleInput(tabId, data);
       },
-      paste: ({ data }: { data: string }) => {
-        session.paste(data);
+      paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
+        workspace.handlePaste(tabId, data);
       },
-      resize: (p: { cols: number; rows: number; cellWidth: number; cellHeight: number }) => {
-        if (session.resize(p.cols, p.rows, p.cellWidth, p.cellHeight)) {
-          scheduleRender();
-        }
+      resize: (p: {
+        tabId: TabId;
+        cols: number;
+        rows: number;
+        cellWidth: number;
+        cellHeight: number;
+      }) => {
+        workspace.handleResize(p.tabId, p.cols, p.rows, p.cellWidth, p.cellHeight);
+      },
+      splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
+        workspace.splitTile(tileId, orientation);
+      },
+      closeTile: ({ tileId }: { tileId: TileId }) => {
+        workspace.closeTile(tileId);
+      },
+      focusTile: ({ tileId }: { tileId: TileId }) => {
+        workspace.focusTile(tileId);
+      },
+      focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
+        workspace.focusDirection(direction);
+      },
+      resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {
+        workspace.resizeSplit(splitId, ratio);
       },
     },
   },

@@ -60,6 +60,9 @@ export function createPty(opts: PtyOptions): Pty {
   }
 
   function kill(): void {
+    // terminal.close()でPTYマスター側を閉じ、シェル側にSIGHUPを送って終了させる。
+    // proc.kill()（SIGTERM）だけでは対話型シェルが無視し、プロセスが残り続けることがある。
+    terminal.close();
     proc.kill();
   }
 
