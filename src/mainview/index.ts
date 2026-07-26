@@ -26,6 +26,10 @@ let focusedTileId: TileId | null = null;
 let currentTabId: TabId | null = null;
 // ドラッグ中のsplitId。reconcile時にflexスタイルを上書きしないようにするためのガード
 let draggingSplitId: TileId | null = null;
+// ドラッグ確定直後、bun側のtreeがまだ古いratioのままのrenderが届く可能性があるため、
+// bunのratioが確定値に追いつくまでローカルのratioを維持する（それまでの間、古いratioで
+// flexスタイルが巻き戻されてResizeObserverが誤ったcolsを送ってしまうのを防ぐ）
+let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
 
 // ---- 256色パレットのCSS変数を定義する（formatter出力が var(--vt-palette-N) を参照する）----
 function setupPalette() {
@@ -189,7 +193,12 @@ function reconcile(
       const cursorEl = tileEl.querySelector(".cursor") as HTMLDivElement;
       termElByTabId.set(tabId, termEl);
       cursorElByTabId.set(tabId, cursorEl);
-      const ro = new ResizeObserver(() => sendResize(tabId));
+      const ro = new ResizeObserver(() => {
+        // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はローカルのflexスタイルが
+        // 一時的に不安定なため、その間のリサイズ計測はスキップする
+        if (draggingSplitId || pendingSplitRatio) return;
+        sendResize(tabId);
+      });
       ro.observe(termEl);
       resizeObserverByTabId.set(tabId, ro);
     } else {
@@ -213,10 +222,19 @@ function reconcile(
   const dividerEl = getOrCreateDivider(node.id);
   const secondEl = reconcile(node.second, seenTabIds, seenSplitIds, seenTileIds);
 
-  // ドラッグ中のsplitはローカルpreviewのflexを保持し、bunからのratioで上書きしない
+  // ドラッグ確定後、bunのtreeが確定ratioに追いついたら以後はtree由来のratioに戻す
+  if (
+    pendingSplitRatio?.splitId === node.id &&
+    Math.abs(node.ratio - pendingSplitRatio.ratio) < 0.001
+  ) {
+    pendingSplitRatio = null;
+  }
+  // ドラッグ中・ドラッグ確定直後（bunのratio確定待ち）はローカルのratioを保持し、
+  // bunからの（まだ古い場合がある）ratioで上書きしない
   if (node.id !== draggingSplitId) {
-    firstEl.style.flex = `${node.ratio} 0 0%`;
-    secondEl.style.flex = `${1 - node.ratio} 0 0%`;
+    const ratio = pendingSplitRatio?.splitId === node.id ? pendingSplitRatio.ratio : node.ratio;
+    firstEl.style.flex = `${ratio} 0 0%`;
+    secondEl.style.flex = `${1 - ratio} 0 0%`;
   }
 
   for (const child of [firstEl, dividerEl, secondEl]) {
@@ -343,8 +361,13 @@ function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
       dividerEl.removeEventListener("pointerup", onUp);
       const ratio = ratioFromEvent(ev);
       draggingSplitId = null;
+      pendingSplitRatio = { splitId, ratio };
       sendMessage("resizeSplit", { splitId, ratio });
       imeEl.focus({ preventScroll: true });
+      // ドラッグ中はResizeObserver経由のresize送信を抑制していたため、確定サイズで送り直す
+      for (const tabId of termElByTabId.keys()) {
+        sendResize(tabId);
+      }
     };
 
     dividerEl.addEventListener("pointermove", onMove);
