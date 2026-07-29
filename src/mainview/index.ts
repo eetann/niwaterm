@@ -1,4 +1,11 @@
 import Electrobun, { Electroview } from "electrobun/view";
+import {
+  compileKeybindings,
+  defaultAppearance,
+  defaultKeybindings,
+  type KeybindingsConfig,
+  type ResolvedAppearanceConfig,
+} from "niwaterm-config";
 import type { NiwaRPC } from "../bun/index";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type { AppRenderState, WorkspaceId } from "../bun/workspace-manager";
@@ -41,31 +48,21 @@ let draggingSplitId: TileId | null = null;
 // bunのratioが確定値に追いつくまでローカルのratioを維持する（それまでの間、古いratioで
 // flexスタイルが巻き戻されてResizeObserverが誤ったcolsを送ってしまうのを防ぐ）
 let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
+// bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする
+let compiledKeybindings = compileKeybindings(defaultKeybindings);
 
 // ---- 256色パレットのCSS変数を定義する（formatter出力が var(--vt-palette-N) を参照する）----
-function setupPalette() {
-  const base16 = [
-    "#45475a",
-    "#f38ba8",
-    "#a6e3a1",
-    "#f9e2af",
-    "#89b4fa",
-    "#f5c2e7",
-    "#94e2d5",
-    "#bac2de",
-    "#585b70",
-    "#f38ba8",
-    "#a6e3a1",
-    "#f9e2af",
-    "#89b4fa",
-    "#f5c2e7",
-    "#94e2d5",
-    "#a6adc8",
-  ];
+// ANSI 0-15（標準色）は外観設定で変更可能なため、外観変更のたびに呼ばれるapplyAnsiPaletteに分離する。
+// 16-231(6x6x6キューブ)/232-255(グレースケール)は固定計算式でユーザー設定に依存しないため起動時1回でよい。
+function applyAnsiPalette(colors: readonly string[]) {
   const root = document.documentElement.style;
   for (let i = 0; i < 16; i++) {
-    root.setProperty(`--vt-palette-${i}`, base16[i] ?? "#ffffff");
+    root.setProperty(`--vt-palette-${i}`, colors[i] ?? "#ffffff");
   }
+}
+
+function setupPalette() {
+  const root = document.documentElement.style;
   // 16-231: 6x6x6 カラーキューブ
   const steps = [0, 95, 135, 175, 215, 255];
   for (let i = 16; i < 232; i++) {
@@ -79,6 +76,21 @@ function setupPalette() {
   for (let i = 232; i < 256; i++) {
     const v = 8 + (i - 232) * 10;
     root.setProperty(`--vt-palette-${i}`, `rgb(${v} ${v} ${v})`);
+  }
+}
+
+// ---- 外観設定（フォント・カラーテーマ）の適用 ----
+function applyAppearance(config: ResolvedAppearanceConfig) {
+  const root = document.documentElement.style;
+  root.setProperty("--term-font", config.fontFamily);
+  root.setProperty("--term-font-size", `${config.fontSize}px`);
+  root.setProperty("--term-line-height", `${config.lineHeight}px`);
+  root.setProperty("--term-fg", config.foreground);
+  root.setProperty("--term-bg", config.background);
+  applyAnsiPalette(config.ansiColors);
+  // フォントサイズ変更でcellWidth/cellHeightが変わりうるため、表示中の全タブへ再計測・再送する
+  for (const tabId of activeTabByTile.values()) {
+    sendResize(tabId);
   }
 }
 
@@ -112,6 +124,16 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             updateImePosition(renderState.cursorX, renderState.cursorY);
           }
         }
+      },
+      config: ({
+        keybindings,
+        appearance,
+      }: {
+        keybindings: KeybindingsConfig;
+        appearance: ResolvedAppearanceConfig;
+      }) => {
+        compiledKeybindings = compileKeybindings(keybindings);
+        applyAppearance(appearance);
       },
     },
   },
@@ -462,7 +484,7 @@ document.addEventListener("keydown", (e) => {
   // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）
   if (e.isComposing || e.keyCode === 229) return;
 
-  const tileCommand = resolveTileCommand(e);
+  const tileCommand = resolveTileCommand(e, compiledKeybindings);
   if (tileCommand) {
     e.preventDefault();
     handleTileCommand(tileCommand);
@@ -604,6 +626,7 @@ imeEl.focus({ preventScroll: true });
 
 // ---- 起動 ----
 setupPalette();
+applyAppearance(defaultAppearance);
 measureCell();
 sendMessage("ready");
 window.addEventListener("error", (e) => {

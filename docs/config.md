@@ -1,0 +1,143 @@
+# 設定ファイル
+
+niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`niwaterm-config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
+
+キーバインドに加えて、フォント・カラーテーマなどの外観も設定できる。設定ファイルの変更は再起動なしで反映される（ホットリロード）。`niwaterm init`によるセットアップ自動化は未実装（roadmap参照）。
+
+## セットアップ（手動、`niwaterm init`実装までの暫定手順）
+
+```sh
+mkdir -p ~/.config/niwaterm
+```
+
+`~/.config/niwaterm/`に以下の3ファイルを配置する（`packages/niwaterm-config/examples/`のコピーがベース）。
+
+**`~/.config/niwaterm/package.json`**
+
+```json
+{
+  "name": "niwaterm-user-config",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "niwaterm-config": "file:/path/to/niwaterm/packages/niwaterm-config"
+  }
+}
+```
+
+`file:`のパスは、このリポジトリをcloneした先の絶対パス（例: `/Users/you/ghq/github.com/eetann/niwaterm/packages/niwaterm-config`）に書き換える。実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定（例: `^0.1.0`）に差し替わる想定。
+
+`file:`の代わりに`bun link`を使う方法もある。`packages/niwaterm-config`で`bun link`を実行後、`~/.config/niwaterm/`で`bun link niwaterm-config`を実行するとリンクできる。
+
+**`~/.config/niwaterm/tsconfig.json`**
+
+```json
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["*.ts"]
+}
+```
+
+**`~/.config/niwaterm/niwaterm.config.ts`**
+
+```ts
+import { defaultAppearance, defaultKeybindings, defineConfig } from "niwaterm-config";
+
+export default defineConfig({
+  keybindings: {
+    ...defaultKeybindings,
+    "cmd+d": "split-horizontal",
+    "cmd+shift+d": "split-vertical",
+  },
+  appearance: {
+    ...defaultAppearance,
+    fontSize: 14,
+  },
+});
+```
+
+最後に依存をインストールする。
+
+```sh
+cd ~/.config/niwaterm && bun install
+```
+
+`node_modules/`はDotfilesで管理する場合、Git管理対象外にする想定。
+
+## キーバインドDSL
+
+`keybindings`は `KeyBindingString → KeybindAction` のマップ。指定しなかったキーは`defaultKeybindings`の割り当てのまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
+
+**KeyBindingString の書式**: `修飾子+...+キー本体`（`+`区切り）
+
+- 修飾子は `cmd` / `shift` / `alt` の3つ。**すべてのキーバインドは`cmd`を含む必要がある**（`cmd`を含まないキーは通常のターミナル入力に予約されているため、割り当てても無視される）
+- キー本体はアルファベット（`d`, `w`, `t`, `n`等）、矢印（`up`/`down`/`left`/`right`）、角括弧（`[`/`]`）のいずれか
+- 例: `"cmd+d"`, `"cmd+shift+d"`, `"cmd+alt+up"`, `"cmd+alt+]"`
+
+**KeybindAction の一覧**（13種類）:
+
+| アクション | 意味 |
+|---|---|
+| `split-vertical` / `split-horizontal` | タイルを垂直/水平分割 |
+| `close-tile` | フォーカス中のタブ/タイルを閉じる |
+| `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
+| `new-tab` | 新規タブ作成 |
+| `next-tab` / `prev-tab` | タブ切替 |
+| `new-workspace` | 新規ワークスペース作成 |
+| `next-workspace` / `prev-workspace` | ワークスペース切替 |
+
+不正なバインド文字列（未知の修飾子、`cmd`を含まない等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
+
+## 外観設定
+
+`appearance`はフォント・カラーテーマを指定するオブジェクト。全フィールドoptionalで、指定しなかったフィールドは`defaultAppearance`の値のまま有効（`defaultAppearance`をspreadしてから一部だけ上書きするのが基本の書き方）。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `fontFamily` | `string` | CSSの`font-family`値をそのまま文字列で指定する（複数フォント列挙・クォートはユーザー側の責務） |
+| `fontSize` | `number` | フォントサイズ（px） |
+| `lineHeight` | `number` | 行高（px） |
+| `foreground` | `string` | 前景色（CSSカラー値） |
+| `background` | `string` | 背景色（CSSカラー値） |
+| `ansiColors` | `readonly string[]` | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる |
+
+```ts
+appearance: {
+  ...defaultAppearance,
+  fontSize: 16,
+  ansiColors: [
+    ...defaultAppearance.ansiColors,
+    "#ff0000", // index 0（黒相当）だけ赤に変更する例
+  ],
+},
+```
+
+不正な値（`fontSize`に文字列を渡す、色に空文字列を渡す等）を指定した場合、そのフィールド（`ansiColors`はそのindex）だけ警告付きでデフォルトにフォールバックする。256色のうち16-231（6x6x6カラーキューブ）・232-255（グレースケール）は固定の計算式でユーザー設定の対象外。
+
+## ホットリロード
+
+`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観の両方）。`~/.config/niwaterm/`ディレクトリを監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
+
+構文エラーのある内容を保存した場合は、コンソールに警告ログが出た上でデフォルト設定（キーバインド・外観とも）にフォールバックする。「直前の有効な設定を保持する」のではなく、初回読み込み時と同様に毎回デフォルトから解決し直す設計のため、エラーを直して再保存すれば元通り反映される。
+
+`~/.config/niwaterm/`ディレクトリ自体が存在しない場合（未セットアップ）は監視そのものがスキップされ、コンソールにログが出るだけでアプリは通常通り起動する。
+
+## 既知の制約
+
+- **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
+- **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある
+- **ホットリロードのキャッシュバスティングはエントリファイルのみ**。`niwaterm.config.ts`自体の変更は毎回最新の内容を読み込むが、そのファイルが（将来）importする他のヘルパーファイルまで再帰的にキャッシュを無効化するわけではない。設定を複数ファイルに分割している場合、エントリファイル以外の変更はホットリロードで拾えず、アプリの再起動が必要
+
+## スコープ外（roadmap参照）
+
+- `niwaterm init`コマンドによるセットアップ自動化

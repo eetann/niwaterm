@@ -1,5 +1,8 @@
-// タイル操作の暫定キーバインド。
-// roadmap「TypeScript設定ファイルとキーバインド」でユーザー設定可能に置き換える前提の仮実装。
+// タイル操作のキーバインド。niwaterm.config.tsで自由に変更できる（compileKeybindingsでコンパイル済みのテーブルを受け取る）。
+// アプリ固有の変換（KeyboardEventLike⇄DSL文字列、KeybindAction⇄TileCommand）をここで担い、
+// 汎用的なDSLパース・コンパイルはniwaterm-configパッケージ側が担う。
+
+import { canonicalizeParsed, type KeybindAction } from "niwaterm-config";
 
 export type TileCommand =
   | { type: "split"; orientation: "horizontal" | "vertical" }
@@ -17,51 +20,74 @@ export type KeyboardEventLike = Pick<
   "key" | "code" | "metaKey" | "altKey" | "shiftKey"
 >;
 
-// Cmd+D=垂直分割、Cmd+Shift+D=水平分割、Cmd+W=タイルを閉じる、Cmd+Option+矢印=フォーカス移動、
-// Cmd+T=タブ新規作成、Cmd+Shift+]/[=タブ切替、Cmd+N=ワークスペース新規作成、
-// Cmd+Option+]/[=ワークスペース切替
-export function resolveTileCommand(e: KeyboardEventLike): TileCommand | null {
-  if (!e.metaKey) return null;
+// niwaterm-configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
+// ブラケットのみcodeで判定する（Shiftで文字自体が変わるためe.keyでは判定できない）。
+function keyBodyFromEvent(e: KeyboardEventLike): string {
+  if (e.code === "BracketRight") return "]";
+  if (e.code === "BracketLeft") return "[";
+  switch (e.key) {
+    case "ArrowUp":
+      return "up";
+    case "ArrowDown":
+      return "down";
+    case "ArrowLeft":
+      return "left";
+    case "ArrowRight":
+      return "right";
+    default:
+      return e.key.toLowerCase();
+  }
+}
 
-  if (e.altKey) {
-    switch (e.key) {
-      case "ArrowUp":
-        return { type: "focus", direction: "up" };
-      case "ArrowDown":
-        return { type: "focus", direction: "down" };
-      case "ArrowLeft":
-        return { type: "focus", direction: "left" };
-      case "ArrowRight":
-        return { type: "focus", direction: "right" };
-    }
-    if (e.code === "BracketRight") {
+function keyboardEventToCanonical(e: KeyboardEventLike): string {
+  return canonicalizeParsed({
+    cmd: e.metaKey,
+    shift: e.shiftKey,
+    alt: e.altKey,
+    key: keyBodyFromEvent(e),
+  });
+}
+
+function actionToTileCommand(action: KeybindAction): TileCommand {
+  switch (action) {
+    case "split-vertical":
+      return { type: "split", orientation: "vertical" };
+    case "split-horizontal":
+      return { type: "split", orientation: "horizontal" };
+    case "close-tile":
+      return { type: "close" };
+    case "focus-up":
+      return { type: "focus", direction: "up" };
+    case "focus-down":
+      return { type: "focus", direction: "down" };
+    case "focus-left":
+      return { type: "focus", direction: "left" };
+    case "focus-right":
+      return { type: "focus", direction: "right" };
+    case "new-tab":
+      return { type: "newTab" };
+    case "next-tab":
+      return { type: "cycleTab", delta: 1 };
+    case "prev-tab":
+      return { type: "cycleTab", delta: -1 };
+    case "new-workspace":
+      return { type: "newWorkspace" };
+    case "next-workspace":
       return { type: "switchWorkspace", delta: 1 };
-    }
-    if (e.code === "BracketLeft") {
+    case "prev-workspace":
       return { type: "switchWorkspace", delta: -1 };
+    default: {
+      const exhaustive: never = action;
+      throw new Error(`unknown keybind action: ${String(exhaustive)}`);
     }
-    return null;
   }
+}
 
-  if (e.shiftKey && e.code === "BracketRight") {
-    return { type: "cycleTab", delta: 1 };
-  }
-  if (e.shiftKey && e.code === "BracketLeft") {
-    return { type: "cycleTab", delta: -1 };
-  }
-
-  const key = e.key.toLowerCase();
-  if (key === "d") {
-    return { type: "split", orientation: e.shiftKey ? "horizontal" : "vertical" };
-  }
-  if (key === "w" && !e.shiftKey) {
-    return { type: "close" };
-  }
-  if (key === "t" && !e.shiftKey) {
-    return { type: "newTab" };
-  }
-  if (key === "n" && !e.shiftKey) {
-    return { type: "newWorkspace" };
-  }
-  return null;
+export function resolveTileCommand(
+  e: KeyboardEventLike,
+  compiled: ReadonlyMap<string, KeybindAction>,
+): TileCommand | null {
+  if (!e.metaKey) return null;
+  const action = compiled.get(keyboardEventToCanonical(e));
+  return action ? actionToTileCommand(action) : null;
 }

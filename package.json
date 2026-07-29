@@ -2,18 +2,20 @@
 	"name": "niwaterm",
 	"version": "0.0.1",
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
+	"workspaces": ["packages/*"],
 	"scripts": {
 		"start": "electrobun dev",
 		"dev": "electrobun dev --watch",
 		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib",
-		"lint": "oxlint src",
-		"lint:fix": "oxlint --fix src",
-		"format": "oxfmt src",
-		"format:check": "oxfmt --check src",
+		"lint": "oxlint src packages",
+		"lint:fix": "oxlint --fix src packages",
+		"format": "oxfmt src packages",
+		"format:check": "oxfmt --check src packages",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"electrobun": "latest"
+		"electrobun": "latest",
+		"niwaterm-config": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",

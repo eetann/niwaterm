@@ -1,4 +1,7 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
+import type { KeybindingsConfig, ResolvedAppearanceConfig } from "niwaterm-config";
+import { configFilePath, loadAndResolveConfig } from "./config";
+import { watchConfigFile } from "./config-watcher";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
@@ -60,6 +63,7 @@ export type NiwaRPC = {
     requests: {};
     messages: {
       render: AppRenderState;
+      config: { keybindings: KeybindingsConfig; appearance: ResolvedAppearanceConfig };
     };
   }>;
 };
@@ -87,6 +91,12 @@ function render() {
   rpcSend.render(snap);
 }
 
+function sendConfig() {
+  const rpcSend = (mainWindow.webview.rpc as any)?.send;
+  if (!rpcSend) return;
+  rpcSend.config({ keybindings, appearance });
+}
+
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
 let persistScheduled = false;
 function schedulePersist() {
@@ -111,7 +121,42 @@ let cleaned = false;
 function cleanup() {
   if (cleaned) return;
   cleaned = true;
+  configWatcher.close();
   workspaceManager.dispose();
+}
+
+let keybindings: KeybindingsConfig;
+let appearance: ResolvedAppearanceConfig;
+
+async function refreshConfig(): Promise<void> {
+  ({ keybindings, appearance } = await loadAndResolveConfig(configFilePath()));
+}
+
+await refreshConfig();
+
+// 設定ファイル変更の検知→再読み込み→RPC送信をまとめて行う。実行中に次の変更が来たら
+// 1回だけ追いかけて再実行する（多重実行の抑制）。scheduleRenderは無条件で呼ぶ:
+// フォントサイズ変更でcols/rowsが変わらない場合でも、新しいcellWidth/cellHeightを
+// 基準にカーソルpx位置を補正する必要があるため
+let configReloadInFlight = false;
+let configReloadPending = false;
+async function handleConfigFileChanged(): Promise<void> {
+  if (configReloadInFlight) {
+    configReloadPending = true;
+    return;
+  }
+  configReloadInFlight = true;
+  try {
+    await refreshConfig();
+    sendConfig();
+    scheduleRender();
+  } finally {
+    configReloadInFlight = false;
+    if (configReloadPending) {
+      configReloadPending = false;
+      void handleConfigFileChanged();
+    }
+  }
 }
 
 const restoreFrom = await loadPersistedState(persistedFilePath());
@@ -148,6 +193,7 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       ready: () => {
         scheduleRender();
+        sendConfig();
       },
       input: ({ tabId, data }: { tabId: TabId; data: string }) => {
         workspaceManager.handleInput(tabId, data);
@@ -211,5 +257,9 @@ const mainWindow = new BrowserWindow({
 });
 
 mainWindow.activate();
+
+const configWatcher = watchConfigFile(configFilePath(), () => {
+  void handleConfigFileChanged();
+});
 
 console.log("niwaterm started");

@@ -1,0 +1,12 @@
+{
+  "name": "niwaterm-config",
+  "version": "0.0.1",
+  "description": "Type definitions and helpers for niwaterm's TypeScript config file",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
