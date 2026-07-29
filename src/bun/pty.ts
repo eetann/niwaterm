@@ -65,6 +65,13 @@ export function createPty(opts: PtyOptions): Pty {
 
   function resize(cols: number, rows: number): void {
     terminal.resize(cols, rows);
+    // Bun.Terminal.resize()はwinsize（TIOCSWINSZ相当）は更新するが、
+    // SIGWINCHをフォアグラウンドプロセスグループへ送出しない。
+    // このためシェルの$COLUMNS等リサイズ通知に依存する値が更新されず、
+    // プロンプト側の罫線幅計算などが古いサイズのまま固着する。
+    try {
+      process.kill(-proc.pid, "SIGWINCH");
+    } catch {}
   }
 
   function kill(): void {

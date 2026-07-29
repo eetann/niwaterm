@@ -1,5 +1,7 @@
 :root {
-  --term-font: "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans", monospace;
+  --term-font:
+    "HackGen Console NF", "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+    monospace;
   --cell-w: 8px;
   --term-font-size: 13px;
   --term-line-height: 18px;
@@ -144,6 +146,11 @@ body {
   font-family: var(--term-font) !important;
   font-size: var(--term-font-size) !important;
   line-height: var(--term-line-height) !important;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "kern" 0;
 }
 
 .tile .term {
