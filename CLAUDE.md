@@ -38,7 +38,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - **キーボード入力には明示的なフォーカスが必要**: bun側 `mainWindow.activate()` + webview側 `tabIndex=-1` と `focus()`（実装済み）
 - electrobun.config.ts の `copy` の出力先は `Resources/app/` 基準の相対パス
 - bundlerは依存の `__dirname` をリポジトリ絶対パス（node_modules内）に焼き込む。実行時のファイル解決に注意
-- devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-dev.app'`
+- devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-dev.app'`。他の自作Electrobunアプリも同時に動いていると同名"bun"プロセスが複数存在し、さらに1プロセスが名前なしヘルパーウィンドウ＋本体ウィンドウの複数を持つことがある。正確な絞り込み方はmacos-gui-testingスキル参照
 - **アプリメニューが無いとCmd+C/Cmd+V等がWebViewに届かない**（macOSのkey equivalentはメニュー経由）。`ApplicationMenu.setApplicationMenu` でEditメニューを `role: "copy"/"paste"` + `accelerator: "Command+C"` 形式で設定する（実装済み、src/bun/index.ts冒頭）
 
 ## bun:ffiのハマりどころ
