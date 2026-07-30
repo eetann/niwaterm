@@ -6,6 +6,8 @@ import { unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { appSupportDir } from "./app-paths";
+import { tmuxKeysToBytes } from "./tmux-keys";
+import type { WorkspaceManager } from "./workspace-manager";
 
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
@@ -15,9 +17,44 @@ export interface IpcServer {
   close(): void;
 }
 
-function buildApp() {
+interface SendKeysRequestBody {
+  tabId: string;
+  keys: string[];
+}
+
+function parseSendKeysBody(body: unknown): SendKeysRequestBody | null {
+  const b = body as { tabId?: unknown; keys?: unknown };
+  if (typeof b.tabId !== "string" || b.tabId.length === 0) return null;
+  if (!Array.isArray(b.keys) || b.keys.length === 0) return null;
+  if (!b.keys.every((k) => typeof k === "string")) return null;
+  return { tabId: b.tabId, keys: b.keys };
+}
+
+function buildApp(workspaceManager: WorkspaceManager) {
   const app = new Hono();
+
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
+
+  app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
+
+  app.post("/send-keys", async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    }
+    const parsed = parseSendKeysBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { tabId: string, keys: string[] }" }, 400);
+    }
+    if (!workspaceManager.hasTab(parsed.tabId)) {
+      return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
+    }
+    workspaceManager.handleInput(parsed.tabId, tmuxKeysToBytes(parsed.keys));
+    return c.json({ ok: true });
+  });
+
   return app;
 }
 
@@ -43,9 +80,12 @@ async function removeStaleSocket(path: string): Promise<void> {
   }
 }
 
-export async function createIpcServer(path: string): Promise<IpcServer> {
+export async function createIpcServer(
+  path: string,
+  workspaceManager: WorkspaceManager,
+): Promise<IpcServer> {
   await removeStaleSocket(path);
-  const app = buildApp();
+  const app = buildApp(workspaceManager);
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   let closed = false;
   return {

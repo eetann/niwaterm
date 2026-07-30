@@ -223,6 +223,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return tree;
   }
 
+  function getFocusedTileId(): TileId {
+    return focusedTileId;
+  }
+
   function hasTab(tabId: TabId): boolean {
     return sessions.has(tabId);
   }
@@ -245,6 +249,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handleResize,
     snapshot,
     getLayout,
+    getFocusedTileId,
     hasTab,
     dispose,
   };

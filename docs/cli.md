@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。現状は疎通確認（`niwaterm ping`）のみ対応。タイル・タブ・ワークスペースの一覧取得やキー送信などはroadmap「CLIからの操作」参照（未実装）。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）に対応。CLIからのレイアウト操作・画面内容取得などはroadmap「CLIからの操作」参照（未実装）。
 
 ## セットアップ
 
@@ -22,6 +22,25 @@ niwaterm ping
 niwatermアプリが起動していれば`pong (pid <アプリのpid>)`が返る（終了コード0）。アプリが起動していない、またはIPCサーバーに接続できない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
+niwaterm list
+```
+
+ワークスペース→タイル→タブの階層構造を表示する。アクティブなワークスペース/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(focused)`のサフィックスが付く。`send-keys`で指定するtabIdはここで確認する。
+
+```sh
+niwaterm send-keys --tab <tabId> <keys...>
+```
+
+指定したタブへキーを送信する（tmuxの`send-keys`相当）。`<keys...>`にはリテラル文字列と特殊キー名を複数個並べて混在指定できる。
+
+```sh
+niwaterm send-keys --tab tab-3 'ls -la' Enter
+niwaterm send-keys -t tab-3 C-c
+```
+
+対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
 niwaterm --help
 niwaterm ping --help
 ```
@@ -29,14 +48,15 @@ niwaterm ping --help
 ## IPCサーバーの仕組み
 
 - ソケットパス: `~/Library/Application Support/niwaterm/niwaterm.sock`（固定）
-- 通信: `Bun.serve({unix, fetch})` + Hono。`GET /ping`が`{ok: true, pid: <number>}`を返す
+- 通信: `Bun.serve({unix, fetch})` + Hono
+  - `GET /ping` — `{ok: true, pid: <number>}`を返す
+  - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`）
+  - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
 
 ## スコープ外（roadmap参照）
 
-- 特定タブへのキー送信（tmux `send-keys`相当）
-- タイル・タブ・ワークスペースの一覧取得
 - CLIからのレイアウト操作（タイル分割・タブ作成等）
 - 特定タブの画面内容（テキスト）取得
 - npm registryへの公開・実行可能ファイルとしての配布

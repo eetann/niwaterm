@@ -309,3 +309,39 @@ describe("serializeForPersistence", () => {
     expect(restored.serializeForPersistence()).toEqual(persisted);
   });
 });
+
+describe("listWorkspaces", () => {
+  test("全ワークスペース分の構造をorder順で返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+
+    const list = mgr.listWorkspaces();
+    expect(list.map((e) => e.workspaceId)).toEqual([firstId, secondId]);
+    expect(list.find((e) => e.workspaceId === secondId)?.active).toBe(true);
+    expect(list.find((e) => e.workspaceId === firstId)?.active).toBe(false);
+  });
+
+  test("focusedTileIdとlayoutが各workspaceのgetLayout/getFocusedTileIdと一致する", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.splitTile(firstTileId, "vertical");
+
+    const entry = mgr.listWorkspaces()[0];
+    expect(entry?.layout).toEqual(mgr.snapshot().workspace.layout);
+    expect(entry?.focusedTileId).toBe(mgr.snapshot().workspace.focusedTileId);
+  });
+});
+
+describe("hasTab", () => {
+  test("存在するtabIdはtrue、存在しないtabIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    expect(mgr.hasTab(tabId)).toBe(true);
+    expect(mgr.hasTab("not-found")).toBe(false);
+  });
+});

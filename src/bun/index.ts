@@ -178,7 +178,7 @@ const workspaceManager = createWorkspaceManager({
 });
 
 try {
-  ipcServer = await createIpcServer(ipcSocketPath());
+  ipcServer = await createIpcServer(ipcSocketPath(), workspaceManager);
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
   console.log(`[bun] failed to start ipc server: ${String(err)}`);

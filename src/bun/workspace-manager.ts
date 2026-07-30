@@ -25,6 +25,13 @@ export interface AppRenderState {
   workspace: WorkspaceRenderState;
 }
 
+export interface WorkspaceListEntry {
+  workspaceId: WorkspaceId;
+  active: boolean;
+  focusedTileId: TileId;
+  layout: TileNode;
+}
+
 export interface WorkspaceManagerOptions {
   initialCols: number;
   initialRows: number;
@@ -177,6 +184,22 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handleResize(tabId, cols, rows, cellWidthPx, cellHeightPx);
   }
 
+  function listWorkspaces(): WorkspaceListEntry[] {
+    return order.map((id) => {
+      const ws = workspaces.get(id) as Workspace;
+      return {
+        workspaceId: id,
+        active: id === activeId,
+        focusedTileId: ws.getFocusedTileId(),
+        layout: ws.getLayout(),
+      };
+    });
+  }
+
+  function hasTab(tabId: TabId): boolean {
+    return findOwnerByTabId(tabId) !== undefined;
+  }
+
   function snapshot(): AppRenderState {
     // activeIdは常にworkspacesの有効なキーを指す（newWorkspace/switchWorkspace/closeWorkspace/
     // handleWorkspaceEmptiedのいずれも、削除時は必ず残存するidへ付け替えてから返す）
@@ -218,6 +241,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     handlePaste,
     handleResize,
     snapshot,
+    listWorkspaces,
+    hasTab,
     serializeForPersistence,
     dispose,
   };

@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
+import listCommand from "./commands/list";
 import pingCommand from "./commands/ping";
+import sendKeysCommand from "./commands/send-keys";
 
 const mainCommand = define({
   name: "niwaterm",
@@ -16,5 +18,7 @@ await cli(process.argv.slice(2), mainCommand, {
   description: "niwatermターミナルアプリをCLIから操作する",
   subCommands: {
     ping: pingCommand,
+    list: listCommand,
+    "send-keys": sendKeysCommand,
   },
 });
