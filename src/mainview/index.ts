@@ -5,7 +5,7 @@ import {
   defaultKeybindings,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
-} from "niwaterm-config";
+} from "@niwaterm/config";
 import type { NiwaRPC } from "../bun/index";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type { AppRenderState, WorkspaceId } from "../bun/workspace-manager";

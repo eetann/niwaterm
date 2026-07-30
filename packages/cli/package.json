@@ -1,0 +1,16 @@
+{
+  "name": "@niwaterm/cli",
+  "version": "0.0.1",
+  "private": true,
+  "description": "niwatermをCLIから操作するコマンド",
+  "bin": {
+    "niwaterm": "./src/index.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "gunshi": "^0.37.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

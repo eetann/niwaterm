@@ -4,8 +4,8 @@
 // 「そのleafに何個タブがあったか」「何番目がアクティブだったか」のみを保持する。
 
 import { mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { appSupportDir } from "./app-paths";
 import type { FlexDirection, TabId, TileId, TileNode } from "./tile-layout";
 
 export interface PersistedTileLeaf {
@@ -79,7 +79,7 @@ export function buildTreeFromPersisted(
 }
 
 export function persistedFilePath(): string {
-  return join(homedir(), "Library", "Application Support", "niwaterm", "workspaces.json");
+  return join(appSupportDir(), "workspaces.json");
 }
 
 function isPersistedTileNode(value: unknown): value is PersistedTileNode {

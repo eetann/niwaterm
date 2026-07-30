@@ -14,8 +14,9 @@
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@niwaterm/config": "workspace:*",
 		"electrobun": "latest",
-		"niwaterm-config": "workspace:*"
+		"hono": "^4.12.32"
 	},
 	"devDependencies": {
 		"@types/bun": "latest",

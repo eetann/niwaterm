@@ -1,6 +1,6 @@
 # 設定ファイル
 
-niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`niwaterm-config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
+niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`@niwaterm/config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
 
 キーバインドに加えて、フォント・カラーテーマなどの外観も設定できる。設定ファイルの変更は再起動なしで反映される（ホットリロード）。`niwaterm init`によるセットアップ自動化は未実装（roadmap参照）。
 
@@ -10,7 +10,7 @@ niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/
 mkdir -p ~/.config/niwaterm
 ```
 
-`~/.config/niwaterm/`に以下の3ファイルを配置する（`packages/niwaterm-config/examples/`のコピーがベース）。
+`~/.config/niwaterm/`に以下の3ファイルを配置する（`packages/config/examples/`のコピーがベース）。
 
 **`~/.config/niwaterm/package.json`**
 
@@ -20,14 +20,14 @@ mkdir -p ~/.config/niwaterm
   "private": true,
   "type": "module",
   "dependencies": {
-    "niwaterm-config": "file:/path/to/niwaterm/packages/niwaterm-config"
+    "@niwaterm/config": "file:/path/to/niwaterm/packages/config"
   }
 }
 ```
 
-`file:`のパスは、このリポジトリをcloneした先の絶対パス（例: `/Users/you/ghq/github.com/eetann/niwaterm/packages/niwaterm-config`）に書き換える。実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定（例: `^0.1.0`）に差し替わる想定。
+`file:`のパスは、このリポジトリをcloneした先の絶対パス（例: `/Users/you/ghq/github.com/eetann/niwaterm/packages/config`）に書き換える。実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定（例: `^0.1.0`）に差し替わる想定。
 
-`file:`の代わりに`bun link`を使う方法もある。`packages/niwaterm-config`で`bun link`を実行後、`~/.config/niwaterm/`で`bun link niwaterm-config`を実行するとリンクできる。
+`file:`の代わりに`bun link`を使う方法もある。`packages/config`で`bun link`を実行後、`~/.config/niwaterm/`で`bun link @niwaterm/config`を実行するとリンクできる。
 
 **`~/.config/niwaterm/tsconfig.json`**
 
@@ -51,7 +51,7 @@ mkdir -p ~/.config/niwaterm
 **`~/.config/niwaterm/niwaterm.config.ts`**
 
 ```ts
-import { defaultAppearance, defaultKeybindings, defineConfig } from "niwaterm-config";
+import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
   keybindings: {

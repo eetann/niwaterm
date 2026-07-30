@@ -1,4 +1,4 @@
-import { defaultAppearance, defaultKeybindings, defineConfig } from "niwaterm-config";
+import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
   keybindings: {

@@ -12,7 +12,7 @@ import {
   type NiwatermConfig,
   parseKeyBindingString,
   type ResolvedAppearanceConfig,
-} from "niwaterm-config";
+} from "@niwaterm/config";
 
 export function configDirPath(): string {
   return join(homedir(), ".config", "niwaterm");

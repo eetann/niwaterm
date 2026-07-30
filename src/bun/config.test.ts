@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultAppearance, defaultKeybindings } from "niwaterm-config";
+import { defaultAppearance, defaultKeybindings } from "@niwaterm/config";
 import { configFilePath, loadUserConfig, resolveAppearance, resolveKeybindings } from "./config";
 
 describe("configFilePath", () => {

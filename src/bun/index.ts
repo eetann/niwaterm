@@ -1,7 +1,8 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
-import type { KeybindingsConfig, ResolvedAppearanceConfig } from "niwaterm-config";
+import type { KeybindingsConfig, ResolvedAppearanceConfig } from "@niwaterm/config";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
+import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
@@ -117,12 +118,15 @@ function onDirty() {
   schedulePersist();
 }
 
+let ipcServer: IpcServer | null = null;
+
 let cleaned = false;
 function cleanup() {
   if (cleaned) return;
   cleaned = true;
   configWatcher.close();
   workspaceManager.dispose();
+  ipcServer?.close();
 }
 
 let keybindings: KeybindingsConfig;
@@ -172,6 +176,13 @@ const workspaceManager = createWorkspaceManager({
     process.exit(0);
   },
 });
+
+try {
+  ipcServer = await createIpcServer(ipcSocketPath());
+  console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
+} catch (err) {
+  console.log(`[bun] failed to start ipc server: ${String(err)}`);
+}
 
 process.on("exit", cleanup);
 process.on("SIGINT", () => {

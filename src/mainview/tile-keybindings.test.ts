@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compileKeybindings, defaultKeybindings } from "niwaterm-config";
+import { compileKeybindings, defaultKeybindings } from "@niwaterm/config";
 import { resolveTileCommand } from "./tile-keybindings";
 
 const compiled = compileKeybindings(defaultKeybindings);

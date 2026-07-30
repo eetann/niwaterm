@@ -1,8 +1,8 @@
 // タイル操作のキーバインド。niwaterm.config.tsで自由に変更できる（compileKeybindingsでコンパイル済みのテーブルを受け取る）。
 // アプリ固有の変換（KeyboardEventLike⇄DSL文字列、KeybindAction⇄TileCommand）をここで担い、
-// 汎用的なDSLパース・コンパイルはniwaterm-configパッケージ側が担う。
+// 汎用的なDSLパース・コンパイルは@niwaterm/configパッケージ側が担う。
 
-import { canonicalizeParsed, type KeybindAction } from "niwaterm-config";
+import { canonicalizeParsed, type KeybindAction } from "@niwaterm/config";
 
 export type TileCommand =
   | { type: "split"; orientation: "horizontal" | "vertical" }
@@ -20,7 +20,7 @@ export type KeyboardEventLike = Pick<
   "key" | "code" | "metaKey" | "altKey" | "shiftKey"
 >;
 
-// niwaterm-configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
+// @niwaterm/configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
 // ブラケットのみcodeで判定する（Shiftで文字自体が変わるためe.keyでは判定できない）。
 function keyBodyFromEvent(e: KeyboardEventLike): string {
   if (e.code === "BracketRight") return "]";

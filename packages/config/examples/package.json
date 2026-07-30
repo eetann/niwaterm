@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "niwaterm-config": "file:/path/to/niwaterm/packages/niwaterm-config"
+    "@niwaterm/config": "file:/path/to/niwaterm/packages/config"
   }
 }
