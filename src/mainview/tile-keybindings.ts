@@ -11,7 +11,8 @@ export type TileCommand =
   | { type: "newTab" }
   | { type: "cycleTab"; delta: 1 | -1 }
   | { type: "newWorkspace" }
-  | { type: "switchWorkspace"; delta: 1 | -1 };
+  | { type: "switchWorkspace"; delta: 1 | -1 }
+  | { type: "toggleSidebar" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -76,6 +77,8 @@ function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "switchWorkspace", delta: 1 };
     case "prev-workspace":
       return { type: "switchWorkspace", delta: -1 };
+    case "toggle-sidebar":
+      return { type: "toggleSidebar" };
     default: {
       const exhaustive: never = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);

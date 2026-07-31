@@ -23,6 +23,8 @@ export interface AppRenderState {
   workspaceIds: WorkspaceId[];
   /** アクティブなワークスペースの描画データのみ（非表示ワークスペース分は送らない） */
   workspace: WorkspaceRenderState;
+  /** サイドバー描画用。全ワークスペースのレイアウト骨格（PTY内容は含まない、listWorkspaces()と同一データ） */
+  workspaces: WorkspaceListEntry[];
 }
 
 export interface WorkspaceListEntry {
@@ -215,6 +217,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       activeWorkspaceId: activeId,
       workspaceIds: [...order],
       workspace: active.snapshot(),
+      workspaces: listWorkspaces(),
     };
   }
 

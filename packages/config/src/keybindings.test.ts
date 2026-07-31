@@ -85,10 +85,10 @@ describe("isKeybindAction", () => {
 });
 
 describe("defaultKeybindings", () => {
-  test("13個のアクション全てに1つずつ割り当てられている", () => {
+  test("14個のアクション全てに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings);
-    expect(actions.length).toBe(13);
-    expect(new Set(actions).size).toBe(13);
+    expect(actions.length).toBe(14);
+    expect(new Set(actions).size).toBe(14);
     for (const action of KEYBIND_ACTIONS) {
       expect(actions).toContain(action);
     }
@@ -112,8 +112,8 @@ describe("compileKeybindings", () => {
     expect(compiled.size).toBe(0);
   });
 
-  test("defaultKeybindingsは13エントリ全てコンパイルできる", () => {
+  test("defaultKeybindingsは14エントリ全てコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
-    expect(compiled.size).toBe(13);
+    expect(compiled.size).toBe(14);
   });
 });

@@ -23,9 +23,23 @@ body {
   background: var(--term-bg);
 }
 
+body {
+  display: flex;
+  flex-direction: row;
+}
+
+#sidebar {
+  flex: 0 0 200px;
+  height: 100%;
+  overflow-y: auto;
+  background: #181825;
+  border-right: 1px solid #313244;
+}
+
 #screen {
   position: relative;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   padding: 4px;
   cursor: text;
@@ -112,6 +126,41 @@ body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.sidebar-workspace-header {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: #a6adc8;
+  font-family: var(--term-font);
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.sidebar-workspace-header.active {
+  color: var(--term-fg);
+}
+
+.sidebar-tab {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px 4px 16px;
+  border: none;
+  background: transparent;
+  color: #a6adc8;
+  font-family: var(--term-font);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sidebar-tab.active {
+  background: var(--term-bg);
+  color: var(--term-fg);
 }
 
 .tab-content {

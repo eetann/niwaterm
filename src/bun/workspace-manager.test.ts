@@ -337,6 +337,14 @@ describe("listWorkspaces", () => {
     expect(entry?.layout).toEqual(mgr.snapshot().workspace.layout);
     expect(entry?.focusedTileId).toBe(mgr.snapshot().workspace.focusedTileId);
   });
+
+  test("snapshot().workspacesはlistWorkspaces()と一致する（サイドバー描画用データ）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    mgr.newWorkspace();
+
+    expect(mgr.snapshot().workspaces).toEqual(mgr.listWorkspaces());
+  });
 });
 
 describe("hasTab", () => {

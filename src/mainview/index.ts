@@ -7,8 +7,15 @@ import {
   type ResolvedAppearanceConfig,
 } from "@niwaterm/config";
 import type { NiwaRPC } from "../bun/index";
-import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
-import type { AppRenderState, WorkspaceId } from "../bun/workspace-manager";
+import {
+  findNode,
+  listLeaves,
+  nextTabId,
+  type TabId,
+  type TileId,
+  type TileNode,
+} from "../bun/tile-layout";
+import type { AppRenderState, WorkspaceId, WorkspaceListEntry } from "../bun/workspace-manager";
 import { keyToBytes } from "./key-to-bytes";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
@@ -21,6 +28,12 @@ const compositionEl = document.getElementById("composition") as HTMLDivElement;
 const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
 const tabButtonTemplate = document.getElementById("tab-button-template") as HTMLTemplateElement;
 const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
+const sidebarEl = document.getElementById("sidebar") as HTMLElement;
+const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
+const sidebarWorkspaceTemplate = document.getElementById(
+  "sidebar-workspace-template",
+) as HTMLTemplateElement;
+const sidebarTabTemplate = document.getElementById("sidebar-tab-template") as HTMLTemplateElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -33,6 +46,14 @@ const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
 const activeTabByTile = new Map<TileId, TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
 const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
+
+// ---- サイドバーごとのDOM要素・状態管理（タイル木のMapとは独立させる。
+// サイドバーは全ワークスペースを表示するため、タイル木側のgcStale基準
+// 「アクティブワークスペースに登場しないID＝stale」を共有すると誤って消えてしまう）----
+const sidebarWorkspaceElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
+const sidebarHeaderElByWorkspaceId = new Map<WorkspaceId, HTMLButtonElement>();
+const sidebarTabListElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
+const sidebarTabRowElByTabId = new Map<TabId, HTMLButtonElement>();
 
 let focusedTileId: TileId | null = null;
 // フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
@@ -50,6 +71,29 @@ let draggingSplitId: TileId | null = null;
 let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
 // bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする
 let compiledKeybindings = compileKeybindings(defaultKeybindings);
+// 直近のrender()で受け取った全ワークスペースの一覧。サイドバーを開いた瞬間に再描画するため保持する
+let lastWorkspaces: WorkspaceListEntry[] = [];
+
+const SIDEBAR_OPEN_STORAGE_KEY = "niwaterm:sidebarOpen";
+
+function loadSidebarOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY);
+    return stored === null ? true : stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+function saveSidebarOpen(open: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, open ? "1" : "0");
+  } catch {
+    // 保存できなくても致命的ではない（次回起動時はデフォルト「開」にフォールバックする）
+  }
+}
+
+let sidebarOpen = loadSidebarOpen();
 
 // ---- 256色パレットのCSS変数を定義する（formatter出力が var(--vt-palette-N) を参照する）----
 // ANSI 0-15（標準色）は外観設定で変更可能なため、外観変更のたびに呼ばれるapplyAnsiPaletteに分離する。
@@ -105,6 +149,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         workspaceIds = p.workspaceIds;
         lastLayout = p.workspace.layout;
         renderLayout(p.workspace.layout);
+        lastWorkspaces = p.workspaces;
+        if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = p.workspace.focusedTileId;
         currentTabId = (focusedTileId && activeTabByTile.get(focusedTileId)) ?? null;
         updateFocusHighlight();
@@ -384,6 +430,110 @@ function gcStale(
   }
 }
 
+// ---- サイドバー: ワークスペース＋タブのフラット一覧 → DOM reconciliation ----
+// タイル木のreconcileとは別系統のMap・gcを使う（全ワークスペースを描画するため）
+function renderSidebar(
+  workspaces: WorkspaceListEntry[],
+  currentActiveWorkspaceId: WorkspaceId | null,
+): void {
+  const seenWorkspaceIds = new Set<WorkspaceId>();
+  const seenTabIds = new Set<TabId>();
+
+  workspaces.forEach((entry, workspaceIndex) => {
+    seenWorkspaceIds.add(entry.workspaceId);
+    const { workspaceEl, headerEl, tabListEl } = ensureSidebarWorkspace(entry.workspaceId);
+    if (workspaceEl.parentElement !== sidebarListEl) {
+      sidebarListEl.appendChild(workspaceEl);
+    }
+    headerEl.textContent = `Workspace ${workspaceIndex + 1}`;
+    headerEl.dataset["workspaceId"] = entry.workspaceId;
+    headerEl.classList.toggle("active", entry.workspaceId === currentActiveWorkspaceId);
+
+    for (const [tileIndex, leaf] of listLeaves(entry.layout).entries()) {
+      leaf.tabIds.forEach((tabId, tabIndex) => {
+        seenTabIds.add(tabId);
+        const rowEl = ensureSidebarTabRow(tabId, tabListEl);
+        rowEl.textContent = `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`;
+        rowEl.dataset["workspaceId"] = entry.workspaceId;
+        rowEl.dataset["tileId"] = leaf.id;
+        rowEl.dataset["tabId"] = tabId;
+        rowEl.classList.toggle(
+          "active",
+          entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
+        );
+      });
+    }
+  });
+
+  gcSidebarStale(seenWorkspaceIds, seenTabIds);
+}
+
+function ensureSidebarWorkspace(workspaceId: WorkspaceId): {
+  workspaceEl: HTMLDivElement;
+  headerEl: HTMLButtonElement;
+  tabListEl: HTMLDivElement;
+} {
+  let workspaceEl = sidebarWorkspaceElByWorkspaceId.get(workspaceId);
+  if (!workspaceEl) {
+    const frag = sidebarWorkspaceTemplate.content.cloneNode(true) as DocumentFragment;
+    workspaceEl = frag.querySelector(".sidebar-workspace") as HTMLDivElement;
+    sidebarWorkspaceElByWorkspaceId.set(workspaceId, workspaceEl);
+    sidebarHeaderElByWorkspaceId.set(
+      workspaceId,
+      workspaceEl.querySelector(".sidebar-workspace-header") as HTMLButtonElement,
+    );
+    sidebarTabListElByWorkspaceId.set(
+      workspaceId,
+      workspaceEl.querySelector(".sidebar-tab-list") as HTMLDivElement,
+    );
+  }
+  return {
+    workspaceEl,
+    headerEl: sidebarHeaderElByWorkspaceId.get(workspaceId) as HTMLButtonElement,
+    tabListEl: sidebarTabListElByWorkspaceId.get(workspaceId) as HTMLDivElement,
+  };
+}
+
+function ensureSidebarTabRow(tabId: TabId, tabListEl: HTMLDivElement): HTMLButtonElement {
+  let rowEl = sidebarTabRowElByTabId.get(tabId);
+  if (!rowEl) {
+    const frag = sidebarTabTemplate.content.cloneNode(true) as DocumentFragment;
+    rowEl = frag.querySelector(".sidebar-tab") as HTMLButtonElement;
+    sidebarTabRowElByTabId.set(tabId, rowEl);
+  }
+  if (rowEl.parentElement !== tabListEl) {
+    tabListEl.appendChild(rowEl);
+  }
+  return rowEl;
+}
+
+/** 前回登場したが今回登場しなかったworkspace/tabの後始末 */
+function gcSidebarStale(seenWorkspaceIds: Set<WorkspaceId>, seenTabIds: Set<TabId>): void {
+  for (const tabId of sidebarTabRowElByTabId.keys()) {
+    if (seenTabIds.has(tabId)) continue;
+    sidebarTabRowElByTabId.get(tabId)?.remove();
+    sidebarTabRowElByTabId.delete(tabId);
+  }
+  for (const [workspaceId, workspaceEl] of sidebarWorkspaceElByWorkspaceId) {
+    if (seenWorkspaceIds.has(workspaceId)) continue;
+    workspaceEl.remove();
+    sidebarWorkspaceElByWorkspaceId.delete(workspaceId);
+    sidebarHeaderElByWorkspaceId.delete(workspaceId);
+    sidebarTabListElByWorkspaceId.delete(workspaceId);
+  }
+}
+
+function applySidebarVisibility(): void {
+  sidebarEl.style.display = sidebarOpen ? "" : "none";
+}
+
+function toggleSidebar(): void {
+  sidebarOpen = !sidebarOpen;
+  applySidebarVisibility();
+  saveSidebarOpen(sidebarOpen);
+  if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
+}
+
 function updateFocusHighlight(): void {
   for (const tileEl of tileTreeEl.querySelectorAll<HTMLElement>(".tile")) {
     tileEl.classList.toggle("focused", tileEl.dataset["tileId"] === focusedTileId);
@@ -500,6 +650,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 function handleTileCommand(cmd: TileCommand): void {
+  // サイドバー開閉はbun側の状態を必要としないため、フォーカス中タイル無しでも動作させる
+  if (cmd.type === "toggleSidebar") {
+    toggleSidebar();
+    return;
+  }
   if (!focusedTileId) return;
   switch (cmd.type) {
     case "split":
@@ -587,6 +742,45 @@ function focusTileLocally(tileId: TileId): void {
   sendMessage("focusTile", { tileId });
 }
 
+/** アクティブワークスペース内でのタブ切替をローカル即時反映＋RPC送信する（タブボタン・サイドバー共通） */
+function switchToTab(tileId: TileId, tabId: TabId): void {
+  setActiveTabLocally(tileId, tabId);
+  focusTileLocally(tileId);
+  currentTabId = tabId;
+  sendMessage("switchTab", { tileId, tabId });
+}
+
+/** サイドバーのタブ行クリック。アクティブワークスペース内ならDOM即時反映、
+ * 非アクティブワークスペースならDOMが存在しないためRPC送信のみで次のrenderを待つ */
+function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: TabId): void {
+  if (workspaceId === activeWorkspaceId) {
+    switchToTab(tileId, tabId);
+  } else {
+    sendMessage("switchWorkspace", { workspaceId });
+    sendMessage("focusTile", { tileId });
+    sendMessage("switchTab", { tileId, tabId });
+  }
+  imeEl.focus({ preventScroll: true });
+}
+
+sidebarListEl.addEventListener("mousedown", (e) => {
+  const target = e.target as HTMLElement;
+  const tabRowEl = target.closest<HTMLElement>(".sidebar-tab");
+  if (tabRowEl) {
+    const workspaceId = tabRowEl.dataset["workspaceId"];
+    const tileId = tabRowEl.dataset["tileId"];
+    const tabId = tabRowEl.dataset["tabId"];
+    if (workspaceId && tileId && tabId) activateSidebarTab(workspaceId, tileId, tabId);
+    return;
+  }
+  const headerEl = target.closest<HTMLElement>(".sidebar-workspace-header");
+  const workspaceId = headerEl?.dataset["workspaceId"];
+  if (workspaceId && workspaceId !== activeWorkspaceId) {
+    sendMessage("switchWorkspace", { workspaceId });
+    imeEl.focus({ preventScroll: true });
+  }
+});
+
 tileTreeEl.addEventListener("mousedown", (e) => {
   const target = e.target as HTMLElement;
   const tileEl = target.closest<HTMLElement>(".tile");
@@ -603,10 +797,7 @@ tileTreeEl.addEventListener("mousedown", (e) => {
     return;
   }
   if (tabButtonEl && tabId) {
-    setActiveTabLocally(tileId, tabId);
-    focusTileLocally(tileId);
-    currentTabId = tabId;
-    sendMessage("switchTab", { tileId, tabId });
+    switchToTab(tileId, tabId);
     imeEl.focus({ preventScroll: true });
     return;
   }
@@ -627,6 +818,7 @@ imeEl.focus({ preventScroll: true });
 // ---- 起動 ----
 setupPalette();
 applyAppearance(defaultAppearance);
+applySidebarVisibility();
 measureCell();
 sendMessage("ready");
 window.addEventListener("error", (e) => {

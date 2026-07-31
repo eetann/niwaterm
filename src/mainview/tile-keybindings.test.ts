@@ -127,6 +127,16 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
       ),
     ).toEqual({ type: "cycleTab", delta: 1 });
   });
+
+  test("Cmd+B -> サイドバートグル", () => {
+    expect(resolveTileCommand(key("b", { metaKey: true }), compiled)).toEqual({
+      type: "toggleSidebar",
+    });
+  });
+
+  test("Cmd+Shift+B はデフォルトでは何も割り当てられていない", () => {
+    expect(resolveTileCommand(key("b", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
+  });
 });
 
 describe("resolveTileCommand（カスタムキーバインド）", () => {

@@ -26,6 +26,7 @@ export const KEYBIND_ACTIONS = [
   "new-workspace",
   "next-workspace",
   "prev-workspace",
+  "toggle-sidebar",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -47,6 +48,7 @@ export const defaultKeybindings: KeybindingsConfig = {
   "cmd+n": "new-workspace",
   "cmd+alt+]": "next-workspace",
   "cmd+alt+[": "prev-workspace",
+  "cmd+b": "toggle-sidebar",
 };
 
 export interface ParsedKeyBinding {
