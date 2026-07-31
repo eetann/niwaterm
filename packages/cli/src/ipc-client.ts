@@ -89,3 +89,74 @@ export async function sendKeys(
     return { ok: false, error: String(err) };
   }
 }
+
+export type SplitOrientation = "horizontal" | "vertical";
+
+/** POST（`{ok:true}`系）呼び出しの共通処理。成功時はbodyをそのまま返す */
+async function postJson<T extends { ok: true }>(
+  socketPath: string,
+  path: string,
+  body: unknown,
+): Promise<T | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`http://localhost${path}`, {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const parsed = (await res.json().catch(() => null)) as (T | { error?: unknown }) | null;
+    if (res.ok && parsed) return parsed as T;
+    const error =
+      parsed && typeof (parsed as { error?: unknown }).error === "string"
+        ? (parsed as { error: string }).error
+        : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+export type SplitTileResult =
+  | { ok: true; tileId: TileId; tabId: TabId }
+  | { ok: false; error: string };
+
+export function splitTile(
+  socketPath: string,
+  tileId: TileId,
+  orientation: SplitOrientation,
+): Promise<SplitTileResult> {
+  return postJson(socketPath, "/split-tile", { tileId, orientation });
+}
+
+export type NewTabResult = { ok: true; tabId: TabId } | { ok: false; error: string };
+
+export function newTab(socketPath: string, tileId: TileId): Promise<NewTabResult> {
+  return postJson(socketPath, "/new-tab", { tileId });
+}
+
+export type SwitchTabResult = { ok: true } | { ok: false; error: string };
+
+export function switchTab(
+  socketPath: string,
+  tileId: TileId,
+  tabId: TabId,
+): Promise<SwitchTabResult> {
+  return postJson(socketPath, "/switch-tab", { tileId, tabId });
+}
+
+export type CloseTabResult = { ok: true } | { ok: false; error: string };
+
+export function closeTab(
+  socketPath: string,
+  tileId: TileId,
+  tabId: TabId,
+): Promise<CloseTabResult> {
+  return postJson(socketPath, "/close-tab", { tileId, tabId });
+}
+
+export type FocusTileResult = { ok: true } | { ok: false; error: string };
+
+export function focusTile(socketPath: string, tileId: TileId): Promise<FocusTileResult> {
+  return postJson(socketPath, "/focus-tile", { tileId });
+}

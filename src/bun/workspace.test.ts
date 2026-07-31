@@ -100,58 +100,88 @@ describe("initialTree（永続化からの復元）", () => {
   });
 });
 
+describe("splitTile", () => {
+  test("対象タイルを分割し、新規tileId/tabIdを返す", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    const result = ws.splitTile(firstTileId, "vertical");
+    expect(result).not.toBeNull();
+    const splitTree = ws.snapshot().layout;
+    expect(splitTree.kind).toBe("split");
+    const secondLeaf = (splitTree as typeof splitTree & { kind: "split" }).second as TileLeaf;
+    expect(result?.tileId).toBe(secondLeaf.id);
+    expect(result?.tabId).toBe(secondLeaf.activeTabId);
+    expect(created.length).toBe(2);
+  });
+
+  test("存在しないtileIdはnullを返し、木構造は変わらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    const result = ws.splitTile("not-found", "vertical");
+    expect(result).toBeNull();
+    expect(ws.snapshot().layout).toEqual(before);
+  });
+});
+
 describe("newTab", () => {
-  test("対象タイルにタブを追加し、新規セッションが起動して active になる", () => {
+  test("対象タイルにタブを追加し、新規セッションが起動して active になる。戻り値は新規tabId", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const before = ws.snapshot().layout as TileLeaf;
-    ws.newTab(before.id);
+    const result = ws.newTab(before.id);
     const after = ws.snapshot().layout as TileLeaf;
     expect(after.tabIds.length).toBe(2);
     expect(after.activeTabId).toBe(after.tabIds[1]);
+    expect(result).toBe(after.activeTabId);
     expect(created.length).toBe(2);
     expect(Object.keys(ws.snapshot().tabs).length).toBe(2);
   });
 
-  test("存在しないtileIdは無視される", () => {
+  test("存在しないtileIdはnullを返し、無視される", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const before = ws.snapshot().layout as TileLeaf;
-    ws.newTab("not-found");
+    const result = ws.newTab("not-found");
+    expect(result).toBeNull();
     expect(ws.snapshot().layout).toEqual(before);
   });
 });
 
 describe("switchTab", () => {
-  test("tabIdsに存在するタブへactiveTabIdが切り替わる", () => {
+  test("tabIdsに存在するタブへactiveTabIdが切り替わり、trueを返す", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     const firstTabId = (ws.snapshot().layout as TileLeaf).tabIds[0];
-    ws.switchTab(tileId, firstTabId);
+    const result = ws.switchTab(tileId, firstTabId);
+    expect(result).toBe(true);
     expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(firstTabId);
   });
 
-  test("存在しないtabIdは無視される", () => {
+  test("存在しないtabIdはfalseを返し、無視される", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const before = ws.snapshot().layout as TileLeaf;
-    ws.switchTab(before.id, "not-a-tab");
+    const result = ws.switchTab(before.id, "not-a-tab");
+    expect(result).toBe(false);
     expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(before.activeTabId);
   });
 });
 
 describe("closeTab", () => {
-  test("複数タブのうち1つを閉じるとそのセッションだけdisposeされ、タイルは残る", () => {
+  test("複数タブのうち1つを閉じるとそのセッションだけdisposeされ、タイルは残る。戻り値はtrue", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     const leaf = ws.snapshot().layout as TileLeaf;
     const [firstTabId, secondTabId] = leaf.tabIds;
-    ws.closeTab(tileId, firstTabId);
+    const result = ws.closeTab(tileId, firstTabId);
 
+    expect(result).toBe(true);
     const after = ws.snapshot().layout as TileLeaf;
     expect(after.tabIds).toEqual([secondTabId]);
     expect(created[0]?.disposed).toBe(true);
@@ -174,12 +204,34 @@ describe("closeTab", () => {
     expect((after as TileLeaf).id).toBe(firstTileId);
   });
 
-  test("ワークスペース最後の1枚のタイルの最後のタブは閉じられない（誤操作防止）", () => {
+  test("ワークスペース最後の1枚のタイルの最後のタブは閉じられない（誤操作防止）。戻り値はfalse", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const leaf = ws.snapshot().layout as TileLeaf;
-    ws.closeTab(leaf.id, leaf.activeTabId);
+    const result = ws.closeTab(leaf.id, leaf.activeTabId);
+    expect(result).toBe(false);
     expect(ws.snapshot().layout).toEqual(leaf);
+  });
+});
+
+describe("focusTile", () => {
+  test("存在するtileIdへfocusedTileIdが切り替わり、trueを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical");
+    const result = ws.focusTile(firstTileId);
+    expect(result).toBe(true);
+    expect(ws.snapshot().focusedTileId).toBe(firstTileId);
+  });
+
+  test("存在しないtileIdはfalseを返し、focusedTileIdは変わらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().focusedTileId;
+    const result = ws.focusTile("not-found");
+    expect(result).toBe(false);
+    expect(ws.snapshot().focusedTileId).toBe(before);
   });
 });
 

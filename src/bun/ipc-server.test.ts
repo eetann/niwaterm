@@ -179,3 +179,268 @@ describe("POST /send-keys", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /split-tile", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タイルを分割し、新規tileId/tabIdを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/split-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, orientation: "vertical" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tileId: string; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.snapshot().workspace.layout.kind).toBe("split");
+    expect(mgr.hasTab(body.tabId)).toBe(true);
+  });
+
+  test("存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/split-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found", orientation: "vertical" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("不正なorientationは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/split-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, orientation: "diagonal" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /new-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タイルに新規タブを作成し、tabIdを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(body.ok).toBe(true);
+    expect((mgr.snapshot().workspace.layout as TileLeaf).tabIds).toContain(body.tabId);
+  });
+
+  test("存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /switch-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タイル内でアクティブタブを切り替える", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newTab(tileId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, tabId: firstTabId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect((mgr.snapshot().workspace.layout as TileLeaf).activeTabId).toBe(firstTabId);
+  });
+
+  test("存在しないtileId/tabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found", tabId }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /close-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タブを閉じる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newTab(tileId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, tabId: firstTabId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.hasTab(firstTabId)).toBe(false);
+  });
+
+  test("ワークスペース最後の1枚のタイルの最後のタブは閉じられず404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: leaf.id, tabId: leaf.activeTabId }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /focus-tile", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タイルへフォーカスを移す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.splitTile(firstTileId, "vertical");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/focus-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspace.focusedTileId).toBe(firstTileId);
+  });
+
+  test("存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/focus-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});

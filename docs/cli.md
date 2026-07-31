@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）に対応。CLIからのレイアウト操作・画面内容取得などはroadmap「CLIからの操作」参照（未実装）。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）に対応。CLIからの画面内容取得はroadmap「CLIからの操作」参照（未実装）。
 
 ## セットアップ
 
@@ -41,6 +41,24 @@ niwaterm send-keys -t tab-3 C-c
 対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
+niwaterm split-tile --tile <tileId> [--orientation horizontal|vertical]
+niwaterm new-tab --tile <tileId>
+niwaterm switch-tab --tile <tileId> --tab <tabId>
+niwaterm close-tab --tile <tileId> --tab <tabId>
+niwaterm focus-tile --tile <tileId>
+```
+
+レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
+
+- `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。成功時、新規に作られた`tileId`/`tabId`を表示する
+- `new-tab` — 指定タイルに新規タブを作成する。成功時、新規`tabId`を表示する
+- `switch-tab` — 指定タイル内でアクティブタブを切り替える
+- `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
+- `focus-tile` — 指定タイルへフォーカスを移す
+
+いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
 niwaterm --help
 niwaterm ping --help
 ```
@@ -52,11 +70,15 @@ niwaterm ping --help
   - `GET /ping` — `{ok: true, pid: <number>}`を返す
   - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`）
   - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
+  - `POST /split-tile` — `{tileId: string, orientation: "horizontal"|"vertical"}`を受け取り、タイルを分割する。成功時`{ok: true, tileId, tabId}`（新規作成分）を返す。tileId不存在時は404、不正なボディは400
+  - `POST /new-tab` — `{tileId: string}`を受け取り、新規タブを作成する。成功時`{ok: true, tabId}`を返す。tileId不存在時は404
+  - `POST /switch-tab` — `{tileId: string, tabId: string}`を受け取り、アクティブタブを切り替える。tileId/tabId不存在時は404
+  - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
+  - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
 
 ## スコープ外（roadmap参照）
 
-- CLIからのレイアウト操作（タイル分割・タブ作成等）
 - 特定タブの画面内容（テキスト）取得
 - npm registryへの公開・実行可能ファイルとしての配布

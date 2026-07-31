@@ -113,9 +113,12 @@ export function createWorkspace(opts: WorkspaceOptions) {
     applyCloseResult(result.tree, [tabId]);
   }
 
-  function splitTileById(tileId: TileId, orientation: SplitOrientation): void {
+  function splitTileById(
+    tileId: TileId,
+    orientation: SplitOrientation,
+  ): { tileId: TileId; tabId: TabId } | null {
     const target = findNode(tree, tileId);
-    if (!target || target.kind !== "leaf") return;
+    if (!target || target.kind !== "leaf") return null;
     const newSplitId = genTileId();
     const newTileId = genTileId();
     const newTabId = genTabId();
@@ -127,7 +130,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       newTileId,
       newTabId,
     );
-    if (!result) return;
+    if (!result) return null;
     tree = result.tree;
     const size = sizeByTabId.get(target.activeTabId) ?? {
       cols: opts.initialCols,
@@ -136,14 +139,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     spawnSession(newTabId, size.cols, size.rows);
     focusedTileId = newTileId;
     opts.onDirty();
+    return { tileId: newTileId, tabId: newTabId };
   }
 
-  function newTab(tileId: TileId): void {
+  function newTab(tileId: TileId): TabId | null {
     const target = findNode(tree, tileId);
-    if (!target || target.kind !== "leaf") return;
+    if (!target || target.kind !== "leaf") return null;
     const newTabId = genTabId();
     const result = addTabToTile(tree, tileId, newTabId);
-    if (!result) return;
+    if (!result) return null;
     tree = result;
     const size = sizeByTabId.get(target.activeTabId) ?? {
       cols: opts.initialCols,
@@ -151,27 +155,31 @@ export function createWorkspace(opts: WorkspaceOptions) {
     };
     spawnSession(newTabId, size.cols, size.rows);
     opts.onDirty();
+    return newTabId;
   }
 
-  function switchTab(tileId: TileId, tabId: TabId): void {
+  function switchTab(tileId: TileId, tabId: TabId): boolean {
     const result = switchActiveTab(tree, tileId, tabId);
-    if (!result) return;
+    if (!result) return false;
     tree = result;
     opts.onDirty();
+    return true;
   }
 
   // タイルに複数タブがあればアクティブタブだけ閉じる。最後の1タブだった場合はタイルごと閉じる
   // （そのタイルがワークスペース最後の1枚だった場合のみ、誤操作防止のため何もしない）
-  function closeTab(tileId: TileId, tabId: TabId): void {
+  function closeTab(tileId: TileId, tabId: TabId): boolean {
     const result = closeTabInTile(tree, tileId, tabId);
-    if (!result || result.tree === null) return;
+    if (!result || result.tree === null) return false;
     applyCloseResult(result.tree, [result.closedTabId]);
+    return true;
   }
 
-  function focusTileById(tileId: TileId): void {
-    if (!findNode(tree, tileId)) return;
+  function focusTileById(tileId: TileId): boolean {
+    if (!findNode(tree, tileId)) return false;
     focusedTileId = tileId;
     opts.onDirty();
+    return true;
   }
 
   function focusDirectionFrom(direction: "up" | "down" | "left" | "right"): void {

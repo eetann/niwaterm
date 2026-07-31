@@ -137,24 +137,27 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     opts.onDirty();
   }
 
-  function splitTile(tileId: TileId, orientation: SplitOrientation): void {
-    findOwnerByTileId(tileId)?.splitTile(tileId, orientation);
+  function splitTile(
+    tileId: TileId,
+    orientation: SplitOrientation,
+  ): { tileId: TileId; tabId: TabId } | null {
+    return findOwnerByTileId(tileId)?.splitTile(tileId, orientation) ?? null;
   }
 
-  function newTab(tileId: TileId): void {
-    findOwnerByTileId(tileId)?.newTab(tileId);
+  function newTab(tileId: TileId): TabId | null {
+    return findOwnerByTileId(tileId)?.newTab(tileId) ?? null;
   }
 
-  function switchTab(tileId: TileId, tabId: TabId): void {
-    findOwnerByTileId(tileId)?.switchTab(tileId, tabId);
+  function switchTab(tileId: TileId, tabId: TabId): boolean {
+    return findOwnerByTileId(tileId)?.switchTab(tileId, tabId) ?? false;
   }
 
-  function closeTab(tileId: TileId, tabId: TabId): void {
-    findOwnerByTileId(tileId)?.closeTab(tileId, tabId);
+  function closeTab(tileId: TileId, tabId: TabId): boolean {
+    return findOwnerByTileId(tileId)?.closeTab(tileId, tabId) ?? false;
   }
 
-  function focusTile(tileId: TileId): void {
-    findOwnerByTileId(tileId)?.focusTile(tileId);
+  function focusTile(tileId: TileId): boolean {
+    return findOwnerByTileId(tileId)?.focusTile(tileId) ?? false;
   }
 
   // 「現在フォーカス」基準の操作のため例外的にidを取らず、アクティブなworkspaceへルーティングする

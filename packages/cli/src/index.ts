@@ -1,8 +1,13 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
+import closeTabCommand from "./commands/close-tab";
+import focusTileCommand from "./commands/focus-tile";
 import listCommand from "./commands/list";
+import newTabCommand from "./commands/new-tab";
 import pingCommand from "./commands/ping";
 import sendKeysCommand from "./commands/send-keys";
+import splitTileCommand from "./commands/split-tile";
+import switchTabCommand from "./commands/switch-tab";
 
 const mainCommand = define({
   name: "niwaterm",
@@ -20,5 +25,10 @@ await cli(process.argv.slice(2), mainCommand, {
     ping: pingCommand,
     list: listCommand,
     "send-keys": sendKeysCommand,
+    "split-tile": splitTileCommand,
+    "new-tab": newTabCommand,
+    "switch-tab": switchTabCommand,
+    "close-tab": closeTabCommand,
+    "focus-tile": focusTileCommand,
   },
 });

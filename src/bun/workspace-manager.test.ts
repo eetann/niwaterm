@@ -143,12 +143,14 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
     mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
 
-    mgr.newTab(firstTileId);
+    const newTabId = mgr.newTab(firstTileId);
+    expect(newTabId).not.toBeNull();
     mgr.switchWorkspace(firstId);
     const afterNewTab = mgr.snapshot().workspace.layout as TileLeaf;
     expect(afterNewTab.tabIds.length).toBe(2);
 
-    mgr.splitTile(firstTileId, "vertical");
+    const splitResult = mgr.splitTile(firstTileId, "vertical");
+    expect(splitResult).not.toBeNull();
     const afterSplit = mgr.snapshot().workspace.layout;
     expect(afterSplit.kind).toBe("split");
   });
@@ -168,7 +170,7 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
   test("存在しないtileId/tabIdへの操作は何もせず例外も投げない", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    expect(() => mgr.newTab("not-found")).not.toThrow();
+    expect(mgr.newTab("not-found")).toBeNull();
     expect(() => mgr.handleInput("not-found", "x")).not.toThrow();
   });
 
@@ -343,5 +345,37 @@ describe("hasTab", () => {
     const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
     expect(mgr.hasTab(tabId)).toBe(true);
     expect(mgr.hasTab("not-found")).toBe(false);
+  });
+});
+
+describe("switchTab / closeTab / focusTileの戻り値", () => {
+  test("switchTabは成功時true、存在しないtileId/tabIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const newTabId = mgr.newTab(tileId) as string;
+
+    expect(mgr.switchTab(tileId, newTabId)).toBe(true);
+    expect(mgr.switchTab("not-found", newTabId)).toBe(false);
+    expect(mgr.switchTab(tileId, "not-found")).toBe(false);
+  });
+
+  test("closeTabは成功時true、存在しないtileId/tabIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const newTabId = mgr.newTab(tileId) as string;
+
+    expect(mgr.closeTab("not-found", newTabId)).toBe(false);
+    expect(mgr.closeTab(tileId, newTabId)).toBe(true);
+  });
+
+  test("focusTileは成功時true、存在しないtileIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+
+    expect(mgr.focusTile(tileId)).toBe(true);
+    expect(mgr.focusTile("not-found")).toBe(false);
   });
 });

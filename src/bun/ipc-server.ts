@@ -4,8 +4,9 @@
 
 import { unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { appSupportDir } from "./app-paths";
+import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
 
@@ -30,6 +31,49 @@ function parseSendKeysBody(body: unknown): SendKeysRequestBody | null {
   return { tabId: b.tabId, keys: b.keys };
 }
 
+interface TileIdRequestBody {
+  tileId: string;
+}
+
+function parseTileIdBody(body: unknown): TileIdRequestBody | null {
+  const b = body as { tileId?: unknown };
+  if (typeof b.tileId !== "string" || b.tileId.length === 0) return null;
+  return { tileId: b.tileId };
+}
+
+interface SplitTileRequestBody extends TileIdRequestBody {
+  orientation: SplitOrientation;
+}
+
+function parseSplitTileBody(body: unknown): SplitTileRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { orientation?: unknown };
+  if (b.orientation !== "horizontal" && b.orientation !== "vertical") return null;
+  return { ...tileIdBody, orientation: b.orientation };
+}
+
+interface TileTabRequestBody extends TileIdRequestBody {
+  tabId: string;
+}
+
+function parseTileTabBody(body: unknown): TileTabRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { tabId?: unknown };
+  if (typeof b.tabId !== "string" || b.tabId.length === 0) return null;
+  return { ...tileIdBody, tabId: b.tabId };
+}
+
+/** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
+async function readJsonBody(c: Context): Promise<unknown | undefined> {
+  try {
+    return await c.req.json();
+  } catch {
+    return undefined;
+  }
+}
+
 function buildApp(workspaceManager: WorkspaceManager) {
   const app = new Hono();
 
@@ -38,12 +82,8 @@ function buildApp(workspaceManager: WorkspaceManager) {
   app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
 
   app.post("/send-keys", async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ ok: false, error: "invalid JSON body" }, 400);
-    }
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
     const parsed = parseSendKeysBody(body);
     if (!parsed) {
       return c.json({ ok: false, error: "expected { tabId: string, keys: string[] }" }, 400);
@@ -52,6 +92,75 @@ function buildApp(workspaceManager: WorkspaceManager) {
       return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
     }
     workspaceManager.handleInput(parsed.tabId, tmuxKeysToBytes(parsed.keys));
+    return c.json({ ok: true });
+  });
+
+  app.post("/split-tile", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseSplitTileBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { tileId: string, orientation: "horizontal"|"vertical" }' },
+        400,
+      );
+    }
+    const result = workspaceManager.splitTile(parsed.tileId, parsed.orientation);
+    if (!result) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
+  });
+
+  app.post("/new-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTileIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { tileId: string }" }, 400);
+    const tabId = workspaceManager.newTab(parsed.tileId);
+    if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    return c.json({ ok: true, tabId });
+  });
+
+  app.post("/switch-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTileTabBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { tileId: string, tabId: string }" }, 400);
+    }
+    const ok = workspaceManager.switchTab(parsed.tileId, parsed.tabId);
+    if (!ok) {
+      return c.json(
+        { ok: false, error: `tile/tab not found: ${parsed.tileId}/${parsed.tabId}` },
+        404,
+      );
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/close-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTileTabBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { tileId: string, tabId: string }" }, 400);
+    }
+    const ok = workspaceManager.closeTab(parsed.tileId, parsed.tabId);
+    if (!ok) {
+      return c.json(
+        { ok: false, error: `tile/tab not found (or last tab): ${parsed.tileId}/${parsed.tabId}` },
+        404,
+      );
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/focus-tile", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTileIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { tileId: string }" }, 400);
+    const ok = workspaceManager.focusTile(parsed.tileId);
+    if (!ok) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true });
   });
 
