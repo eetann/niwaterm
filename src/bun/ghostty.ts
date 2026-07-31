@@ -83,6 +83,7 @@ const DATA_CURSOR_Y = 4;
 const DATA_CURSOR_VISIBLE = 7;
 
 // GhosttyFormatterFormat
+const FORMAT_PLAIN = 0;
 const FORMAT_HTML = 2;
 
 export interface CursorState {
@@ -101,9 +102,12 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   if (rc !== 0) throw new Error(`ghostty_formatter_new failed: ${rc}`);
   const formatter = read.ptr(ptr(handle)) as Pointer;
 
+  rc = shim.symbols.niwa_formatter_new(ptr(handle), term, FORMAT_PLAIN);
+  if (rc !== 0) throw new Error(`ghostty_formatter_new(plain) failed: ${rc}`);
+  const textFormatter = read.ptr(ptr(handle)) as Pointer;
+
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
-  let formatBuf = new Uint8Array(256 * 1024);
   const writtenBuf = new BigUint64Array(1);
   const u16Out = new Uint16Array(1);
   const u8Out = new Uint8Array(1);
@@ -218,29 +222,39 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     return { x, y, visible: u8Out[0] !== 0 };
   }
 
-  /** 現在の画面をHTML文字列として取り出す */
-  function dumpHtml(): string {
-    for (;;) {
-      const rc = vt.symbols.ghostty_formatter_format_buf(
-        formatter,
-        ptr(formatBuf),
-        BigInt(formatBuf.length),
-        ptr(writtenBuf),
-      );
-      const written = Number(writtenBuf[0]);
-      if (rc === 0) {
-        return new TextDecoder().decode(formatBuf.subarray(0, written));
+  /** formatterから現在の画面を文字列として取り出す関数を作る（HTML/PLAINで共用） */
+  function createFormatterDumper(target: Pointer): () => string {
+    let buf = new Uint8Array(256 * 1024);
+    return function dump(): string {
+      for (;;) {
+        const rc = vt.symbols.ghostty_formatter_format_buf(
+          target,
+          ptr(buf),
+          BigInt(buf.length),
+          ptr(writtenBuf),
+        );
+        const written = Number(writtenBuf[0]);
+        if (rc === 0) {
+          return new TextDecoder().decode(buf.subarray(0, written));
+        }
+        if (written > buf.length) {
+          buf = new Uint8Array(written + 1024);
+          continue;
+        }
+        throw new Error(`ghostty_formatter_format_buf failed: ${rc}`);
       }
-      if (written > formatBuf.length) {
-        formatBuf = new Uint8Array(written + 1024);
-        continue;
-      }
-      throw new Error(`ghostty_formatter_format_buf failed: ${rc}`);
-    }
+    };
   }
+
+  /** 現在の画面をHTML文字列として取り出す */
+  const dumpHtml = createFormatterDumper(formatter);
+
+  /** 現在の画面をプレーンテキストとして取り出す */
+  const dumpText = createFormatterDumper(textFormatter);
 
   function free(): void {
     vt.symbols.ghostty_formatter_free(formatter);
+    vt.symbols.ghostty_formatter_free(textFormatter);
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
     clipboardCallback?.close();
@@ -255,6 +269,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     resize,
     cursor,
     dumpHtml,
+    dumpText,
     free,
   };
 }

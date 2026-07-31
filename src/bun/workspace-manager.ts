@@ -203,6 +203,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId) !== undefined;
   }
 
+  function getTabText(tabId: TabId): string | null {
+    return findOwnerByTabId(tabId)?.getTabText(tabId) ?? null;
+  }
+
   function snapshot(): AppRenderState {
     // activeIdは常にworkspacesの有効なキーを指す（newWorkspace/switchWorkspace/closeWorkspace/
     // handleWorkspaceEmptiedのいずれも、削除時は必ず残存するidへ付け替えてから返す）
@@ -246,6 +250,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     snapshot,
     listWorkspaces,
     hasTab,
+    getTabText,
     serializeForPersistence,
     dispose,
   };

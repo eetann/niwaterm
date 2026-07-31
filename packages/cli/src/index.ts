@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
+import captureTabCommand from "./commands/capture-tab";
 import closeTabCommand from "./commands/close-tab";
 import focusTileCommand from "./commands/focus-tile";
 import listCommand from "./commands/list";
@@ -30,5 +31,6 @@ await cli(process.argv.slice(2), mainCommand, {
     "switch-tab": switchTabCommand,
     "close-tab": closeTabCommand,
     "focus-tile": focusTileCommand,
+    "capture-tab": captureTabCommand,
   },
 });

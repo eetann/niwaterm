@@ -13,14 +13,17 @@ function createTestWorkspaceManager(): {
   writes: (string | Uint8Array)[][];
 } {
   const writes: (string | Uint8Array)[][] = [];
+  let sessionCount = 0;
   const createSession = (_opts: TerminalSessionOptions): TerminalSession => {
     const record: (string | Uint8Array)[] = [];
     writes.push(record);
+    const index = sessionCount++;
     return {
       write: (data) => record.push(data),
       paste: () => {},
       resize: () => false,
       renderState: () => ({ html: "", cursorX: 0, cursorY: 0, cursorVisible: true }),
+      dumpText: () => `screen-text-${index}`,
       dispose: () => {},
     };
   };
@@ -175,6 +178,52 @@ describe("POST /send-keys", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tabId, keys: [] }),
     });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /capture-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タブの画面内容をプレーンテキストで返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/capture-tab?tabId=${tabId}`, { unix: socketPath });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, text: "screen-text-0" });
+  });
+
+  test("存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/capture-tab?tabId=not-found", { unix: socketPath });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("tabId未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/capture-tab", { unix: socketPath });
 
     expect(res.status).toBe(400);
   });

@@ -80,6 +80,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     };
   }
 
+  /** 現在の画面内容をプレーンテキストとして取り出す（CLIの`capture-tab`相当） */
+  function dumpText(): string {
+    return term.dumpText();
+  }
+
   function dispose(): void {
     if (disposed) return;
     disposed = true;
@@ -89,7 +94,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     term.free();
   }
 
-  return { write, paste, resize, renderState, dispose };
+  return { write, paste, resize, renderState, dumpText, dispose };
 }
 
 export type TerminalSession = ReturnType<typeof createTerminalSession>;

@@ -239,6 +239,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return sessions.has(tabId);
   }
 
+  /** 対象タブの画面内容をプレーンテキストで取り出す。tabId不存在時はnull */
+  function getTabText(tabId: TabId): string | null {
+    return sessions.get(tabId)?.dumpText() ?? null;
+  }
+
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
@@ -259,6 +264,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getLayout,
     getFocusedTileId,
     hasTab,
+    getTabText,
     dispose,
   };
 }

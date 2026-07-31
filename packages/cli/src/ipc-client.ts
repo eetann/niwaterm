@@ -160,3 +160,19 @@ export type FocusTileResult = { ok: true } | { ok: false; error: string };
 export function focusTile(socketPath: string, tileId: TileId): Promise<FocusTileResult> {
   return postJson(socketPath, "/focus-tile", { tileId });
 }
+
+export type CaptureTabResult = { ok: true; text: string } | { ok: false; error: string };
+
+export async function captureTab(socketPath: string, tabId: TabId): Promise<CaptureTabResult> {
+  try {
+    const res = await fetch(`http://localhost/capture-tab?tabId=${encodeURIComponent(tabId)}`, {
+      unix: socketPath,
+    });
+    const body = (await res.json().catch(() => null)) as { text?: unknown; error?: unknown } | null;
+    if (res.ok && typeof body?.text === "string") return { ok: true, text: body.text };
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}

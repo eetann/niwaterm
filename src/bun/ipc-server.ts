@@ -81,6 +81,14 @@ function buildApp(workspaceManager: WorkspaceManager) {
 
   app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
 
+  app.get("/capture-tab", (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const text = workspaceManager.getTabText(tabId);
+    if (text === null) return c.json({ ok: false, error: `tab not found: ${tabId}` }, 404);
+    return c.json({ ok: true, text });
+  });
+
   app.post("/send-keys", async (c) => {
     const body = await readJsonBody(c);
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);

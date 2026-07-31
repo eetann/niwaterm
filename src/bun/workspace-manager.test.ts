@@ -19,6 +19,7 @@ function createFakeSessionFactory() {
       paste: () => {},
       resize: () => false,
       renderState: () => ({ html: "", cursorX: 0, cursorY: 0, cursorVisible: true }),
+      dumpText: () => "",
       dispose: () => {
         record.disposed = true;
       },
@@ -345,6 +346,24 @@ describe("hasTab", () => {
     const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
     expect(mgr.hasTab(tabId)).toBe(true);
     expect(mgr.hasTab("not-found")).toBe(false);
+  });
+});
+
+describe("getTabText", () => {
+  test("存在するtabIdはテキストを返し、存在しないtabIdはnullを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    expect(mgr.getTabText(tabId)).toBe("");
+    expect(mgr.getTabText("not-found")).toBeNull();
+  });
+
+  test("非アクティブなワークスペースのタブへも届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace();
+    expect(mgr.getTabText(firstTabId)).toBe("");
   });
 });
 
