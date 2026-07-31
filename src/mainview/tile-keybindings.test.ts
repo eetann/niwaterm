@@ -66,8 +66,10 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
     expect(resolveTileCommand(key("t", { metaKey: true }), compiled)).toEqual({ type: "newTab" });
   });
 
-  test("Cmd+Shift+T はデフォルトでは何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("t", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
+  test("Cmd+Shift+T -> ブラウザタブ新規作成", () => {
+    expect(resolveTileCommand(key("t", { metaKey: true, shiftKey: true }), compiled)).toEqual({
+      type: "newBrowserTab",
+    });
   });
 
   test("Cmd+Shift+] -> 次のタブへ切替", () => {

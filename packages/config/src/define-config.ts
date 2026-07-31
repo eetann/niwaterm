@@ -1,4 +1,5 @@
 import type { AppearanceConfig } from "./appearance";
+import type { BrowserConfig } from "./browser";
 import type { KeybindingsConfig } from "./keybindings";
 
 export interface NiwatermConfig {
@@ -13,6 +14,11 @@ export interface NiwatermConfig {
    * 例: { ...defaultAppearance, fontSize: 16 }
    */
   appearance?: AppearanceConfig;
+  /**
+   * ブラウザタブ設定。未指定のフィールドはdefaultBrowserConfigの値のまま有効。
+   * 例: { defaultUrl: "https://example.com" }
+   */
+  browser?: BrowserConfig;
 }
 
 /** 型推論とエディタ補完のためのヘルパー。渡された値をそのまま返す */

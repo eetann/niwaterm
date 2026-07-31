@@ -9,6 +9,7 @@ export type TileCommand =
   | { type: "close" }
   | { type: "focus"; direction: "up" | "down" | "left" | "right" }
   | { type: "newTab" }
+  | { type: "newBrowserTab" }
   | { type: "cycleTab"; delta: 1 | -1 }
   | { type: "newWorkspace" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
@@ -67,6 +68,8 @@ function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "focus", direction: "right" };
     case "new-tab":
       return { type: "newTab" };
+    case "new-browser-tab":
+      return { type: "newBrowserTab" };
     case "next-tab":
       return { type: "cycleTab", delta: 1 };
     case "prev-tab":

@@ -1,4 +1,4 @@
-import Electrobun, { Electroview } from "electrobun/view";
+import Electrobun, { Electroview, type WebviewTagElement } from "electrobun/view";
 import {
   compileKeybindings,
   defaultAppearance,
@@ -7,6 +7,7 @@ import {
   type ResolvedAppearanceConfig,
 } from "@niwaterm/config";
 import type { NiwaRPC } from "../bun/index";
+import type { TabRenderState } from "../bun/workspace";
 import {
   findNode,
   listLeaves,
@@ -42,6 +43,7 @@ const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
 const tabButtonElByTabId = new Map<TabId, HTMLButtonElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
+const browserElByTabId = new Map<TabId, WebviewTagElement>();
 const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
 const activeTabByTile = new Map<TileId, TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
@@ -148,7 +150,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         activeWorkspaceId = p.activeWorkspaceId;
         workspaceIds = p.workspaceIds;
         lastLayout = p.workspace.layout;
-        renderLayout(p.workspace.layout);
+        renderLayout(p.workspace.layout, p.workspace.tabs);
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = p.workspace.focusedTileId;
@@ -156,8 +158,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         updateFocusHighlight();
         for (const tabId of Object.keys(p.workspace.tabs)) {
           const renderState = p.workspace.tabs[tabId];
+          if (!renderState || renderState.kind !== "terminal") continue;
           const termEl = termElByTabId.get(tabId);
-          if (!termEl || !renderState) continue;
+          if (!termEl) continue;
           termEl.innerHTML = renderState.html;
           fixWideChars(termEl);
           updateCursorForTab(
@@ -243,11 +246,11 @@ function fixWideChars(root: HTMLElement) {
 }
 
 // ---- タイル木構造 → DOM reconciliation ----
-function renderLayout(layout: TileNode): void {
+function renderLayout(layout: TileNode, tabs: Record<TabId, TabRenderState>): void {
   const seenTabIds = new Set<TabId>();
   const seenSplitIds = new Set<TileId>();
   const seenTileIds = new Set<TileId>();
-  const rootEl = reconcile(layout, seenTabIds, seenSplitIds, seenTileIds);
+  const rootEl = reconcile(layout, tabs, seenTabIds, seenSplitIds, seenTileIds);
   if (rootEl.parentElement !== tileTreeEl) {
     tileTreeEl.appendChild(rootEl);
   }
@@ -256,6 +259,7 @@ function renderLayout(layout: TileNode): void {
 
 function reconcile(
   node: TileNode,
+  tabs: Record<TabId, TabRenderState>,
   seenTabIds: Set<TabId>,
   seenSplitIds: Set<TileId>,
   seenTileIds: Set<TileId>,
@@ -283,11 +287,11 @@ function reconcile(
 
     node.tabIds.forEach((tabId, index) => {
       seenTabIds.add(tabId);
-      ensureTabContent(tabId, tileContentEl);
+      const renderState = tabs[tabId];
+      if (renderState) ensureTabContent(tabId, tileContentEl, renderState);
       ensureTabButton(tabId, tabBarEl, addBtn);
       const isActive = tabId === node.activeTabId;
-      const tabContentEl = tabContentElByTabId.get(tabId);
-      if (tabContentEl) tabContentEl.style.display = isActive ? "block" : "none";
+      setTabVisible(tabId, isActive);
       const tabButtonEl = tabButtonElByTabId.get(tabId);
       tabButtonEl?.classList.toggle("active", isActive);
       const labelEl = tabButtonEl?.querySelector(".tab-label");
@@ -307,9 +311,9 @@ function reconcile(
   splitEl.dataset["splitId"] = node.id;
   splitEl.dataset["direction"] = node.direction;
 
-  const firstEl = reconcile(node.first, seenTabIds, seenSplitIds, seenTileIds);
+  const firstEl = reconcile(node.first, tabs, seenTabIds, seenSplitIds, seenTileIds);
   const dividerEl = getOrCreateDivider(node.id);
-  const secondEl = reconcile(node.second, seenTabIds, seenSplitIds, seenTileIds);
+  const secondEl = reconcile(node.second, tabs, seenTabIds, seenSplitIds, seenTileIds);
 
   // ドラッグ確定後、bunのtreeが確定ratioに追いついたら以後はtree由来のratioに戻す
   if (
@@ -344,9 +348,22 @@ function getOrCreateDivider(splitId: TileId): HTMLDivElement {
   return dividerEl;
 }
 
-/** tabId用の.term/.cursorペア（.tab-content）を必要なら生成し、ResizeObserverを設置する */
-function ensureTabContent(tabId: TabId, tileContentEl: HTMLDivElement): void {
-  if (termElByTabId.has(tabId)) return;
+/** tabId用の.tab-contentを種別に応じて必要なら生成する。既存の場合は何もしない（種別は初回のrenderで固定） */
+function ensureTabContent(
+  tabId: TabId,
+  tileContentEl: HTMLDivElement,
+  renderState: TabRenderState,
+): void {
+  if (tabContentElByTabId.has(tabId)) return;
+  if (renderState.kind === "terminal") {
+    ensureTerminalTabContent(tabId, tileContentEl);
+  } else {
+    ensureBrowserTabContent(tabId, tileContentEl, renderState.url);
+  }
+}
+
+/** ターミナルタブ用の.term/.cursorペア（.tab-content）を生成し、ResizeObserverを設置する */
+function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): void {
   const frag = tabContentTemplate.content.cloneNode(true) as DocumentFragment;
   const tabContentEl = frag.querySelector(".tab-content") as HTMLDivElement;
   const termEl = tabContentEl.querySelector(".term") as HTMLDivElement;
@@ -367,6 +384,34 @@ function ensureTabContent(tabId: TabId, tileContentEl: HTMLDivElement): void {
   resizeObserverByTabId.set(tabId, ro);
 }
 
+/**
+ * ブラウザタブ用の<electrobun-webview>を生成する。リサイズはElectrobun側のOverlaySyncControllerが
+ * DOM位置に自動追従するため、ターミナルタブと異なりResizeObserver/sendResizeは付けない。
+ * sandbox/src属性はDOM追加（connectedCallback）より前に設定する必要がある。
+ */
+function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, url: string): void {
+  const tabContentEl = document.createElement("div");
+  tabContentEl.className = "tab-content";
+  const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
+  webviewEl.setAttribute("sandbox", "");
+  webviewEl.src = url;
+  tabContentEl.appendChild(webviewEl);
+  tabContentElByTabId.set(tabId, tabContentEl);
+  browserElByTabId.set(tabId, webviewEl);
+  tileContentEl.appendChild(tabContentEl);
+}
+
+/**
+ * タブの表示/非表示を切り替える。ブラウザタブはdisplay:noneだけでは
+ * ネイティブOOPIFが隠れない（位置同期が0x0でスキップされ直前の位置に居座る）ため、
+ * toggleHiddenも併せて呼ぶ必要がある。
+ */
+function setTabVisible(tabId: TabId, visible: boolean): void {
+  const tabContentEl = tabContentElByTabId.get(tabId);
+  if (tabContentEl) tabContentEl.style.display = visible ? "block" : "none";
+  browserElByTabId.get(tabId)?.toggleHidden(!visible);
+}
+
 /** tabId用のタブボタンを必要なら生成し、+ボタンの直前に挿入する（tabIds配列の順序を保つ） */
 function ensureTabButton(tabId: TabId, tabBarEl: HTMLDivElement, addBtn: HTMLButtonElement): void {
   if (tabButtonElByTabId.has(tabId)) return;
@@ -383,12 +428,10 @@ function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
   if (previousActive === tabId) return;
   activeTabByTile.set(tileId, tabId);
   if (previousActive) {
-    const prevContent = tabContentElByTabId.get(previousActive);
-    if (prevContent) prevContent.style.display = "none";
+    setTabVisible(previousActive, false);
     tabButtonElByTabId.get(previousActive)?.classList.remove("active");
   }
-  const nextContent = tabContentElByTabId.get(tabId);
-  if (nextContent) nextContent.style.display = "block";
+  setTabVisible(tabId, true);
   tabButtonElByTabId.get(tabId)?.classList.add("active");
 }
 
@@ -399,8 +442,9 @@ function gcStale(
   seenTileIds: Set<TileId>,
 ): void {
   // 個別に閉じられたタブ（タイル自体は生存）の後始末。.tab-content単位で除去し、
-  // 同じタイルに残る他のタブには影響しない
-  for (const tabId of termElByTabId.keys()) {
+  // 同じタイルに残る他のタブには影響しない。.remove()でブラウザタブは
+  // disconnectedCallbackが自動発火しネイティブ側リソースも解放される
+  for (const tabId of tabContentElByTabId.keys()) {
     if (seenTabIds.has(tabId)) continue;
     resizeObserverByTabId.get(tabId)?.disconnect();
     resizeObserverByTabId.delete(tabId);
@@ -410,6 +454,7 @@ function gcStale(
     tabButtonElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
+    browserElByTabId.delete(tabId);
   }
   // タイルごと閉じられた場合の後始末（配下のタブは上のループで既に個別除去済み）
   for (const [tileId, tileEl] of tileElByTileId) {
@@ -669,6 +714,9 @@ function handleTileCommand(cmd: TileCommand): void {
       break;
     case "newTab":
       sendMessage("newTab", { tileId: focusedTileId });
+      break;
+    case "newBrowserTab":
+      sendMessage("newBrowserTab", { tileId: focusedTileId });
       break;
     case "cycleTab": {
       if (!lastLayout) return;

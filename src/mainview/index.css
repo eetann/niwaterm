@@ -168,6 +168,13 @@ body {
   inset: 0;
 }
 
+/* <electrobun-webview>はデフォルトで固定サイズを持つため、.tab-content全体に広げる */
+.tab-content electrobun-webview {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .divider {
   position: relative;
   flex: 0 0 4px;

@@ -2,8 +2,14 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultAppearance, defaultKeybindings } from "@niwaterm/config";
-import { configFilePath, loadUserConfig, resolveAppearance, resolveKeybindings } from "./config";
+import { defaultAppearance, defaultBrowserConfig, defaultKeybindings } from "@niwaterm/config";
+import {
+  configFilePath,
+  loadUserConfig,
+  resolveAppearance,
+  resolveBrowser,
+  resolveKeybindings,
+} from "./config";
 
 describe("configFilePath", () => {
   test(".config/niwaterm/niwaterm.config.ts を指す", () => {
@@ -53,6 +59,12 @@ describe("loadUserConfig", () => {
   test("appearance以外の形（配列やnull）の場合はnullを返す", async () => {
     const path = join(dir, "invalid-appearance-shape.config.ts");
     await writeFile(path, "export default { appearance: null };\n");
+    expect(await loadUserConfig(path)).toBeNull();
+  });
+
+  test("browser以外の形（配列やnull）の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-browser-shape.config.ts");
+    await writeFile(path, "export default { browser: null };\n");
     expect(await loadUserConfig(path)).toBeNull();
   });
 
@@ -135,6 +147,28 @@ describe("resolveAppearance", () => {
       expect(resolved.ansiColors[1]).toBe(defaultAppearance.ansiColors[1]);
       expect(resolved.ansiColors[2]).toBe("#333333");
       expect(resolved.ansiColors.length).toBe(16);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveBrowser", () => {
+  test("nullを渡すとdefaultBrowserConfigがそのまま返る", () => {
+    expect(resolveBrowser(null)).toEqual(defaultBrowserConfig);
+  });
+
+  test("defaultUrlを部分上書きできる", () => {
+    const resolved = resolveBrowser({ browser: { defaultUrl: "https://example.com" } });
+    expect(resolved.defaultUrl).toBe("https://example.com");
+  });
+
+  test("不正な型のフィールドは警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveBrowser({ browser: { defaultUrl: "" } });
+      expect(resolved.defaultUrl).toBe(defaultBrowserConfig.defaultUrl);
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

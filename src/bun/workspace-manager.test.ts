@@ -18,7 +18,13 @@ function createFakeSessionFactory() {
       write: () => {},
       paste: () => {},
       resize: () => false,
-      renderState: () => ({ html: "", cursorX: 0, cursorY: 0, cursorVisible: true }),
+      renderState: () => ({
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: true,
+      }),
       dumpText: () => "",
       dispose: () => {
         record.disposed = true;
@@ -173,6 +179,22 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     expect(mgr.newTab("not-found")).toBeNull();
     expect(() => mgr.handleInput("not-found", "x")).not.toThrow();
+  });
+
+  test("非アクティブなワークスペースのタイルへもnewBrowserTabが届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
+
+    const newTabId = mgr.newBrowserTab(firstTileId, "https://example.com");
+    expect(newTabId).not.toBeNull();
+    mgr.switchWorkspace(firstId);
+    expect(mgr.snapshot().workspace.tabs[newTabId as string]).toEqual({
+      kind: "browser",
+      url: "https://example.com",
+    });
   });
 
   test("focusDirectionは常にアクティブなワークスペースへルーティングされる", () => {

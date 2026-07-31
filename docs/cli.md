@@ -51,7 +51,7 @@ niwaterm focus-tile --tile <tileId>
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
 
 - `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `new-tab` — 指定タイルに新規タブを作成する。成功時、新規`tabId`を表示する
+- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、省略時は通常のターミナルタブを作成する。成功時、新規`tabId`を表示する
 - `switch-tab` — 指定タイル内でアクティブタブを切り替える
 - `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
 - `focus-tile` — 指定タイルへフォーカスを移す
@@ -77,7 +77,7 @@ niwaterm ping --help
   - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`）
   - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
   - `POST /split-tile` — `{tileId: string, orientation: "horizontal"|"vertical"}`を受け取り、タイルを分割する。成功時`{ok: true, tileId, tabId}`（新規作成分）を返す。tileId不存在時は404、不正なボディは400
-  - `POST /new-tab` — `{tileId: string}`を受け取り、新規タブを作成する。成功時`{ok: true, tabId}`を返す。tileId不存在時は404
+  - `POST /new-tab` — `{tileId: string, url?: string}`を受け取り、新規タブを作成する。`url`指定時はブラウザタブ、省略時はターミナルタブ。成功時`{ok: true, tabId}`を返す。tileId不存在時は404、urlが空文字列の場合は400
   - `POST /switch-tab` — `{tileId: string, tabId: string}`を受け取り、アクティブタブを切り替える。tileId/tabId不存在時は404
   - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
   - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404

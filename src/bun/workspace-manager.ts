@@ -150,6 +150,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.newTab(tileId) ?? null;
   }
 
+  function newBrowserTab(tileId: TileId, url: string): TabId | null {
+    return findOwnerByTileId(tileId)?.newBrowserTab(tileId, url) ?? null;
+  }
+
   function switchTab(tileId: TileId, tabId: TabId): boolean {
     return findOwnerByTileId(tileId)?.switchTab(tileId, tabId) ?? false;
   }
@@ -242,6 +246,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     closeWorkspace,
     splitTile,
     newTab,
+    newBrowserTab,
     switchTab,
     closeTab,
     focusTile,

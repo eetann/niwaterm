@@ -84,7 +84,7 @@ cd ~/.config/niwaterm && bun install
 - キー本体はアルファベット（`d`, `w`, `t`, `n`等）、矢印（`up`/`down`/`left`/`right`）、角括弧（`[`/`]`）のいずれか
 - 例: `"cmd+d"`, `"cmd+shift+d"`, `"cmd+alt+up"`, `"cmd+alt+]"`
 
-**KeybindAction の一覧**（14種類）:
+**KeybindAction の一覧**（15種類）:
 
 | アクション | 意味 |
 |---|---|
@@ -92,6 +92,7 @@ cd ~/.config/niwaterm && bun install
 | `close-tile` | フォーカス中のタブ/タイルを閉じる |
 | `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
 | `new-tab` | 新規タブ作成 |
+| `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
 | `next-tab` / `prev-tab` | タブ切替 |
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
@@ -124,6 +125,22 @@ appearance: {
 ```
 
 不正な値（`fontSize`に文字列を渡す、色に空文字列を渡す等）を指定した場合、そのフィールド（`ansiColors`はそのindex）だけ警告付きでデフォルトにフォールバックする。256色のうち16-231（6x6x6カラーキューブ）・232-255（グレースケール）は固定の計算式でユーザー設定の対象外。
+
+## ブラウザ設定
+
+`browser`は新規ブラウザタブ（`new-browser-tab`キーバインド、または`niwaterm new-tab`のCLIで`--url`省略時）を開いた際のデフォルトURLを指定するオブジェクト。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `defaultUrl` | `string` | 新規ブラウザタブの初期表示URL。未指定時は`about:blank` |
+
+```ts
+browser: {
+  defaultUrl: "https://example.com",
+},
+```
+
+不正な値（空文字列等）を指定した場合、警告付きで`about:blank`にフォールバックする。CLIから`niwaterm new-tab --tile <tileId> --url <url>`のように`--url`を指定した場合は、この設定に関わらず指定したURLが優先される。
 
 ## ホットリロード
 

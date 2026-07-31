@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   defaultAppearance,
+  defaultBrowserConfig,
   defaultKeybindings,
   isKeybindAction,
   type KeyBindingString,
@@ -12,6 +13,7 @@ import {
   type NiwatermConfig,
   parseKeyBindingString,
   type ResolvedAppearanceConfig,
+  type ResolvedBrowserConfig,
 } from "@niwaterm/config";
 
 export function configDirPath(): string {
@@ -32,6 +34,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   if ("appearance" in v) {
     const ap = v["appearance"];
     if (typeof ap !== "object" || ap === null) return false;
+  }
+  if ("browser" in v) {
+    const br = v["browser"];
+    if (typeof br !== "object" || br === null) return false;
   }
   return true;
 }
@@ -81,6 +87,7 @@ export function resolveKeybindings(userConfig: NiwatermConfig | null): Keybindin
 }
 
 function resolveField<T>(
+  section: string,
   fieldName: string,
   userValue: unknown,
   defaultValue: T,
@@ -88,7 +95,7 @@ function resolveField<T>(
 ): T {
   if (userValue === undefined) return defaultValue;
   if (isValid(userValue)) return userValue;
-  console.log(`[bun] ignoring invalid appearance.${fieldName}: ${String(userValue)}`);
+  console.log(`[bun] ignoring invalid ${section}.${fieldName}: ${String(userValue)}`);
   return defaultValue;
 }
 
@@ -122,30 +129,35 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
 
   return {
     fontFamily: resolveField(
+      "appearance",
       "fontFamily",
       user?.fontFamily,
       defaultAppearance.fontFamily,
       isNonEmptyString,
     ),
     fontSize: resolveField(
+      "appearance",
       "fontSize",
       user?.fontSize,
       defaultAppearance.fontSize,
       isPositiveNumber,
     ),
     lineHeight: resolveField(
+      "appearance",
       "lineHeight",
       user?.lineHeight,
       defaultAppearance.lineHeight,
       isPositiveNumber,
     ),
     foreground: resolveField(
+      "appearance",
       "foreground",
       user?.foreground,
       defaultAppearance.foreground,
       isNonEmptyString,
     ),
     background: resolveField(
+      "appearance",
       "background",
       user?.background,
       defaultAppearance.background,
@@ -155,13 +167,32 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
   };
 }
 
-/** 設定ファイルを読み込み、キーバインド・外観の両方を解決する（起動時・ホットリロード時共通） */
-export async function loadAndResolveConfig(
-  path: string,
-): Promise<{ keybindings: KeybindingsConfig; appearance: ResolvedAppearanceConfig }> {
+/**
+ * defaultBrowserConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
+ */
+export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrowserConfig {
+  const user = userConfig?.browser;
+  return {
+    defaultUrl: resolveField(
+      "browser",
+      "defaultUrl",
+      user?.defaultUrl,
+      defaultBrowserConfig.defaultUrl,
+      isNonEmptyString,
+    ),
+  };
+}
+
+/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ設定を解決する（起動時・ホットリロード時共通） */
+export async function loadAndResolveConfig(path: string): Promise<{
+  keybindings: KeybindingsConfig;
+  appearance: ResolvedAppearanceConfig;
+  browser: ResolvedBrowserConfig;
+}> {
   const userConfig = await loadUserConfig(path);
   return {
     keybindings: resolveKeybindings(userConfig),
     appearance: resolveAppearance(userConfig),
+    browser: resolveBrowser(userConfig),
   };
 }

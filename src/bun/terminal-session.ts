@@ -12,6 +12,7 @@ export type TerminalSessionOptions = PtyOptions & {
 };
 
 export interface TerminalRenderState {
+  kind: "terminal";
   html: string;
   cursorX: number;
   cursorY: number;
@@ -73,6 +74,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   function renderState(): TerminalRenderState {
     const cursor = term.cursor();
     return {
+      kind: "terminal",
       html: term.dumpHtml(),
       cursorX: cursor.x,
       cursorY: cursor.y,

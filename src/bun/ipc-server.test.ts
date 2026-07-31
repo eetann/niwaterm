@@ -22,7 +22,13 @@ function createTestWorkspaceManager(): {
       write: (data) => record.push(data),
       paste: () => {},
       resize: () => false,
-      renderState: () => ({ html: "", cursorX: 0, cursorY: 0, cursorVisible: true }),
+      renderState: () => ({
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: true,
+      }),
       dumpText: () => `screen-text-${index}`,
       dispose: () => {},
     };
@@ -340,6 +346,43 @@ describe("POST /new-tab", () => {
     });
 
     expect(res.status).toBe(404);
+  });
+
+  test("urlを指定するとブラウザタブを作成する。hasTabはfalseのまま", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, url: "https://example.com" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.snapshot().workspace.tabs[body.tabId]).toEqual({
+      kind: "browser",
+      url: "https://example.com",
+    });
+    expect(mgr.hasTab(body.tabId)).toBe(false);
+  });
+
+  test("空文字列のurlは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, url: "" }),
+    });
+
+    expect(res.status).toBe(400);
   });
 });
 

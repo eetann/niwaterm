@@ -1,5 +1,6 @@
 // tile-layout.ts（純粋な木構造）と TerminalSession（I/O）を束ねる、状態を持つ層。
 // bun/index.tsはこのモジュールだけを通してタイル・タブ・PTYを操作する。
+import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
 import {
   addTabToTile,
   closeTabInTile,
@@ -21,10 +22,12 @@ import {
   type TerminalSession,
 } from "./terminal-session";
 
+export type TabRenderState = TerminalRenderState | BrowserRenderState;
+
 export interface WorkspaceRenderState {
   layout: TileNode;
   focusedTileId: TileId;
-  tabs: Record<TabId, TerminalRenderState>;
+  tabs: Record<TabId, TabRenderState>;
 }
 
 export type WorkspaceOptions = {
@@ -46,6 +49,7 @@ export type WorkspaceOptions = {
 export function createWorkspace(opts: WorkspaceOptions) {
   const createSession = opts.createSession ?? createTerminalSession;
   const sessions = new Map<TabId, TerminalSession>();
+  const browserTabs = new Map<TabId, BrowserTabState>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
 
   const genTileId = opts.genTileId;
@@ -86,6 +90,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       sessions.get(tabId)?.dispose();
       sessions.delete(tabId);
       sizeByTabId.delete(tabId);
+      browserTabs.delete(tabId);
     }
   }
 
@@ -158,6 +163,18 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return newTabId;
   }
 
+  function newBrowserTab(tileId: TileId, url: string): TabId | null {
+    const target = findNode(tree, tileId);
+    if (!target || target.kind !== "leaf") return null;
+    const newTabId = genTabId();
+    const result = addTabToTile(tree, tileId, newTabId);
+    if (!result) return null;
+    tree = result;
+    browserTabs.set(newTabId, { url });
+    opts.onDirty();
+    return newTabId;
+  }
+
   function switchTab(tileId: TileId, tabId: TabId): boolean {
     const result = switchActiveTab(tree, tileId, tabId);
     if (!result) return false;
@@ -219,9 +236,12 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   function snapshot(): WorkspaceRenderState {
-    const tabs: Record<TabId, TerminalRenderState> = {};
+    const tabs: Record<TabId, TabRenderState> = {};
     for (const [tabId, session] of sessions) {
       tabs[tabId] = session.renderState();
+    }
+    for (const [tabId, state] of browserTabs) {
+      tabs[tabId] = { kind: "browser", url: state.url };
     }
     return { layout: tree, focusedTileId, tabs };
   }
@@ -247,11 +267,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
+    browserTabs.clear();
   }
 
   return {
     splitTile: splitTileById,
     newTab,
+    newBrowserTab,
     switchTab,
     closeTab,
     focusTile: focusTileById,

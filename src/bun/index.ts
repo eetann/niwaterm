@@ -1,5 +1,9 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
-import type { KeybindingsConfig, ResolvedAppearanceConfig } from "@niwaterm/config";
+import type {
+  KeybindingsConfig,
+  ResolvedAppearanceConfig,
+  ResolvedBrowserConfig,
+} from "@niwaterm/config";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
@@ -50,6 +54,7 @@ export type NiwaRPC = {
       };
       splitTile: { tileId: TileId; orientation: SplitOrientation };
       newTab: { tileId: TileId };
+      newBrowserTab: { tileId: TileId; url?: string };
       switchTab: { tileId: TileId; tabId: TabId };
       closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
@@ -131,9 +136,10 @@ function cleanup() {
 
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
+let browser: ResolvedBrowserConfig;
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance } = await loadAndResolveConfig(configFilePath()));
+  ({ keybindings, appearance, browser } = await loadAndResolveConfig(configFilePath()));
 }
 
 await refreshConfig();
@@ -226,6 +232,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       newTab: ({ tileId }: { tileId: TileId }) => {
         workspaceManager.newTab(tileId);
+      },
+      newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
+        workspaceManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);

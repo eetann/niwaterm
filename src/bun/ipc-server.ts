@@ -41,6 +41,20 @@ function parseTileIdBody(body: unknown): TileIdRequestBody | null {
   return { tileId: b.tileId };
 }
 
+interface NewTabRequestBody extends TileIdRequestBody {
+  url?: string;
+}
+
+/** urlが省略されていればターミナルタブ、指定されていればブラウザタブ（空文字列は不可） */
+function parseNewTabBody(body: unknown): NewTabRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { url?: unknown };
+  if (b.url === undefined) return tileIdBody;
+  if (typeof b.url !== "string" || b.url.length === 0) return null;
+  return { ...tileIdBody, url: b.url };
+}
+
 interface SplitTileRequestBody extends TileIdRequestBody {
   orientation: SplitOrientation;
 }
@@ -121,9 +135,13 @@ function buildApp(workspaceManager: WorkspaceManager) {
   app.post("/new-tab", async (c) => {
     const body = await readJsonBody(c);
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
-    const parsed = parseTileIdBody(body);
-    if (!parsed) return c.json({ ok: false, error: "expected { tileId: string }" }, 400);
-    const tabId = workspaceManager.newTab(parsed.tileId);
+    const parsed = parseNewTabBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { tileId: string, url?: string }" }, 400);
+    }
+    const tabId = parsed.url
+      ? workspaceManager.newBrowserTab(parsed.tileId, parsed.url)
+      : workspaceManager.newTab(parsed.tileId);
     if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true, tabId });
   });

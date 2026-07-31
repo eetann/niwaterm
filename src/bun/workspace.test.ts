@@ -22,7 +22,13 @@ function createFakeSessionFactory() {
       write: () => {},
       paste: () => {},
       resize: () => false,
-      renderState: () => ({ html: "", cursorX: 0, cursorY: 0, cursorVisible: true }),
+      renderState: () => ({
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: true,
+      }),
       dumpText: () => "",
       dispose: () => {
         record.disposed = true;
@@ -145,6 +151,51 @@ describe("newTab", () => {
     const ws = createWorkspace(baseOpts({ createSession: factory }));
     const before = ws.snapshot().layout as TileLeaf;
     const result = ws.newTab("not-found");
+    expect(result).toBeNull();
+    expect(ws.snapshot().layout).toEqual(before);
+  });
+});
+
+describe("newBrowserTab", () => {
+  test("対象タイルにタブを追加するが、PTYセッションは増やさない。snapshotはkind:browserを返す", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    const result = ws.newBrowserTab(before.id, "https://example.com");
+    const after = ws.snapshot().layout as TileLeaf;
+    expect(after.tabIds.length).toBe(2);
+    expect(after.activeTabId).toBe(after.tabIds[1]);
+    expect(result).toBe(after.activeTabId);
+    expect(created.length).toBe(1); // PTYセッションは増えない
+    expect(ws.snapshot().tabs[after.activeTabId]).toEqual({
+      kind: "browser",
+      url: "https://example.com",
+    });
+  });
+
+  test("hasTabはfalseのまま（PTYセッションを持たないため）", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    const result = ws.newBrowserTab(before.id, "https://example.com") as string;
+    expect(ws.hasTab(result)).toBe(false);
+  });
+
+  test("closeTabで閉じるとtabsから消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const tabId = ws.newBrowserTab(tileId, "https://example.com") as string;
+    const result = ws.closeTab(tileId, tabId);
+    expect(result).toBe(true);
+    expect(ws.snapshot().tabs[tabId]).toBeUndefined();
+  });
+
+  test("存在しないtileIdはnullを返し、無視される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    const result = ws.newBrowserTab("not-found", "https://example.com");
     expect(result).toBeNull();
     expect(ws.snapshot().layout).toEqual(before);
   });

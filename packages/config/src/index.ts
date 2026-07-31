@@ -3,6 +3,7 @@ export {
   defaultAppearance,
   type ResolvedAppearanceConfig,
 } from "./appearance";
+export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export { defineConfig, type NiwatermConfig } from "./define-config";
 export {
   canonicalizeParsed,
