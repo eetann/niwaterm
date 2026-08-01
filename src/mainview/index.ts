@@ -18,6 +18,7 @@ import {
 } from "../bun/tile-layout";
 import type { AppRenderState, WorkspaceId, WorkspaceListEntry } from "../bun/workspace-manager";
 import { keyToBytes } from "./key-to-bytes";
+import { normalizeUrl } from "./normalize-url";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
 
@@ -35,6 +36,9 @@ const sidebarWorkspaceTemplate = document.getElementById(
   "sidebar-workspace-template",
 ) as HTMLTemplateElement;
 const sidebarTabTemplate = document.getElementById("sidebar-tab-template") as HTMLTemplateElement;
+const browserToolbarTemplate = document.getElementById(
+  "browser-toolbar-template",
+) as HTMLTemplateElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -385,16 +389,66 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
 }
 
 /**
- * ブラウザタブ用の<electrobun-webview>を生成する。リサイズはElectrobun側のOverlaySyncControllerが
- * DOM位置に自動追従するため、ターミナルタブと異なりResizeObserver/sendResizeは付けない。
+ * ブラウザタブ用の<electrobun-webview>とツールバー（戻る/進む/リロード/URL入力欄）を生成する。
+ * リサイズはElectrobun側のOverlaySyncControllerがDOM位置に自動追従するため、
+ * ターミナルタブと異なりResizeObserver/sendResizeは付けない。
  * sandbox/src属性はDOM追加（connectedCallback）より前に設定する必要がある。
  */
 function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, url: string): void {
   const tabContentEl = document.createElement("div");
-  tabContentEl.className = "tab-content";
+  tabContentEl.className = "tab-content browser";
+
+  const toolbarFrag = browserToolbarTemplate.content.cloneNode(true) as DocumentFragment;
+  const toolbarEl = toolbarFrag.querySelector(".browser-toolbar") as HTMLDivElement;
+  const backBtn = toolbarEl.querySelector(".browser-back") as HTMLButtonElement;
+  const forwardBtn = toolbarEl.querySelector(".browser-forward") as HTMLButtonElement;
+  const reloadBtn = toolbarEl.querySelector(".browser-reload") as HTMLButtonElement;
+  const urlInput = toolbarEl.querySelector(".browser-url-input") as HTMLInputElement;
+  urlInput.value = url;
+  backBtn.disabled = true;
+  forwardBtn.disabled = true;
+
   const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
   webviewEl.setAttribute("sandbox", "");
   webviewEl.src = url;
+
+  // Escで編集を取り消す際に戻す先。did-navigateのたびに最新のURLへ更新する
+  let lastKnownUrl = url;
+
+  const updateNavButtons = () => {
+    void webviewEl.canGoBack().then((canGoBack) => {
+      backBtn.disabled = !canGoBack;
+    });
+    void webviewEl.canGoForward().then((canGoForward) => {
+      forwardBtn.disabled = !canGoForward;
+    });
+  };
+
+  backBtn.addEventListener("click", () => webviewEl.goBack());
+  forwardBtn.addEventListener("click", () => webviewEl.goForward());
+  reloadBtn.addEventListener("click", () => webviewEl.reload());
+
+  urlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      webviewEl.loadURL(normalizeUrl(urlInput.value));
+      imeEl.focus({ preventScroll: true });
+    } else if (e.key === "Escape") {
+      urlInput.value = lastKnownUrl;
+      imeEl.focus({ preventScroll: true });
+    }
+  });
+
+  webviewEl.on("did-navigate", (e) => {
+    const newUrl = String((e as CustomEvent).detail ?? "");
+    if (newUrl) {
+      lastKnownUrl = newUrl;
+      if (document.activeElement !== urlInput) urlInput.value = newUrl;
+    }
+    updateNavButtons();
+  });
+
+  tabContentEl.appendChild(toolbarEl);
   tabContentEl.appendChild(webviewEl);
   tabContentElByTabId.set(tabId, tabContentEl);
   browserElByTabId.set(tabId, webviewEl);
@@ -408,7 +462,8 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
  */
 function setTabVisible(tabId: TabId, visible: boolean): void {
   const tabContentEl = tabContentElByTabId.get(tabId);
-  if (tabContentEl) tabContentEl.style.display = visible ? "block" : "none";
+  // ""に戻すことでCSS側のdisplay指定（ターミナルはblock、ブラウザは.browserのflex）に委ねる
+  if (tabContentEl) tabContentEl.style.display = visible ? "" : "none";
   browserElByTabId.get(tabId)?.toggleHidden(!visible);
 }
 
@@ -678,6 +733,9 @@ function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
 document.addEventListener("keydown", (e) => {
   // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）
   if (e.isComposing || e.keyCode === 229) return;
+  // ブラウザタブのURL入力欄編集中は、そのままネイティブのテキスト編集に任せる
+  // （PTYへのバイト送信やタイル操作キーバインドに奪われないようにする）
+  if (e.target instanceof HTMLInputElement) return;
 
   const tileCommand = resolveTileCommand(e, compiledKeybindings);
   if (tileCommand) {
@@ -776,6 +834,8 @@ imeEl.addEventListener("input", (e) => {
 
 // ---- ペースト（Cmd+V）----
 document.addEventListener("paste", (e) => {
+  // ブラウザタブのURL入力欄ではネイティブのペーストに任せる
+  if (e.target instanceof HTMLInputElement) return;
   e.preventDefault();
   const text = e.clipboardData?.getData("text/plain");
   if (text && currentTabId) sendMessage("paste", { tabId: currentTabId, data: text });
@@ -835,6 +895,13 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   const tileId = tileEl?.dataset["tileId"];
   if (!tileId) return;
 
+  if (target.closest<HTMLElement>(".browser-toolbar")) {
+    // URL入力欄クリック時にimeElへフォーカスを奪うと編集できなくなるため、
+    // フォーカスハイライトの更新だけ行いネイティブのフォーカス遷移に任せる
+    focusTileLocally(tileId);
+    return;
+  }
+
   const closeBtn = target.closest<HTMLElement>(".tab-close-btn");
   const tabButtonEl = target.closest<HTMLElement>(".tab-button");
   const tabId = tabButtonEl?.dataset["tabId"];
@@ -860,7 +927,12 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
   imeEl.focus({ preventScroll: true });
 });
-window.addEventListener("focus", () => imeEl.focus({ preventScroll: true }));
+window.addEventListener("focus", () => {
+  // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで
+  // imeElへフォーカスを奪われ編集が中断してしまうため、その場合はスキップする
+  if (document.activeElement instanceof HTMLInputElement) return;
+  imeEl.focus({ preventScroll: true });
+});
 imeEl.focus({ preventScroll: true });
 
 // ---- 起動 ----
