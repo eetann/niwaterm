@@ -17,9 +17,24 @@ export default define({
       description:
         "指定すると、そのURLを開くブラウザタブを作成する（省略時は通常のターミナルタブ）",
     },
+    "custom-view": {
+      type: "boolean",
+      short: "c",
+      description:
+        "指定すると、niwaterm.config.tsのcustomView設定を開くブラウザタブを作成する（--urlとは同時指定不可）",
+    },
   },
   run: async (ctx) => {
-    const result = await newTab(ipcSocketPath(), ctx.values.tile, ctx.values.url);
+    if (ctx.values.url !== undefined && ctx.values["custom-view"]) {
+      console.error("new-tabに失敗しました: --urlと--custom-viewは同時に指定できません");
+      process.exit(1);
+    }
+    const result = await newTab(
+      ipcSocketPath(),
+      ctx.values.tile,
+      ctx.values.url,
+      ctx.values["custom-view"],
+    );
     if (!result.ok) {
       console.error(`new-tabに失敗しました: ${result.error}`);
       process.exit(1);

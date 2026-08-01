@@ -22,6 +22,7 @@ export const KEYBIND_ACTIONS = [
   "focus-right",
   "new-tab",
   "new-browser-tab",
+  "new-custom-view-tab",
   "next-tab",
   "prev-tab",
   "new-workspace",

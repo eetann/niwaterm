@@ -384,6 +384,63 @@ describe("POST /new-tab", () => {
 
     expect(res.status).toBe(400);
   });
+
+  test("customView:trueを指定すると設定済みのcustomViewを開くブラウザタブを作成する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => ({
+      name: "Notes",
+      url: "file:///tmp/notes.html",
+    }));
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customView: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.snapshot().workspace.tabs[body.tabId]).toEqual({
+      kind: "browser",
+      url: "file:///tmp/notes.html",
+    });
+  });
+
+  test("customViewが未設定の状態でcustomView:trueを指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customView: true }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("urlとcustomViewを同時に指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => ({
+      name: "Notes",
+      url: "file:///tmp/notes.html",
+    }));
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, url: "https://example.com", customView: true }),
+    });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("POST /switch-tab", () => {

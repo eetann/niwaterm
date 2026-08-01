@@ -2,7 +2,8 @@
 // ファイル不在・importエラー・スキーマ不一致いずれでも例外を投げずnullを返す（persistence.tsのloadPersistedStateと同じ設計）。
 
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
   defaultBrowserConfig,
@@ -14,6 +15,7 @@ import {
   parseKeyBindingString,
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
+  type ResolvedCustomViewConfig,
 } from "@niwaterm/config";
 
 export function configDirPath(): string {
@@ -38,6 +40,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   if ("browser" in v) {
     const br = v["browser"];
     if (typeof br !== "object" || br === null) return false;
+  }
+  if ("customView" in v) {
+    const cv = v["customView"];
+    if (typeof cv !== "object" || cv === null) return false;
   }
   return true;
 }
@@ -183,16 +189,42 @@ export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrows
   };
 }
 
-/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ設定を解決する（起動時・ホットリロード時共通） */
+/**
+ * ユーザー定義HTML UI設定を解決する。未設定ならnull（機能オフ）。
+ * pathが有効ならconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。
+ * どちらも無効なら警告して機能オフ（nullを返す）。nameは省略時"Custom View"にフォールバックする。
+ */
+export function resolveCustomView(
+  userConfig: NiwatermConfig | null,
+): ResolvedCustomViewConfig | null {
+  const user = userConfig?.customView;
+  if (!user) return null;
+
+  const name = isNonEmptyString(user.name) ? user.name : "Custom View";
+
+  if (isNonEmptyString(user.path)) {
+    const resolvedPath = resolve(configDirPath(), user.path);
+    return { name, url: pathToFileURL(resolvedPath).href };
+  }
+  if (isNonEmptyString(user.url)) {
+    return { name, url: user.url };
+  }
+  console.log("[bun] customView requires either path or url; ignoring");
+  return null;
+}
+
+/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー設定を解決する（起動時・ホットリロード時共通） */
 export async function loadAndResolveConfig(path: string): Promise<{
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
+  customView: ResolvedCustomViewConfig | null;
 }> {
   const userConfig = await loadUserConfig(path);
   return {
     keybindings: resolveKeybindings(userConfig),
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
+    customView: resolveCustomView(userConfig),
   };
 }

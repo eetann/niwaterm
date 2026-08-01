@@ -72,6 +72,13 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
     });
   });
 
+  test("new-custom-view-tabはデフォルトでは何もキーに割り当てられていない（customView未設定時は無意味なため）", () => {
+    const customCompiled = compileKeybindings({ "cmd+shift+u": "new-custom-view-tab" });
+    expect(resolveTileCommand(key("u", { metaKey: true, shiftKey: true }), customCompiled)).toEqual(
+      { type: "newCustomViewTab" },
+    );
+  });
+
   test("Cmd+Shift+] -> 次のタブへ切替", () => {
     expect(
       resolveTileCommand(

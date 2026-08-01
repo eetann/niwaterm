@@ -3,6 +3,7 @@ import type {
   KeybindingsConfig,
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
+  ResolvedCustomViewConfig,
 } from "@niwaterm/config";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
@@ -55,6 +56,7 @@ export type NiwaRPC = {
       splitTile: { tileId: TileId; orientation: SplitOrientation };
       newTab: { tileId: TileId };
       newBrowserTab: { tileId: TileId; url?: string };
+      newCustomViewTab: { tileId: TileId };
       switchTab: { tileId: TileId; tabId: TabId };
       closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
@@ -69,7 +71,11 @@ export type NiwaRPC = {
     requests: {};
     messages: {
       render: AppRenderState;
-      config: { keybindings: KeybindingsConfig; appearance: ResolvedAppearanceConfig };
+      config: {
+        keybindings: KeybindingsConfig;
+        appearance: ResolvedAppearanceConfig;
+        customView: ResolvedCustomViewConfig | null;
+      };
     };
   }>;
 };
@@ -100,7 +106,7 @@ function render() {
 function sendConfig() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.config({ keybindings, appearance });
+  rpcSend.config({ keybindings, appearance, customView });
 }
 
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
@@ -137,9 +143,10 @@ function cleanup() {
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
+let customView: ResolvedCustomViewConfig | null;
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance, browser } = await loadAndResolveConfig(configFilePath()));
+  ({ keybindings, appearance, browser, customView } = await loadAndResolveConfig(configFilePath()));
 }
 
 await refreshConfig();
@@ -184,7 +191,7 @@ const workspaceManager = createWorkspaceManager({
 });
 
 try {
-  ipcServer = await createIpcServer(ipcSocketPath(), workspaceManager);
+  ipcServer = await createIpcServer(ipcSocketPath(), workspaceManager, () => customView);
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
   console.log(`[bun] failed to start ipc server: ${String(err)}`);
@@ -235,6 +242,13 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
         workspaceManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
+      },
+      newCustomViewTab: ({ tileId }: { tileId: TileId }) => {
+        if (!customView) {
+          console.log("[bun] customView is not configured; ignoring newCustomViewTab");
+          return;
+        }
+        workspaceManager.newBrowserTab(tileId, customView.url);
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);

@@ -85,13 +85,18 @@ describe("isKeybindAction", () => {
 });
 
 describe("defaultKeybindings", () => {
-  test("15個のアクション全てに1つずつ割り当てられている", () => {
+  test("new-custom-view-tab以外の15個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings);
     expect(actions.length).toBe(15);
     expect(new Set(actions).size).toBe(15);
     for (const action of KEYBIND_ACTIONS) {
+      if (action === "new-custom-view-tab") continue;
       expect(actions).toContain(action);
     }
+  });
+
+  test("new-custom-view-tabはcustomView未設定時に無意味なため既定キーを持たない（ユーザー設定での割り当てを想定）", () => {
+    expect(Object.values(defaultKeybindings)).not.toContain("new-custom-view-tab");
   });
 });
 

@@ -8,7 +8,16 @@
   </head>
   <body>
     <aside id="sidebar">
-      <div id="sidebar-list"></div>
+      <div id="sidebar-switcher" hidden>
+        <button id="sidebar-switch-list" type="button" tabindex="-1" class="active">
+          Workspaces
+        </button>
+        <button id="sidebar-switch-custom" type="button" tabindex="-1"></button>
+      </div>
+      <div id="sidebar-body">
+        <div id="sidebar-list"></div>
+        <div id="sidebar-custom-view"></div>
+      </div>
     </aside>
     <div id="screen">
       <div id="tile-tree"></div>

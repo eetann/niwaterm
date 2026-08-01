@@ -5,6 +5,7 @@ import {
   defaultKeybindings,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
+  type ResolvedCustomViewConfig,
 } from "@niwaterm/config";
 import type { NiwaRPC } from "../bun/index";
 import type { TabRenderState } from "../bun/workspace";
@@ -32,6 +33,12 @@ const tabButtonTemplate = document.getElementById("tab-button-template") as HTML
 const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
 const sidebarEl = document.getElementById("sidebar") as HTMLElement;
 const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
+const sidebarSwitcherEl = document.getElementById("sidebar-switcher") as HTMLDivElement;
+const sidebarSwitchListBtn = document.getElementById("sidebar-switch-list") as HTMLButtonElement;
+const sidebarSwitchCustomBtn = document.getElementById(
+  "sidebar-switch-custom",
+) as HTMLButtonElement;
+const sidebarCustomViewEl = document.getElementById("sidebar-custom-view") as HTMLDivElement;
 const sidebarWorkspaceTemplate = document.getElementById(
   "sidebar-workspace-template",
 ) as HTMLTemplateElement;
@@ -60,6 +67,11 @@ const sidebarWorkspaceElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
 const sidebarHeaderElByWorkspaceId = new Map<WorkspaceId, HTMLButtonElement>();
 const sidebarTabListElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
 const sidebarTabRowElByTabId = new Map<TabId, HTMLButtonElement>();
+
+// ---- サイドバーのユーザー定義HTML UI（customView）----
+let customViewWebviewEl: WebviewTagElement | null = null;
+let customViewUrl: string | null = null;
+let sidebarShowingCustom = false;
 
 let focusedTileId: TileId | null = null;
 // フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
@@ -181,12 +193,15 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       config: ({
         keybindings,
         appearance,
+        customView,
       }: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
+        customView: ResolvedCustomViewConfig | null;
       }) => {
         compiledKeybindings = compileKeybindings(keybindings);
         applyAppearance(appearance);
+        applyCustomView(customView);
       },
     },
   },
@@ -623,6 +638,58 @@ function gcSidebarStale(seenWorkspaceIds: Set<WorkspaceId>, seenTabIds: Set<TabI
   }
 }
 
+/**
+ * サイドバーの一覧/カスタムビュー表示を切り替える。
+ * #sidebar-listはhidden属性で、#sidebar-custom-view内のOOPIFはtoggleHiddenで隠す
+ * （OOPIFはdisplay:noneだけでは隠れないため）。#sidebar-custom-view自体は常にレイアウトを
+ * 持たせたままにする必要があるため、非アクティブ時の見た目上の無効化はpointer-events経由で行う。
+ */
+function setSidebarShowingCustom(showing: boolean): void {
+  sidebarShowingCustom = showing;
+  sidebarListEl.hidden = showing;
+  sidebarCustomViewEl.classList.toggle("active", showing);
+  customViewWebviewEl?.toggleHidden(!showing);
+  sidebarSwitchListBtn.classList.toggle("active", !showing);
+  sidebarSwitchCustomBtn.classList.toggle("active", showing);
+}
+
+/** customView設定に合わせてサイドバーパネル用の<electrobun-webview>を作成/更新/破棄する */
+function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
+  if (!customView) {
+    sidebarSwitcherEl.hidden = true;
+    if (sidebarShowingCustom) setSidebarShowingCustom(false);
+    customViewWebviewEl?.remove();
+    customViewWebviewEl = null;
+    customViewUrl = null;
+    return;
+  }
+
+  sidebarSwitcherEl.hidden = false;
+  sidebarSwitchCustomBtn.textContent = customView.name;
+
+  if (!customViewWebviewEl) {
+    // #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
+    // 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenだけで正しく隠せる。
+    // ただしtoggleHidden()はwebviewId確定後でないと送信先が無く無視されるため、
+    // 初回のみdom-readyを待ってから呼ぶ（work-log 2026-08-01参照）
+    const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
+    webviewEl.setAttribute("sandbox", "");
+    webviewEl.src = customView.url;
+    webviewEl.on("dom-ready", () => {
+      webviewEl.toggleHidden(!sidebarShowingCustom);
+    });
+    sidebarCustomViewEl.appendChild(webviewEl);
+    customViewWebviewEl = webviewEl;
+    customViewUrl = customView.url;
+  } else if (customViewUrl !== customView.url) {
+    customViewWebviewEl.loadURL(customView.url);
+    customViewUrl = customView.url;
+  }
+}
+
+sidebarSwitchListBtn.addEventListener("click", () => setSidebarShowingCustom(false));
+sidebarSwitchCustomBtn.addEventListener("click", () => setSidebarShowingCustom(true));
+
 function applySidebarVisibility(): void {
   sidebarEl.style.display = sidebarOpen ? "" : "none";
 }
@@ -775,6 +842,9 @@ function handleTileCommand(cmd: TileCommand): void {
       break;
     case "newBrowserTab":
       sendMessage("newBrowserTab", { tileId: focusedTileId });
+      break;
+    case "newCustomViewTab":
+      sendMessage("newCustomViewTab", { tileId: focusedTileId });
       break;
     case "cycleTab": {
       if (!lastLayout) return;

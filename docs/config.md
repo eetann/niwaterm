@@ -84,7 +84,7 @@ cd ~/.config/niwaterm && bun install
 - キー本体はアルファベット（`d`, `w`, `t`, `n`等）、矢印（`up`/`down`/`left`/`right`）、角括弧（`[`/`]`）のいずれか
 - 例: `"cmd+d"`, `"cmd+shift+d"`, `"cmd+alt+up"`, `"cmd+alt+]"`
 
-**KeybindAction の一覧**（15種類）:
+**KeybindAction の一覧**（16種類）:
 
 | アクション | 意味 |
 |---|---|
@@ -93,6 +93,7 @@ cd ~/.config/niwaterm && bun install
 | `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
 | `new-tab` | 新規タブ作成 |
 | `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
+| `new-custom-view-tab` | `customView`設定を開くタブを作成（`customView`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある） |
 | `next-tab` / `prev-tab` | タブ切替 |
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
@@ -142,9 +143,41 @@ browser: {
 
 不正な値（空文字列等）を指定した場合、警告付きで`about:blank`にフォールバックする。CLIから`niwaterm new-tab --tile <tileId> --url <url>`のように`--url`を指定した場合は、この設定に関わらず指定したURLが優先される。
 
+## ユーザー定義HTML UI（customView）
+
+`customView`は、ユーザーが用意したHTMLをniwaterm内（サイドバー・タブ）に表示するための設定。**未指定なら機能自体がオフ**になり、サイドバーの見た目・挙動は変化しない。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `name` | `string` | サイドバーの切替ボタンに表示する名前。未指定時は`"Custom View"` |
+| `path` | `string` | ローカルHTMLファイルへのパス。`~/.config/niwaterm/`（設定ファイルのあるディレクトリ）からの相対 or 絶対パス。`file://`として読み込む |
+| `url` | `string` | 任意URL。`path`未指定時のみ使われる（`path`優先） |
+
+`path`と`url`のどちらも指定しなかった場合は警告付きで機能オフになる。
+
+```ts
+customView: {
+  name: "Notes",
+  path: "./notes.html",
+},
+```
+
+設定すると、サイドバーの上部にワークスペース一覧との切替スイッチャーが表示され、クリックで一覧表示とcustomViewパネルを切り替えられる。同じHTMLはタブとしても開ける:
+
+- キーバインド: `new-custom-view-tab`アクションを自分で割り当てる（既定キーは無い）
+  ```ts
+  keybindings: {
+    ...defaultKeybindings,
+    "cmd+shift+u": "new-custom-view-tab",
+  },
+  ```
+- CLI: `niwaterm new-tab --tile <tileId> --custom-view`（`--url`と同時指定は不可）
+
+内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っており、`customView`のHTMLからniwatermのAPI（タイル・タブ操作等）を呼び出す仕組みは未実装（roadmap参照）。
+
 ## ホットリロード
 
-`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観の両方）。`~/.config/niwaterm/`ディレクトリを監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
+`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewいずれも）。`~/.config/niwaterm/`ディレクトリを監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
 
 構文エラーのある内容を保存した場合は、コンソールに警告ログが出た上でデフォルト設定（キーバインド・外観とも）にフォールバックする。「直前の有効な設定を保持する」のではなく、初回読み込み時と同様に毎回デフォルトから解決し直す設計のため、エラーを直して再保存すれば元通り反映される。
 

@@ -5,6 +5,7 @@
 import { unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Hono, type Context } from "hono";
+import type { ResolvedCustomViewConfig } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
@@ -43,14 +44,26 @@ function parseTileIdBody(body: unknown): TileIdRequestBody | null {
 
 interface NewTabRequestBody extends TileIdRequestBody {
   url?: string;
+  customView?: boolean;
 }
 
-/** urlが省略されていればターミナルタブ、指定されていればブラウザタブ（空文字列は不可） */
+/**
+ * url・customViewいずれも省略されていればターミナルタブ、urlが指定されていればブラウザタブ
+ * （空文字列は不可）、customView:trueが指定されていれば設定済みのユーザー定義HTML UIを開く。
+ * urlとcustomViewの同時指定は不正とする。
+ */
 function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   const tileIdBody = parseTileIdBody(body);
   if (!tileIdBody) return null;
-  const b = body as { url?: unknown };
-  if (b.url === undefined) return tileIdBody;
+  const b = body as { url?: unknown; customView?: unknown };
+  const hasUrl = b.url !== undefined;
+  const hasCustomView = b.customView !== undefined;
+  if (hasUrl && hasCustomView) return null;
+  if (hasCustomView) {
+    if (b.customView !== true) return null;
+    return { ...tileIdBody, customView: true };
+  }
+  if (!hasUrl) return tileIdBody;
   if (typeof b.url !== "string" || b.url.length === 0) return null;
   return { ...tileIdBody, url: b.url };
 }
@@ -88,7 +101,10 @@ async function readJsonBody(c: Context): Promise<unknown | undefined> {
   }
 }
 
-function buildApp(workspaceManager: WorkspaceManager) {
+function buildApp(
+  workspaceManager: WorkspaceManager,
+  getCustomView: () => ResolvedCustomViewConfig | null,
+) {
   const app = new Hono();
 
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
@@ -137,7 +153,23 @@ function buildApp(workspaceManager: WorkspaceManager) {
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
     const parsed = parseNewTabBody(body);
     if (!parsed) {
-      return c.json({ ok: false, error: "expected { tileId: string, url?: string }" }, 400);
+      return c.json(
+        {
+          ok: false,
+          error:
+            "expected { tileId: string, url?: string, customView?: boolean } (url and customView are mutually exclusive)",
+        },
+        400,
+      );
+    }
+    if (parsed.customView) {
+      const customView = getCustomView();
+      if (!customView) {
+        return c.json({ ok: false, error: "customView is not configured" }, 400);
+      }
+      const tabId = workspaceManager.newBrowserTab(parsed.tileId, customView.url);
+      if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+      return c.json({ ok: true, tabId });
     }
     const tabId = parsed.url
       ? workspaceManager.newBrowserTab(parsed.tileId, parsed.url)
@@ -218,9 +250,10 @@ async function removeStaleSocket(path: string): Promise<void> {
 export async function createIpcServer(
   path: string,
   workspaceManager: WorkspaceManager,
+  getCustomView: () => ResolvedCustomViewConfig | null = () => null,
 ): Promise<IpcServer> {
   await removeStaleSocket(path);
-  const app = buildApp(workspaceManager);
+  const app = buildApp(workspaceManager, getCustomView);
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   let closed = false;
   return {

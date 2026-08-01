@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultAppearance, defaultBrowserConfig, defaultKeybindings } from "@niwaterm/config";
 import {
+  configDirPath,
   configFilePath,
   loadUserConfig,
   resolveAppearance,
   resolveBrowser,
+  resolveCustomView,
   resolveKeybindings,
 } from "./config";
 
@@ -169,6 +171,52 @@ describe("resolveBrowser", () => {
     try {
       const resolved = resolveBrowser({ browser: { defaultUrl: "" } });
       expect(resolved.defaultUrl).toBe(defaultBrowserConfig.defaultUrl);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveCustomView", () => {
+  test("nullを渡すとnull（機能オフ）を返す", () => {
+    expect(resolveCustomView(null)).toBeNull();
+  });
+
+  test("customView未指定ならnullを返す", () => {
+    expect(resolveCustomView({})).toBeNull();
+  });
+
+  test("pathを指定するとconfigDirPath基準のfile://に解決される", () => {
+    const resolved = resolveCustomView({ customView: { name: "Notes", path: "./notes.html" } });
+    expect(resolved).not.toBeNull();
+    expect(resolved?.name).toBe("Notes");
+    expect(resolved?.url).toBe(`file://${join(configDirPath(), "notes.html")}`);
+  });
+
+  test("urlを指定するとそのまま使われる", () => {
+    const resolved = resolveCustomView({
+      customView: { name: "Docs", url: "https://example.com" },
+    });
+    expect(resolved).toEqual({ name: "Docs", url: "https://example.com" });
+  });
+
+  test("pathとurlが両方指定されている場合はpathが優先される", () => {
+    const resolved = resolveCustomView({
+      customView: { path: "./notes.html", url: "https://example.com" },
+    });
+    expect(resolved?.url).toBe(`file://${join(configDirPath(), "notes.html")}`);
+  });
+
+  test("nameを省略すると'Custom View'にフォールバックする", () => {
+    const resolved = resolveCustomView({ customView: { url: "https://example.com" } });
+    expect(resolved?.name).toBe("Custom View");
+  });
+
+  test("pathとurlどちらも無効なら警告付きでnullを返す", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveCustomView({ customView: { name: "Broken" } })).toBeNull();
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

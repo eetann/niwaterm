@@ -131,8 +131,16 @@ export function splitTile(
 
 export type NewTabResult = { ok: true; tabId: TabId } | { ok: false; error: string };
 
-export function newTab(socketPath: string, tileId: TileId, url?: string): Promise<NewTabResult> {
-  return postJson(socketPath, "/new-tab", url === undefined ? { tileId } : { tileId, url });
+export function newTab(
+  socketPath: string,
+  tileId: TileId,
+  url?: string,
+  customView?: boolean,
+): Promise<NewTabResult> {
+  const body: { tileId: TileId; url?: string; customView?: boolean } = { tileId };
+  if (url !== undefined) body.url = url;
+  if (customView !== undefined) body.customView = customView;
+  return postJson(socketPath, "/new-tab", body);
 }
 
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };
