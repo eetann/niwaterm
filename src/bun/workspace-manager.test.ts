@@ -208,6 +208,61 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
   });
 });
 
+describe("タイル変数(setTileVar/getTileVar/listTileVars)", () => {
+  test("非アクティブなワークスペースのタイルへも届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.newWorkspace(); // 以後、firstTileId所属のworkspaceは非アクティブ
+
+    expect(mgr.setTileVar(firstTileId, "status", "running")).toBe(true);
+    expect(mgr.getTileVar(firstTileId, "status")).toEqual({ found: true, value: "running" });
+    expect(mgr.listTileVars(firstTileId)).toEqual({ status: "running" });
+  });
+
+  test("タイルAが書いた変数をタイルBから読める（tileIdを指定すれば所属workspaceに関わらずアクセスできる）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tileB = splitResult?.tileId as string;
+
+    // タイルAが自身の状態をtileVarに書く
+    mgr.setTileVar(tileA, "status", "running");
+    // タイルBが送信元（タイルA）のtileVarを読む
+    expect(mgr.getTileVar(tileA, "status")).toEqual({ found: true, value: "running" });
+
+    // タイルBが読んでいる間にタイルAが値を更新する
+    mgr.setTileVar(tileA, "status", "done");
+    expect(mgr.getTileVar(tileA, "status")).toEqual({ found: true, value: "done" });
+
+    // tileBには影響しない（namespace分離）
+    expect(mgr.getTileVar(tileB, "status")).toEqual({ found: false, reason: "not-set" });
+  });
+
+  test("異なるタイル間で変数が混ざらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tileB = splitResult?.tileId as string;
+
+    mgr.setTileVar(tileA, "k", "a-value");
+    mgr.setTileVar(tileB, "k", "b-value");
+
+    expect(mgr.getTileVar(tileA, "k")).toEqual({ found: true, value: "a-value" });
+    expect(mgr.getTileVar(tileB, "k")).toEqual({ found: true, value: "b-value" });
+  });
+
+  test("存在しないtileIdはsetがfalse、getがtile-not-found、listがnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setTileVar("not-found", "k", "v")).toBe(false);
+    expect(mgr.getTileVar("not-found", "k")).toEqual({ found: false, reason: "tile-not-found" });
+    expect(mgr.listTileVars("not-found")).toBeNull();
+  });
+});
+
 describe("ワークスペースが空になった時の挙動", () => {
   test("あるワークスペースの最後のタブのプロセスが終了すると、そのワークスペースは削除されアクティブが切り替わる", () => {
     const { created, factory } = createFakeSessionFactory();

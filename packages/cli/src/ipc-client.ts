@@ -184,3 +184,61 @@ export async function captureTab(socketPath: string, tabId: TabId): Promise<Capt
     return { ok: false, error: String(err) };
   }
 }
+
+export type SetTileVarResult = { ok: true } | { ok: false; error: string };
+
+export function setTileVar(
+  socketPath: string,
+  tileId: TileId,
+  key: string,
+  value: string,
+): Promise<SetTileVarResult> {
+  return postJson(socketPath, "/set-var", { tileId, key, value });
+}
+
+export type GetTileVarResult = { ok: true; value: string } | { ok: false; error: string };
+
+export async function getTileVar(
+  socketPath: string,
+  tileId: TileId,
+  key: string,
+): Promise<GetTileVarResult> {
+  try {
+    const res = await fetch(
+      `http://localhost/get-var?tileId=${encodeURIComponent(tileId)}&key=${encodeURIComponent(key)}`,
+      { unix: socketPath },
+    );
+    const body = (await res.json().catch(() => null)) as {
+      value?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && typeof body?.value === "string") return { ok: true, value: body.value };
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+export type ListTileVarsResult =
+  | { ok: true; vars: Record<string, string> }
+  | { ok: false; error: string };
+
+export async function listTileVars(
+  socketPath: string,
+  tileId: TileId,
+): Promise<ListTileVarsResult> {
+  try {
+    const res = await fetch(`http://localhost/list-vars?tileId=${encodeURIComponent(tileId)}`, {
+      unix: socketPath,
+    });
+    const body = (await res.json().catch(() => null)) as { vars?: unknown; error?: unknown } | null;
+    if (res.ok && body?.vars && typeof body.vars === "object") {
+      return { ok: true, vars: body.vars as Record<string, string> };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}

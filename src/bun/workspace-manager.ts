@@ -10,10 +10,13 @@ import {
 } from "./tile-layout";
 import {
   createWorkspace,
+  type GetTileVarResult,
   type Workspace,
   type WorkspaceOptions,
   type WorkspaceRenderState,
 } from "./workspace";
+
+export type { GetTileVarResult } from "./workspace";
 
 export type WorkspaceId = string;
 
@@ -213,6 +216,20 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId)?.getTabText(tabId) ?? null;
   }
 
+  function setTileVar(tileId: TileId, key: string, value: string): boolean {
+    return findOwnerByTileId(tileId)?.setTileVar(tileId, key, value) ?? false;
+  }
+
+  function getTileVar(tileId: TileId, key: string): GetTileVarResult {
+    const owner = findOwnerByTileId(tileId);
+    if (!owner) return { found: false, reason: "tile-not-found" };
+    return owner.getTileVar(tileId, key);
+  }
+
+  function listTileVars(tileId: TileId): Record<string, string> | null {
+    return findOwnerByTileId(tileId)?.listTileVars(tileId) ?? null;
+  }
+
   function snapshot(): AppRenderState {
     // activeIdは常にworkspacesの有効なキーを指す（newWorkspace/switchWorkspace/closeWorkspace/
     // handleWorkspaceEmptiedのいずれも、削除時は必ず残存するidへ付け替えてから返す）
@@ -259,6 +276,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     listWorkspaces,
     hasTab,
     getTabText,
+    setTileVar,
+    getTileVar,
+    listTileVars,
     serializeForPersistence,
     dispose,
   };

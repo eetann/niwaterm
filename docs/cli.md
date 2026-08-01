@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）に対応。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）に対応。
 
 ## セットアップ
 
@@ -65,6 +65,14 @@ niwaterm capture-tab --tab <tabId>
 指定したタブの現在の画面内容をプレーンテキストで標準出力へ表示する（tmuxの`capture-pane -p`相当）。エスケープシーケンス・色情報は含まれず、現在画面（viewport）の内容のみが対象でスクロールバックは含まれない。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
+niwaterm set-var --tile <tileId> <key> <value>
+niwaterm get-var --tile <tileId> <key>
+niwaterm list-vars --tile <tileId>
+```
+
+タイルごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。**変数は永続化されず、アプリを終了する・対象タイルを閉じると消える**（tileId自体がアプリ再起動のたびに再採番されるため）。`tileId`を指定すればどのタイルからでも別タイルの変数を読み書きできるため、送信元タイルが自身の状態を`set-var`で書き、別タイルがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタイル間の自動化に使える。指定した`tileId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
 niwaterm --help
 niwaterm ping --help
 ```
@@ -82,6 +90,9 @@ niwaterm ping --help
   - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
   - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404
   - `GET /capture-tab` — `?tabId=<tabId>`を受け取り、そのタブの現在画面をプレーンテキスト（`GhosttyFormatterFormat`の`PLAIN`）で`{ok: true, text}`として返す。tabId未指定は400、tabId不存在は404
+  - `POST /set-var` — `{tileId: string, key: string, value: string}`を受け取り、タイル変数を設定する。keyは`^[A-Za-z0-9_.-]{1,128}$`のみ許可、不一致・valueが非stringは400。tileId不存在時は404
+  - `GET /get-var` — `?tileId=<tileId>&key=<key>`を受け取り、タイル変数を`{ok: true, value}`として返す。クエリ未指定は400、tileId不存在または未設定のkeyは404
+  - `GET /list-vars` — `?tileId=<tileId>`を受け取り、そのタイルの変数を`{ok: true, vars: Record<string,string>}`として返す。tileId未指定は400、tileId不存在は404
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
 

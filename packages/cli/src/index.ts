@@ -3,10 +3,13 @@ import { cli, define } from "gunshi";
 import captureTabCommand from "./commands/capture-tab";
 import closeTabCommand from "./commands/close-tab";
 import focusTileCommand from "./commands/focus-tile";
+import getVarCommand from "./commands/get-var";
 import listCommand from "./commands/list";
+import listVarsCommand from "./commands/list-vars";
 import newTabCommand from "./commands/new-tab";
 import pingCommand from "./commands/ping";
 import sendKeysCommand from "./commands/send-keys";
+import setVarCommand from "./commands/set-var";
 import splitTileCommand from "./commands/split-tile";
 import switchTabCommand from "./commands/switch-tab";
 
@@ -32,5 +35,8 @@ await cli(process.argv.slice(2), mainCommand, {
     "close-tab": closeTabCommand,
     "focus-tile": focusTileCommand,
     "capture-tab": captureTabCommand,
+    "set-var": setVarCommand,
+    "get-var": getVarCommand,
+    "list-vars": listVarsCommand,
   },
 });

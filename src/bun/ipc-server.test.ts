@@ -593,3 +593,152 @@ describe("POST /focus-tile", () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe("POST /set-var, GET /get-var, GET /list-vars", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("set-varで書いた値をget-var/list-varsで読める", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const setRes = await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, key: "status", value: "running" }),
+    });
+    expect(setRes.status).toBe(200);
+    expect(await setRes.json()).toEqual({ ok: true });
+
+    const getRes = await fetch(`http://localhost/get-var?tileId=${tileId}&key=status`, {
+      unix: socketPath,
+    });
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ ok: true, value: "running" });
+
+    const listRes = await fetch(`http://localhost/list-vars?tileId=${tileId}`, {
+      unix: socketPath,
+    });
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual({ ok: true, vars: { status: "running" } });
+  });
+
+  test("別タイル(tileB)からtileAの変数を読める（tileBに書いても混ざらない）", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tileB = splitResult?.tileId as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: tileA, key: "status", value: "from-a" }),
+    });
+
+    // tileB視点からtileAのtileIdを指定して読む（別タイルからの参照を模す）
+    const getFromB = await fetch(`http://localhost/get-var?tileId=${tileA}&key=status`, {
+      unix: socketPath,
+    });
+    expect(await getFromB.json()).toEqual({ ok: true, value: "from-a" });
+
+    // tileB自身にはまだ設定されていない
+    const getB = await fetch(`http://localhost/get-var?tileId=${tileB}&key=status`, {
+      unix: socketPath,
+    });
+    expect(getB.status).toBe(404);
+  });
+
+  test("set-var: 不正なkey（空白を含む）は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, key: "bad key", value: "v" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("set-var: 存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found", key: "k", value: "v" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("get-var: tileId/keyクエリ未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/get-var", { unix: socketPath });
+    expect(res.status).toBe(400);
+  });
+
+  test("get-var: 存在するtileIdだが未設定のkeyは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/get-var?tileId=${tileId}&key=not-set`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("list-vars: tileId未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/list-vars", { unix: socketPath });
+    expect(res.status).toBe(400);
+  });
+
+  test("list-vars: 存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/list-vars?tileId=not-found", {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("list-vars: 何も設定していないtileIdは空オブジェクトを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/list-vars?tileId=${tileId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, vars: {} });
+  });
+});

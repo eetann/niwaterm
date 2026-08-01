@@ -302,6 +302,84 @@ describe("focusTile", () => {
   });
 });
 
+describe("タイル変数(setTileVar/getTileVar/listTileVars)", () => {
+  test("set→getで同じ値が返る。上書きもできる", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+
+    expect(ws.setTileVar(tileId, "status", "running")).toBe(true);
+    expect(ws.getTileVar(tileId, "status")).toEqual({ found: true, value: "running" });
+
+    expect(ws.setTileVar(tileId, "status", "done")).toBe(true);
+    expect(ws.getTileVar(tileId, "status")).toEqual({ found: true, value: "done" });
+  });
+
+  test("未設定キーはfound:false, reason:not-set", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    expect(ws.getTileVar(tileId, "not-set-key")).toEqual({ found: false, reason: "not-set" });
+  });
+
+  test("listTileVarsは設定済みの全キーを返す。未設定なら空オブジェクト", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+
+    expect(ws.listTileVars(tileId)).toEqual({});
+    ws.setTileVar(tileId, "a", "1");
+    ws.setTileVar(tileId, "b", "2");
+    expect(ws.listTileVars(tileId)).toEqual({ a: "1", b: "2" });
+  });
+
+  test("存在しないtileIdはsetがfalse、getがtile-not-found、listがnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.setTileVar("not-found", "k", "v")).toBe(false);
+    expect(ws.getTileVar("not-found", "k")).toEqual({ found: false, reason: "tile-not-found" });
+    expect(ws.listTileVars("not-found")).toBeNull();
+  });
+
+  test("split（leafでないtileId）はtile-not-found扱い", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical");
+    const splitId = ws.snapshot().layout.id;
+    expect(ws.setTileVar(splitId, "k", "v")).toBe(false);
+    expect(ws.listTileVars(splitId)).toBeNull();
+  });
+
+  test("closeTabでタイル自体が閉じられると変数も消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical");
+    const splitTree = ws.snapshot().layout;
+    const secondLeaf = (splitTree as typeof splitTree & { kind: "split" }).second as TileLeaf;
+
+    ws.setTileVar(secondLeaf.id, "k", "v");
+    ws.closeTab(secondLeaf.id, secondLeaf.activeTabId);
+
+    expect(ws.getTileVar(secondLeaf.id, "k")).toEqual({ found: false, reason: "tile-not-found" });
+  });
+
+  test("タイル内の複数タブのうち1つを閉じただけ（タイル自体は残る）では変数は消えない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    ws.setTileVar(tileId, "k", "v");
+    const leaf = ws.snapshot().layout as TileLeaf;
+    const [firstTabId] = leaf.tabIds;
+
+    ws.closeTab(tileId, firstTabId);
+
+    expect(ws.getTileVar(tileId, "k")).toEqual({ found: true, value: "v" });
+  });
+});
+
 describe("シェルプロセス終了時の挙動(onExit経由)", () => {
   test("複数タブがあるタイルで1つのプロセスが終了しても、そのタブだけ消えタイルは残る", () => {
     const { created, factory } = createFakeSessionFactory();

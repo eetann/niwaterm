@@ -92,6 +92,23 @@ function parseTileTabBody(body: unknown): TileTabRequestBody | null {
   return { ...tileIdBody, tabId: b.tabId };
 }
 
+/** 英数字・_・-・. のみ、1〜128文字。CLI出力（list-varsのkey=value整形）を壊す空白・改行等を排除する */
+const TILE_VAR_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+
+interface SetVarRequestBody extends TileIdRequestBody {
+  key: string;
+  value: string;
+}
+
+function parseSetVarBody(body: unknown): SetVarRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { key?: unknown; value?: unknown };
+  if (typeof b.key !== "string" || !TILE_VAR_KEY_PATTERN.test(b.key)) return null;
+  if (typeof b.value !== "string") return null;
+  return { ...tileIdBody, key: b.key, value: b.value };
+}
+
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
 async function readJsonBody(c: Context): Promise<unknown | undefined> {
   try {
@@ -220,6 +237,50 @@ function buildApp(
     const ok = workspaceManager.focusTile(parsed.tileId);
     if (!ok) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true });
+  });
+
+  app.post("/set-var", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseSetVarBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "expected { tileId: string, key: string (英数字・_・-・.のみ、1〜128文字), value: string }",
+        },
+        400,
+      );
+    }
+    const ok = workspaceManager.setTileVar(parsed.tileId, parsed.key, parsed.value);
+    if (!ok) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.get("/get-var", (c) => {
+    const tileId = c.req.query("tileId");
+    const key = c.req.query("key");
+    if (!tileId || !key) {
+      return c.json({ ok: false, error: "expected ?tileId=<tileId>&key=<key>" }, 400);
+    }
+    const result = workspaceManager.getTileVar(tileId, key);
+    if (!result.found) {
+      const error =
+        result.reason === "tile-not-found"
+          ? `tile not found: ${tileId}`
+          : `variable not set: ${key} (tile: ${tileId})`;
+      return c.json({ ok: false, error }, 404);
+    }
+    return c.json({ ok: true, value: result.value });
+  });
+
+  app.get("/list-vars", (c) => {
+    const tileId = c.req.query("tileId");
+    if (!tileId) return c.json({ ok: false, error: "expected ?tileId=<tileId>" }, 400);
+    const vars = workspaceManager.listTileVars(tileId);
+    if (vars === null) return c.json({ ok: false, error: `tile not found: ${tileId}` }, 404);
+    return c.json({ ok: true, vars });
   });
 
   return app;
