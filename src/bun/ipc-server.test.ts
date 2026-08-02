@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BrowserBridge } from "./browser-bridge";
+import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import type { TileLeaf } from "./tile-layout";
@@ -14,7 +15,14 @@ function createFakeBrowserBridge(overrides: Partial<BrowserBridge> = {}): Browse
     navigate: overrides.navigate ?? (async () => ({ ok: true })),
     getText: overrides.getText ?? (async () => ({ ok: true, text: "fake-text" })),
     getHtml: overrides.getHtml ?? (async () => ({ ok: true, html: "<html></html>" })),
+    getUrl: overrides.getUrl ?? (async () => ({ ok: true, url: "https://example.com/" })),
   };
+}
+
+function createFakeCaptureScreenshot(
+  impl?: (url: string) => Promise<ScreenshotResult>,
+): (url: string) => Promise<ScreenshotResult> {
+  return impl ?? (async () => ({ ok: true, data: new Blob(["fake-png-bytes"]) }));
 }
 
 function createTestWorkspaceManager(): {
@@ -863,6 +871,191 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch(`http://localhost/browser-get-text?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "browser bridge not available" });
+  });
+});
+
+describe("GET /browser-screenshot", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象がブラウザタブでアクティブなワークスペースならgetUrl→captureScreenshotの順で呼びPNGを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const bridge = createFakeBrowserBridge({
+      getUrl: async () => ({ ok: true, url: "https://example.com/" }),
+    });
+    let receivedUrl: unknown;
+    const captureScreenshot = createFakeCaptureScreenshot(async (url) => {
+      receivedUrl = url;
+      return { ok: true, data: new Blob(["fake-png-bytes"]) };
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+      captureScreenshot,
+    );
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    expect(await res.text()).toBe("fake-png-bytes");
+    expect(receivedUrl).toBe("https://example.com/");
+  });
+
+  test("存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+      createFakeCaptureScreenshot(),
+    );
+
+    const res = await fetch("http://localhost/browser-screenshot?tabId=not-found", {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("terminalタブを指定すると404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+      createFakeCaptureScreenshot(),
+    );
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${terminalTabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("tabId未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+      createFakeCaptureScreenshot(),
+    );
+
+    const res = await fetch("http://localhost/browser-screenshot", { unix: socketPath });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("対象タブの所属ワークスペースが非アクティブなら409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    mgr.newWorkspace();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+      createFakeCaptureScreenshot(),
+    );
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  test("browserBridge.getUrlが失敗を返すと409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const bridge = createFakeBrowserBridge({
+      getUrl: async () => ({ ok: false, error: "page not loaded yet" }),
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+      createFakeCaptureScreenshot(),
+    );
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "page not loaded yet" });
+  });
+
+  test("captureScreenshotが失敗を返すと409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const captureScreenshot = createFakeCaptureScreenshot(async () => ({
+      ok: false,
+      error: "navigation timed out",
+    }));
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+      captureScreenshot,
+    );
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "navigation timed out" });
+  });
+
+  test("browserBridgeを渡さない場合はデフォルトのUNAVAILABLE扱いで409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/browser-screenshot?tabId=${tabId}`, {
       unix: socketPath,
     });
 

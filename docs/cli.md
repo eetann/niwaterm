@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）に対応。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）に対応。
 
 ## セットアップ
 
@@ -76,6 +76,7 @@ niwaterm list-vars --tile <tileId>
 niwaterm browser-navigate --tab <tabId> --url <url>
 niwaterm browser-get-text --tab <tabId>
 niwaterm browser-get-html --tab <tabId>
+niwaterm browser-screenshot --tab <tabId> --out <path>
 niwaterm show-tab --tab <tabId>
 ```
 
@@ -84,6 +85,7 @@ niwaterm show-tab --tab <tabId>
 - `browser-navigate` — 指定したブラウザタブのURLを遷移する（Playwrightの`page.goto()`相当）。次のページ読み込み完了まで待って結果を返す
 - `browser-get-text` — 指定したブラウザタブの表示内容をプレーンテキストで取得する（`document.body.innerText`相当）
 - `browser-get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
+- `browser-screenshot` — 指定したブラウザタブの現在URLをheadlessブラウザ（Bun本体がv1.3.12以降ネイティブに提供する`Bun.WebView`、macOSはniwatermのElectrobun側と同じWKWebViewベース）で別途開き直し、スクリーンショットをPNGファイルに保存する。**表示中タブそのものではなく、別インスタンスで同じURLを新規に開いた場合の見た目**になる点に注意（ログイン状態やスクロール位置、フォーム入力中の値などは反映されない）
 
 いずれも対象`tabId`がterminalタブの場合、または存在しない場合はエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`show-tab`で対象ワークスペースをアクティブ化してから呼び直す。
 
@@ -92,7 +94,7 @@ niwaterm show-tab --tab <tabId>
   - `focus-tile --tile` — フォーカス（キー入力の宛先）を移すのみ
   - `show-tab --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
 
-スクリーンショット画像の取得には対応しない（Electrobunにスクリーンショット取得APIが存在しないため）。人間が画面を確認したい場合は`show-tab`で実ウィンドウを前面化し、直接目視で確認する。
+「表示中タブそのものの見た目を確認したい」場合は`show-tab`で実ウィンドウを前面化して直接目視するか、`browser-screenshot`で同じURLのheadlessスクショを撮る（後者はDOM状態が再現されない代わりに人間が画面の前にいなくても確認できる）。使い分けの目安として、両者は互いを置き換えるものではない。
 
 ```sh
 niwaterm --help
@@ -118,6 +120,7 @@ niwaterm ping --help
   - `POST /browser-navigate` — `{tabId: string, url: string}`を受け取り、ブラウザタブのURLを遷移する。成功時`{ok: true}`。tabId不存在またはterminalタブは404、対象ワークスペースが非アクティブ・ページ未ロード・遷移タイムアウトは409、不正なボディは400
   - `GET /browser-get-text` — `?tabId=<tabId>`を受け取り、ブラウザタブの表示内容を`{ok: true, text}`として返す。404/409/400の条件は`/browser-navigate`と同様
   - `GET /browser-get-html` — `?tabId=<tabId>`を受け取り、ブラウザタブのHTMLを`{ok: true, html}`として返す。404/409/400の条件は`/browser-navigate`と同様
+  - `GET /browser-screenshot` — `?tabId=<tabId>`を受け取り、対象タブの現在URLをheadlessな`Bun.WebView`で別途開き直してスクリーンショットを撮り、`image/png`のバイナリを返す。404/409/400の条件は`/browser-navigate`と同様（URL取得失敗・スクショ取得失敗もいずれも409）
   - `POST /show-tab` — `{tabId: string}`を受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化をまとめて行う。成功時`{ok: true, workspaceId, tileId}`。tabId不存在時は404。対象ワークスペースが非アクティブであること自体は正常系（それを直すのがこのコマンドの役割）なので409にはしない
   - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する（詳細: `.mywork/work-logs/`配下の該当work-log）
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）

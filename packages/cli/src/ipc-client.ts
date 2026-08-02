@@ -238,6 +238,34 @@ export async function browserGetHtml(
   }
 }
 
+export type BrowserScreenshotResult = { ok: true; data: Uint8Array } | { ok: false; error: string };
+
+/**
+ * ブラウザタブの現在URLをheadless WebViewで別途開き直してスクリーンショット(PNG)を取得する。
+ * 表示中タブとは別インスタンスのため「今見えている状態そのもの」ではなく
+ * 「同じURLを新規に開いた場合の見た目」になる点に注意
+ */
+export async function browserScreenshot(
+  socketPath: string,
+  tabId: TabId,
+): Promise<BrowserScreenshotResult> {
+  try {
+    const res = await fetch(
+      `http://localhost/browser-screenshot?tabId=${encodeURIComponent(tabId)}`,
+      { unix: socketPath },
+    );
+    if (res.ok) {
+      const data = new Uint8Array(await res.arrayBuffer());
+      return { ok: true, data };
+    }
+    const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
 export type ShowTabResult =
   | { ok: true; workspaceId: string; tileId: TileId }
   | { ok: false; error: string };

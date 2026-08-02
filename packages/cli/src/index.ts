@@ -3,6 +3,7 @@ import { cli, define } from "gunshi";
 import browserGetHtmlCommand from "./commands/browser-get-html";
 import browserGetTextCommand from "./commands/browser-get-text";
 import browserNavigateCommand from "./commands/browser-navigate";
+import browserScreenshotCommand from "./commands/browser-screenshot";
 import captureTabCommand from "./commands/capture-tab";
 import closeTabCommand from "./commands/close-tab";
 import focusTileCommand from "./commands/focus-tile";
@@ -36,6 +37,7 @@ await cli(process.argv.slice(2), mainCommand, {
     "browser-navigate": browserNavigateCommand,
     "browser-get-text": browserGetTextCommand,
     "browser-get-html": browserGetHtmlCommand,
+    "browser-screenshot": browserScreenshotCommand,
     "split-tile": splitTileCommand,
     "new-tab": newTabCommand,
     "switch-tab": switchTabCommand,

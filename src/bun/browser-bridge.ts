@@ -7,11 +7,13 @@ import type { TabId } from "./tile-layout";
 export type BrowserNavigateResult = { ok: true } | { ok: false; error: string };
 export type BrowserGetTextResult = { ok: true; text: string } | { ok: false; error: string };
 export type BrowserGetHtmlResult = { ok: true; html: string } | { ok: false; error: string };
+export type BrowserGetUrlResult = { ok: true; url: string } | { ok: false; error: string };
 
 export interface BrowserBridge {
   navigate(tabId: TabId, url: string): Promise<BrowserNavigateResult>;
   getText(tabId: TabId): Promise<BrowserGetTextResult>;
   getHtml(tabId: TabId): Promise<BrowserGetHtmlResult>;
+  getUrl(tabId: TabId): Promise<BrowserGetUrlResult>;
 }
 
 /** mainview側へ渡すrpc.requestの最小構造インターフェース。NiwaRPCへの直接依存を避けるため */
@@ -30,6 +32,7 @@ export interface BrowserBridgeRpc {
 
 const GET_TEXT_CODE = "return document.body ? document.body.innerText : '';";
 const GET_HTML_CODE = "return document.documentElement ? document.documentElement.outerHTML : '';";
+const GET_URL_CODE = "return document.location.href;";
 
 export function createBrowserBridge(getRpc: () => BrowserBridgeRpc): BrowserBridge {
   async function execText(
@@ -53,6 +56,10 @@ export function createBrowserBridge(getRpc: () => BrowserBridgeRpc): BrowserBrid
     async getHtml(tabId) {
       const r = await execText(tabId, GET_HTML_CODE);
       return r.ok ? { ok: true, html: r.value } : r;
+    },
+    async getUrl(tabId) {
+      const r = await execText(tabId, GET_URL_CODE);
+      return r.ok ? { ok: true, url: r.value } : r;
     },
   };
 }

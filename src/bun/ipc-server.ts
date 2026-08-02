@@ -8,6 +8,7 @@ import { Hono, type Context } from "hono";
 import type { ResolvedCustomViewConfig } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
+import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
@@ -16,7 +17,10 @@ const UNAVAILABLE_BROWSER_BRIDGE: BrowserBridge = {
   navigate: async () => ({ ok: false, error: "browser bridge not available" }),
   getText: async () => ({ ok: false, error: "browser bridge not available" }),
   getHtml: async () => ({ ok: false, error: "browser bridge not available" }),
+  getUrl: async () => ({ ok: false, error: "browser bridge not available" }),
 };
+
+type CaptureScreenshot = (url: string) => Promise<ScreenshotResult>;
 
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
@@ -152,6 +156,7 @@ function buildApp(
   getCustomView: () => ResolvedCustomViewConfig | null,
   activateWindow: () => void,
   browserBridge: BrowserBridge,
+  captureScreenshot: CaptureScreenshot,
 ) {
   const app = new Hono();
 
@@ -372,6 +377,27 @@ function buildApp(
     return c.json({ ok: true, html: result.html });
   });
 
+  // ブラウザタブの現在URLをheadless WebView（Bun.WebView）で別途開き直してスクリーンショットを取得する。
+  // 表示中タブとは別インスタンスのため「今見えている状態そのもの」ではなく
+  // 「同じURLを新規に開いた場合の見た目」になる点に注意（詳細: src/bun/browser-screenshot.ts）
+  app.get("/browser-screenshot", async (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const location = workspaceManager.locateBrowserTab(tabId);
+    if (!location) return c.json({ ok: false, error: `browser tab not found: ${tabId}` }, 404);
+    if (!workspaceManager.isWorkspaceActive(location.workspaceId)) {
+      return c.json(
+        { ok: false, error: `tab's workspace is not active; call show-tab first: ${tabId}` },
+        409,
+      );
+    }
+    const urlResult = await browserBridge.getUrl(tabId);
+    if (!urlResult.ok) return c.json({ ok: false, error: urlResult.error }, 409);
+    const shotResult = await captureScreenshot(urlResult.url);
+    if (!shotResult.ok) return c.json({ ok: false, error: shotResult.error }, 409);
+    return new Response(shotResult.data, { status: 200, headers: { "Content-Type": "image/png" } });
+  });
+
   // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を
   // まとめて行う。人間がAIの操作結果を任意に目視確認するための高レベルコマンド
   // （switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）。
@@ -421,9 +447,16 @@ export async function createIpcServer(
   getCustomView: () => ResolvedCustomViewConfig | null = () => null,
   activateWindow: () => void = () => {},
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
+  captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
 ): Promise<IpcServer> {
   await removeStaleSocket(path);
-  const app = buildApp(workspaceManager, getCustomView, activateWindow, browserBridge);
+  const app = buildApp(
+    workspaceManager,
+    getCustomView,
+    activateWindow,
+    browserBridge,
+    captureScreenshot,
+  );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   let closed = false;
   return {

@@ -76,6 +76,23 @@ describe("createBrowserBridge", () => {
     expect(await bridge.getHtml("tab-1")).toEqual({ ok: false, error: "timed out" });
   });
 
+  test("getUrlはexecBrowserJsの結果（文字列）をurlとして返す", async () => {
+    let receivedCode: unknown;
+    const rpc = createFakeRpc({
+      execBrowserJs: async (p) => {
+        receivedCode = p.code;
+        return { ok: true, result: "https://example.com/" };
+      },
+    });
+    const bridge = createBrowserBridge(() => rpc);
+
+    const result = await bridge.getUrl("tab-1");
+
+    expect(result).toEqual({ ok: true, url: "https://example.com/" });
+    expect(typeof receivedCode).toBe("string");
+    expect(receivedCode).toContain("document.location.href");
+  });
+
   test("getRpcは呼び出し時（都度）に評価される（遅延アクセサとして機能する）", async () => {
     let rpcInstance: BrowserBridgeRpc | null = null;
     const bridge = createBrowserBridge(() => {
