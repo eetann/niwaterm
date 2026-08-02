@@ -5,6 +5,7 @@ import type {
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
 } from "@niwaterm/config";
+import { createBrowserBridge } from "./browser-bridge";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
@@ -68,7 +69,22 @@ export type NiwaRPC = {
     };
   }>;
   webview: RPCSchema<{
-    requests: {};
+    requests: {
+      /** ブラウザタブのURLを遷移する。次のdom-ready（またはmainview側の内部タイムアウト）まで待って解決する */
+      browserNavigate: {
+        params: { tabId: TabId; url: string };
+        response: { ok: true } | { ok: false; error: string };
+      };
+      /**
+       * ブラウザタブ（OOPIF）内でJSを実行し、host-message経由の結果を待って返す汎用プリミティブ。
+       * MVPではgetText/getHTML用の固定コードのみbun側から渡す想定
+       * （CLIから任意JSを直接指定できるようにはしない。click/fill実装時にセキュリティ境界を再検討する）
+       */
+      execBrowserJs: {
+        params: { tabId: TabId; code: string };
+        response: { ok: true; result: unknown } | { ok: false; error: string };
+      };
+    };
     messages: {
       render: AppRenderState;
       config: {
@@ -191,7 +207,13 @@ const workspaceManager = createWorkspaceManager({
 });
 
 try {
-  ipcServer = await createIpcServer(ipcSocketPath(), workspaceManager, () => customView);
+  ipcServer = await createIpcServer(
+    ipcSocketPath(),
+    workspaceManager,
+    () => customView,
+    () => mainWindow.activate(),
+    createBrowserBridge(() => rpc),
+  );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
   console.log(`[bun] failed to start ipc server: ${String(err)}`);
@@ -208,7 +230,10 @@ process.on("SIGTERM", () => {
 });
 
 const rpc = BrowserView.defineRPC<NiwaRPC>({
-  maxRequestTime: 5000,
+  // ナビゲーション待ち等は数秒かかりうるため長めに設定。実際のタイムアウト制御はmainview側の
+  // 内部タイムアウト（execBrowserJs/browserNavigateハンドラ）が先に発火し、必ずresolveで返す。
+  // これは万一ハンドラがハングした場合の最終防波堤
+  maxRequestTime: 20000,
   handlers: {
     requests: {},
     messages: {

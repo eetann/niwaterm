@@ -18,6 +18,7 @@ import {
   type TileNode,
 } from "../bun/tile-layout";
 import type { AppRenderState, WorkspaceId, WorkspaceListEntry } from "../bun/workspace-manager";
+import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
@@ -55,6 +56,20 @@ const tabButtonElByTabId = new Map<TabId, HTMLButtonElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
 const browserElByTabId = new Map<TabId, WebviewTagElement>();
+// webviewId確定・初回dom-ready発火済みか（execBrowserJs/browserNavigateの前提条件判定に使う）
+const browserDomReadyByTabId = new Map<TabId, boolean>();
+// execBrowserJsの結果待ちPromiseの相関ID管理。host-message受信 or タイムアウトで解決・削除する
+const execJsPendingByRequestId = new Map<
+  string,
+  { resolve: (r: { ok: true; result: unknown } | { ok: false; error: string }) => void }
+>();
+let execJsRequestSeq = 0;
+/** tabId単位でpendingを絞り込めるよう、requestIdの先頭にtabIdを埋め込む（gcStale時の一括解決用） */
+function execJsRequestIdPrefix(tabId: TabId): string {
+  return `bjs-${tabId}-`;
+}
+const EXEC_JS_TIMEOUT_MS = 8000;
+const NAVIGATE_LOAD_TIMEOUT_MS = 15000;
 const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
 const activeTabByTile = new Map<TileId, TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
@@ -160,7 +175,12 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
 const rpc = Electroview.defineRPC<NiwaRPC>({
   maxRequestTime: 5000,
   handlers: {
-    requests: {},
+    requests: {
+      browserNavigate: ({ tabId, url }: { tabId: TabId; url: string }) =>
+        browserNavigate(tabId, url),
+      execBrowserJs: ({ tabId, code }: { tabId: TabId; code: string }) =>
+        execBrowserJs(tabId, code),
+    },
     messages: {
       render: (p: AppRenderState) => {
         activeWorkspaceId = p.activeWorkspaceId;
@@ -463,11 +483,112 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
     updateNavButtons();
   });
 
+  browserDomReadyByTabId.set(tabId, false);
+  webviewEl.on("dom-ready", () => {
+    browserDomReadyByTabId.set(tabId, true);
+  });
+
+  // execBrowserJsの結果送信を待ち受ける。host-message detailはbrowser-js-bridge.tsが
+  // window.__electrobunEventBridge経由で送ってくる{requestId, ok, result|error}
+  webviewEl.on("host-message", (e) => {
+    const detail = (e as CustomEvent).detail as {
+      requestId?: unknown;
+      ok?: unknown;
+      result?: unknown;
+      error?: unknown;
+    } | null;
+    const requestId = typeof detail?.requestId === "string" ? detail.requestId : null;
+    if (!requestId) return;
+    const pending = execJsPendingByRequestId.get(requestId);
+    if (!pending) return;
+    execJsPendingByRequestId.delete(requestId);
+    pending.resolve(
+      detail?.ok === true
+        ? { ok: true, result: (detail as { result: unknown }).result }
+        : { ok: false, error: typeof detail?.error === "string" ? detail.error : "unknown error" },
+    );
+  });
+
   tabContentEl.appendChild(toolbarEl);
   tabContentEl.appendChild(webviewEl);
   tabContentElByTabId.set(tabId, tabContentEl);
   browserElByTabId.set(tabId, webviewEl);
   tileContentEl.appendChild(tabContentEl);
+}
+
+/**
+ * ブラウザタブ（OOPIF）内でcodeを実行し、host-message経由の結果を待って返す。
+ * webviewId未確定・dom-ready未発火（初回ロード未完了）なら即座に失敗を返す。
+ * 内部タイムアウトで必ずresolveする（外側のNiwaRPC maxRequestTimeは最終防波堤）。
+ */
+function execBrowserJs(
+  tabId: TabId,
+  code: string,
+): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
+  const webviewEl = browserElByTabId.get(tabId);
+  if (!webviewEl) {
+    return Promise.resolve({
+      ok: false,
+      error: "browser tab not found (workspace may be inactive)",
+    });
+  }
+  if (webviewEl.webviewId == null || !browserDomReadyByTabId.get(tabId)) {
+    return Promise.resolve({ ok: false, error: "browser tab has not finished loading yet" });
+  }
+  const requestId = `${execJsRequestIdPrefix(tabId)}${++execJsRequestSeq}`;
+  return new Promise((resolve) => {
+    const timeoutHandle = setTimeout(() => {
+      if (execJsPendingByRequestId.delete(requestId)) {
+        resolve({ ok: false, error: "browser js execution timed out" });
+      }
+    }, EXEC_JS_TIMEOUT_MS);
+    execJsPendingByRequestId.set(requestId, {
+      resolve: (r) => {
+        clearTimeout(timeoutHandle);
+        resolve(r);
+      },
+    });
+    webviewEl.executeJavascript(buildExecBrowserJsScript(requestId, code));
+  });
+}
+
+/**
+ * ブラウザタブのURLを遷移し、次のdom-ready（またはタイムアウト）まで待って解決する
+ * （Playwrightのpage.goto()同様、読み込み完了を待つ）。
+ */
+function browserNavigate(
+  tabId: TabId,
+  url: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const webviewEl = browserElByTabId.get(tabId);
+  if (!webviewEl) {
+    return Promise.resolve({
+      ok: false,
+      error: "browser tab not found (workspace may be inactive)",
+    });
+  }
+  if (webviewEl.webviewId == null) {
+    return Promise.resolve({ ok: false, error: "browser tab is not ready yet" });
+  }
+  const normalized = normalizeUrl(url);
+  return new Promise((resolve) => {
+    let settled = false;
+    const onDomReady = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      webviewEl.off("dom-ready", onDomReady);
+      resolve({ ok: true });
+    };
+    const timeoutHandle = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      webviewEl.off("dom-ready", onDomReady);
+      resolve({ ok: false, error: "navigation timed out waiting for page load" });
+    }, NAVIGATE_LOAD_TIMEOUT_MS);
+    webviewEl.on("dom-ready", onDomReady);
+    webviewEl.loadURL(normalized);
+  });
 }
 
 /**
@@ -525,6 +646,13 @@ function gcStale(
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     browserElByTabId.delete(tabId);
+    browserDomReadyByTabId.delete(tabId);
+    const pendingPrefix = execJsRequestIdPrefix(tabId);
+    for (const [requestId, pending] of execJsPendingByRequestId) {
+      if (!requestId.startsWith(pendingPrefix)) continue;
+      execJsPendingByRequestId.delete(requestId);
+      pending.resolve({ ok: false, error: "browser tab was closed" });
+    }
   }
   // タイルごと閉じられた場合の後始末（配下のタブは上のループで既に個別除去済み）
   for (const [tileId, tileEl] of tileElByTileId) {

@@ -185,6 +185,72 @@ export async function captureTab(socketPath: string, tabId: TabId): Promise<Capt
   }
 }
 
+export type BrowserNavigateResult = { ok: true } | { ok: false; error: string };
+
+/** ブラウザタブのURLを遷移する（Playwrightのpage.goto()相当） */
+export function browserNavigate(
+  socketPath: string,
+  tabId: TabId,
+  url: string,
+): Promise<BrowserNavigateResult> {
+  return postJson(socketPath, "/browser-navigate", { tabId, url });
+}
+
+export type BrowserGetTextResult = { ok: true; text: string } | { ok: false; error: string };
+
+/** ブラウザタブの表示内容をプレーンテキストで取得する */
+export async function browserGetText(
+  socketPath: string,
+  tabId: TabId,
+): Promise<BrowserGetTextResult> {
+  try {
+    const res = await fetch(
+      `http://localhost/browser-get-text?tabId=${encodeURIComponent(tabId)}`,
+      { unix: socketPath },
+    );
+    const body = (await res.json().catch(() => null)) as { text?: unknown; error?: unknown } | null;
+    if (res.ok && typeof body?.text === "string") return { ok: true, text: body.text };
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+export type BrowserGetHtmlResult = { ok: true; html: string } | { ok: false; error: string };
+
+/** ブラウザタブのHTMLを取得する */
+export async function browserGetHtml(
+  socketPath: string,
+  tabId: TabId,
+): Promise<BrowserGetHtmlResult> {
+  try {
+    const res = await fetch(
+      `http://localhost/browser-get-html?tabId=${encodeURIComponent(tabId)}`,
+      { unix: socketPath },
+    );
+    const body = (await res.json().catch(() => null)) as { html?: unknown; error?: unknown } | null;
+    if (res.ok && typeof body?.html === "string") return { ok: true, html: body.html };
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+export type ShowTabResult =
+  | { ok: true; workspaceId: string; tileId: TileId }
+  | { ok: false; error: string };
+
+/**
+ * tabIdだけを指定して、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・
+ * ウィンドウ前面化をまとめて行う。AIがヘッドレスで操作したタブを人間が任意に目視確認するための
+ * コマンド（switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）
+ */
+export function showTab(socketPath: string, tabId: TabId): Promise<ShowTabResult> {
+  return postJson(socketPath, "/show-tab", { tabId });
+}
+
 export type SetTileVarResult = { ok: true } | { ok: false; error: string };
 
 export function setTileVar(

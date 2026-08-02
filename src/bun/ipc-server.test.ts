@@ -3,10 +3,19 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { BrowserBridge } from "./browser-bridge";
 import { createIpcServer, type IpcServer } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import type { TileLeaf } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
+
+function createFakeBrowserBridge(overrides: Partial<BrowserBridge> = {}): BrowserBridge {
+  return {
+    navigate: overrides.navigate ?? (async () => ({ ok: true })),
+    getText: overrides.getText ?? (async () => ({ ok: true, text: "fake-text" })),
+    getHtml: overrides.getHtml ?? (async () => ({ ok: true, html: "<html></html>" })),
+  };
+}
 
 function createTestWorkspaceManager(): {
   mgr: WorkspaceManager;
@@ -591,6 +600,351 @@ describe("POST /focus-tile", () => {
     });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("browser-navigate: 対象がブラウザタブでアクティブなワークスペースならbrowserBridge.navigateを呼びok:trueを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    let received: unknown;
+    const bridge = createFakeBrowserBridge({
+      navigate: async (t, u) => {
+        received = { tabId: t, url: u };
+        return { ok: true };
+      },
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId, url: "https://example.org" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(received).toEqual({ tabId, url: "https://example.org" });
+  });
+
+  test("browser-navigate: 存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: "not-found", url: "https://example.com" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("browser-navigate: terminalタブを指定すると404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: terminalTabId, url: "https://example.com" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("browser-navigate: 対象タブの所属ワークスペースが非アクティブなら409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    mgr.newWorkspace(); // 以後、tabId所属のworkspaceは非アクティブ
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId, url: "https://example.com" }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  test("browser-navigate: urlが空/未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId, url: "" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("browser-navigate: browserBridge.navigateが失敗を返すと409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const bridge = createFakeBrowserBridge({
+      navigate: async () => ({ ok: false, error: "navigation timed out waiting for page load" }),
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+    );
+
+    const res = await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId, url: "https://example.com" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      ok: false,
+      error: "navigation timed out waiting for page load",
+    });
+  });
+
+  test("browser-get-text: 対象がブラウザタブでアクティブなワークスペースならテキストを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const bridge = createFakeBrowserBridge({
+      getText: async () => ({ ok: true, text: "Example Domain" }),
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+    );
+
+    const res = await fetch(`http://localhost/browser-get-text?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, text: "Example Domain" });
+  });
+
+  test("browser-get-text: terminalタブは404、tabId未指定は400、非アクティブワークスペースは409", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const browserTabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    mgr.newWorkspace();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const terminalRes = await fetch(`http://localhost/browser-get-text?tabId=${terminalTabId}`, {
+      unix: socketPath,
+    });
+    expect(terminalRes.status).toBe(404);
+
+    const missingRes = await fetch("http://localhost/browser-get-text", { unix: socketPath });
+    expect(missingRes.status).toBe(400);
+
+    const inactiveRes = await fetch(`http://localhost/browser-get-text?tabId=${browserTabId}`, {
+      unix: socketPath,
+    });
+    expect(inactiveRes.status).toBe(409);
+  });
+
+  test("browser-get-html: 対象がブラウザタブでアクティブなワークスペースならHTMLを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    const bridge = createFakeBrowserBridge({
+      getHtml: async () => ({ ok: true, html: "<html><body>hi</body></html>" }),
+    });
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      bridge,
+    );
+
+    const res = await fetch(`http://localhost/browser-get-html?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, html: "<html><body>hi</body></html>" });
+  });
+
+  test("browser-get-html: 存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge(),
+    );
+
+    const res = await fetch("http://localhost/browser-get-html?tabId=not-found", {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("browserBridgeを渡さない場合はデフォルトのUNAVAILABLE扱いで409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/browser-get-text?tabId=${tabId}`, {
+      unix: socketPath,
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: "browser bridge not available" });
+  });
+});
+
+describe("POST /show-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("非アクティブなワークスペースのタブでも、切替・フォーカス・アクティブ化・ウィンドウ前面化を行いok:trueを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newTab(firstTileId);
+    mgr.newWorkspace(); // 以後firstIdは非アクティブ
+    let activated = false;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {
+        activated = true;
+      },
+    );
+
+    const res = await fetch("http://localhost/show-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: firstTabId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, workspaceId: firstId, tileId: firstTileId });
+    expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
+    expect((mgr.snapshot().workspace.layout as TileLeaf).activeTabId).toBe(firstTabId);
+    expect(mgr.snapshot().workspace.focusedTileId).toBe(firstTileId);
+    expect(activated).toBe(true);
+  });
+
+  test("存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/show-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("tabId未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/show-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
   });
 });
 

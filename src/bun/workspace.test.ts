@@ -266,6 +266,37 @@ describe("closeTab", () => {
   });
 });
 
+describe("findTileIdForTab / hasBrowserTab", () => {
+  test("findTileIdForTabはterminalタブ・browserタブいずれの所属tileIdも返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const terminalTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    const browserTabId = ws.newBrowserTab(tileId, "https://example.com") as string;
+
+    expect(ws.findTileIdForTab(terminalTabId)).toBe(tileId);
+    expect(ws.findTileIdForTab(browserTabId)).toBe(tileId);
+  });
+
+  test("findTileIdForTabは存在しないtabIdはnullを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.findTileIdForTab("not-found")).toBeNull();
+  });
+
+  test("hasBrowserTabはbrowserタブのみtrue、terminalタブ・不存在はfalse", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const terminalTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    const browserTabId = ws.newBrowserTab(tileId, "https://example.com") as string;
+
+    expect(ws.hasBrowserTab(browserTabId)).toBe(true);
+    expect(ws.hasBrowserTab(terminalTabId)).toBe(false);
+    expect(ws.hasBrowserTab("not-found")).toBe(false);
+  });
+});
+
 describe("getTabText", () => {
   test("存在するtabIdはセッションのdumpTextの結果を返す", () => {
     const { factory } = createFakeSessionFactory();

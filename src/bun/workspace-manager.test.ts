@@ -434,6 +434,48 @@ describe("hasTab", () => {
   });
 });
 
+describe("locateTab / locateBrowserTab / isWorkspaceActive", () => {
+  test("locateTabは種別問わず所在workspaceId/tileIdを返す。非アクティブなワークスペースでも見つかる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const browserTabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
+    mgr.newWorkspace(); // 以後、firstIdは非アクティブ
+
+    expect(mgr.locateTab(terminalTabId)).toEqual({ workspaceId: firstId, tileId: firstTileId });
+    expect(mgr.locateTab(browserTabId)).toEqual({ workspaceId: firstId, tileId: firstTileId });
+    expect(mgr.locateTab("not-found")).toBeNull();
+  });
+
+  test("locateBrowserTabはbrowserタブのみ所在を返し、terminalタブはnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const browserTabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
+
+    expect(mgr.locateBrowserTab(browserTabId)).toEqual({
+      workspaceId: firstId,
+      tileId: firstTileId,
+    });
+    expect(mgr.locateBrowserTab(terminalTabId)).toBeNull();
+  });
+
+  test("isWorkspaceActiveはアクティブなworkspaceIdのみtrue", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+
+    expect(mgr.isWorkspaceActive(firstId)).toBe(false);
+    expect(mgr.isWorkspaceActive(secondId)).toBe(true);
+  });
+});
+
 describe("getTabText", () => {
   test("存在するtabIdはテキストを返し、存在しないtabIdはnullを返す", () => {
     const { factory } = createFakeSessionFactory();

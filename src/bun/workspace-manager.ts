@@ -37,6 +37,11 @@ export interface WorkspaceListEntry {
   layout: TileNode;
 }
 
+export interface TabLocation {
+  workspaceId: WorkspaceId;
+  tileId: TileId;
+}
+
 export interface WorkspaceManagerOptions {
   initialCols: number;
   initialRows: number;
@@ -118,6 +123,29 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       if (ws.hasTab(tabId)) return ws;
     }
     return undefined;
+  }
+
+  /** 種別（terminal/browser）を問わずtabIdの所在を返す。show-tab用 */
+  function locateTab(tabId: TabId): TabLocation | null {
+    for (const [workspaceId, ws] of workspaces) {
+      const tileId = ws.findTileIdForTab(tabId);
+      if (tileId) return { workspaceId, tileId };
+    }
+    return null;
+  }
+
+  /** ブラウザタブに限定した所在確認。terminalタブはnullを返す */
+  function locateBrowserTab(tabId: TabId): TabLocation | null {
+    for (const [workspaceId, ws] of workspaces) {
+      if (!ws.hasBrowserTab(tabId)) continue;
+      const tileId = ws.findTileIdForTab(tabId);
+      if (tileId) return { workspaceId, tileId };
+    }
+    return null;
+  }
+
+  function isWorkspaceActive(workspaceId: WorkspaceId): boolean {
+    return workspaceId === activeId;
   }
 
   function newWorkspace(): void {
@@ -275,6 +303,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     snapshot,
     listWorkspaces,
     hasTab,
+    locateTab,
+    locateBrowserTab,
+    isWorkspaceActive,
     getTabText,
     setTileVar,
     getTileVar,

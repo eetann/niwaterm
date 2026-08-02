@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
+import browserGetHtmlCommand from "./commands/browser-get-html";
+import browserGetTextCommand from "./commands/browser-get-text";
+import browserNavigateCommand from "./commands/browser-navigate";
 import captureTabCommand from "./commands/capture-tab";
 import closeTabCommand from "./commands/close-tab";
 import focusTileCommand from "./commands/focus-tile";
@@ -10,6 +13,7 @@ import newTabCommand from "./commands/new-tab";
 import pingCommand from "./commands/ping";
 import sendKeysCommand from "./commands/send-keys";
 import setVarCommand from "./commands/set-var";
+import showTabCommand from "./commands/show-tab";
 import splitTileCommand from "./commands/split-tile";
 import switchTabCommand from "./commands/switch-tab";
 
@@ -29,11 +33,15 @@ await cli(process.argv.slice(2), mainCommand, {
     ping: pingCommand,
     list: listCommand,
     "send-keys": sendKeysCommand,
+    "browser-navigate": browserNavigateCommand,
+    "browser-get-text": browserGetTextCommand,
+    "browser-get-html": browserGetHtmlCommand,
     "split-tile": splitTileCommand,
     "new-tab": newTabCommand,
     "switch-tab": switchTabCommand,
     "close-tab": closeTabCommand,
     "focus-tile": focusTileCommand,
+    "show-tab": showTabCommand,
     "capture-tab": captureTabCommand,
     "set-var": setVarCommand,
     "get-var": getVarCommand,

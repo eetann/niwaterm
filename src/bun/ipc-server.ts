@@ -7,9 +7,16 @@ import { join } from "node:path";
 import { Hono, type Context } from "hono";
 import type { ResolvedCustomViewConfig } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
+import type { BrowserBridge } from "./browser-bridge";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
+
+const UNAVAILABLE_BROWSER_BRIDGE: BrowserBridge = {
+  navigate: async () => ({ ok: false, error: "browser bridge not available" }),
+  getText: async () => ({ ok: false, error: "browser bridge not available" }),
+  getHtml: async () => ({ ok: false, error: "browser bridge not available" }),
+};
 
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
@@ -40,6 +47,28 @@ function parseTileIdBody(body: unknown): TileIdRequestBody | null {
   const b = body as { tileId?: unknown };
   if (typeof b.tileId !== "string" || b.tileId.length === 0) return null;
   return { tileId: b.tileId };
+}
+
+interface TabIdRequestBody {
+  tabId: string;
+}
+
+function parseTabIdBody(body: unknown): TabIdRequestBody | null {
+  const b = body as { tabId?: unknown };
+  if (typeof b.tabId !== "string" || b.tabId.length === 0) return null;
+  return { tabId: b.tabId };
+}
+
+interface BrowserNavigateRequestBody extends TabIdRequestBody {
+  url: string;
+}
+
+function parseBrowserNavigateBody(body: unknown): BrowserNavigateRequestBody | null {
+  const tabIdBody = parseTabIdBody(body);
+  if (!tabIdBody) return null;
+  const b = body as { url?: unknown };
+  if (typeof b.url !== "string" || b.url.length === 0) return null;
+  return { ...tabIdBody, url: b.url };
 }
 
 interface NewTabRequestBody extends TileIdRequestBody {
@@ -121,6 +150,8 @@ async function readJsonBody(c: Context): Promise<unknown | undefined> {
 function buildApp(
   workspaceManager: WorkspaceManager,
   getCustomView: () => ResolvedCustomViewConfig | null,
+  activateWindow: () => void,
+  browserBridge: BrowserBridge,
 ) {
   const app = new Hono();
 
@@ -283,6 +314,82 @@ function buildApp(
     return c.json({ ok: true, vars });
   });
 
+  // ブラウザタブのURLを遷移する（Playwrightのpage.goto()相当）。対象タブの所属ワークスペースが
+  // 非アクティブ（gcStaleでDOM破棄済みの可能性）な場合は409を返す。人間が確認したい場合は
+  // show-tabで先に対象ワークスペースをアクティブ化してから呼び直す
+  app.post("/browser-navigate", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBrowserNavigateBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { tabId: string, url: string }" }, 400);
+    }
+    const location = workspaceManager.locateBrowserTab(parsed.tabId);
+    if (!location)
+      return c.json({ ok: false, error: `browser tab not found: ${parsed.tabId}` }, 404);
+    if (!workspaceManager.isWorkspaceActive(location.workspaceId)) {
+      return c.json(
+        { ok: false, error: `tab's workspace is not active; call show-tab first: ${parsed.tabId}` },
+        409,
+      );
+    }
+    const result = await browserBridge.navigate(parsed.tabId, parsed.url);
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 409);
+    return c.json({ ok: true });
+  });
+
+  // ブラウザタブの表示内容をプレーンテキストで取得する（document.body.innerText相当）
+  app.get("/browser-get-text", async (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const location = workspaceManager.locateBrowserTab(tabId);
+    if (!location) return c.json({ ok: false, error: `browser tab not found: ${tabId}` }, 404);
+    if (!workspaceManager.isWorkspaceActive(location.workspaceId)) {
+      return c.json(
+        { ok: false, error: `tab's workspace is not active; call show-tab first: ${tabId}` },
+        409,
+      );
+    }
+    const result = await browserBridge.getText(tabId);
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 409);
+    return c.json({ ok: true, text: result.text });
+  });
+
+  // ブラウザタブのHTMLを取得する（document.documentElement.outerHTML相当）
+  app.get("/browser-get-html", async (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const location = workspaceManager.locateBrowserTab(tabId);
+    if (!location) return c.json({ ok: false, error: `browser tab not found: ${tabId}` }, 404);
+    if (!workspaceManager.isWorkspaceActive(location.workspaceId)) {
+      return c.json(
+        { ok: false, error: `tab's workspace is not active; call show-tab first: ${tabId}` },
+        409,
+      );
+    }
+    const result = await browserBridge.getHtml(tabId);
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 409);
+    return c.json({ ok: true, html: result.html });
+  });
+
+  // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を
+  // まとめて行う。人間がAIの操作結果を任意に目視確認するための高レベルコマンド
+  // （switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）。
+  // 対象ワークスペースが非アクティブであること自体はこのコマンドの通常の対象ケースなので409にはしない
+  app.post("/show-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTabIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { tabId: string }" }, 400);
+    const location = workspaceManager.locateTab(parsed.tabId);
+    if (!location) return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
+    workspaceManager.switchWorkspace(location.workspaceId);
+    workspaceManager.focusTile(location.tileId);
+    workspaceManager.switchTab(location.tileId, parsed.tabId);
+    activateWindow();
+    return c.json({ ok: true, workspaceId: location.workspaceId, tileId: location.tileId });
+  });
+
   return app;
 }
 
@@ -312,9 +419,11 @@ export async function createIpcServer(
   path: string,
   workspaceManager: WorkspaceManager,
   getCustomView: () => ResolvedCustomViewConfig | null = () => null,
+  activateWindow: () => void = () => {},
+  browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
 ): Promise<IpcServer> {
   await removeStaleSocket(path);
-  const app = buildApp(workspaceManager, getCustomView);
+  const app = buildApp(workspaceManager, getCustomView, activateWindow, browserBridge);
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   let closed = false;
   return {

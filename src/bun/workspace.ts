@@ -265,6 +265,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return sessions.has(tabId);
   }
 
+  function hasBrowserTab(tabId: TabId): boolean {
+    return browserTabs.has(tabId);
+  }
+
+  /** 種別（terminal/browser）を問わずtabIdの所属tileIdを返す。不存在はnull */
+  function findTileIdForTab(tabId: TabId): TileId | null {
+    return listLeaves(tree).find((leaf) => leaf.tabIds.includes(tabId))?.id ?? null;
+  }
+
   /** 対象タブの画面内容をプレーンテキストで取り出す。tabId不存在時はnull */
   function getTabText(tabId: TabId): string | null {
     return sessions.get(tabId)?.dumpText() ?? null;
@@ -321,6 +330,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getLayout,
     getFocusedTileId,
     hasTab,
+    hasBrowserTab,
+    findTileIdForTab,
     getTabText,
     setTileVar,
     getTileVar,

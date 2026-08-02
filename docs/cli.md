@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）に対応。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）に対応。
 
 ## セットアップ
 
@@ -73,6 +73,28 @@ niwaterm list-vars --tile <tileId>
 タイルごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。**変数は永続化されず、アプリを終了する・対象タイルを閉じると消える**（tileId自体がアプリ再起動のたびに再採番されるため）。`tileId`を指定すればどのタイルからでも別タイルの変数を読み書きできるため、送信元タイルが自身の状態を`set-var`で書き、別タイルがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタイル間の自動化に使える。指定した`tileId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
+niwaterm browser-navigate --tab <tabId> --url <url>
+niwaterm browser-get-text --tab <tabId>
+niwaterm browser-get-html --tab <tabId>
+niwaterm show-tab --tab <tabId>
+```
+
+ブラウザタブをCLIから操作するコマンド（PlaywrightのAPIのような感覚での操作を想定。読み取り中心のMVPで、click/fill等の操作系は未対応）。
+
+- `browser-navigate` — 指定したブラウザタブのURLを遷移する（Playwrightの`page.goto()`相当）。次のページ読み込み完了まで待って結果を返す
+- `browser-get-text` — 指定したブラウザタブの表示内容をプレーンテキストで取得する（`document.body.innerText`相当）
+- `browser-get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
+
+いずれも対象`tabId`がterminalタブの場合、または存在しない場合はエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`show-tab`で対象ワークスペースをアクティブ化してから呼び直す。
+
+- `show-tab` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`switch-tab`/`focus-tile`と役割が重なって見えるが、粒度が異なる合成コマンドである:
+  - `switch-tab --tile --tab` — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
+  - `focus-tile --tile` — フォーカス（キー入力の宛先）を移すのみ
+  - `show-tab --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
+
+スクリーンショット画像の取得には対応しない（Electrobunにスクリーンショット取得APIが存在しないため）。人間が画面を確認したい場合は`show-tab`で実ウィンドウを前面化し、直接目視で確認する。
+
+```sh
 niwaterm --help
 niwaterm ping --help
 ```
@@ -93,6 +115,11 @@ niwaterm ping --help
   - `POST /set-var` — `{tileId: string, key: string, value: string}`を受け取り、タイル変数を設定する。keyは`^[A-Za-z0-9_.-]{1,128}$`のみ許可、不一致・valueが非stringは400。tileId不存在時は404
   - `GET /get-var` — `?tileId=<tileId>&key=<key>`を受け取り、タイル変数を`{ok: true, value}`として返す。クエリ未指定は400、tileId不存在または未設定のkeyは404
   - `GET /list-vars` — `?tileId=<tileId>`を受け取り、そのタイルの変数を`{ok: true, vars: Record<string,string>}`として返す。tileId未指定は400、tileId不存在は404
+  - `POST /browser-navigate` — `{tabId: string, url: string}`を受け取り、ブラウザタブのURLを遷移する。成功時`{ok: true}`。tabId不存在またはterminalタブは404、対象ワークスペースが非アクティブ・ページ未ロード・遷移タイムアウトは409、不正なボディは400
+  - `GET /browser-get-text` — `?tabId=<tabId>`を受け取り、ブラウザタブの表示内容を`{ok: true, text}`として返す。404/409/400の条件は`/browser-navigate`と同様
+  - `GET /browser-get-html` — `?tabId=<tabId>`を受け取り、ブラウザタブのHTMLを`{ok: true, html}`として返す。404/409/400の条件は`/browser-navigate`と同様
+  - `POST /show-tab` — `{tabId: string}`を受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化をまとめて行う。成功時`{ok: true, workspaceId, tileId}`。tabId不存在時は404。対象ワークスペースが非アクティブであること自体は正常系（それを直すのがこのコマンドの役割）なので409にはしない
+  - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する（詳細: `.mywork/work-logs/`配下の該当work-log）
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
 
