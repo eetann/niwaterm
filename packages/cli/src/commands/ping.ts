@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, pingNiwaterm } from "../ipc-client";
 
 export default define({
@@ -10,7 +11,6 @@ export default define({
       console.log(`pong (pid ${result.pid})`);
       return;
     }
-    console.error(`niwatermに接続できませんでした: ${result.error}`);
-    process.exit(1);
+    failAndExit(`niwatermに接続できませんでした: ${result.error}`);
   },
 });

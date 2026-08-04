@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, listTileVars } from "../ipc-client";
 
 export default define({
@@ -15,8 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await listTileVars(ipcSocketPath(), ctx.values.tile);
     if (!result.ok) {
-      console.error(`list-varsに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`list-varsに失敗しました: ${result.error}`);
     }
     const entries = Object.entries(result.vars).sort(([a], [b]) => a.localeCompare(b));
     if (entries.length === 0) {

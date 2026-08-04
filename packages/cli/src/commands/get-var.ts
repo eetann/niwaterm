@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { getTileVar, ipcSocketPath } from "../ipc-client";
 
 export default define({
@@ -19,8 +20,7 @@ export default define({
   run: async (ctx) => {
     const result = await getTileVar(ipcSocketPath(), ctx.values.tile, ctx.values.key);
     if (!result.ok) {
-      console.error(`get-varに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`get-varに失敗しました: ${result.error}`);
     }
     console.log(result.value);
   },

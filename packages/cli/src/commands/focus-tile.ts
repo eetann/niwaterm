@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { focusTile, ipcSocketPath } from "../ipc-client";
 
 export default define({
@@ -15,8 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await focusTile(ipcSocketPath(), ctx.values.tile);
     if (!result.ok) {
-      console.error(`focus-tileに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`focus-tileに失敗しました: ${result.error}`);
     }
   },
 });

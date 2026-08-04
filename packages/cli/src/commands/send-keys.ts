@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, sendKeys } from "../ipc-client";
 
 export default define({
@@ -21,15 +22,13 @@ export default define({
   run: async (ctx) => {
     const keys = ctx.values.keys ?? [];
     if (keys.length === 0) {
-      console.error(
+      failAndExit(
         "送信するキーを1つ以上指定してください（例: niwaterm send-keys --tab tab-3 'ls -la' Enter）",
       );
-      process.exit(1);
     }
     const result = await sendKeys(ipcSocketPath(), ctx.values.tab, keys);
     if (!result.ok) {
-      console.error(`send-keysに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`send-keysに失敗しました: ${result.error}`);
     }
   },
 });

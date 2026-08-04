@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { browserNavigate, ipcSocketPath } from "../ipc-client";
 
 export default define({
@@ -21,8 +22,7 @@ export default define({
   run: async (ctx) => {
     const result = await browserNavigate(ipcSocketPath(), ctx.values.tab, ctx.values.url);
     if (!result.ok) {
-      console.error(`browser-navigateに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`browser-navigateに失敗しました: ${result.error}`);
     }
   },
 });

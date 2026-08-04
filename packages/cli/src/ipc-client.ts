@@ -9,6 +9,19 @@ export function ipcSocketPath(): string {
   return join(homedir(), "Library", "Application Support", "niwaterm", "niwaterm.sock");
 }
 
+/**
+ * unix socketへの接続失敗はソケット未存在・プロセス不在・不正ファイルいずれも
+ * err.code === "FailedToOpenSocket" になる（Bunのfetch実装、実機確認済み）。
+ * デフォルトの文言("Was there a typo in the url or port?")はunix socket用途では
+ * わかりにくいため、原因（アプリ未起動の可能性）を示す文言に差し替える。
+ */
+function describeError(err: unknown): string {
+  if (err instanceof Error && (err as { code?: string }).code === "FailedToOpenSocket") {
+    return "アプリが起動していない可能性があります。`bun run start`で起動してから再実行してください";
+  }
+  return String(err);
+}
+
 export type PingResult = { ok: true; pid: number } | { ok: false; error: string };
 
 export async function pingNiwaterm(socketPath: string): Promise<PingResult> {
@@ -19,7 +32,7 @@ export async function pingNiwaterm(socketPath: string): Promise<PingResult> {
     if (typeof body.pid !== "number") return { ok: false, error: "malformed response" };
     return { ok: true, pid: body.pid };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -63,7 +76,7 @@ export async function listWorkspaces(socketPath: string): Promise<ListResult> {
     if (!Array.isArray(body.workspaces)) return { ok: false, error: "malformed response" };
     return { ok: true, workspaces: body.workspaces as WorkspaceListEntry[] };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -86,7 +99,7 @@ export async function sendKeys(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -113,7 +126,7 @@ async function postJson<T extends { ok: true }>(
         : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -181,7 +194,7 @@ export async function captureTab(socketPath: string, tabId: TabId): Promise<Capt
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -213,7 +226,7 @@ export async function browserGetText(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -234,7 +247,7 @@ export async function browserGetHtml(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -262,7 +275,7 @@ export async function browserScreenshot(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -310,7 +323,7 @@ export async function getTileVar(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }
 
@@ -333,6 +346,6 @@ export async function listTileVars(
     const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
     return { ok: false, error };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, error: describeError(err) };
   }
 }

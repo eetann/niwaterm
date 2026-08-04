@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { browserScreenshot, ipcSocketPath } from "../ipc-client";
 
 export default define({
@@ -22,8 +23,7 @@ export default define({
   run: async (ctx) => {
     const result = await browserScreenshot(ipcSocketPath(), ctx.values.tab);
     if (!result.ok) {
-      console.error(`browser-screenshotに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`browser-screenshotに失敗しました: ${result.error}`);
     }
     await Bun.write(ctx.values.out, result.data);
     console.log(`saved: ${ctx.values.out}`);

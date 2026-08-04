@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, setTileVar } from "../ipc-client";
 
 export default define({
@@ -28,8 +29,7 @@ export default define({
       ctx.values.value,
     );
     if (!result.ok) {
-      console.error(`set-varに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`set-varに失敗しました: ${result.error}`);
     }
   },
 });

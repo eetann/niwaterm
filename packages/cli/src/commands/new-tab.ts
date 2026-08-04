@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, newTab } from "../ipc-client";
 
 export default define({
@@ -26,8 +27,7 @@ export default define({
   },
   run: async (ctx) => {
     if (ctx.values.url !== undefined && ctx.values["custom-view"]) {
-      console.error("new-tabに失敗しました: --urlと--custom-viewは同時に指定できません");
-      process.exit(1);
+      failAndExit("new-tabに失敗しました: --urlと--custom-viewは同時に指定できません");
     }
     const result = await newTab(
       ipcSocketPath(),
@@ -36,8 +36,7 @@ export default define({
       ctx.values["custom-view"],
     );
     if (!result.ok) {
-      console.error(`new-tabに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`new-tabに失敗しました: ${result.error}`);
     }
     console.log(`tab: ${result.tabId}`);
   },

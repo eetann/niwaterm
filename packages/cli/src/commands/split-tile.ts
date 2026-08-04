@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, splitTile } from "../ipc-client";
 
 export default define({
@@ -21,8 +22,7 @@ export default define({
   run: async (ctx) => {
     const result = await splitTile(ipcSocketPath(), ctx.values.tile, ctx.values.orientation);
     if (!result.ok) {
-      console.error(`split-tileに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`split-tileに失敗しました: ${result.error}`);
     }
     console.log(`tile: ${result.tileId}, tab: ${result.tabId}`);
   },

@@ -1,4 +1,5 @@
 import { define } from "gunshi";
+import { failAndExit } from "../cli-error";
 import { ipcSocketPath, switchTab } from "../ipc-client";
 
 export default define({
@@ -20,8 +21,7 @@ export default define({
   run: async (ctx) => {
     const result = await switchTab(ipcSocketPath(), ctx.values.tile, ctx.values.tab);
     if (!result.ok) {
-      console.error(`switch-tabに失敗しました: ${result.error}`);
-      process.exit(1);
+      failAndExit(`switch-tabに失敗しました: ${result.error}`);
     }
   },
 });

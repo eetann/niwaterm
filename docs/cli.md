@@ -1,6 +1,6 @@
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）に対応。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -101,6 +101,13 @@ niwaterm --help
 niwaterm ping --help
 ```
 
+```sh
+niwaterm docs list
+niwaterm docs show cli
+```
+
+`niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show cli`はこのドキュメント（`docs/cli.md`）の内容そのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでこのドキュメント全体を取得できる。
+
 ## IPCサーバーの仕組み
 
 - ソケットパス: `~/Library/Application Support/niwaterm/niwaterm.sock`（固定）
@@ -125,6 +132,13 @@ niwaterm ping --help
   - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する（詳細: `.mywork/work-logs/`配下の該当work-log）
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
+
+## AIエージェント向けの導線
+
+- `packages/cli/README.md` — CLIパッケージのセットアップ手順・基本的な使い方
+- `.claude/skills/niwaterm-cli/SKILL.md` — Claude Codeなどのエージェントがniwatermを操作する際に自律的に発見できるスキル定義
+
+いずれもコマンドの詳細はこのドキュメント（`niwaterm docs show cli`）への導線に留め、内容を書き写さない。
 
 ## スコープ外（roadmap参照）
 
