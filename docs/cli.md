@@ -129,7 +129,7 @@ niwaterm docs show cli
   - `GET /browser-get-html` — `?tabId=<tabId>`を受け取り、ブラウザタブのHTMLを`{ok: true, html}`として返す。404/409/400の条件は`/browser-navigate`と同様
   - `GET /browser-screenshot` — `?tabId=<tabId>`を受け取り、対象タブの現在URLをheadlessな`Bun.WebView`で別途開き直してスクリーンショットを撮り、`image/png`のバイナリを返す。404/409/400の条件は`/browser-navigate`と同様（URL取得失敗・スクショ取得失敗もいずれも409）
   - `POST /show-tab` — `{tabId: string}`を受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化をまとめて行う。成功時`{ok: true, workspaceId, tileId}`。tabId不存在時は404。対象ワークスペースが非アクティブであること自体は正常系（それを直すのがこのコマンドの役割）なので409にはしない
-  - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する（詳細: `.mywork/work-logs/`配下の該当work-log）
+  - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する
 - アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
 - 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
 

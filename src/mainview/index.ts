@@ -801,7 +801,7 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     // #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
     // 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenだけで正しく隠せる。
     // ただしtoggleHidden()はwebviewId確定後でないと送信先が無く無視されるため、
-    // 初回のみdom-readyを待ってから呼ぶ（work-log 2026-08-01参照）
+    // 初回のみdom-readyを待ってから呼ぶ
     const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
     webviewEl.setAttribute("sandbox", "");
     webviewEl.src = customView.url;

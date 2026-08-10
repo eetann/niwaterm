@@ -28,11 +28,11 @@ zig build (クロスコンパイル)
 
 ### 必要なもの
 
-| ツール | 用途 | 確認コマンド |
-| --- | --- | --- |
-| Bun 1.3.14以上 | ランタイム。**Bun.TerminalのWindows(ConPTY)対応が1.3.14から** | `bun --version` |
-| Git | リポジトリのclone | `git --version` |
-| WebView2 Runtime | Electrobunの描画基盤 | 下記参照 |
+| ツール           | 用途                                                          | 確認コマンド    |
+| ---------------- | ------------------------------------------------------------- | --------------- |
+| Bun 1.3.14以上   | ランタイム。**Bun.TerminalのWindows(ConPTY)対応が1.3.14から** | `bun --version` |
+| Git              | リポジトリのclone                                             | `git --version` |
+| WebView2 Runtime | Electrobunの描画基盤                                          | 下記参照        |
 
 > **開発機のBunとは別に、アプリに同梱されるBunがある。**
 > Electrobunはビルド時に自前のBunをアプリへ同梱するため、開発機のBunを上げても
@@ -236,15 +236,15 @@ $env:ELECTROBUN_CONSOLE=1
 
 ## トラブルシューティング
 
-| 症状 | 原因・対処 |
-| --- | --- |
-| `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う |
-| クロスビルドがMSVC関連で失敗する | `-Dtarget` に `-gnu` を付け忘れている |
-| `dlopen` でDLLが見つからない | `.dll` は `lib/` ではなく `bin/` に出る。配置先を確認する |
-| `Failed to open library "niwashim.dll": error code 126` | 126は ERROR_MOD_NOT_FOUND。**DLL自体ではなく依存先の `ghostty-vt.dll` が見つかっていない**。WindowsのローダーはDLL自身と同じディレクトリを依存解決の対象にしない（macOSの `@loader_path` rpathに相当するものが無い）。先に `ghostty-vt.dll` を `dlopen` してプロセスにロード済みにしてから開く（src/bun/ghostty.tsで対応済み）。2つの`.dll`が同じディレクトリに揃っているかも確認する |
-| `error: PTY not supported on this platform` | **アプリに同梱されるBun**が1.3.14未満。Electrobun 1.18.1の同梱版は1.3.13なので、`electrobun.config.ts` の `build.bunVersion` で上書きする（設定済み）。開発機のBunを上げるだけでは直らない点に注意 |
-| ターミナルが起動しない / PTYが動かない | Windows側のBunが1.3.14未満。`bun upgrade` する |
-| WebViewが真っ白 | WebView2 Runtime未導入 |
+| 症状                                                                        | 原因・対処                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う                                                                                                                                                                                                                                                                                                                              |
+| クロスビルドがMSVC関連で失敗する                                            | `-Dtarget` に `-gnu` を付け忘れている                                                                                                                                                                                                                                                                                                                                                 |
+| `dlopen` でDLLが見つからない                                                | `.dll` は `lib/` ではなく `bin/` に出る。配置先を確認する                                                                                                                                                                                                                                                                                                                             |
+| `Failed to open library "niwashim.dll": error code 126`                     | 126は ERROR_MOD_NOT_FOUND。**DLL自体ではなく依存先の `ghostty-vt.dll` が見つかっていない**。WindowsのローダーはDLL自身と同じディレクトリを依存解決の対象にしない（macOSの `@loader_path` rpathに相当するものが無い）。先に `ghostty-vt.dll` を `dlopen` してプロセスにロード済みにしてから開く（src/bun/ghostty.tsで対応済み）。2つの`.dll`が同じディレクトリに揃っているかも確認する |
+| `error: PTY not supported on this platform`                                 | **アプリに同梱されるBun**が1.3.14未満。Electrobun 1.18.1の同梱版は1.3.13なので、`electrobun.config.ts` の `build.bunVersion` で上書きする（設定済み）。開発機のBunを上げるだけでは直らない点に注意                                                                                                                                                                                    |
+| ターミナルが起動しない / PTYが動かない                                      | Windows側のBunが1.3.14未満。`bun upgrade` する                                                                                                                                                                                                                                                                                                                                        |
+| WebViewが真っ白                                                             | WebView2 Runtime未導入                                                                                                                                                                                                                                                                                                                                                                |
 
 ## 既知の差異・制約
 
@@ -261,21 +261,20 @@ macOSはcmd系、Windowsは**ctrl+shift系**を既定にしている。
 ctrl単独は `Ctrl+C` / `Ctrl+D` / `Ctrl+B`（tmuxのprefix）などターミナルの制御文字と衝突するため、
 必ずshiftかaltを伴わせる。`niwaterm.config.ts` で上書きできる。
 
-| 操作 | macOS | Windows |
-| --- | --- | --- |
-| 垂直分割 | `cmd+d` | `ctrl+shift+d` |
-| 水平分割 | `cmd+shift+d` | `ctrl+shift+e` |
-| タイルを閉じる | `cmd+w` | `ctrl+shift+w` |
-| フォーカス移動 | `cmd+alt+↑↓←→` | `ctrl+alt+↑↓←→` |
-| 新規タブ | `cmd+t` | `ctrl+shift+t` |
-| 新規ブラウザタブ | `cmd+shift+t` | `ctrl+shift+alt+t` |
-| 次/前のタブ | `cmd+shift+]` / `[` | `ctrl+shift+]` / `[` |
-| 新規ワークスペース | `cmd+n` | `ctrl+shift+n` |
-| 次/前のワークスペース | `cmd+alt+]` / `[` | `ctrl+alt+]` / `[` |
-| サイドバー開閉 | `cmd+b` | `ctrl+shift+b` |
+| 操作                  | macOS               | Windows              |
+| --------------------- | ------------------- | -------------------- |
+| 垂直分割              | `cmd+d`             | `ctrl+shift+d`       |
+| 水平分割              | `cmd+shift+d`       | `ctrl+shift+e`       |
+| タイルを閉じる        | `cmd+w`             | `ctrl+shift+w`       |
+| フォーカス移動        | `cmd+alt+↑↓←→`      | `ctrl+alt+↑↓←→`      |
+| 新規タブ              | `cmd+t`             | `ctrl+shift+t`       |
+| 新規ブラウザタブ      | `cmd+shift+t`       | `ctrl+shift+alt+t`   |
+| 次/前のタブ           | `cmd+shift+]` / `[` | `ctrl+shift+]` / `[` |
+| 新規ワークスペース    | `cmd+n`             | `ctrl+shift+n`       |
+| 次/前のワークスペース | `cmd+alt+]` / `[`   | `ctrl+alt+]` / `[`   |
+| サイドバー開閉        | `cmd+b`             | `ctrl+shift+b`       |
 
 ## 参考資料
 
 - [Electrobun Cross-Platform Development](https://framework.blackboard.sh/electrobun/guides/cross-platform-development/)
 - [Bun v1.3.14 リリースノート（Bun.TerminalのWindows対応）](https://bun.com/blog/bun-v1.3.14)
-- 事前調査と実機検証の詳細: `.mywork/work-logs/2026-08-10-windows-support-research.md`
