@@ -13,31 +13,34 @@ import { loadPersistedState, persistedFilePath, savePersistedState } from "./per
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
 
-// メニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する
-ApplicationMenu.setApplicationMenu([
-  {
-    label: "niwaterm",
-    submenu: [
-      { role: "hide", accelerator: "Command+H" },
-      { role: "hideOthers" },
-      { role: "showAll" },
-      { type: "divider" },
-      { role: "quit", accelerator: "Command+Q" },
-    ],
-  },
-  {
-    label: "Edit",
-    submenu: [
-      { role: "undo", accelerator: "Command+Z" },
-      { role: "redo", accelerator: "Command+Shift+Z" },
-      { type: "divider" },
-      { role: "cut", accelerator: "Command+X" },
-      { role: "copy", accelerator: "Command+C" },
-      { role: "paste", accelerator: "Command+V" },
-      { role: "selectAll", accelerator: "Command+A" },
-    ],
-  },
-]);
+// macOSではメニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する。
+// これはmacOS固有の事情（key equivalentがメニュー経由で配送される）への対処なので他OSでは設定しない
+if (process.platform === "darwin") {
+  ApplicationMenu.setApplicationMenu([
+    {
+      label: "niwaterm",
+      submenu: [
+        { role: "hide", accelerator: "Command+H" },
+        { role: "hideOthers" },
+        { role: "showAll" },
+        { type: "divider" },
+        { role: "quit", accelerator: "Command+Q" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo", accelerator: "Command+Z" },
+        { role: "redo", accelerator: "Command+Shift+Z" },
+        { type: "divider" },
+        { role: "cut", accelerator: "Command+X" },
+        { role: "copy", accelerator: "Command+C" },
+        { role: "paste", accelerator: "Command+V" },
+        { role: "selectAll", accelerator: "Command+A" },
+      ],
+    },
+  ]);
+}
 
 export type NiwaRPC = {
   bun: RPCSchema<{

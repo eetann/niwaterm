@@ -102,7 +102,9 @@ let draggingSplitId: TileId | null = null;
 // bunのratioが確定値に追いつくまでローカルのratioを維持する（それまでの間、古いratioで
 // flexスタイルが巻き戻されてResizeObserverが誤ったcolsを送ってしまうのを防ぐ）
 let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
-// bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする
+// bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする。
+// プラットフォーム別デフォルト（Windowsはctrl+shift系）の解決はbun側が行うため、
+// ここではmacOS向けの値になる。configメッセージ到達時に正しいテーブルへ差し替わる
 let compiledKeybindings = compileKeybindings(defaultKeybindings);
 // 直近のrender()で受け取った全ワークスペースの一覧。サイドバーを開いた瞬間に再描画するため保持する
 let lastWorkspaces: WorkspaceListEntry[] = [];

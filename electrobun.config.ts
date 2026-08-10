@@ -7,6 +7,10 @@ export default {
 		version: "0.0.1",
 	},
 	build: {
+		// Electrobun 1.18.1が同梱するBunは1.3.13で、Bun.TerminalのWindows対応(ConPTY)が入った
+		// 1.3.14に届かない。そのままだとWindowsでPTY生成時に
+		// "PTY not supported on this platform" で落ちるため、明示的に上書きする
+		bunVersion: "1.3.14",
 		views: {
 			mainview: {
 				entrypoint: "src/mainview/index.ts",

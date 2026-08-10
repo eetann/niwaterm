@@ -3,15 +3,18 @@ import {
   canonicalizeParsed,
   compileKeybindings,
   defaultKeybindings,
+  defaultWindowsKeybindings,
   isKeybindAction,
   KEYBIND_ACTIONS,
   parseKeyBindingString,
+  platformDefaultKeybindings,
 } from "./keybindings";
 
 describe("parseKeyBindingString", () => {
   test("cmd+key を解析できる", () => {
     expect(parseKeyBindingString("cmd+d")).toEqual({
       cmd: true,
+      ctrl: false,
       shift: false,
       alt: false,
       key: "d",
@@ -21,6 +24,7 @@ describe("parseKeyBindingString", () => {
   test("cmd+shift+key を解析できる", () => {
     expect(parseKeyBindingString("cmd+shift+d")).toEqual({
       cmd: true,
+      ctrl: false,
       shift: true,
       alt: false,
       key: "d",
@@ -30,43 +34,75 @@ describe("parseKeyBindingString", () => {
   test("cmd+alt+key を解析できる", () => {
     expect(parseKeyBindingString("cmd+alt+up")).toEqual({
       cmd: true,
+      ctrl: false,
       shift: false,
       alt: true,
       key: "up",
     });
   });
 
-  test("大文字混じりも許容する", () => {
-    expect(parseKeyBindingString("Cmd+Shift+D")).toEqual({
-      cmd: true,
+  test("ctrl+shift+key を解析できる（Windowsの既定形）", () => {
+    expect(parseKeyBindingString("ctrl+shift+d")).toEqual({
+      cmd: false,
+      ctrl: true,
       shift: true,
       alt: false,
       key: "d",
     });
   });
 
-  test("Cmdを含まない場合はnull", () => {
+  test("修飾子4つの組み合わせも解析できる", () => {
+    expect(parseKeyBindingString("ctrl+shift+alt+t")).toEqual({
+      cmd: false,
+      ctrl: true,
+      shift: true,
+      alt: true,
+      key: "t",
+    });
+  });
+
+  test("大文字混じりも許容する", () => {
+    expect(parseKeyBindingString("Cmd+Shift+D")).toEqual({
+      cmd: true,
+      ctrl: false,
+      shift: true,
+      alt: false,
+      key: "d",
+    });
+  });
+
+  test("cmdもctrlも含まない場合はnull", () => {
     expect(parseKeyBindingString("shift+d")).toBeNull();
+    expect(parseKeyBindingString("alt+d")).toBeNull();
   });
 
   test("未知の修飾子を含む場合はnull", () => {
-    expect(parseKeyBindingString("ctrl+d")).toBeNull();
+    expect(parseKeyBindingString("hyper+d")).toBeNull();
   });
 
   test("キー本体が無い場合はnull", () => {
     expect(parseKeyBindingString("cmd+")).toBeNull();
   });
 
-  test("修飾子が無い単独キーはnull（Cmd必須のため）", () => {
+  test("修飾子が無い単独キーはnull（cmdまたはctrl必須のため）", () => {
     expect(parseKeyBindingString("d")).toBeNull();
   });
 });
 
 describe("canonicalizeParsed", () => {
   test("修飾子の有無とkeyから一意な文字列を生成する", () => {
-    expect(canonicalizeParsed({ cmd: true, shift: false, alt: false, key: "d" })).toBe("100:d");
-    expect(canonicalizeParsed({ cmd: true, shift: true, alt: false, key: "d" })).toBe("110:d");
-    expect(canonicalizeParsed({ cmd: true, shift: false, alt: true, key: "up" })).toBe("101:up");
+    const base = { cmd: false, ctrl: false, shift: false, alt: false };
+    expect(canonicalizeParsed({ ...base, cmd: true, key: "d" })).toBe("1000:d");
+    expect(canonicalizeParsed({ ...base, cmd: true, shift: true, key: "d" })).toBe("1010:d");
+    expect(canonicalizeParsed({ ...base, cmd: true, alt: true, key: "up" })).toBe("1001:up");
+    expect(canonicalizeParsed({ ...base, ctrl: true, shift: true, key: "d" })).toBe("0110:d");
+  });
+
+  test("cmdとctrlは区別される", () => {
+    const base = { shift: false, alt: false, key: "d" };
+    expect(canonicalizeParsed({ ...base, cmd: true, ctrl: false })).not.toBe(
+      canonicalizeParsed({ ...base, cmd: false, ctrl: true }),
+    );
   });
 });
 
@@ -100,15 +136,41 @@ describe("defaultKeybindings", () => {
   });
 });
 
+describe("defaultWindowsKeybindings", () => {
+  test("macOS版と同じアクション集合をカバーする", () => {
+    expect(new Set(Object.values(defaultWindowsKeybindings))).toEqual(
+      new Set(Object.values(defaultKeybindings)),
+    );
+  });
+
+  test("全エントリがctrl始まりで、ターミナルの制御文字と衝突しないようshiftを伴う", () => {
+    for (const binding of Object.keys(defaultWindowsKeybindings)) {
+      const parsed = parseKeyBindingString(binding);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.ctrl).toBe(true);
+      expect(parsed?.cmd).toBe(false);
+      // ctrl単独だとCtrl+C/Ctrl+D等を奪ってしまうため、shiftかaltを必ず伴わせる
+      expect(parsed?.shift === true || parsed?.alt === true).toBe(true);
+    }
+  });
+});
+
+describe("platformDefaultKeybindings", () => {
+  test("win32ではWindows用、それ以外はmacOS用を返す", () => {
+    expect(platformDefaultKeybindings("win32")).toBe(defaultWindowsKeybindings);
+    expect(platformDefaultKeybindings("darwin")).toBe(defaultKeybindings);
+  });
+});
+
 describe("compileKeybindings", () => {
   test("正常なエントリはcanonicalizeされたキーでMapに入る", () => {
     const compiled = compileKeybindings({ "cmd+d": "split-vertical" });
-    expect(compiled.get("100:d")).toBe("split-vertical");
+    expect(compiled.get("1000:d")).toBe("split-vertical");
     expect(compiled.size).toBe(1);
   });
 
   test("不正なバインド文字列は黙ってスキップされる", () => {
-    const compiled = compileKeybindings({ "ctrl+d": "split-vertical" } as never);
+    const compiled = compileKeybindings({ "hyper+d": "split-vertical" } as never);
     expect(compiled.size).toBe(0);
   });
 
@@ -119,6 +181,11 @@ describe("compileKeybindings", () => {
 
   test("defaultKeybindingsは15エントリ全てコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
+    expect(compiled.size).toBe(15);
+  });
+
+  test("defaultWindowsKeybindingsは15エントリ全てコンパイルできる", () => {
+    const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.size).toBe(15);
   });
 });

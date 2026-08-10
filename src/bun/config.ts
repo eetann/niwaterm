@@ -7,12 +7,12 @@ import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
   defaultBrowserConfig,
-  defaultKeybindings,
   isKeybindAction,
   type KeyBindingString,
   type KeybindingsConfig,
   type NiwatermConfig,
   parseKeyBindingString,
+  platformDefaultKeybindings,
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
@@ -73,12 +73,13 @@ export async function loadUserConfig(path: string): Promise<NiwatermConfig | nul
 }
 
 /**
- * defaultKeybindingsにユーザー設定をマージし、不正エントリを警告付きで除外した最終テーブルを返す。
+ * プラットフォームのデフォルトキーバインドにユーザー設定をマージし、
+ * 不正エントリを警告付きで除外した最終テーブルを返す。
  * 1箇所のtypoで全キーバインドがデフォルトに落ちるのを防ぐため、エントリ単位で検証する。
  */
 export function resolveKeybindings(userConfig: NiwatermConfig | null): KeybindingsConfig {
   const merged: Record<string, unknown> = {
-    ...defaultKeybindings,
+    ...platformDefaultKeybindings(process.platform),
     ...userConfig?.keybindings,
   };
   const result: KeybindingsConfig = {};

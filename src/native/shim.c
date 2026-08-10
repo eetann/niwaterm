@@ -4,16 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-int niwa_terminal_new(GhosttyTerminal *term, uint16_t cols, uint16_t rows,
-                      size_t max_scrollback) {
-  GhosttyTerminalOptions opts;
-  memset(&opts, 0, sizeof(opts));
-  opts.cols = cols;
-  opts.rows = rows;
-  opts.max_scrollback = max_scrollback;
-  return ghostty_terminal_new(NULL, term, opts);
-}
-
 // emit: 0=plain, 1=vt, 2=html (GhosttyFormatterFormat)
 int niwa_formatter_new(GhosttyFormatter *fmt, GhosttyTerminal term, int emit) {
   GhosttyFormatterTerminalOptions opts;

@@ -10,6 +10,7 @@ export {
   canonicalizeParsed,
   compileKeybindings,
   defaultKeybindings,
+  defaultWindowsKeybindings,
   isKeybindAction,
   KEYBIND_ACTIONS,
   type KeyBindingString,
@@ -17,4 +18,5 @@ export {
   type KeybindingsConfig,
   type ParsedKeyBinding,
   parseKeyBindingString,
+  platformDefaultKeybindings,
 } from "./keybindings";

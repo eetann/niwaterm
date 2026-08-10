@@ -3,7 +3,8 @@
 // Bun.serveのunixオプションがWorker内でも動作することはsmoke testで実機確認済み。
 
 import { unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
 import type { ResolvedCustomViewConfig } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
@@ -449,6 +450,9 @@ export async function createIpcServer(
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
 ): Promise<IpcServer> {
+  // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
+  // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
+  await mkdir(dirname(path), { recursive: true });
   await removeStaleSocket(path);
   const app = buildApp(
     workspaceManager,

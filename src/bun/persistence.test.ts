@@ -176,9 +176,12 @@ describe("loadPersistedState / savePersistedState", () => {
 });
 
 describe("persistedFilePath", () => {
-  test("Application Support配下のniwaterm/workspaces.jsonを指す", () => {
+  test("アプリケーションサポートディレクトリ配下のniwaterm/workspaces.jsonを指す", () => {
+    // Windowsは%APPDATA%配下、それ以外(macOS)はApplication Support配下
     expect(persistedFilePath()).toMatch(
-      /Library\/Application Support\/niwaterm\/workspaces\.json$/,
+      process.platform === "win32"
+        ? /Roaming\\niwaterm\\workspaces\.json$/
+        : /Library\/Application Support\/niwaterm\/workspaces\.json$/,
     );
   });
 });

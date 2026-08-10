@@ -1,14 +1,32 @@
 import { describe, expect, test } from "bun:test";
-import { compileKeybindings, defaultKeybindings } from "@niwaterm/config";
+import {
+  compileKeybindings,
+  defaultKeybindings,
+  defaultWindowsKeybindings,
+} from "@niwaterm/config";
 import { resolveTileCommand } from "./tile-keybindings";
 
 const compiled = compileKeybindings(defaultKeybindings);
 
 function key(
   k: string,
-  opts: { metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; code?: string } = {},
+  opts: {
+    metaKey?: boolean;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    code?: string;
+  } = {},
 ): Parameters<typeof resolveTileCommand>[0] {
-  return { key: k, code: "", metaKey: false, altKey: false, shiftKey: false, ...opts };
+  return {
+    key: k,
+    code: "",
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...opts,
+  };
 }
 
 describe("resolveTileCommand（デフォルトキーバインド）", () => {
@@ -145,6 +163,43 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
 
   test("Cmd+Shift+B はデフォルトでは何も割り当てられていない", () => {
     expect(resolveTileCommand(key("b", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
+  });
+});
+
+describe("resolveTileCommand（Windowsのデフォルトキーバインド）", () => {
+  const winCompiled = compileKeybindings(defaultWindowsKeybindings);
+
+  test("Ctrl+Shift+D -> 垂直分割", () => {
+    expect(resolveTileCommand(key("D", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
+      type: "split",
+      orientation: "vertical",
+    });
+  });
+
+  test("Ctrl+Shift+E -> 水平分割", () => {
+    expect(resolveTileCommand(key("E", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
+      type: "split",
+      orientation: "horizontal",
+    });
+  });
+
+  test("Ctrl+Shift+Alt+T -> ブラウザタブ新規作成", () => {
+    expect(
+      resolveTileCommand(key("T", { ctrlKey: true, shiftKey: true, altKey: true }), winCompiled),
+    ).toEqual({ type: "newBrowserTab" });
+  });
+
+  test("Ctrl+C はターミナルの制御文字なので何も割り当てられていない", () => {
+    expect(resolveTileCommand(key("c", { ctrlKey: true }), winCompiled)).toBeNull();
+  });
+
+  test("Ctrl+D / Ctrl+B もターミナルへ素通りする", () => {
+    expect(resolveTileCommand(key("d", { ctrlKey: true }), winCompiled)).toBeNull();
+    expect(resolveTileCommand(key("b", { ctrlKey: true }), winCompiled)).toBeNull();
+  });
+
+  test("macOS用のCmd+Dはこのテーブルでは反応しない", () => {
+    expect(resolveTileCommand(key("d", { metaKey: true }), winCompiled)).toBeNull();
   });
 });
 

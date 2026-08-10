@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultAppearance, defaultBrowserConfig, defaultKeybindings } from "@niwaterm/config";
+import { pathToFileURL } from "node:url";
+import {
+  defaultAppearance,
+  defaultBrowserConfig,
+  type KeybindAction,
+  platformDefaultKeybindings,
+} from "@niwaterm/config";
 import {
   configDirPath,
   configFilePath,
@@ -15,7 +21,10 @@ import {
 
 describe("configFilePath", () => {
   test(".config/niwaterm/niwaterm.config.ts を指す", () => {
-    expect(configFilePath()).toMatch(/\.config\/niwaterm\/niwaterm\.config\.ts$/);
+    // Windowsは区切りが \ になるため正規化してから比較する
+    expect(configFilePath().replaceAll("\\", "/")).toMatch(
+      /\.config\/niwaterm\/niwaterm\.config\.ts$/,
+    );
   });
 });
 
@@ -80,16 +89,29 @@ describe("loadUserConfig", () => {
 });
 
 describe("resolveKeybindings", () => {
-  test("nullを渡すとdefaultKeybindingsがそのまま返る", () => {
+  // 既定キーはプラットフォームで異なる（macOSはcmd系、Windowsはctrl+shift系）ため、
+  // テストではキー文字列を直接書かずアクションから逆引きする
+  const platformDefaults = platformDefaultKeybindings(process.platform);
+  function defaultKeyFor(action: KeybindAction): string {
+    const entry = Object.entries(platformDefaults).find(([, a]) => a === action);
+    if (!entry) throw new Error(`no default keybinding for ${action}`);
+    return entry[0];
+  }
+
+  test("nullを渡すとプラットフォームのデフォルトがそのまま返る", () => {
     const resolved = resolveKeybindings(null);
-    expect(Object.keys(resolved).length).toBe(Object.keys(defaultKeybindings).length);
+    expect(Object.keys(resolved).length).toBe(Object.keys(platformDefaults).length);
   });
 
   test("ユーザー設定で一部のキーを上書きできる", () => {
-    const resolved = resolveKeybindings({ keybindings: { "cmd+d": "close-tile" } });
-    expect(resolved["cmd+d"]).toBe("close-tile");
+    const splitKey = defaultKeyFor("split-vertical");
+    const closeKey = defaultKeyFor("close-tile");
+    const resolved = resolveKeybindings({
+      keybindings: { [splitKey]: "close-tile" } as never,
+    });
+    expect(resolved[splitKey as never]).toBe("close-tile");
     // 上書きしていないキーはデフォルトのまま
-    expect(resolved["cmd+w"]).toBe("close-tile");
+    expect(resolved[closeKey as never]).toBe("close-tile");
   });
 
   test("不正なバインド文字列・未知のアクション名のエントリだけ除外し、残りは有効にする", () => {
@@ -97,14 +119,14 @@ describe("resolveKeybindings", () => {
     try {
       const resolved = resolveKeybindings({
         keybindings: {
-          "ctrl+d": "close-tile",
+          "hyper+d": "close-tile",
           "cmd+z": "not-a-real-action",
         } as never,
       });
-      expect(resolved["ctrl+d" as never]).toBeUndefined();
+      expect(resolved["hyper+d" as never]).toBeUndefined();
       expect(resolved["cmd+z" as never]).toBeUndefined();
-      // defaultKeybindingsの13エントリは影響を受けず残っている
-      expect(Object.keys(resolved).length).toBe(Object.keys(defaultKeybindings).length);
+      // デフォルトのエントリは影響を受けず残っている
+      expect(Object.keys(resolved).length).toBe(Object.keys(platformDefaults).length);
     } finally {
       logSpy.mockRestore();
     }
@@ -191,7 +213,8 @@ describe("resolveCustomView", () => {
     const resolved = resolveCustomView({ customView: { name: "Notes", path: "./notes.html" } });
     expect(resolved).not.toBeNull();
     expect(resolved?.name).toBe("Notes");
-    expect(resolved?.url).toBe(`file://${join(configDirPath(), "notes.html")}`);
+    // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
+    expect(resolved?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
   });
 
   test("urlを指定するとそのまま使われる", () => {
@@ -205,7 +228,8 @@ describe("resolveCustomView", () => {
     const resolved = resolveCustomView({
       customView: { path: "./notes.html", url: "https://example.com" },
     });
-    expect(resolved?.url).toBe(`file://${join(configDirPath(), "notes.html")}`);
+    // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
+    expect(resolved?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
   });
 
   test("nameを省略すると'Custom View'にフォールバックする", () => {

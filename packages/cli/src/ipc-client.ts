@@ -1,12 +1,21 @@
 // niwatermアプリのIPCサーバー(unix socket)への接続。
-// ソケットパスの解決ロジックはsrc/bun/ipc-server.tsと同じ内容だが、
+// ソケットパスの解決ロジックはsrc/bun/app-paths.ts・ipc-server.tsと同じ内容だが、
 // このパッケージは別ワークスペースパッケージでsrc/bunをimportできないため、意図的に重複させている。
+// 片方だけ変更すると接続できなくなるため、変更時は必ず両方を揃えること。
 
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+function appSupportDir(): string {
+  if (process.platform === "win32") {
+    const appData = process.env["APPDATA"] ?? join(homedir(), "AppData", "Roaming");
+    return join(appData, "niwaterm");
+  }
+  return join(homedir(), "Library", "Application Support", "niwaterm");
+}
+
 export function ipcSocketPath(): string {
-  return join(homedir(), "Library", "Application Support", "niwaterm", "niwaterm.sock");
+  return join(appSupportDir(), "niwaterm.sock");
 }
 
 /**

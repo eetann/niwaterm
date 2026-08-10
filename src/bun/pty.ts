@@ -1,5 +1,10 @@
 // Bun.Terminal（Bun 1.3.5+）ベースのPTY実装。
 // node-ptyと異なり、Bun Worker内でもTerminalのdata/exitコールバックが正常に発火する。
+// WindowsではBun 1.3.14+が必要（ConPTY実装がそのバージョンから入った）。
+
+import { homedir } from "node:os";
+
+const isWindows = process.platform === "win32";
 
 export interface PtyOptions {
   shell?: string;
@@ -18,6 +23,15 @@ export interface Pty {
   kill(): void;
 }
 
+/**
+ * 起動するシェルのコマンドライン。
+ * Windowsにはログインシェルの概念が無いため、プロファイル読み込みは各シェルの既定に任せる。
+ */
+function shellCommand(shell: string | undefined): string[] {
+  if (isWindows) return shell ? [shell] : ["powershell.exe", "-NoLogo"];
+  return [shell ?? "/bin/zsh", "-il"];
+}
+
 export function createPty(opts: PtyOptions): Pty {
   const term = opts.term ?? "xterm-256color";
 
@@ -33,8 +47,8 @@ export function createPty(opts: PtyOptions): Pty {
     },
   });
 
-  const proc = Bun.spawn([opts.shell ?? "/bin/zsh", "-il"], {
-    cwd: opts.cwd ?? process.env["HOME"] ?? "/",
+  const proc = Bun.spawn(shellCommand(opts.shell), {
+    cwd: opts.cwd ?? homedir(),
     // TerminalOptions.nameはTERM環境変数を設定しないため明示的に渡す
     env: { ...process.env, TERM: term },
     terminal,
@@ -56,7 +70,8 @@ export function createPty(opts: PtyOptions): Pty {
     // Bun.Terminal.write()はptyのline discipline処理（ISIG検知によるシグナル生成）を
     // バイパスするため、Ctrl+C(ETX, 0x03)を書き込むだけではSIGINTが生成されない。
     // フォアグラウンドプロセスグループへ直接送ることで代替する。
-    if (data === "\x03") {
+    // Windowsにはプロセスグループが無く、ConPTYがCtrl+Cをコンソール入力として解釈するため不要。
+    if (!isWindows && data === "\x03") {
       try {
         process.kill(-proc.pid, "SIGINT");
       } catch {}
@@ -69,6 +84,8 @@ export function createPty(opts: PtyOptions): Pty {
     // SIGWINCHをフォアグラウンドプロセスグループへ送出しない。
     // このためシェルの$COLUMNS等リサイズ通知に依存する値が更新されず、
     // プロンプト側の罫線幅計算などが古いサイズのまま固着する。
+    // Windowsにはプロセスグループもシグナルも無く、ConPTY側がサイズ変更を子へ通知する。
+    if (isWindows) return;
     try {
       process.kill(-proc.pid, "SIGWINCH");
     } catch {}

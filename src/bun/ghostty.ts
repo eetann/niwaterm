@@ -3,35 +3,41 @@ import { dlopen, FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } f
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+// ネイティブ成果物の配置と命名はプラットフォームで異なる。
+// zigはWindowsのみDLL本体をbin/へ出す（lib/に入るのはリンク用のインポートライブラリ）
+const nativeLayout =
+  process.platform === "win32"
+    ? { subdir: "bin", vt: "ghostty-vt.dll", shim: "niwashim.dll" }
+    : { subdir: "lib", vt: "libghostty-vt.dylib", shim: "libniwashim.dylib" };
+
+const libSubdir = join("vendor/libghostty", nativeLayout.subdir);
+
 // ビルド成果物(build/内)から実行されるため、repoルートのvendorを上方向に探索する
 function findLibDir(): string {
   let dir = process.cwd();
   for (let i = 0; i < 10; i++) {
-    const candidate = join(dir, "vendor/libghostty/lib");
-    if (existsSync(join(candidate, "libghostty-vt.dylib"))) return candidate;
+    const candidate = join(dir, libSubdir);
+    if (existsSync(join(candidate, nativeLayout.vt))) return candidate;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
   throw new Error(
-    "vendor/libghostty/lib が見つからない。`bun run build:native` の前に libghostty-vt をビルドすること",
+    `${libSubdir} が見つからない。\`bun run build:native\` の前に libghostty-vt をビルドすること`,
   );
 }
 
 export const libDir = findLibDir();
 
-const shim = dlopen(join(libDir, "libniwashim.dylib"), {
-  niwa_terminal_new: {
-    args: [FFIType.ptr, FFIType.u16, FFIType.u16, FFIType.u64],
+// shimはghostty-vtに依存する。WindowsのローダーはDLL自身と同じディレクトリを
+// 依存DLLの探索対象にしない（macOSの@loader_path rpathに相当するものが無い）ため、
+// shimを先に開くとERROR_MOD_NOT_FOUND(126)で失敗する。
+// 先にghostty-vtを開いてプロセスにロード済みにしておくと、名前解決がそちらに当たって解決する
+const vt = dlopen(join(libDir, nativeLayout.vt), {
+  ghostty_terminal_new: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.u16, FFIType.u16],
     returns: FFIType.i32,
   },
-  niwa_formatter_new: {
-    args: [FFIType.ptr, FFIType.ptr, FFIType.i32],
-    returns: FFIType.i32,
-  },
-});
-
-const vt = dlopen(join(libDir, "libghostty-vt.dylib"), {
   ghostty_terminal_vt_write: {
     args: [FFIType.ptr, FFIType.ptr, FFIType.u64],
     returns: FFIType.void,
@@ -52,10 +58,6 @@ const vt = dlopen(join(libDir, "libghostty-vt.dylib"), {
     args: [FFIType.ptr],
     returns: FFIType.void,
   },
-  ghostty_terminal_mode_get: {
-    args: [FFIType.ptr, FFIType.u16, FFIType.ptr],
-    returns: FFIType.i32,
-  },
   ghostty_paste_encode: {
     args: [FFIType.ptr, FFIType.u64, FFIType.bool, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
@@ -70,17 +72,26 @@ const vt = dlopen(join(libDir, "libghostty-vt.dylib"), {
   },
 });
 
+const shim = dlopen(join(libDir, nativeLayout.shim), {
+  niwa_formatter_new: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.i32],
+    returns: FFIType.i32,
+  },
+});
+
 // GhosttyTerminalOption
 const OPT_WRITE_PTY = 1;
 const OPT_CLIPBOARD_WRITE = 26;
+const OPT_SCROLLBACK_MAX_LINES = 28;
 
-// GhosttyMode（bit0-14=値, bit15=ANSIフラグ。2004はDEC privateなのでフラグなし）
+// GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。2004はDEC privateなのでフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
 
 // GhosttyTerminalData
 const DATA_CURSOR_X = 3;
 const DATA_CURSOR_Y = 4;
 const DATA_CURSOR_VISIBLE = 7;
+const DATA_MODE = 37;
 
 // GhosttyFormatterFormat
 const FORMAT_PLAIN = 0;
@@ -94,9 +105,14 @@ export interface CursorState {
 
 export function createGhosttyTerminal(cols: number, rows: number, maxScrollback = 10_000) {
   const handle = new BigUint64Array(1);
-  let rc = shim.symbols.niwa_terminal_new(ptr(handle), cols, rows, BigInt(maxScrollback));
+  let rc = vt.symbols.ghostty_terminal_new(null, ptr(handle), cols, rows);
   if (rc !== 0) throw new Error(`ghostty_terminal_new failed: ${rc}`);
   const term = read.ptr(ptr(handle)) as Pointer;
+
+  // スクロールバック上限は生成時オプションではなく生成後のsetで指定する
+  // （ghostty_terminal_newは構造体値渡しをやめてcols/rowsのみ受け取る形になった）
+  const scrollbackLimit = new BigUint64Array([BigInt(maxScrollback)]);
+  vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(scrollbackLimit));
 
   rc = shim.symbols.niwa_formatter_new(ptr(handle), term, FORMAT_HTML);
   if (rc !== 0) throw new Error(`ghostty_formatter_new failed: ${rc}`);
@@ -165,10 +181,16 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     vt.symbols.ghostty_terminal_set(term, OPT_CLIPBOARD_WRITE, clipboardCallback.ptr);
   }
 
+  // GhosttyTerminalModeConfig { GhosttyMode mode(uint16); bool value; } のレイアウト（4バイト）。
+  // modeを埋めてghostty_terminal_get(DATA_MODE)を呼ぶと、valueに現在値が返る
+  const modeConfig = new Uint8Array(4);
+  const modeConfigView = new DataView(modeConfig.buffer);
+
   /** bracketed pasteモード（DEC 2004）が有効か */
   function bracketedPaste(): boolean {
-    const rc = vt.symbols.ghostty_terminal_mode_get(term, MODE_BRACKETED_PASTE, ptr(u8Out));
-    return rc === 0 && u8Out[0] !== 0;
+    modeConfigView.setUint16(0, MODE_BRACKETED_PASTE, true);
+    const rc = vt.symbols.ghostty_terminal_get(term, DATA_MODE, ptr(modeConfig));
+    return rc === 0 && modeConfig[2] !== 0;
   }
 
   /** ペースト文字列をPTY書き込み用に整形する（危険バイト除去 + bracketed paste包み） */

@@ -20,7 +20,7 @@ export type TileCommand =
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
 export type KeyboardEventLike = Pick<
   KeyboardEvent,
-  "key" | "code" | "metaKey" | "altKey" | "shiftKey"
+  "key" | "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey"
 >;
 
 // @niwaterm/configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
@@ -45,6 +45,7 @@ function keyBodyFromEvent(e: KeyboardEventLike): string {
 function keyboardEventToCanonical(e: KeyboardEventLike): string {
   return canonicalizeParsed({
     cmd: e.metaKey,
+    ctrl: e.ctrlKey,
     shift: e.shiftKey,
     alt: e.altKey,
     key: keyBodyFromEvent(e),
@@ -96,7 +97,8 @@ export function resolveTileCommand(
   e: KeyboardEventLike,
   compiled: ReadonlyMap<string, KeybindAction>,
 ): TileCommand | null {
-  if (!e.metaKey) return null;
+  // cmdもctrlも伴わないキーはターミナルへの通常入力に予約されている
+  if (!e.metaKey && !e.ctrlKey) return null;
   const action = compiled.get(keyboardEventToCanonical(e));
   return action ? actionToTileCommand(action) : null;
 }
