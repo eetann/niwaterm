@@ -46,8 +46,9 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 
 ## プラットフォーム対応
 
-macOSとWindows（x64）に対応する。Windowsは起動・ターミナル・タイル分割・IPC/CLIまで実機確認済みで、
-ブラウザタブ・スクリーンショット・カスタムViewは未検証。手順とハマりどころ: docs/windows-build.md
+macOSとWindows（x64）に対応する。Windowsは起動・ターミナル・タイル分割・IPC/CLI・ブラウザタブ・
+customViewまで実機確認済み。`browser-screenshot`のみBun本体側の既知issue（Windows上でChrome/Edgeの
+自動起動に失敗する、oven-sh/bun#29102）により動作しない。手順とハマりどころ: docs/windows-build.md
 
 - **Electrobunはクロスビルド不可**。アプリ本体はWindows実機でビルドする。一方ネイティブ成果物（libghostty-vt / シム）はzigでLinux・WSLからクロスコンパイルできるため、Windows側にzigやMSVCは要らない
 - **ネイティブ成果物の命名・配置がOSで異なる**: macOS `lib/libghostty-vt.dylib`・`lib/libniwashim.dylib` / Windows `bin/ghostty-vt.dll`・`bin/niwashim.dll`（zigはWindowsのみDLL本体をbin/へ出し、lib/にはリンク用の.libを置く）。分岐はsrc/bun/ghostty.tsの`nativeLayout`

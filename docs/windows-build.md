@@ -4,8 +4,10 @@ Windowsでniwatermをビルド・実行するための手順。
 
 > **状態**（2026-08-10時点）: Windows 11 x64で**動作確認済み**。
 > 確認できたのは、アプリ起動・PowerShellの起動と入出力・タイル分割（`ctrl+shift+d`）・
-> IPCサーバー起動・CLI（`ping` / `list` / `send-keys` / `capture-tab`）まで。
-> **ブラウザタブ・スクリーンショット・カスタムViewは未検証**。
+> IPCサーバー起動・CLI（`ping` / `list` / `send-keys` / `capture-tab`）・
+> ブラウザタブ（`new-tab --url` / `browser-navigate` / `browser-get-text` / `browser-get-html`）・
+> customView（`new-tab --custom-view`）まで。
+> **`browser-screenshot`のみ、Bun本体側の既知issue（Windows上でChrome/Edgeの自動起動に失敗する）により動作しない**（後述）。
 
 ## 全体像
 
@@ -223,7 +225,38 @@ bun packages/cli/src/index.ts capture-tab --tab tab-3
 ```
 
 `Bun.serve({unix})` と `fetch(..., {unix})` はWindowsでも動作する。
-ブラウザタブ・スクリーンショット・カスタムViewは未検証。
+
+さらに、ブラウザタブ・customViewも動作確認できた:
+
+```powershell
+bun packages/cli/src/index.ts new-tab --tile tile-2 --url 'https://example.com'
+bun packages/cli/src/index.ts browser-navigate --tab tab-6 --url 'https://www.wikipedia.org'
+bun packages/cli/src/index.ts browser-get-text --tab tab-6
+bun packages/cli/src/index.ts browser-get-html --tab tab-6
+
+bun packages/cli/src/index.ts new-tab --tile tile-4 --custom-view
+bun packages/cli/src/index.ts browser-get-text --tab tab-8
+```
+
+customViewの検証には `~/.config/niwaterm/` のセットアップが要る（`docs/config.md`参照）。
+`@niwaterm/config` パッケージ側の`file:`参照はWindowsでも`bun link`方式で問題なく解決できた。
+
+`browser-screenshot` のみ失敗する（後述のBun側issue）。
+
+### `browser-screenshot` が動かない（Bun本体の既知issue）
+
+`niwaterm browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
+
+```
+error: Failed to spawn Chrome (set BUN_CHROME_PATH, backend.path, or install Chrome/Chromium)
+ code: "ERR_DLOPEN_FAILED"
+    at captureUrlScreenshot (.../src/bun/browser-screenshot.ts)
+```
+
+`BUN_CHROME_PATH` にEdge/Chromeの実行ファイルパスを明示的に指定しても再現する。
+niwatermのコードやElectrobun/Bun Worker環境に起因するものではなく、**素のBun（Worker無し、Electrobun無し）で`new Bun.WebView(...)`を呼ぶだけの最小再現でも同じエラーになる**ことを確認済み。
+Bun本体のWindows版`Bun.WebView`（Chromeバックエンド）がChromeプロセスの起動に失敗する既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)、2026-08時点で未解決）。
+Bun側の修正待ちで、niwaterm側での回避策は無い。
 
 ### ログを見る
 
@@ -245,6 +278,8 @@ $env:ELECTROBUN_CONSOLE=1
 | `error: PTY not supported on this platform`                                 | **アプリに同梱されるBun**が1.3.14未満。Electrobun 1.18.1の同梱版は1.3.13なので、`electrobun.config.ts` の `build.bunVersion` で上書きする（設定済み）。開発機のBunを上げるだけでは直らない点に注意                                                                                                                                                                                    |
 | ターミナルが起動しない / PTYが動かない                                      | Windows側のBunが1.3.14未満。`bun upgrade` する                                                                                                                                                                                                                                                                                                                                        |
 | WebViewが真っ白                                                             | WebView2 Runtime未導入                                                                                                                                                                                                                                                                                                                                                                |
+| `browser-screenshot` が `unexpected status 500` で失敗する                  | Bun本体のWindows版`Bun.WebView`の既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)）。`BUN_CHROME_PATH`を設定しても直らない。niwaterm側の回避策は無く、Bun側の修正待ち                                                                                                                                                                                    |
+| `niwaterm ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
 
 ## 既知の差異・制約
 
