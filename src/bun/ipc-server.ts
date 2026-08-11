@@ -6,10 +6,11 @@ import { unlinkSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
-import type { ResolvedCustomViewConfig } from "@niwaterm/config";
+import type { ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
+import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
@@ -79,20 +80,27 @@ function parseBrowserNavigateBody(body: unknown): BrowserNavigateRequestBody | n
 interface NewTabRequestBody extends TileIdRequestBody {
   url?: string;
   customView?: boolean;
+  shellProfileId?: string;
 }
 
 /**
- * url・customViewいずれも省略されていればターミナルタブ、urlが指定されていればブラウザタブ
- * （空文字列は不可）、customView:trueが指定されていれば設定済みのユーザー定義HTML UIを開く。
- * urlとcustomViewの同時指定は不正とする。
+ * url・customView・shellProfileIdいずれも省略されていればデフォルトシェルのターミナルタブ、
+ * urlが指定されていればブラウザタブ（空文字列は不可）、customView:trueが指定されていれば
+ * 設定済みのユーザー定義HTML UIを開く、shellProfileIdが指定されていればそのプロファイルの
+ * シェルでターミナルタブを開く。3つは互いに排他とする。
  */
 function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   const tileIdBody = parseTileIdBody(body);
   if (!tileIdBody) return null;
-  const b = body as { url?: unknown; customView?: unknown };
+  const b = body as { url?: unknown; customView?: unknown; shellProfileId?: unknown };
   const hasUrl = b.url !== undefined;
   const hasCustomView = b.customView !== undefined;
-  if (hasUrl && hasCustomView) return null;
+  const hasShellProfileId = b.shellProfileId !== undefined;
+  if ([hasUrl, hasCustomView, hasShellProfileId].filter(Boolean).length > 1) return null;
+  if (hasShellProfileId) {
+    if (typeof b.shellProfileId !== "string" || b.shellProfileId.length === 0) return null;
+    return { ...tileIdBody, shellProfileId: b.shellProfileId };
+  }
   if (hasCustomView) {
     if (b.customView !== true) return null;
     return { ...tileIdBody, customView: true };
@@ -158,12 +166,15 @@ function buildApp(
   activateWindow: () => void,
   browserBridge: BrowserBridge,
   captureScreenshot: CaptureScreenshot,
+  getShellProfiles: () => ShellProfile[],
 ) {
   const app = new Hono();
 
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
 
   app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
+
+  app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
 
   app.get("/capture-tab", (c) => {
     const tabId = c.req.query("tabId");
@@ -211,7 +222,7 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { tileId: string, url?: string, customView?: boolean } (url and customView are mutually exclusive)",
+            "expected { tileId: string, url?: string, customView?: boolean, shellProfileId?: string } (url, customView, shellProfileId are mutually exclusive)",
         },
         400,
       );
@@ -225,9 +236,14 @@ function buildApp(
       if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
       return c.json({ ok: true, tabId });
     }
-    const tabId = parsed.url
-      ? workspaceManager.newBrowserTab(parsed.tileId, parsed.url)
-      : workspaceManager.newTab(parsed.tileId);
+    if (parsed.url) {
+      const tabId = workspaceManager.newBrowserTab(parsed.tileId, parsed.url);
+      if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+      return c.json({ ok: true, tabId });
+    }
+    const resolved = resolveShellProfileCommand(getShellProfiles(), parsed.shellProfileId);
+    if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 400);
+    const tabId = workspaceManager.newTab(parsed.tileId, resolved.command);
     if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true, tabId });
   });
@@ -449,6 +465,7 @@ export async function createIpcServer(
   activateWindow: () => void = () => {},
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
+  getShellProfiles: () => ShellProfile[] = () => [],
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -460,6 +477,7 @@ export async function createIpcServer(
     activateWindow,
     browserBridge,
     captureScreenshot,
+    getShellProfiles,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   let closed = false;

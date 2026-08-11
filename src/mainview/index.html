@@ -38,9 +38,18 @@
       <div class="tile">
         <div class="tab-bar">
           <button class="tab-add-btn" type="button" tabindex="-1">+</button>
+          <button class="tab-add-dropdown-btn" type="button" tabindex="-1" title="シェルを選択">
+            ⌄
+          </button>
         </div>
         <div class="tile-content"></div>
       </div>
+    </template>
+    <template id="shell-profile-menu-template">
+      <div class="shell-profile-menu"></div>
+    </template>
+    <template id="shell-profile-menu-item-template">
+      <button class="shell-profile-menu-item" type="button" tabindex="-1"></button>
     </template>
     <template id="tab-button-template">
       <button class="tab-button" type="button" tabindex="-1">

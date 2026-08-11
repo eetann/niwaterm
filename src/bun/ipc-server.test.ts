@@ -28,10 +28,13 @@ function createFakeCaptureScreenshot(
 function createTestWorkspaceManager(): {
   mgr: WorkspaceManager;
   writes: (string | Uint8Array)[][];
+  sessionOpts: TerminalSessionOptions[];
 } {
   const writes: (string | Uint8Array)[][] = [];
+  const sessionOpts: TerminalSessionOptions[] = [];
   let sessionCount = 0;
-  const createSession = (_opts: TerminalSessionOptions): TerminalSession => {
+  const createSession = (opts: TerminalSessionOptions): TerminalSession => {
+    sessionOpts.push(opts);
     const record: (string | Uint8Array)[] = [];
     writes.push(record);
     const index = sessionCount++;
@@ -57,7 +60,7 @@ function createTestWorkspaceManager(): {
     onAllWorkspacesClosed: () => {},
     createSession,
   });
-  return { mgr, writes };
+  return { mgr, writes, sessionOpts };
 }
 
 describe("createIpcServer", () => {
@@ -457,6 +460,110 @@ describe("POST /new-tab", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  test("shellProfileIdを指定すると解決されたcommandでターミナルタブを作成する", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      undefined,
+      undefined,
+      () => [{ id: "wsl-ubuntu", name: "WSL: Ubuntu", command: "wsl.exe -d Ubuntu" }],
+    );
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, shellProfileId: "wsl-ubuntu" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.hasTab(body.tabId)).toBe(true);
+    expect(sessionOpts[1]?.shell).toBe("wsl.exe -d Ubuntu");
+  });
+
+  test("未知のshellProfileIdを指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, shellProfileId: "unknown" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("urlとshellProfileIdを同時に指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, url: "https://example.com", shellProfileId: "wsl-ubuntu" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /shell-profiles", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("getShellProfiles未指定時は空配列を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/shell-profiles", { unix: socketPath });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; profiles: unknown[] };
+    expect(body.ok).toBe(true);
+    expect(body.profiles).toEqual([]);
+  });
+
+  test("getShellProfilesが返すプロファイル一覧を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const profiles = [{ id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" }];
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      undefined,
+      undefined,
+      () => profiles,
+    );
+
+    const res = await fetch("http://localhost/shell-profiles", { unix: socketPath });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; profiles: unknown[] };
+    expect(body.profiles).toEqual(profiles);
   });
 });
 

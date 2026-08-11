@@ -18,6 +18,7 @@ import {
   resolveCustomView,
   resolveKeybindings,
   resolveShell,
+  resolveShellProfiles,
 } from "./config";
 
 describe("configFilePath", () => {
@@ -224,6 +225,72 @@ describe("resolveShell", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
       expect(resolveShell({ shell: { default: "" } })).toBeUndefined();
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveShellProfiles", () => {
+  test("nullを渡すと検出済みプロファイルのみ返す", () => {
+    const detected = [{ id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" }];
+    expect(resolveShellProfiles(null, detected)).toEqual(detected);
+  });
+
+  test("shell.profiles未指定なら検出済みプロファイルのみ返す", () => {
+    const detected = [{ id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" }];
+    expect(resolveShellProfiles({}, detected)).toEqual(detected);
+  });
+
+  test("検出済みプロファイルとユーザー設定のprofilesをマージする", () => {
+    const detected = [{ id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" }];
+    const resolved = resolveShellProfiles(
+      { shell: { profiles: [{ id: "ssh-dev", name: "dev server", command: "ssh dev" }] } },
+      detected,
+    );
+    expect(resolved).toEqual([
+      { id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" },
+      { id: "ssh-dev", name: "dev server", command: "ssh dev" },
+    ]);
+  });
+
+  test("同じidのユーザー設定は検出済みプロファイルを上書きする", () => {
+    const detected = [{ id: "powershell", name: "PowerShell", command: "powershell.exe -NoLogo" }];
+    const resolved = resolveShellProfiles(
+      { shell: { profiles: [{ id: "powershell", name: "PS (custom)", command: "pwsh.exe" }] } },
+      detected,
+    );
+    expect(resolved).toEqual([{ id: "powershell", name: "PS (custom)", command: "pwsh.exe" }]);
+  });
+
+  test("不正なプロファイル（id/name/command欠如）は警告付きでスキップする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveShellProfiles(
+        {
+          shell: {
+            profiles: [
+              { id: "ok", name: "OK", command: "ok-cmd" },
+              { id: "", name: "missing id", command: "x" } as never,
+              { id: "no-command", name: "no command" } as never,
+            ],
+          },
+        },
+        [],
+      );
+      expect(resolved).toEqual([{ id: "ok", name: "OK", command: "ok-cmd" }]);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("shell.profilesが配列でない場合は警告付きで無視する", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveShellProfiles({ shell: { profiles: "not-an-array" as never } }, []);
+      expect(resolved).toEqual([]);
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

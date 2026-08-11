@@ -16,6 +16,7 @@ import {
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  type ShellProfile,
 } from "@niwaterm/config";
 
 export function configDirPath(): string {
@@ -231,13 +232,66 @@ export function resolveShell(userConfig: NiwatermConfig | null): string | undefi
   return undefined;
 }
 
-/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー・シェル設定を解決する（起動時・ホットリロード時共通） */
-export async function loadAndResolveConfig(path: string): Promise<{
+/** 英数字・_・-・. のみ、1〜64文字。CLI --shellやRPCでの指定値として扱いやすい形式に絞る */
+const SHELL_PROFILE_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+
+function isValidShellProfile(value: unknown): value is ShellProfile {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    isNonEmptyString(v["id"]) &&
+    SHELL_PROFILE_ID_PATTERN.test(v["id"]) &&
+    isNonEmptyString(v["name"]) &&
+    isNonEmptyString(v["command"])
+  );
+}
+
+/**
+ * 自動検出プロファイル（Windows起動時のWSLディストロ・PowerShell等）とユーザー設定の
+ * shell.profilesをidベースでマージする。同じidが両方にある場合はユーザー設定側が優先
+ * （自動検出結果の上書き・SSH先等の追加を両立させるため）。
+ * 不正なプロファイル（id/name/command欠如、id形式不正）は警告付きでスキップする。
+ */
+export function resolveShellProfiles(
+  userConfig: NiwatermConfig | null,
+  detected: ShellProfile[],
+): ShellProfile[] {
+  const byId = new Map<string, ShellProfile>();
+  for (const profile of detected) {
+    byId.set(profile.id, profile);
+  }
+  const userProfiles = userConfig?.shell?.profiles;
+  if (userProfiles !== undefined) {
+    if (Array.isArray(userProfiles)) {
+      for (const profile of userProfiles) {
+        if (isValidShellProfile(profile)) {
+          byId.set(profile.id, profile);
+        } else {
+          console.log(`[bun] ignoring invalid shell.profiles entry: ${JSON.stringify(profile)}`);
+        }
+      }
+    } else {
+      console.log(`[bun] ignoring invalid shell.profiles: ${String(userProfiles)}`);
+    }
+  }
+  return [...byId.values()];
+}
+
+/**
+ * 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー・シェル設定を解決する（起動時・ホットリロード時共通）。
+ * detectedShellProfilesはOS依存の非同期処理（Windows起動時のwsl.exe呼び出し等）を伴うため、
+ * このモジュールでは扱わず呼び出し元（index.ts）が事前に解決した結果を渡す
+ */
+export async function loadAndResolveConfig(
+  path: string,
+  detectedShellProfiles: ShellProfile[] = [],
+): Promise<{
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   customView: ResolvedCustomViewConfig | null;
   defaultShell: string | undefined;
+  shellProfiles: ShellProfile[];
 }> {
   const userConfig = await loadUserConfig(path);
   return {
@@ -246,5 +300,6 @@ export async function loadAndResolveConfig(path: string): Promise<{
     browser: resolveBrowser(userConfig),
     customView: resolveCustomView(userConfig),
     defaultShell: resolveShell(userConfig),
+    shellProfiles: resolveShellProfiles(userConfig, detectedShellProfiles),
   };
 }

@@ -65,12 +65,18 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
-  function spawnSession(tabId: TabId, tileId: TileId, cols: number, rows: number): void {
+  function spawnSession(
+    tabId: TabId,
+    tileId: TileId,
+    cols: number,
+    rows: number,
+    shellOverride?: string,
+  ): void {
     sizeByTabId.set(tabId, { cols, rows });
     const session = createSession({
       cols,
       rows,
-      shell: opts.getDefaultShell?.(),
+      shell: shellOverride ?? opts.getDefaultShell?.(),
       // シェル統合スクリプトやタイル内のCLI呼び出しが`--tile`省略でこのタイルを指せるようにする
       env: { NIWATERM_TILE_ID: tileId },
       onOutput: () => opts.onDirty(),
@@ -161,7 +167,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return { tileId: newTileId, tabId: newTabId };
   }
 
-  function newTab(tileId: TileId): TabId | null {
+  function newTab(tileId: TileId, shellOverride?: string): TabId | null {
     const target = findNode(tree, tileId);
     if (!target || target.kind !== "leaf") return null;
     const newTabId = genTabId();
@@ -172,7 +178,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, tileId, size.cols, size.rows);
+    spawnSession(newTabId, tileId, size.cols, size.rows, shellOverride);
     opts.onDirty();
     return newTabId;
   }

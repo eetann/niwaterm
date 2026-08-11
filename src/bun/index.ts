@@ -4,12 +4,15 @@ import type {
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
+  ShellProfile,
 } from "@niwaterm/config";
 import { createBrowserBridge } from "./browser-bridge";
+import { captureUrlScreenshot } from "./browser-screenshot";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
+import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
 
@@ -58,7 +61,7 @@ export type NiwaRPC = {
         cellHeight: number;
       };
       splitTile: { tileId: TileId; orientation: SplitOrientation };
-      newTab: { tileId: TileId };
+      newTab: { tileId: TileId; shellProfileId?: string };
       newBrowserTab: { tileId: TileId; url?: string };
       newCustomViewTab: { tileId: TileId };
       switchTab: { tileId: TileId; tabId: TabId };
@@ -94,6 +97,7 @@ export type NiwaRPC = {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         customView: ResolvedCustomViewConfig | null;
+        shellProfiles: ShellProfile[];
       };
     };
   }>;
@@ -125,7 +129,7 @@ function render() {
 function sendConfig() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.config({ keybindings, appearance, customView });
+  rpcSend.config({ keybindings, appearance, customView, shellProfiles });
 }
 
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
@@ -164,10 +168,15 @@ let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 let customView: ResolvedCustomViewConfig | null;
 let defaultShell: string | undefined;
+let shellProfiles: ShellProfile[];
+
+// WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
+// wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
+const detectedShellProfiles = await detectShellProfiles();
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance, browser, customView, defaultShell } =
-    await loadAndResolveConfig(configFilePath()));
+  ({ keybindings, appearance, browser, customView, defaultShell, shellProfiles } =
+    await loadAndResolveConfig(configFilePath(), detectedShellProfiles));
 }
 
 await refreshConfig();
@@ -219,6 +228,8 @@ try {
     () => customView,
     () => mainWindow.activate(),
     createBrowserBridge(() => rpc),
+    captureUrlScreenshot,
+    () => shellProfiles,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -268,8 +279,13 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
         workspaceManager.splitTile(tileId, orientation);
       },
-      newTab: ({ tileId }: { tileId: TileId }) => {
-        workspaceManager.newTab(tileId);
+      newTab: ({ tileId, shellProfileId }: { tileId: TileId; shellProfileId?: string }) => {
+        const resolved = resolveShellProfileCommand(shellProfiles, shellProfileId);
+        if (!resolved.ok) {
+          console.log(`[bun] ${resolved.error}`);
+          return;
+        }
+        workspaceManager.newTab(tileId, resolved.command);
       },
       newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
         workspaceManager.newBrowserTab(tileId, url ?? browser.defaultUrl);

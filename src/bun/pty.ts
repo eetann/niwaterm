@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 const isWindows = process.platform === "win32";
 
 export interface PtyOptions {
+  /** 起動するシェルの実行コマンド。スペース区切りで単純分割される（クォート・エスケープ非対応）。省略時はOS標準シェル */
   shell?: string;
   cols: number;
   rows: number;
@@ -28,10 +29,15 @@ export interface Pty {
 /**
  * 起動するシェルのコマンドライン。
  * Windowsにはログインシェルの概念が無いため、プロファイル読み込みは各シェルの既定に任せる。
+ * shellはスペース区切りで単純分割する（クォート・エスケープ非対応）。WSLディストロ起動
+ * （"wsl.exe -d Ubuntu"等）やシェルプロファイルの引数指定に対応するため
  */
 function shellCommand(shell: string | undefined): string[] {
-  if (isWindows) return shell ? [shell] : ["powershell.exe", "-NoLogo"];
-  return [shell ?? "/bin/zsh", "-il"];
+  if (shell) {
+    const parts = shell.split(" ").filter((s) => s.length > 0);
+    if (parts.length > 0) return parts;
+  }
+  return isWindows ? ["powershell.exe", "-NoLogo"] : ["/bin/zsh", "-il"];
 }
 
 export function createPty(opts: PtyOptions): Pty {

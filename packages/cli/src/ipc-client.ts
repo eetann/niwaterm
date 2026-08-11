@@ -158,11 +158,42 @@ export function newTab(
   tileId: TileId,
   url?: string,
   customView?: boolean,
+  shellProfileId?: string,
 ): Promise<NewTabResult> {
-  const body: { tileId: TileId; url?: string; customView?: boolean } = { tileId };
+  const body: { tileId: TileId; url?: string; customView?: boolean; shellProfileId?: string } = {
+    tileId,
+  };
   if (url !== undefined) body.url = url;
   if (customView !== undefined) body.customView = customView;
+  if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
   return postJson(socketPath, "/new-tab", body);
+}
+
+export interface ShellProfileEntry {
+  id: string;
+  name: string;
+  command: string;
+}
+
+export type ListShellProfilesResult =
+  | { ok: true; profiles: ShellProfileEntry[] }
+  | { ok: false; error: string };
+
+export async function listShellProfiles(socketPath: string): Promise<ListShellProfilesResult> {
+  try {
+    const res = await fetch("http://localhost/shell-profiles", { unix: socketPath });
+    const body = (await res.json().catch(() => null)) as {
+      profiles?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.profiles)) {
+      return { ok: true, profiles: body.profiles as ShellProfileEntry[] };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(err) };
+  }
 }
 
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };

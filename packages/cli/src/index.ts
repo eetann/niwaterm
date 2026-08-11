@@ -16,6 +16,7 @@ import newTabCommand from "./commands/new-tab";
 import pingCommand from "./commands/ping";
 import sendKeysCommand from "./commands/send-keys";
 import setVarCommand from "./commands/set-var";
+import shellProfilesCommand from "./commands/shell-profiles";
 import showTabCommand from "./commands/show-tab";
 import splitTileCommand from "./commands/split-tile";
 import switchTabCommand from "./commands/switch-tab";
@@ -55,6 +56,7 @@ try {
       "set-var": setVarCommand,
       "get-var": getVarCommand,
       "list-vars": listVarsCommand,
+      "shell-profiles": shellProfilesCommand,
       docs: docsCommand,
     },
   });

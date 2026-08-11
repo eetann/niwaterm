@@ -28,9 +28,9 @@ export interface NiwatermConfig {
    */
   customView?: CustomViewConfig;
   /**
-   * シェル設定。新規タブ作成時に使うデフォルトシェルを変更できる。
-   * 未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。
-   * 例: { default: "/bin/bash" }
+   * シェル設定。新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイル（PowerShell・SSH先等）を変更できる。
+   * defaultの未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。
+   * 例: { default: "/bin/bash", profiles: [{ id: "ssh-dev", name: "dev server", command: "ssh dev" }] }
    */
   shell?: ShellConfig;
 }

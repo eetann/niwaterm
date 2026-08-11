@@ -42,7 +42,7 @@ niwaterm send-keys -t tab-3 C-c
 
 ```sh
 niwaterm split-tile --tile <tileId> [--orientation horizontal|vertical]
-niwaterm new-tab --tile <tileId> [--url <url> | --custom-view]
+niwaterm new-tab --tile <tileId> [--url <url> | --custom-view | --shell <shellProfileId>]
 niwaterm switch-tab --tile <tileId> --tab <tabId>
 niwaterm close-tab --tile <tileId> --tab <tabId>
 niwaterm focus-tile --tile <tileId>
@@ -51,12 +51,18 @@ niwaterm focus-tile --tile <tileId>
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
 
 - `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、両方省略時は通常のターミナルタブを作成する（`--url`と`--custom-view`は同時指定不可）。成功時、新規`tabId`を表示する
+- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。成功時、新規`tabId`を表示する
 - `switch-tab` — 指定タイル内でアクティブタブを切り替える
 - `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
 - `focus-tile` — 指定タイルへフォーカスを移す
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
+niwaterm shell-profiles
+```
+
+利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`new-tab --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
 
 ```sh
 niwaterm capture-tab --tab <tabId>
@@ -144,7 +150,8 @@ niwaterm docs show cli
   - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`）
   - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
   - `POST /split-tile` — `{tileId: string, orientation: "horizontal"|"vertical"}`を受け取り、タイルを分割する。成功時`{ok: true, tileId, tabId}`（新規作成分）を返す。tileId不存在時は404、不正なボディは400
-  - `POST /new-tab` — `{tileId: string, url?: string, customView?: boolean}`を受け取り、新規タブを作成する。`url`指定時はそのURLのブラウザタブ、`customView: true`指定時は設定済みの`customView`を開くブラウザタブ、いずれも省略時はターミナルタブ。成功時`{ok: true, tabId}`を返す。tileId不存在時は404、urlが空文字列・urlとcustomViewの同時指定・customView未設定時のcustomView:trueはいずれも400
+  - `POST /new-tab` — `{tileId: string, url?: string, customView?: boolean, shellProfileId?: string}`を受け取り、新規タブを作成する。`url`指定時はそのURLのブラウザタブ、`customView: true`指定時は設定済みの`customView`を開くブラウザタブ、`shellProfileId`指定時はそのプロファイルのシェルでターミナルタブ、いずれも省略時はデフォルトシェルのターミナルタブ。成功時`{ok: true, tabId}`を返す。tileId不存在時は404、urlが空文字列・3つのうち2つ以上の同時指定・customView未設定時のcustomView:true・未知のshellProfileIdはいずれも400
+  - `GET /shell-profiles` — 利用可能なシェルプロファイル一覧を`{ok: true, profiles: {id, name, command}[]}`として返す
   - `POST /switch-tab` — `{tileId: string, tabId: string}`を受け取り、アクティブタブを切り替える。tileId/tabId不存在時は404
   - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
   - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404

@@ -177,21 +177,39 @@ customView: {
 
 ## シェル設定
 
-`shell`は新規タブ作成時に使うデフォルトシェルを指定するオブジェクト。**未指定なら機能オフ**で、OS標準シェル（macOS/Linux: `/bin/zsh -il`、Windows: `powershell.exe -NoLogo`）が使われる。
+`shell`は新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイルを指定するオブジェクト。**未指定なら機能オフ**で、OS標準シェル（macOS/Linux: `/bin/zsh -il`、Windows: `powershell.exe -NoLogo`）が使われる。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `default` | `string` | 新規タブ作成時に使うシェルの実行コマンド（PATHから解決される） |
+| `profiles` | `ShellProfile[]` | 追加のシェルプロファイル一覧（後述） |
 
 ```ts
 shell: {
   default: "/bin/bash",
+  profiles: [{ id: "ssh-dev", name: "dev server", command: "ssh dev" }],
 },
 ```
 
-不正な値（空文字列等）を指定した場合、警告付きでOS標準シェルにフォールバックする。設定はホットリロード対象で、保存後に新規作成されるタブから反映される（既存タブのシェルは変わらない）。
+`default`に不正な値（空文字列等）を指定した場合、警告付きでOS標準シェルにフォールバックする。設定はホットリロード対象で、保存後に新規作成されるタブから反映される（既存タブのシェルは変わらない）。
 
-現状は全タブ共通の単一シェルのみ指定できる。タブ作成時にシェル（PowerShell・WSLの各ディストロなど）を選んで起動する仕組み（プロファイル・ドロップダウンUI等）は未実装（roadmap「シェルプロファイル選択」節参照）。
+シェルの実行コマンド（`default`・`profiles[].command`共通）はスペース区切りで単純分割される（クォート・エスケープ非対応）。`"wsl.exe -d Ubuntu"`のように引数を含められるが、スペースを含むパス・引数は指定できない。
+
+### シェルプロファイル（`shell.profiles`）
+
+Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを「+」ボタン横の「⌄」ドロップダウンから選べる。各プロファイルは以下の3フィールドを持つ。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `id` | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm new-tab --shell <id>`やRPCでの指定に使う |
+| `name` | `string` | ドロップダウン・`niwaterm shell-profiles`に表示する名前 |
+| `command` | `string` | 実行コマンド（PATHから解決される。スペース区切りで単純分割） |
+
+Windows環境では起動時に`wsl.exe --list --quiet`相当でインストール済みのWSLディストロを自動検出し、`id: "wsl-<ディストロ名>"`のプロファイルとして追加する（PowerShellは`id: "powershell"`の固定プロファイルとして常に追加される）。macOS/Linuxでは自動検出は行われず、`shell.profiles`で指定した分のみが有効。
+
+`shell.profiles`と自動検出プロファイルは`id`単位でマージされ、**同じidの場合は`shell.profiles`側が優先**される（自動検出結果の名前・コマンドを上書きしたい場合に使える）。不正なプロファイル（`id`/`name`/`command`のいずれかが欠けている、`id`が形式不正）は警告付きでスキップされる。
+
+利用可能なプロファイル一覧はCLIの`niwaterm shell-profiles`で確認できる（詳細: `docs/cli.md`）。
 
 ## ホットリロード
 

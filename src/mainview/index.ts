@@ -6,6 +6,7 @@ import {
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
   type ResolvedCustomViewConfig,
+  type ShellProfile,
 } from "@niwaterm/config";
 import type { NiwaRPC } from "../bun/index";
 import type { TabRenderState } from "../bun/workspace";
@@ -32,6 +33,12 @@ const compositionEl = document.getElementById("composition") as HTMLDivElement;
 const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
 const tabButtonTemplate = document.getElementById("tab-button-template") as HTMLTemplateElement;
 const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
+const shellProfileMenuTemplate = document.getElementById(
+  "shell-profile-menu-template",
+) as HTMLTemplateElement;
+const shellProfileMenuItemTemplate = document.getElementById(
+  "shell-profile-menu-item-template",
+) as HTMLTemplateElement;
 const sidebarEl = document.getElementById("sidebar") as HTMLElement;
 const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
 const sidebarSwitcherEl = document.getElementById("sidebar-switcher") as HTMLDivElement;
@@ -108,6 +115,10 @@ let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
 let compiledKeybindings = compileKeybindings(defaultKeybindings);
 // 直近のrender()で受け取った全ワークスペースの一覧。サイドバーを開いた瞬間に再描画するため保持する
 let lastWorkspaces: WorkspaceListEntry[] = [];
+// bun側で解決されたシェルプロファイル一覧（configメッセージで受信）。+ボタン横のドロップダウンに表示する
+let shellProfiles: ShellProfile[] = [];
+// 開いているシェルプロファイルメニュー。外側クリック等で閉じるため対象tileIdと要素を保持する
+let openShellProfileMenu: { tileId: TileId; menuEl: HTMLDivElement } | null = null;
 
 const SIDEBAR_OPEN_STORAGE_KEY = "niwaterm:sidebarOpen";
 
@@ -216,14 +227,17 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         keybindings,
         appearance,
         customView,
+        shellProfiles: profiles,
       }: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         customView: ResolvedCustomViewConfig | null;
+        shellProfiles: ShellProfile[];
       }) => {
         compiledKeybindings = compileKeybindings(keybindings);
         applyAppearance(appearance);
         applyCustomView(customView);
+        shellProfiles = profiles;
       },
     },
   },
@@ -662,6 +676,7 @@ function gcStale(
     tileEl.remove();
     tileElByTileId.delete(tileId);
     tabBarElByTileId.delete(tileId);
+    if (openShellProfileMenu?.tileId === tileId) closeShellProfileMenu();
   }
   for (const [splitId, splitEl] of splitElBySplitId) {
     if (seenSplitIds.has(splitId)) continue;
@@ -1062,6 +1077,53 @@ function switchToTab(tileId: TileId, tabId: TabId): void {
   sendMessage("switchTab", { tileId, tabId });
 }
 
+function closeShellProfileMenu(): void {
+  if (!openShellProfileMenu) return;
+  openShellProfileMenu.menuEl.remove();
+  openShellProfileMenu = null;
+}
+
+/**
+ * +ボタン横の「⌄」ドロップダウンをクリックした際、シェルプロファイル一覧のポップアップメニューを
+ * anchorElの直下に表示する。「デフォルト」項目（shellProfileId省略でnewTabを送る）を先頭に持つ
+ */
+function openShellProfileMenuFor(tileId: TileId, anchorEl: HTMLElement): void {
+  closeShellProfileMenu();
+  const menuFrag = shellProfileMenuTemplate.content.cloneNode(true) as DocumentFragment;
+  const menuEl = menuFrag.querySelector(".shell-profile-menu") as HTMLDivElement;
+
+  function addItem(label: string, shellProfileId: string | undefined): void {
+    const itemFrag = shellProfileMenuItemTemplate.content.cloneNode(true) as DocumentFragment;
+    const itemEl = itemFrag.querySelector(".shell-profile-menu-item") as HTMLButtonElement;
+    itemEl.textContent = label;
+    if (shellProfileId !== undefined) itemEl.dataset["shellProfileId"] = shellProfileId;
+    menuEl.appendChild(itemEl);
+  }
+
+  addItem("デフォルト", undefined);
+  for (const profile of shellProfiles) {
+    addItem(profile.name, profile.id);
+  }
+
+  menuEl.addEventListener("mousedown", (e) => {
+    e.stopPropagation();
+    const itemEl = (e.target as HTMLElement).closest<HTMLElement>(".shell-profile-menu-item");
+    if (!itemEl) return;
+    const shellProfileId = itemEl.dataset["shellProfileId"];
+    focusTileLocally(tileId);
+    sendMessage("newTab", shellProfileId ? { tileId, shellProfileId } : { tileId });
+    closeShellProfileMenu();
+    imeEl.focus({ preventScroll: true });
+  });
+
+  document.body.appendChild(menuEl);
+  const rect = anchorEl.getBoundingClientRect();
+  menuEl.style.left = `${rect.left}px`;
+  menuEl.style.top = `${rect.bottom + 2}px`;
+
+  openShellProfileMenu = { tileId, menuEl };
+}
+
 /** サイドバーのタブ行クリック。アクティブワークスペース内ならDOM即時反映、
  * 非アクティブワークスペースならDOMが存在しないためRPC送信のみで次のrenderを待つ */
 function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: TabId): void {
@@ -1126,10 +1188,29 @@ tileTreeEl.addEventListener("mousedown", (e) => {
     imeEl.focus({ preventScroll: true });
     return;
   }
+  const dropdownBtn = target.closest<HTMLElement>(".tab-add-dropdown-btn");
+  if (dropdownBtn) {
+    focusTileLocally(tileId);
+    if (openShellProfileMenu?.tileId === tileId) {
+      closeShellProfileMenu();
+    } else {
+      openShellProfileMenuFor(tileId, dropdownBtn);
+    }
+    return;
+  }
 
   focusTileLocally(tileId);
   // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
   imeEl.focus({ preventScroll: true });
+});
+// シェルプロファイルメニュー外（ドロップダウンボタン自体を除く）をクリックしたら閉じる。
+// メニュー・ドロップダウンボタン自身のmousedownはtileTreeEl側で先に処理されバブリングしてくるため、
+// ここでは「それ以外」を判定するだけでよい
+window.addEventListener("mousedown", (e) => {
+  if (!openShellProfileMenu) return;
+  const target = e.target as HTMLElement;
+  if (target.closest(".shell-profile-menu") || target.closest(".tab-add-dropdown-btn")) return;
+  closeShellProfileMenu();
 });
 window.addEventListener("focus", () => {
   // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで

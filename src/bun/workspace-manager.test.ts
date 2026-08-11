@@ -56,6 +56,16 @@ describe("getDefaultShellの配線", () => {
     );
     expect(created[0]?.opts.shell).toBe("/bin/bash");
   });
+
+  test("newTabにshellOverrideを渡すとworkspace.tsまで届き、そのタブのセッションへ優先して渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.newTab(tileId, "wsl.exe -d Ubuntu");
+    expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
+  });
 });
 
 describe("createWorkspaceManager", () => {

@@ -217,6 +217,18 @@ describe("newTab", () => {
     expect(result).toBeNull();
     expect(ws.snapshot().layout).toEqual(before);
   });
+
+  test("shellOverrideを渡すとgetDefaultShellより優先してそのタブのセッションへ渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    const before = ws.snapshot().layout as TileLeaf;
+    ws.newTab(before.id, "wsl.exe -d Ubuntu");
+    expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
+    // 初期タブはgetDefaultShellのまま（shellOverrideは今回のnewTab呼び出しのみに効く）
+    expect(created[0]?.opts.shell).toBe("/bin/bash");
+  });
 });
 
 describe("newBrowserTab", () => {
