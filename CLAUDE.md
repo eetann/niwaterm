@@ -14,9 +14,8 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
-- `vendor/libghostty/` はgitignore。再現手順:
-  `mise exec zig@0.16.0 -- zig build -Demit-lib-vt --prefix <repo>/vendor/libghostty`（ghosttyソースは `opensrc path ghostty-org/ghostty` で取得）。
-  **Zig 0.16.0以上が必要**（ghosttyのbuild.zigが要求する）
+- `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/macos-build.md
+  （要点: `mise exec zig@0.16.0 -- zig build -Demit-lib-vt --prefix <repo>/vendor/libghostty`。ghosttyソースは `opensrc path ghostty-org/ghostty` で取得。**Zig 0.16.0以上が必要**）
 
 ## アーキテクチャ
 
