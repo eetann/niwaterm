@@ -695,10 +695,14 @@ function renderSidebar(
     headerEl.classList.toggle("active", entry.workspaceId === currentActiveWorkspaceId);
 
     for (const [tileIndex, leaf] of listLeaves(entry.layout).entries()) {
+      // タイル変数はタイル単位（同一タイル内の複数タブで共有）。
+      // シェル統合スクリプトが`branch`変数へgitブランチ名を書く運用を想定した表示
+      const branch = entry.tileVars[leaf.id]?.["branch"];
       leaf.tabIds.forEach((tabId, tabIndex) => {
         seenTabIds.add(tabId);
         const rowEl = ensureSidebarTabRow(tabId, tabListEl);
-        rowEl.textContent = `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`;
+        const label = `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`;
+        rowEl.textContent = branch ? `${label} · ${branch}` : label;
         rowEl.dataset["workspaceId"] = entry.workspaceId;
         rowEl.dataset["tileId"] = leaf.id;
         rowEl.dataset["tabId"] = tabId;

@@ -163,9 +163,11 @@ let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 let customView: ResolvedCustomViewConfig | null;
+let defaultShell: string | undefined;
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance, browser, customView } = await loadAndResolveConfig(configFilePath()));
+  ({ keybindings, appearance, browser, customView, defaultShell } =
+    await loadAndResolveConfig(configFilePath()));
 }
 
 await refreshConfig();
@@ -202,6 +204,7 @@ const workspaceManager = createWorkspaceManager({
   initialRows: 24,
   onDirty,
   restoreFrom,
+  getDefaultShell: () => defaultShell,
   onAllWorkspacesClosed: () => {
     console.log("all workspaces closed, exiting");
     cleanup();

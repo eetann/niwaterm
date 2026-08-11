@@ -72,6 +72,34 @@ niwaterm list-vars --tile <tileId>
 
 タイルごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。**変数は永続化されず、アプリを終了する・対象タイルを閉じると消える**（tileId自体がアプリ再起動のたびに再採番されるため）。`tileId`を指定すればどのタイルからでも別タイルの変数を読み書きできるため、送信元タイルが自身の状態を`set-var`で書き、別タイルがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタイル間の自動化に使える。指定した`tileId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
+`--tile`は省略可能で、その場合`NIWATERM_TILE_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタイル自身の変数を読み書きする分にはタイルIDを調べる必要がない（別タイルの変数を操作する場合は`--tile`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`set-var`する。`--tile`省略かつ`NIWATERM_TILE_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+
+## シェル統合
+
+`contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタイル変数`branch`へ自動反映する（`niwaterm set-var branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
+
+```sh
+# ~/.zshrc
+[ -n "$NIWATERM_TILE_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.zsh
+```
+
+```sh
+# ~/.bashrc
+[ -n "$NIWATERM_TILE_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
+```
+
+```fish
+# ~/.config/fish/config.fish
+test -n "$NIWATERM_TILE_ID"; and source /path/to/niwaterm/contrib/shell-integration/niwaterm.fish
+```
+
+```powershell
+# $PROFILE
+if ($env:NIWATERM_TILE_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwaterm.ps1 }
+```
+
+`NIWATERM_TILE_ID`が無いシェル（niwaterm外のターミナル）では何もしない。PowerShell版は`prompt`関数を上書きするが、既存の`prompt`関数（他ツールのプロンプトカスタマイズ等）を保持して末尾で呼び直すため、他のプロンプト拡張と共存できる。
+
 ```sh
 niwaterm browser-navigate --tab <tabId> --url <url>
 niwaterm browser-get-text --tab <tabId>

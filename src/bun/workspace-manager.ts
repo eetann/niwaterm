@@ -3,6 +3,7 @@
 import { buildTreeFromPersisted, toPersistedTileNode, type PersistedState } from "./persistence";
 import {
   findNode,
+  listLeaves,
   type SplitOrientation,
   type TabId,
   type TileId,
@@ -35,6 +36,8 @@ export interface WorkspaceListEntry {
   active: boolean;
   focusedTileId: TileId;
   layout: TileNode;
+  /** サイドバー表示用。タイルごとのkey-value変数（branch等） */
+  tileVars: Record<TileId, Record<string, string>>;
 }
 
 export interface TabLocation {
@@ -51,6 +54,8 @@ export interface WorkspaceManagerOptions {
   onAllWorkspacesClosed: () => void;
   /** 起動時に読み込んだ永続化データ。省略時・無効時は単一ワークスペース・単一タブで初期化する */
   restoreFrom?: PersistedState | null;
+  /** 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う */
+  getDefaultShell?: WorkspaceOptions["getDefaultShell"];
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: WorkspaceOptions["createSession"];
 }
@@ -75,6 +80,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       initialTree,
       onDirty: () => opts.onDirty(),
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
+      getDefaultShell: opts.getDefaultShell,
       createSession: opts.createSession,
     });
     workspaces.set(id, ws);
@@ -227,11 +233,17 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   function listWorkspaces(): WorkspaceListEntry[] {
     return order.map((id) => {
       const ws = workspaces.get(id) as Workspace;
+      const layout = ws.getLayout();
+      const tileVars: Record<TileId, Record<string, string>> = {};
+      for (const leaf of listLeaves(layout)) {
+        tileVars[leaf.id] = ws.listTileVars(leaf.id) ?? {};
+      }
       return {
         workspaceId: id,
         active: id === activeId,
         focusedTileId: ws.getFocusedTileId(),
-        layout: ws.getLayout(),
+        layout,
+        tileVars,
       };
     });
   }

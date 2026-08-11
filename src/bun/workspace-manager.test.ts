@@ -48,6 +48,16 @@ function baseOpts(
   };
 }
 
+describe("getDefaultShellの配線", () => {
+  test("getDefaultShellが返す値がworkspace.tsまで届き、初期タブのセッションへshellとして渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspaceManager(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    expect(created[0]?.opts.shell).toBe("/bin/bash");
+  });
+});
+
 describe("createWorkspaceManager", () => {
   test("初期状態は単一ワークスペース・単一タイル・単一タブ", () => {
     const { factory } = createFakeSessionFactory();
@@ -421,6 +431,20 @@ describe("listWorkspaces", () => {
     mgr.newWorkspace();
 
     expect(mgr.snapshot().workspaces).toEqual(mgr.listWorkspaces());
+  });
+
+  test("tileVarsに各leafタイルのタイル変数がtileIdをキーに含まれる（未設定なら空オブジェクト）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const split = mgr.splitTile(firstTileId, "vertical");
+    mgr.setTileVar(firstTileId, "branch", "main");
+
+    const entry = mgr.listWorkspaces()[0];
+    expect(entry?.tileVars).toEqual({
+      [firstTileId]: { branch: "main" },
+      [split?.tileId as string]: {},
+    });
   });
 });
 

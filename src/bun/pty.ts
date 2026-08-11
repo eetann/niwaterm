@@ -12,6 +12,8 @@ export interface PtyOptions {
   rows: number;
   cwd?: string;
   term?: string;
+  /** 追加で設定する環境変数（process.envへ上書きマージする） */
+  env?: Record<string, string>;
 }
 
 export interface Pty {
@@ -50,7 +52,7 @@ export function createPty(opts: PtyOptions): Pty {
   const proc = Bun.spawn(shellCommand(opts.shell), {
     cwd: opts.cwd ?? homedir(),
     // TerminalOptions.nameはTERM環境変数を設定しないため明示的に渡す
-    env: { ...process.env, TERM: term },
+    env: { ...process.env, TERM: term, ...opts.env },
     terminal,
     onExit(_proc, exitCode) {
       onExitFn?.(exitCode ?? 0);

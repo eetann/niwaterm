@@ -2,6 +2,7 @@ import type { AppearanceConfig } from "./appearance";
 import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
+import type { ShellConfig } from "./shell";
 
 export interface NiwatermConfig {
   /**
@@ -26,6 +27,12 @@ export interface NiwatermConfig {
    * 例: { name: "Notes", path: "./notes.html" }
    */
   customView?: CustomViewConfig;
+  /**
+   * シェル設定。新規タブ作成時に使うデフォルトシェルを変更できる。
+   * 未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。
+   * 例: { default: "/bin/bash" }
+   */
+  shell?: ShellConfig;
 }
 
 /** 型推論とエディタ補完のためのヘルパー。渡された値をそのまま返す */

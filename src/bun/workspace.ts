@@ -46,6 +46,11 @@ export type WorkspaceOptions = {
   onDirty: () => void;
   /** 最後の1タブのプロセスが終了した時に呼ばれる。アプリを終了するかどうかの判断は呼び出し側の責務 */
   onAllTabsClosed: () => void;
+  /**
+   * 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う。
+   * 呼び出し毎に評価する（設定ファイルのホットリロードを反映するため、生成時に値を固定しない）
+   */
+  getDefaultShell?: () => string | undefined;
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: typeof createTerminalSession;
 };
@@ -60,11 +65,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
-  function spawnSession(tabId: TabId, cols: number, rows: number): void {
+  function spawnSession(tabId: TabId, tileId: TileId, cols: number, rows: number): void {
     sizeByTabId.set(tabId, { cols, rows });
     const session = createSession({
       cols,
       rows,
+      shell: opts.getDefaultShell?.(),
+      // シェル統合スクリプトやタイル内のCLI呼び出しが`--tile`省略でこのタイルを指せるようにする
+      env: { NIWATERM_TILE_ID: tileId },
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
     });
@@ -79,7 +87,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     focusedTileId = leaves[0].id;
     for (const leaf of leaves) {
       for (const tabId of leaf.tabIds) {
-        spawnSession(tabId, opts.initialCols, opts.initialRows);
+        spawnSession(tabId, leaf.id, opts.initialCols, opts.initialRows);
       }
     }
   } else {
@@ -87,7 +95,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const firstTileId = genTileId();
     tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
     focusedTileId = firstTileId;
-    spawnSession(firstTabId, opts.initialCols, opts.initialRows);
+    spawnSession(firstTabId, firstTileId, opts.initialCols, opts.initialRows);
   }
 
   function disposeSessions(tabIds: TabId[]): void {
@@ -147,7 +155,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows);
+    spawnSession(newTabId, newTileId, size.cols, size.rows);
     focusedTileId = newTileId;
     opts.onDirty();
     return { tileId: newTileId, tabId: newTabId };
@@ -164,7 +172,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows);
+    spawnSession(newTabId, tileId, size.cols, size.rows);
     opts.onDirty();
     return newTabId;
   }

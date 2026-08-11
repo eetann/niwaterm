@@ -17,6 +17,7 @@ import {
   resolveBrowser,
   resolveCustomView,
   resolveKeybindings,
+  resolveShell,
 } from "./config";
 
 describe("configFilePath", () => {
@@ -76,6 +77,12 @@ describe("loadUserConfig", () => {
   test("browser以外の形（配列やnull）の場合はnullを返す", async () => {
     const path = join(dir, "invalid-browser-shape.config.ts");
     await writeFile(path, "export default { browser: null };\n");
+    expect(await loadUserConfig(path)).toBeNull();
+  });
+
+  test("shell以外の形（配列やnull）の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-shell-shape.config.ts");
+    await writeFile(path, "export default { shell: null };\n");
     expect(await loadUserConfig(path)).toBeNull();
   });
 
@@ -193,6 +200,30 @@ describe("resolveBrowser", () => {
     try {
       const resolved = resolveBrowser({ browser: { defaultUrl: "" } });
       expect(resolved.defaultUrl).toBe(defaultBrowserConfig.defaultUrl);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveShell", () => {
+  test("nullを渡すとundefined（OS標準シェルへフォールバック）を返す", () => {
+    expect(resolveShell(null)).toBeUndefined();
+  });
+
+  test("shell未指定ならundefinedを返す", () => {
+    expect(resolveShell({})).toBeUndefined();
+  });
+
+  test("shell.defaultを指定するとその値が返る", () => {
+    expect(resolveShell({ shell: { default: "/bin/bash" } })).toBe("/bin/bash");
+  });
+
+  test("空文字列など不正な値は警告付きでundefinedにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveShell({ shell: { default: "" } })).toBeUndefined();
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

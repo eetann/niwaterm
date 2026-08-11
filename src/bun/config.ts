@@ -45,6 +45,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
     const cv = v["customView"];
     if (typeof cv !== "object" || cv === null) return false;
   }
+  if ("shell" in v) {
+    const sh = v["shell"];
+    if (typeof sh !== "object" || sh === null) return false;
+  }
   return true;
 }
 
@@ -214,12 +218,26 @@ export function resolveCustomView(
   return null;
 }
 
-/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー設定を解決する（起動時・ホットリロード時共通） */
+/**
+ * 新規タブ作成時に使うデフォルトシェルを解決する。未指定・不正値はundefined
+ * （pty.ts側のOS標準シェルにフォールバックする。appearance/browserと異なりOS共通の
+ * 既定値を持たないため、defaultAppearanceのような具体的なデフォルト定数は無い）。
+ */
+export function resolveShell(userConfig: NiwatermConfig | null): string | undefined {
+  const user = userConfig?.shell?.default;
+  if (user === undefined) return undefined;
+  if (isNonEmptyString(user)) return user;
+  console.log(`[bun] ignoring invalid shell.default: ${String(user)}`);
+  return undefined;
+}
+
+/** 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー・シェル設定を解決する（起動時・ホットリロード時共通） */
 export async function loadAndResolveConfig(path: string): Promise<{
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   customView: ResolvedCustomViewConfig | null;
+  defaultShell: string | undefined;
 }> {
   const userConfig = await loadUserConfig(path);
   return {
@@ -227,5 +245,6 @@ export async function loadAndResolveConfig(path: string): Promise<{
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     customView: resolveCustomView(userConfig),
+    defaultShell: resolveShell(userConfig),
   };
 }

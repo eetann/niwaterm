@@ -107,6 +107,69 @@ describe("initialTree（永続化からの復元）", () => {
   });
 });
 
+describe("NIWATERM_TILE_ID環境変数の注入", () => {
+  test("初期タブのセッションには所属タイルのtileIdがNIWATERM_TILE_IDとして渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    expect(created[0]?.opts.env).toEqual({ NIWATERM_TILE_ID: tileId });
+  });
+
+  test("splitTileで生成される新タイルのセッションには新tileIdが渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    const result = ws.splitTile(firstTileId, "vertical");
+    expect(result).not.toBeNull();
+    expect(created[1]?.opts.env).toEqual({ NIWATERM_TILE_ID: result?.tileId as string });
+  });
+
+  test("newTabで既存タイルに追加されるセッションには同一tileIdが渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    expect(created[1]?.opts.env).toEqual({ NIWATERM_TILE_ID: tileId });
+  });
+});
+
+describe("getDefaultShellによるシェル指定", () => {
+  test("getDefaultShell省略時はshellがundefinedのまま渡る（pty.ts側のOS標準にフォールバック）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspace(baseOpts({ createSession: factory }));
+    expect(created[0]?.opts.shell).toBeUndefined();
+  });
+
+  test("getDefaultShellが返す値が初期タブのセッションへshellとして渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspace(baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }));
+    expect(created[0]?.opts.shell).toBe("/bin/bash");
+  });
+
+  test("splitTile/newTabで生成されるセッションにもgetDefaultShellの値が渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    expect(created[1]?.opts.shell).toBe("/bin/bash");
+  });
+
+  test("getDefaultShellは呼び出し毎に評価される（ホットリロードで変わった値が新規タブへ反映される）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    let current = "/bin/bash";
+    const ws = createWorkspace(
+      baseOpts({ createSession: factory, getDefaultShell: () => current }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    current = "/bin/fish";
+    ws.newTab(tileId);
+    expect(created[0]?.opts.shell).toBe("/bin/bash");
+    expect(created[1]?.opts.shell).toBe("/bin/fish");
+  });
+});
+
 describe("splitTile", () => {
   test("対象タイルを分割し、新規tileId/tabIdを返す", () => {
     const { created, factory } = createFakeSessionFactory();
