@@ -6,3 +6,6 @@ artifacts/
 
 # libghostty-vt ビルド成果物（zig build -Demit-lib-vt で再現）
 vendor/
+
+# mise: 環境依存の値（Windows側ユーザー名等）を上書きするローカル設定
+mise.local.toml

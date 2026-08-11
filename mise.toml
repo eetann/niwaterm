@@ -1,0 +1,21 @@
+# WindowsでElectrobunアプリをビルド・起動する手順は docs/windows-build.md 参照。
+# ここではその中で毎回発生するWSL→Windows間のファイル同期をタスク化している。
+#
+# 環境依存の値（Windows側のユーザー名を含むパスなど）はこのファイルにコミットせず、
+# 同じディレクトリに mise.local.toml（.gitignore対象、各自手動作成）を置いて上書きすること。
+# 例:
+#
+#   [env]
+#   NIWATERM_WIN_REPO = "/mnt/c/Users/<ユーザー名>/niwaterm"
+
+[tasks."win:sync"]
+description = "WSL側のソースコードをWindows側のリポジトリへrsyncで同期する（docs/windows-build.md ステップ2相当）"
+run = '''
+if [ -z "$NIWATERM_WIN_REPO" ]; then
+  echo "NIWATERM_WIN_REPO が未設定です。mise.toml先頭のコメントを参照し mise.local.toml に設定してください" >&2
+  exit 1
+fi
+rsync -a --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude 'vendor' \
+  ./ "$NIWATERM_WIN_REPO/"
+echo "synced to $NIWATERM_WIN_REPO"
+'''
