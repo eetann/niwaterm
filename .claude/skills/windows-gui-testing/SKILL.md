@@ -100,6 +100,54 @@ RDPセッション）だと、GDI経由のキャプチャが黒画面になる�
 通常の状態なら問題ない。黒画面になった場合はユーザーに手動でスクリーンショットを撮って共有して
 もらう。
 
+## キーボードショートカット・マウス操作のシミュレーション
+
+`niwaterm send-keys`はPTYへの文字列送信（tmuxのsend-keys相当）であり、
+Ctrl+Shift+CやCtrl+Shift+VのようなGUIレベルのキーボードショートカット（webviewの
+keydownイベント経由でRPCが飛ぶもの）は発火できない。これらを検証するにはOSレベルの
+キー・マウスイベント注入が必要で、`System.Windows.Forms.SendKeys`と`user32.dll`の
+`mouse_event`/`SetCursorPos`をP/Invokeで使う。
+
+**`SetForegroundWindow`だけではwebviewにキー入力が届かない**。`GetForegroundWindow`で
+確認すると対象プロセスが確かにフォアグラウンドになっていても、SendKeysで送ったキーが
+無視されることがある。原因はCLAUDE.mdにある「キーボード入力には明示的なフォーカスが必要」
+という制約で、ウィンドウ自体のフォアグラウンド化とwebview内DOM要素へのfocus()は別物。
+**確実なのはウィンドウのタイトルバーではなく、ターミナル表示領域を実際にマウスクリックして
+からSendKeysを送る**方法（クリックでwebview内の要素にfocusが移る）。
+
+```powershell
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class Win32Mouse {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+}
+"@
+[Win32Mouse]::SetCursorPos($x, $y)  # ターミナル表示領域内の座標（タイトルバーは不可）
+Start-Sleep -Milliseconds 200
+[Win32Mouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)  # LEFTDOWN
+Start-Sleep -Milliseconds 100
+[Win32Mouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)  # LEFTUP
+Start-Sleep -Milliseconds 500
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.SendKeys]::SendWait("^+v")  # Ctrl+Shift+V。^=Ctrl +=Shift %=Alt
+```
+
+対象座標はまずスクリーンショットを撮ってGUI要素の表示座標を特定し、
+`実座標 = 表示座標 × (原寸/表示サイズ)`で換算する（Readツールで画像を開くと
+「original WxH, displayed at wxh」が出るのでその比率を使う）。
+
+ドラッグ選択（テキスト選択→コピーの検証など）はLEFTDOWN後に`SetCursorPos`を
+少しずつ動かしながらループしてからLEFTUPする。1回のジャンプでは選択が発生しないことがある。
+
+これらのP/Invokeスクリプトは複数行になるため、bashのヒアドキュメントで`/tmp`に書いてから
+`cp`でWindows側の`$env:TEMP`へ置き、`powershell.exe -ExecutionPolicy Bypass -Command "& \$env:TEMP\foo.ps1"`
+で実行するのが確実（`-Command`に長いスクリプトをインラインで詰め込むとクォートのエスケープが
+bash→powershell.exeの二重引用ですぐ壊れる）。既定のExecutionPolicyはスクリプトファイルの
+直接実行（`. $env:TEMP\foo.ps1`）を拒否するため、`-ExecutionPolicy Bypass -File`か
+`-Command "& <path>"`を使う。
+
 ## 複数タブを同時に動かすとログが混ざる
 
 診断用に一時的なconsole.errorログを仕込む場合、tabId等の識別子をログに含めないと
