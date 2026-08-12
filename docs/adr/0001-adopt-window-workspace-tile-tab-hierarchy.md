@@ -73,7 +73,7 @@ Window（OS ウィンドウ。当面1つ）
 ### 2. 流派2（タブ＝タイル内切り替え）の採用理由
 
 - サイドバーの Workspace 一覧が「レイアウトごと切り替える」役割を既に担っており、流派1のタブは役割が重複する
-- 「このタイルでエージェントを動かしつつ、裏のタブにログを置く」という AI エージェント常駐ワークフロー（docs/mvp.md のコンセプト）に適合する
+- 「このタイルでエージェントを動かしつつ、裏のタブにログを置く」という AI エージェント常駐ワークフロー（docs/planning/mvp.md のコンセプト）に適合する
 
 ### 3. Tile という名前の採用理由
 
@@ -135,4 +135,4 @@ Window（OS ウィンドウ。当面1つ）
 - [herdr Concepts](https://herdr.dev/docs/concepts/) — Session > Workspace > Tab > Pane（流派1）
 - [cmux Concepts](https://cmux.com/docs/concepts) — Window > Workspace > Pane > Surface（流派2）
 - [WezTerm Multiplexing](https://wezterm.org/multiplexing.html) — Domain / Window > Tab > Pane + 横断的 Workspace
-- docs/mvp.md — niwaterm のコンセプト
+- docs/planning/mvp.md — niwaterm のコンセプト

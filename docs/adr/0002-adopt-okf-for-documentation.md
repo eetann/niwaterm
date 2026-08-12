@@ -1,7 +1,7 @@
 ---
 type: ADR
 title: "ADR 0002: ドキュメントを Google の Open Knowledge Format (OKF) に従って書く"
-description: docs/配下をOKFバンドルとして扱い、frontmatterのtype/title/descriptionを必須化する
+description: docs/配下をOKFバンドルとして扱い、frontmatterのtype/title/description必須化とplanning/guide/build/adrのディレクトリ構成を定める
 ---
 
 # ADR 0002: ドキュメントを Google の Open Knowledge Format (OKF) に従って書く
@@ -37,7 +37,7 @@ AI エージェントがドキュメントを読み書きする機会が増え�
 | 中央ツール・専用パーサー依存 | なし | 設計次第 | なし（gitワークフローのみで完結、cat/git clone で読める） |
 | 将来の外部連携（OKF 対応ツールが増えた場合） | 不可 | 不可 | 可能 |
 | 学習コスト | なし | プロジェクト固有で都度説明が要る | 仕様書1つを参照すれば済む |
-| niwaterm のコンセプト（AI エージェント常駐ワークフロー、docs/mvp.md）との整合 | 低 | 中立 | 高（AI エージェントが読むナレッジベース向けに設計された仕様） |
+| niwaterm のコンセプト（AI エージェント常駐ワークフロー、docs/planning/mvp.md）との整合 | 低 | 中立 | 高（AI エージェントが読むナレッジベース向けに設計された仕様） |
 
 OKF は「type フィールドのみ必須、中央レジストリなし、通常の git ワークフローで完結」という意図的に最小限の規約であり、独自規約をゼロから設計するより導入コストが小さい。niwaterm 自体が AI エージェント常駐ワークフローをコンセプトとするプロジェクトであり、AI エージェントが読み書きしやすいナレッジベース形式との親和性が高い。
 
@@ -72,13 +72,13 @@ description: niwaterm CLI（niwatermコマンド）のサブコマンド一覧�
 
 中央レジストリを持たない OKF の思想に従い、type は niwaterm プロジェクト内で自由に定義・拡張してよい。現時点の語彙は以下の5つ。
 
-| type | 用途 | 該当ファイル（移行後） |
-|------|------|------------------------|
-| `Concept` | プロダクトのコンセプト・思想 | mvp.md |
-| `Plan` | 進行計画 | roadmap.md |
+| type | 用途 | 該当ファイル |
+|------|------|--------------|
+| `Concept` | プロダクトのコンセプト・思想 | planning/mvp.md |
+| `Plan` | 進行計画 | planning/roadmap.md |
 | `ADR` | 意思決定記録 | adr/*.md |
-| `Reference` | コマンド・設定項目のリファレンス | cli.md, config.md |
-| `Runbook` | 手順書 | macos-build.md, windows-build.md |
+| `Reference` | コマンド・設定項目のリファレンス | guide/cli.md, guide/config.md |
+| `Runbook` | 手順書 | build/macos-build.md, build/windows-build.md |
 
 未知の type 値が出てきても、OKF の consumer 要件（未知の type を拒否してはならない）に従い、読み手はエラーとして扱わない。新しい種類の文書が必要になったら、この表に語彙を追記する。
 
@@ -90,7 +90,7 @@ ADR 本文の構成（`## Status` / `## Context` / `## Decision` / `## Consequen
 ---
 type: ADR
 title: "ADR 0002: ドキュメントを Google の Open Knowledge Format (OKF) に従って書く"
-description: docs/配下をOKFバンドルとして扱い、frontmatterのtype/title/descriptionを必須化する
+description: docs/配下をOKFバンドルとして扱い、frontmatterのtype/title/description必須化とplanning/guide/build/adrのディレクトリ構成を定める
 ---
 ```
 
@@ -102,7 +102,7 @@ OKF が定めるバンドル相対パス（`docs/` ルートからのスラッ�
 
 ```markdown
 [ADR 0001](/adr/0001-adopt-window-workspace-tile-tab-hierarchy.md)
-[CLI リファレンス](/cli.md)
+[CLI リファレンス](/guide/cli.md)
 ```
 
 同一ディレクトリ内など近接する文書間では通常の相対パス（`./other.md`）も可とする。
@@ -114,6 +114,30 @@ OKF の conformance 基準に倣い、`docs/` 配下の各 `.md`（`index.md` / 
 1. パース可能な YAML frontmatter を持つ
 2. `type` / `title` / `description` が空でない
 3. `type` は「3. niwaterm の type 語彙」の値、または新規追加として本 ADR の表を更新したもの
+
+### 7. ディレクトリ構成
+
+`docs/` 直下に種類の異なる文書が並んでいると、開発者向け（ビルド手順）とユーザー向け（CLI・設定の使い方）の区別がつきにくい。type 語彙とは別に、ディレクトリでも読み手（誰が読むか）の軸で整理する。
+
+```
+docs/
+  planning/   # Concept・Plan。プロダクト企画。MVP達成後はいずれ縮小・アーカイブする性質のもの
+    mvp.md
+    roadmap.md
+  guide/      # Reference。niwaterm を使うユーザー向け（CLI操作・設定ファイルの書き方）
+    cli.md
+    config.md
+  build/      # Runbook。niwaterm を開発・ビルドする開発者向け（macOS/Windows手順）
+    macos-build.md
+    windows-build.md
+  adr/        # ADR。意思決定記録
+    0001-....md
+    0002-....md
+```
+
+- `planning/`: mvp.md（コンセプト）と roadmap.md（進行計画）をまとめる。両者は「プロダクトが目指す姿と現在地」を示すものであり、MVP 達成という区切りを迎えたら役目を終えて縮小・アーカイブされる性質を持つ点で、他の3分類（ユーザーが使い続ける限り必要な guide/、開発を続ける限り必要な build/、恒久的な記録である adr/）と異なる
+- `guide/` と `build/` の境界は「読者が niwaterm を使う人か、ビルドする人か」。CLI・設定ファイルは前者、ネイティブライブラリのビルド手順は後者
+- type 語彙とディレクトリは概ね1対1で対応する（`Concept`/`Plan` → `planning/`、`Reference` → `guide/`、`Runbook` → `build/`、`ADR` → `adr/`）が、規約として強制はしない。将来 type が増えた際に必ずしも新しいディレクトリを切る必要はない
 
 ## Consequences
 
@@ -151,4 +175,4 @@ OKF の conformance 基準に倣い、`docs/` 配下の各 `.md`（`index.md` / 
 - [Open Knowledge Format (OKF) SPEC.md](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) — GoogleCloudPlatform/knowledge-catalog
 - [How the Open Knowledge Format can improve data sharing | Google Cloud Blog](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing)
 - ADR 0001（画面構成の用語定義。ADR 採択と同時に関連ドキュメントを更新した前例）
-- docs/mvp.md — niwaterm のコンセプト（AI エージェント常駐ワークフロー）
+- docs/planning/mvp.md — niwaterm のコンセプト（AI エージェント常駐ワークフロー）

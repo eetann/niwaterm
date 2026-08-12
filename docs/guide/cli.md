@@ -68,7 +68,7 @@ niwaterm focus-tile --tile <tileId>
 niwaterm shell-profiles
 ```
 
-利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`new-tab --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
+利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`new-tab --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
 
 ```sh
 niwaterm capture-tab --tab <tabId>
@@ -146,7 +146,7 @@ niwaterm docs list
 niwaterm docs show cli
 ```
 
-`niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show cli`はこのドキュメント（`docs/cli.md`）の内容そのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでこのドキュメント全体を取得できる。
+`niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show cli`はこのドキュメント（`docs/guide/cli.md`）の内容そのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでこのドキュメント全体を取得できる。
 
 ## IPCサーバーの仕組み
 

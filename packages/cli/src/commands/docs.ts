@@ -12,7 +12,7 @@ const DOC_TOPICS: readonly DocTopic[] = [
   {
     name: "cli",
     description: "niwatermをCLIから操作する方法（コマンド一覧・使用例・IPCサーバー仕様）",
-    relativePath: "../../../../docs/cli.md",
+    relativePath: "../../../../docs/guide/cli.md",
   },
 ];
 

@@ -117,10 +117,10 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
 
 プロファイル一覧の管理方式は「自動検出＋config併用」を採用する。Windows起動時に`wsl.exe --list --quiet`相当でインストール済みディストロを自動検出してプロファイル化し（PowerShellは常に固定プロファイルとして追加）、`niwaterm.config.ts`ではSSH先などの追加分だけ書けばよい設計にする。全プロファイルを毎回手で列挙する静的方式は、WSLディストロが増減するたびに設定ファイルの更新が要るため採用しない。
 
-プロファイル配列・WSL自動検出・タブ作成時の選択UIまで実装済み（詳細: docs/config.md「シェルプロファイル」節、docs/cli.md）。WSL自動検出・ドロップダウンUIともにElectrobunがLinux非対応でこの開発環境（WSL）では動かせないため、Windows実機での動作確認は未実施（コード・ユニットテストレベルでの検証のみ）。
+プロファイル配列・WSL自動検出・タブ作成時の選択UIまで実装済み（詳細: docs/guide/config.md「シェルプロファイル」節、docs/guide/cli.md）。WSL自動検出・ドロップダウンUIともにElectrobunがLinux非対応でこの開発環境（WSL）では動かせないため、Windows実機での動作確認は未実施（コード・ユニットテストレベルでの検証のみ）。
 
 - [x] 設計: プロファイル管理方式を検討し、「自動検出（Windowsは`wsl.exe --list`相当）＋config.ts併用」方式を採用する
-- [x] `niwaterm.config.ts`に`shell.default`を追加し、新規タブ作成時のデフォルトシェルを設定できるようにする（PTY起動への配線・ホットリロード対応まで完了。ユニットテストで検証済み。詳細: docs/config.md「シェル設定」節）
+- [x] `niwaterm.config.ts`に`shell.default`を追加し、新規タブ作成時のデフォルトシェルを設定できるようにする（PTY起動への配線・ホットリロード対応まで完了。ユニットテストで検証済み。詳細: docs/guide/config.md「シェル設定」節）
 - [x] 複数プロファイル（PowerShell・各WSLディストロ・SSH先など）を`shell.profiles`配列で管理できるようにする
 - [x] Windows起動時にインストール済みWSLディストロを自動検出し、profilesへマージする（`wsl.exe --list --quiet`の出力はUTF-16LEになりうる既知の挙動に対応。Windows実機での最終確認は未実施）
 - [x] タブ作成時にプロファイルを指定できるようにする（RPC `newTab`・IPCサーバー`/new-tab`・CLI `niwaterm new-tab --shell <id>`まで一気通貫で配線。プロファイル一覧を返す`niwaterm shell-profiles`/`GET /shell-profiles`も追加）

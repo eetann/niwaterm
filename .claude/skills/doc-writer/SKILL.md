@@ -24,17 +24,19 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 
 2. `type` は下表（ADR 0002 §3 と同じ）から選ぶ。当てはまるものがなければ新しい type 名を作ってよいが、その場合 ADR 0002 の表も更新する（中央レジストリを持たない OKF の思想どおり、type 語彙はプロジェクト内で自由に拡張できる）。
 
-   | type | 用途 |
-   |------|------|
-   | `Concept` | プロダクトのコンセプト・思想 |
-   | `Plan` | 進行計画 |
-   | `ADR` | 意思決定記録 |
-   | `Reference` | コマンド・設定項目のリファレンス |
-   | `Runbook` | 手順書 |
+   | type | 用途 | 置き場所 |
+   |------|------|----------|
+   | `Concept` | プロダクトのコンセプト・思想 | `docs/planning/` |
+   | `Plan` | 進行計画 | `docs/planning/` |
+   | `ADR` | 意思決定記録 | `docs/adr/` |
+   | `Reference` | コマンド・設定項目のリファレンス（ユーザー向け） | `docs/guide/` |
+   | `Runbook` | 手順書（開発者向け） | `docs/build/` |
 
 3. ADR を新規作成する場合は adr-creator スキルで本文（Status/Context/Decision/Consequences...）を作り、frontmatter は本スキルのルールで追加する。`type: ADR`、`title` は本文見出し `# ADR NNNN: ...` と同じ文字列にする。
 
 4. 他ドキュメントへのリンクはバンドル相対パス（`docs/` ルートからのスラッシュ始まり、例: `/adr/0001-xxx.md`）を第一選択にする。同一ディレクトリ内など近接するファイル同士は `./other.md` でもよい。
+
+5. 上表にない種類の文書で、`docs/planning/` / `docs/guide/` / `docs/build/` / `docs/adr/` のどれにも当てはまらない場合は、新しいディレクトリを切るかどうかも含めて ADR 0002 §7 を更新する。
 
 ## 既存ドキュメントを編集するとき
 

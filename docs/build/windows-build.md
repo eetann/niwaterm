@@ -244,7 +244,7 @@ bun packages/cli/src/index.ts new-tab --tile tile-4 --custom-view
 bun packages/cli/src/index.ts browser-get-text --tab tab-8
 ```
 
-customViewの検証には `~/.config/niwaterm/` のセットアップが要る（`docs/config.md`参照）。
+customViewの検証には `~/.config/niwaterm/` のセットアップが要る（`docs/guide/config.md`参照）。
 `@niwaterm/config` パッケージ側の`file:`参照はWindowsでも`bun link`方式で問題なく解決できた。
 
 `browser-screenshot` のみ失敗する（後述のBun側issue）。

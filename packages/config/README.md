@@ -19,4 +19,4 @@ export default defineConfig({
 
 設定ファイルの変更は再起動なしで反映される（ホットリロード）。
 
-セットアップ手順・DSL仕様は[docs/config.md](../../docs/config.md)を参照。
+セットアップ手順・DSL仕様は[docs/guide/config.md](../../docs/guide/config.md)を参照。

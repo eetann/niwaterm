@@ -3,18 +3,18 @@
 ターミナル・マルチプレクサ・ワークスペース統合デスクトップアプリ。
 Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
-- コンセプト: docs/mvp.md
-- 進行計画: docs/roadmap.md（h2セクション1つ = 1セッションの作業単位。完了したらチェックを付ける）
+- コンセプト: docs/planning/mvp.md
+- 進行計画: docs/planning/roadmap.md（h2セクション1つ = 1セッションの作業単位。完了したらチェックを付ける）
 - 意思決定記録: docs/adr/
 
 ## セットアップ・コマンド
 
 - `bun run start` — devモードでアプリ起動（GUIアプリなのでbackgroundで実行する）
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
-- `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/windows-build.md）
+- `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
-- `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/macos-build.md
+- `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/build/macos-build.md
   （要点: `mise exec zig@0.16.0 -- zig build -Demit-lib-vt --prefix <repo>/vendor/libghostty`。ghosttyソースは `opensrc path ghostty-org/ghostty` で取得。**Zig 0.16.0以上が必要**）
 
 ## アーキテクチャ
@@ -29,7 +29,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはmacOSが`~/Library/Application Support/niwaterm/niwaterm.sock`、Windowsが`%APPDATA%\niwaterm\niwaterm.sock`（src/bun/app-paths.tsで解決）
-- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）
+- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
 
@@ -48,7 +48,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 
 macOSとWindows（x64）に対応する。Windowsは起動・ターミナル・タイル分割・IPC/CLI・ブラウザタブ・
 customViewまで実機確認済み。`browser-screenshot`のみBun本体側の既知issue（Windows上でChrome/Edgeの
-自動起動に失敗する、oven-sh/bun#29102）により動作しない。手順とハマりどころ: docs/windows-build.md
+自動起動に失敗する、oven-sh/bun#29102）により動作しない。手順とハマりどころ: docs/build/windows-build.md
 
 - **Electrobunはクロスビルド不可**。アプリ本体はWindows実機でビルドする。一方ネイティブ成果物（libghostty-vt / シム）はzigでLinux・WSLからクロスコンパイルできるため、Windows側にzigやMSVCは要らない
 - **ネイティブ成果物の命名・配置がOSで異なる**: macOS `lib/libghostty-vt.dylib`・`lib/libniwashim.dylib` / Windows `bin/ghostty-vt.dll`・`bin/niwashim.dll`（zigはWindowsのみDLL本体をbin/へ出し、lib/にはリンク用の.libを置く）。分岐はsrc/bun/ghostty.tsの`nativeLayout`

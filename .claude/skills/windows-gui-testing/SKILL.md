@@ -30,7 +30,7 @@ mise run win:sync
 
 WSL interopで`powershell.exe`を叩くときは、日本語文字化け対策とPATH復元が毎回必要
 （wingetでのインストール直後などはユーザーPATHがWSL起動時点のものしか見えない）。
-詳細はdocs/windows-build.md「WSLからWindows側を操作する場合」参照。
+詳細はdocs/build/windows-build.md「WSLからWindows側を操作する場合」参照。
 
 ```bash
 PS_PREFIX='[Console]::OutputEncoding=[Text.Encoding]::UTF8; $env:PATH=[Environment]::GetEnvironmentVariable("PATH","User")+";"+[Environment]::GetEnvironmentVariable("PATH","Machine")+";"+$env:USERPROFILE+"\.bun\bin"; '
