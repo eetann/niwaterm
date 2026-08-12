@@ -14,7 +14,8 @@ export interface AppearanceConfig {
 export type ResolvedAppearanceConfig = Required<AppearanceConfig>;
 
 export const defaultAppearance: ResolvedAppearanceConfig = {
-  fontFamily: '"SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans", monospace',
+  fontFamily:
+    '"HackGen Console NF", "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans", monospace',
   fontSize: 13,
   lineHeight: 18,
   foreground: "#cdd6f4",
