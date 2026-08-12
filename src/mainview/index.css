@@ -74,6 +74,23 @@
   box-sizing: border-box;
 }
 
+/*
+ * Tailwind preflightは意図的に除外している（既存CSSへの影響を避けるため。ADR 0003参照）。
+ * shadcnのButtonコンポーネント等はpreflightのbutton要素リセットが適用されている前提のため、
+ * それが無いとghost/outline等の背景色を指定しないvariantでOSネイティブのボタン外観
+ * （ライトモード基調の背景色等）がダークテーマを無視して表示されてしまう。
+ * button要素だけ最小限のリセットを補う（クラスセレクタのbg-*等は詳細度で上書きされるため
+ * default/destructive等の明示的に背景色を持つvariantには影響しない）。
+ */
+button {
+  appearance: none;
+  background-color: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
 html,
 body {
   width: 100%;
