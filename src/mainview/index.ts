@@ -9,23 +9,22 @@ import {
   type ResolvedCustomViewConfig,
   type ShellProfile,
 } from "@niwaterm/config";
+import { createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { TabRenderState } from "../bun/workspace";
-import {
-  findNode,
-  listLeaves,
-  nextTabId,
-  type TabId,
-  type TileId,
-  type TileNode,
-} from "../bun/tile-layout";
+import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type { AppRenderState, WorkspaceId, WorkspaceListEntry } from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
+import { BrowserToolbar } from "./react/browser-toolbar";
+import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
+import { SidebarSwitcher } from "./react/sidebar-switcher";
+import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
+import { TileTabBar } from "./react/tile-tab-bar";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
-import { mountReactRoot } from "./react/mount";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
@@ -33,38 +32,21 @@ const measureEl = document.getElementById("measure") as HTMLSpanElement;
 const imeEl = document.getElementById("ime-input") as HTMLTextAreaElement;
 const compositionEl = document.getElementById("composition") as HTMLDivElement;
 const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
-const tabButtonTemplate = document.getElementById("tab-button-template") as HTMLTemplateElement;
 const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
-const shellProfileMenuTemplate = document.getElementById(
-  "shell-profile-menu-template",
-) as HTMLTemplateElement;
-const shellProfileMenuItemTemplate = document.getElementById(
-  "shell-profile-menu-item-template",
-) as HTMLTemplateElement;
 const sidebarEl = document.getElementById("sidebar") as HTMLElement;
 const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
 const sidebarSwitcherEl = document.getElementById("sidebar-switcher") as HTMLDivElement;
-const sidebarSwitchListBtn = document.getElementById("sidebar-switch-list") as HTMLButtonElement;
-const sidebarSwitchCustomBtn = document.getElementById(
-  "sidebar-switch-custom",
-) as HTMLButtonElement;
 const sidebarCustomViewEl = document.getElementById("sidebar-custom-view") as HTMLDivElement;
-const sidebarWorkspaceTemplate = document.getElementById(
-  "sidebar-workspace-template",
-) as HTMLTemplateElement;
-const sidebarTabTemplate = document.getElementById("sidebar-tab-template") as HTMLTemplateElement;
-const browserToolbarTemplate = document.getElementById(
-  "browser-toolbar-template",
-) as HTMLTemplateElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
 const tabBarElByTileId = new Map<TileId, HTMLDivElement>();
+const tabBarReactRootByTileId = new Map<TileId, Root>();
 const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
-const tabButtonElByTabId = new Map<TabId, HTMLButtonElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
 const browserElByTabId = new Map<TabId, WebviewTagElement>();
+const browserToolbarRootByTabId = new Map<TabId, Root>();
 // webviewId確定・初回dom-ready発火済みか（execBrowserJs/browserNavigateの前提条件判定に使う）
 const browserDomReadyByTabId = new Map<TabId, boolean>();
 // execBrowserJsの結果待ちPromiseの相関ID管理。host-message受信 or タイムアウトで解決・削除する
@@ -84,17 +66,14 @@ const activeTabByTile = new Map<TileId, TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
 const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 
-// ---- サイドバーごとのDOM要素・状態管理（タイル木のMapとは独立させる。
-// サイドバーは全ワークスペースを表示するため、タイル木側のgcStale基準
-// 「アクティブワークスペースに登場しないID＝stale」を共有すると誤って消えてしまう）----
-const sidebarWorkspaceElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
-const sidebarHeaderElByWorkspaceId = new Map<WorkspaceId, HTMLButtonElement>();
-const sidebarTabListElByWorkspaceId = new Map<WorkspaceId, HTMLDivElement>();
-const sidebarTabRowElByTabId = new Map<TabId, HTMLButtonElement>();
+// ---- サイドバー: 起動時に固定のReact root（closeやopen等に応じて中身だけ差し替える）----
+const sidebarSwitcherRoot = createRoot(sidebarSwitcherEl);
+const sidebarWorkspaceListRoot = createRoot(sidebarListEl);
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
 let customViewWebviewEl: WebviewTagElement | null = null;
 let customViewUrl: string | null = null;
+let customViewName: string | null = null;
 let sidebarShowingCustom = false;
 
 let focusedTileId: TileId | null = null;
@@ -119,8 +98,6 @@ let compiledKeybindings = compileKeybindings(defaultKeybindings);
 let lastWorkspaces: WorkspaceListEntry[] = [];
 // bun側で解決されたシェルプロファイル一覧（configメッセージで受信）。+ボタン横のドロップダウンに表示する
 let shellProfiles: ShellProfile[] = [];
-// 開いているシェルプロファイルメニュー。外側クリック等で閉じるため対象tileIdと要素を保持する
-let openShellProfileMenu: { tileId: TileId; menuEl: HTMLDivElement } | null = null;
 
 const SIDEBAR_OPEN_STORAGE_KEY = "niwaterm:sidebarOpen";
 
@@ -240,6 +217,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         applyAppearance(appearance);
         applyCustomView(customView);
         shellProfiles = profiles;
+        // configの到達タイミングは既存タイルの最終renderより後になりうるため、
+        // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
+        for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
       },
     },
   },
@@ -335,25 +315,20 @@ function reconcile(
       tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
       tileElByTileId.set(node.id, tileEl);
       tabBarElByTileId.set(node.id, tabBarEl);
+      tabBarReactRootByTileId.set(node.id, createRoot(tabBarEl));
     } else {
       tabBarEl = tabBarElByTileId.get(node.id) as HTMLDivElement;
       tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
     }
     tileEl.dataset["tileId"] = node.id;
-    const addBtn = tabBarEl.querySelector(".tab-add-btn") as HTMLButtonElement;
 
-    node.tabIds.forEach((tabId, index) => {
+    node.tabIds.forEach((tabId) => {
       seenTabIds.add(tabId);
       const renderState = tabs[tabId];
       if (renderState) ensureTabContent(tabId, tileContentEl, renderState);
-      ensureTabButton(tabId, tabBarEl, addBtn);
-      const isActive = tabId === node.activeTabId;
-      setTabVisible(tabId, isActive);
-      const tabButtonEl = tabButtonElByTabId.get(tabId);
-      tabButtonEl?.classList.toggle("active", isActive);
-      const labelEl = tabButtonEl?.querySelector(".tab-label");
-      if (labelEl) labelEl.textContent = String(index + 1);
+      setTabVisible(tabId, tabId === node.activeTabId);
     });
+    renderTileTabBar(node.id);
 
     return tileEl;
   }
@@ -451,55 +426,24 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
   const tabContentEl = document.createElement("div");
   tabContentEl.className = "tab-content browser";
 
-  const toolbarFrag = browserToolbarTemplate.content.cloneNode(true) as DocumentFragment;
-  const toolbarEl = toolbarFrag.querySelector(".browser-toolbar") as HTMLDivElement;
-  const backBtn = toolbarEl.querySelector(".browser-back") as HTMLButtonElement;
-  const forwardBtn = toolbarEl.querySelector(".browser-forward") as HTMLButtonElement;
-  const reloadBtn = toolbarEl.querySelector(".browser-reload") as HTMLButtonElement;
-  const urlInput = toolbarEl.querySelector(".browser-url-input") as HTMLInputElement;
-  urlInput.value = url;
-  backBtn.disabled = true;
-  forwardBtn.disabled = true;
+  // "browser-toolbar"クラス名は、tileTreeElのmousedown委譲に残る
+  // target.closest(".browser-toolbar")判定を変えずに済ませるため維持する
+  const toolbarEl = document.createElement("div");
+  toolbarEl.className = "browser-toolbar";
 
   const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
   webviewEl.setAttribute("sandbox", "");
   webviewEl.src = url;
 
-  // Escで編集を取り消す際に戻す先。did-navigateのたびに最新のURLへ更新する
-  let lastKnownUrl = url;
-
-  const updateNavButtons = () => {
-    void webviewEl.canGoBack().then((canGoBack) => {
-      backBtn.disabled = !canGoBack;
-    });
-    void webviewEl.canGoForward().then((canGoForward) => {
-      forwardBtn.disabled = !canGoForward;
-    });
-  };
-
-  backBtn.addEventListener("click", () => webviewEl.goBack());
-  forwardBtn.addEventListener("click", () => webviewEl.goForward());
-  reloadBtn.addEventListener("click", () => webviewEl.reload());
-
-  urlInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      webviewEl.loadURL(normalizeUrl(urlInput.value));
-      imeEl.focus({ preventScroll: true });
-    } else if (e.key === "Escape") {
-      urlInput.value = lastKnownUrl;
-      imeEl.focus({ preventScroll: true });
-    }
-  });
-
-  webviewEl.on("did-navigate", (e) => {
-    const newUrl = String((e as CustomEvent).detail ?? "");
-    if (newUrl) {
-      lastKnownUrl = newUrl;
-      if (document.activeElement !== urlInput) urlInput.value = newUrl;
-    }
-    updateNavButtons();
-  });
+  const toolbarRoot = createRoot(toolbarEl);
+  browserToolbarRootByTabId.set(tabId, toolbarRoot);
+  toolbarRoot.render(
+    createElement(BrowserToolbar, {
+      webviewEl,
+      initialUrl: url,
+      onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
+    }),
+  );
 
   browserDomReadyByTabId.set(tabId, false);
   webviewEl.on("dom-ready", () => {
@@ -621,27 +565,49 @@ function setTabVisible(tabId: TabId, visible: boolean): void {
   browserElByTabId.get(tabId)?.toggleHidden(!visible);
 }
 
-/** tabId用のタブボタンを必要なら生成し、+ボタンの直前に挿入する（tabIds配列の順序を保つ） */
-function ensureTabButton(tabId: TabId, tabBarEl: HTMLDivElement, addBtn: HTMLButtonElement): void {
-  if (tabButtonElByTabId.has(tabId)) return;
-  const frag = tabButtonTemplate.content.cloneNode(true) as DocumentFragment;
-  const btnEl = frag.querySelector(".tab-button") as HTMLButtonElement;
-  btnEl.dataset["tabId"] = tabId;
-  tabButtonElByTabId.set(tabId, btnEl);
-  tabBarEl.insertBefore(btnEl, addBtn);
-}
-
 /** クリック/キー操作でのタブ切替をローカルへ即時反映する（次のrenderを待たず入力送信先を切り替えるため） */
 function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
   const previousActive = activeTabByTile.get(tileId);
   if (previousActive === tabId) return;
   activeTabByTile.set(tileId, tabId);
-  if (previousActive) {
-    setTabVisible(previousActive, false);
-    tabButtonElByTabId.get(previousActive)?.classList.remove("active");
-  }
+  if (previousActive) setTabVisible(previousActive, false);
   setTabVisible(tabId, true);
-  tabButtonElByTabId.get(tabId)?.classList.add("active");
+  renderTileTabBar(tileId);
+}
+
+/** tileIdのタブバーReact rootへ最新propsで再renderする。lastLayoutから対象leafを都度引く */
+function renderTileTabBar(tileId: TileId): void {
+  const root = tabBarReactRootByTileId.get(tileId);
+  if (!root || !lastLayout) return;
+  const leaf = findNode(lastLayout, tileId);
+  if (!leaf || leaf.kind !== "leaf") return;
+  root.render(
+    createElement(TileTabBar, {
+      tileId,
+      tabs: leaf.tabIds.map((tabId, index) => ({ tabId, label: String(index + 1) })),
+      activeTabId: leaf.activeTabId,
+      shellProfiles,
+      onSelectTab: (tabId) => {
+        switchToTab(tileId, tabId);
+        imeEl.focus({ preventScroll: true });
+      },
+      onCloseTab: (tabId) => {
+        sendMessage("closeTab", { tileId, tabId });
+        imeEl.focus({ preventScroll: true });
+      },
+      onAddTab: () => {
+        focusTileLocally(tileId);
+        sendMessage("newTab", { tileId });
+        imeEl.focus({ preventScroll: true });
+      },
+      onAddTabWithProfile: (shellProfileId) => {
+        focusTileLocally(tileId);
+        sendMessage("newTab", shellProfileId ? { tileId, shellProfileId } : { tileId });
+        imeEl.focus({ preventScroll: true });
+      },
+      onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
+    }),
+  );
 }
 
 /** 前回登場したが今回登場しなかったtab/split/tileの後始末（DOM除去・ResizeObserver停止） */
@@ -659,12 +625,12 @@ function gcStale(
     resizeObserverByTabId.delete(tabId);
     tabContentElByTabId.get(tabId)?.remove();
     tabContentElByTabId.delete(tabId);
-    tabButtonElByTabId.get(tabId)?.remove();
-    tabButtonElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     browserElByTabId.delete(tabId);
     browserDomReadyByTabId.delete(tabId);
+    browserToolbarRootByTabId.get(tabId)?.unmount();
+    browserToolbarRootByTabId.delete(tabId);
     const pendingPrefix = execJsRequestIdPrefix(tabId);
     for (const [requestId, pending] of execJsPendingByRequestId) {
       if (!requestId.startsWith(pendingPrefix)) continue;
@@ -675,10 +641,11 @@ function gcStale(
   // タイルごと閉じられた場合の後始末（配下のタブは上のループで既に個別除去済み）
   for (const [tileId, tileEl] of tileElByTileId) {
     if (seenTileIds.has(tileId)) continue;
+    tabBarReactRootByTileId.get(tileId)?.unmount();
+    tabBarReactRootByTileId.delete(tileId);
     tileEl.remove();
     tileElByTileId.delete(tileId);
     tabBarElByTileId.delete(tileId);
-    if (openShellProfileMenu?.tileId === tileId) closeShellProfileMenu();
   }
   for (const [splitId, splitEl] of splitElBySplitId) {
     if (seenSplitIds.has(splitId)) continue;
@@ -698,95 +665,31 @@ function renderSidebar(
   workspaces: WorkspaceListEntry[],
   currentActiveWorkspaceId: WorkspaceId | null,
 ): void {
-  const seenWorkspaceIds = new Set<WorkspaceId>();
-  const seenTabIds = new Set<TabId>();
-
-  workspaces.forEach((entry, workspaceIndex) => {
-    seenWorkspaceIds.add(entry.workspaceId);
-    const { workspaceEl, headerEl, tabListEl } = ensureSidebarWorkspace(entry.workspaceId);
-    if (workspaceEl.parentElement !== sidebarListEl) {
-      sidebarListEl.appendChild(workspaceEl);
-    }
-    headerEl.textContent = `Workspace ${workspaceIndex + 1}`;
-    headerEl.dataset["workspaceId"] = entry.workspaceId;
-    headerEl.classList.toggle("active", entry.workspaceId === currentActiveWorkspaceId);
-
-    for (const [tileIndex, leaf] of listLeaves(entry.layout).entries()) {
-      // タイル変数はタイル単位（同一タイル内の複数タブで共有）。
-      // シェル統合スクリプトが`branch`変数へgitブランチ名を書く運用を想定した表示
-      const branch = entry.tileVars[leaf.id]?.["branch"];
-      leaf.tabIds.forEach((tabId, tabIndex) => {
-        seenTabIds.add(tabId);
-        const rowEl = ensureSidebarTabRow(tabId, tabListEl);
-        const label = `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`;
-        rowEl.textContent = branch ? `${label} · ${branch}` : label;
-        rowEl.dataset["workspaceId"] = entry.workspaceId;
-        rowEl.dataset["tileId"] = leaf.id;
-        rowEl.dataset["tabId"] = tabId;
-        rowEl.classList.toggle(
-          "active",
-          entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
-        );
-      });
-    }
-  });
-
-  gcSidebarStale(seenWorkspaceIds, seenTabIds);
+  sidebarWorkspaceListRoot.render(
+    createElement(SidebarWorkspaceList, {
+      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
+      onSelectWorkspaceHeader: activateSidebarWorkspace,
+      onSelectTab: activateSidebarTab,
+    }),
+  );
 }
 
-function ensureSidebarWorkspace(workspaceId: WorkspaceId): {
-  workspaceEl: HTMLDivElement;
-  headerEl: HTMLButtonElement;
-  tabListEl: HTMLDivElement;
-} {
-  let workspaceEl = sidebarWorkspaceElByWorkspaceId.get(workspaceId);
-  if (!workspaceEl) {
-    const frag = sidebarWorkspaceTemplate.content.cloneNode(true) as DocumentFragment;
-    workspaceEl = frag.querySelector(".sidebar-workspace") as HTMLDivElement;
-    sidebarWorkspaceElByWorkspaceId.set(workspaceId, workspaceEl);
-    sidebarHeaderElByWorkspaceId.set(
-      workspaceId,
-      workspaceEl.querySelector(".sidebar-workspace-header") as HTMLButtonElement,
-    );
-    sidebarTabListElByWorkspaceId.set(
-      workspaceId,
-      workspaceEl.querySelector(".sidebar-tab-list") as HTMLDivElement,
-    );
-  }
-  return {
-    workspaceEl,
-    headerEl: sidebarHeaderElByWorkspaceId.get(workspaceId) as HTMLButtonElement,
-    tabListEl: sidebarTabListElByWorkspaceId.get(workspaceId) as HTMLDivElement,
-  };
+/** サイドバーのワークスペース見出しクリック。既にアクティブなワークスペースなら何もしない */
+function activateSidebarWorkspace(workspaceId: WorkspaceId): void {
+  if (workspaceId === activeWorkspaceId) return;
+  sendMessage("switchWorkspace", { workspaceId });
+  imeEl.focus({ preventScroll: true });
 }
 
-function ensureSidebarTabRow(tabId: TabId, tabListEl: HTMLDivElement): HTMLButtonElement {
-  let rowEl = sidebarTabRowElByTabId.get(tabId);
-  if (!rowEl) {
-    const frag = sidebarTabTemplate.content.cloneNode(true) as DocumentFragment;
-    rowEl = frag.querySelector(".sidebar-tab") as HTMLButtonElement;
-    sidebarTabRowElByTabId.set(tabId, rowEl);
-  }
-  if (rowEl.parentElement !== tabListEl) {
-    tabListEl.appendChild(rowEl);
-  }
-  return rowEl;
-}
-
-/** 前回登場したが今回登場しなかったworkspace/tabの後始末 */
-function gcSidebarStale(seenWorkspaceIds: Set<WorkspaceId>, seenTabIds: Set<TabId>): void {
-  for (const tabId of sidebarTabRowElByTabId.keys()) {
-    if (seenTabIds.has(tabId)) continue;
-    sidebarTabRowElByTabId.get(tabId)?.remove();
-    sidebarTabRowElByTabId.delete(tabId);
-  }
-  for (const [workspaceId, workspaceEl] of sidebarWorkspaceElByWorkspaceId) {
-    if (seenWorkspaceIds.has(workspaceId)) continue;
-    workspaceEl.remove();
-    sidebarWorkspaceElByWorkspaceId.delete(workspaceId);
-    sidebarHeaderElByWorkspaceId.delete(workspaceId);
-    sidebarTabListElByWorkspaceId.delete(workspaceId);
-  }
+function renderSidebarSwitcher(): void {
+  sidebarSwitcherRoot.render(
+    createElement(SidebarSwitcher, {
+      customViewName: customViewName ?? "",
+      showingCustom: sidebarShowingCustom,
+      onShowList: () => setSidebarShowingCustom(false),
+      onShowCustom: () => setSidebarShowingCustom(true),
+    }),
+  );
 }
 
 /**
@@ -800,8 +703,7 @@ function setSidebarShowingCustom(showing: boolean): void {
   sidebarListEl.hidden = showing;
   sidebarCustomViewEl.classList.toggle("active", showing);
   customViewWebviewEl?.toggleHidden(!showing);
-  sidebarSwitchListBtn.classList.toggle("active", !showing);
-  sidebarSwitchCustomBtn.classList.toggle("active", showing);
+  renderSidebarSwitcher();
 }
 
 /** customView設定に合わせてサイドバーパネル用の<electrobun-webview>を作成/更新/破棄する */
@@ -816,7 +718,8 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
   }
 
   sidebarSwitcherEl.hidden = false;
-  sidebarSwitchCustomBtn.textContent = customView.name;
+  customViewName = customView.name;
+  renderSidebarSwitcher();
 
   if (!customViewWebviewEl) {
     // #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
@@ -837,9 +740,6 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     customViewUrl = customView.url;
   }
 }
-
-sidebarSwitchListBtn.addEventListener("click", () => setSidebarShowingCustom(false));
-sidebarSwitchCustomBtn.addEventListener("click", () => setSidebarShowingCustom(true));
 
 function applySidebarVisibility(): void {
   sidebarEl.style.display = sidebarOpen ? "" : "none";
@@ -1088,53 +988,6 @@ function switchToTab(tileId: TileId, tabId: TabId): void {
   sendMessage("switchTab", { tileId, tabId });
 }
 
-function closeShellProfileMenu(): void {
-  if (!openShellProfileMenu) return;
-  openShellProfileMenu.menuEl.remove();
-  openShellProfileMenu = null;
-}
-
-/**
- * +ボタン横の「⌄」ドロップダウンをクリックした際、シェルプロファイル一覧のポップアップメニューを
- * anchorElの直下に表示する。「デフォルト」項目（shellProfileId省略でnewTabを送る）を先頭に持つ
- */
-function openShellProfileMenuFor(tileId: TileId, anchorEl: HTMLElement): void {
-  closeShellProfileMenu();
-  const menuFrag = shellProfileMenuTemplate.content.cloneNode(true) as DocumentFragment;
-  const menuEl = menuFrag.querySelector(".shell-profile-menu") as HTMLDivElement;
-
-  function addItem(label: string, shellProfileId: string | undefined): void {
-    const itemFrag = shellProfileMenuItemTemplate.content.cloneNode(true) as DocumentFragment;
-    const itemEl = itemFrag.querySelector(".shell-profile-menu-item") as HTMLButtonElement;
-    itemEl.textContent = label;
-    if (shellProfileId !== undefined) itemEl.dataset["shellProfileId"] = shellProfileId;
-    menuEl.appendChild(itemEl);
-  }
-
-  addItem("デフォルト", undefined);
-  for (const profile of shellProfiles) {
-    addItem(profile.name, profile.id);
-  }
-
-  menuEl.addEventListener("mousedown", (e) => {
-    e.stopPropagation();
-    const itemEl = (e.target as HTMLElement).closest<HTMLElement>(".shell-profile-menu-item");
-    if (!itemEl) return;
-    const shellProfileId = itemEl.dataset["shellProfileId"];
-    focusTileLocally(tileId);
-    sendMessage("newTab", shellProfileId ? { tileId, shellProfileId } : { tileId });
-    closeShellProfileMenu();
-    imeEl.focus({ preventScroll: true });
-  });
-
-  document.body.appendChild(menuEl);
-  const rect = anchorEl.getBoundingClientRect();
-  menuEl.style.left = `${rect.left}px`;
-  menuEl.style.top = `${rect.bottom + 2}px`;
-
-  openShellProfileMenu = { tileId, menuEl };
-}
-
 /** サイドバーのタブ行クリック。アクティブワークスペース内ならDOM即時反映、
  * 非アクティブワークスペースならDOMが存在しないためRPC送信のみで次のrenderを待つ */
 function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: TabId): void {
@@ -1147,24 +1000,6 @@ function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: Tab
   }
   imeEl.focus({ preventScroll: true });
 }
-
-sidebarListEl.addEventListener("mousedown", (e) => {
-  const target = e.target as HTMLElement;
-  const tabRowEl = target.closest<HTMLElement>(".sidebar-tab");
-  if (tabRowEl) {
-    const workspaceId = tabRowEl.dataset["workspaceId"];
-    const tileId = tabRowEl.dataset["tileId"];
-    const tabId = tabRowEl.dataset["tabId"];
-    if (workspaceId && tileId && tabId) activateSidebarTab(workspaceId, tileId, tabId);
-    return;
-  }
-  const headerEl = target.closest<HTMLElement>(".sidebar-workspace-header");
-  const workspaceId = headerEl?.dataset["workspaceId"];
-  if (workspaceId && workspaceId !== activeWorkspaceId) {
-    sendMessage("switchWorkspace", { workspaceId });
-    imeEl.focus({ preventScroll: true });
-  }
-});
 
 tileTreeEl.addEventListener("mousedown", (e) => {
   const target = e.target as HTMLElement;
@@ -1179,49 +1014,9 @@ tileTreeEl.addEventListener("mousedown", (e) => {
     return;
   }
 
-  const closeBtn = target.closest<HTMLElement>(".tab-close-btn");
-  const tabButtonEl = target.closest<HTMLElement>(".tab-button");
-  const tabId = tabButtonEl?.dataset["tabId"];
-
-  if (closeBtn && tabId) {
-    sendMessage("closeTab", { tileId, tabId });
-    imeEl.focus({ preventScroll: true });
-    return;
-  }
-  if (tabButtonEl && tabId) {
-    switchToTab(tileId, tabId);
-    imeEl.focus({ preventScroll: true });
-    return;
-  }
-  if (target.closest<HTMLElement>(".tab-add-btn")) {
-    focusTileLocally(tileId);
-    sendMessage("newTab", { tileId });
-    imeEl.focus({ preventScroll: true });
-    return;
-  }
-  const dropdownBtn = target.closest<HTMLElement>(".tab-add-dropdown-btn");
-  if (dropdownBtn) {
-    focusTileLocally(tileId);
-    if (openShellProfileMenu?.tileId === tileId) {
-      closeShellProfileMenu();
-    } else {
-      openShellProfileMenuFor(tileId, dropdownBtn);
-    }
-    return;
-  }
-
   focusTileLocally(tileId);
   // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
   imeEl.focus({ preventScroll: true });
-});
-// シェルプロファイルメニュー外（ドロップダウンボタン自体を除く）をクリックしたら閉じる。
-// メニュー・ドロップダウンボタン自身のmousedownはtileTreeEl側で先に処理されバブリングしてくるため、
-// ここでは「それ以外」を判定するだけでよい
-window.addEventListener("mousedown", (e) => {
-  if (!openShellProfileMenu) return;
-  const target = e.target as HTMLElement;
-  if (target.closest(".shell-profile-menu") || target.closest(".tab-add-dropdown-btn")) return;
-  closeShellProfileMenu();
 });
 window.addEventListener("focus", () => {
   // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで
@@ -1236,7 +1031,6 @@ setupPalette();
 applyAppearance(defaultAppearance);
 applySidebarVisibility();
 measureCell();
-mountReactRoot();
 sendMessage("ready");
 window.addEventListener("error", (e) => {
   sendMessage("log", { msg: `error: ${e.message}` });

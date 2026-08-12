@@ -103,26 +103,6 @@ body {
   flex: 0 0 auto;
   border-bottom: 1px solid #313244;
 }
-#sidebar-switcher button {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  font-family: var(--term-font);
-  font-size: 11px;
-  font-weight: bold;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#sidebar-switcher button.active {
-  color: var(--term-fg);
-  background: var(--term-bg);
-}
-
 /*
  * #sidebar-listと#sidebar-custom-viewは重ねて配置し、表示切替はdisplay:noneではなく
  * hidden属性(#sidebar-list側)とtoggleHidden()(#sidebar-custom-view内のOOPIF)で行う。
@@ -213,126 +193,11 @@ body {
   overflow-x: auto;
 }
 
-.tab-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  font-family: var(--term-font);
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.tab-button.active {
-  background: var(--term-bg);
-  color: var(--term-fg);
-}
-.tab-close-btn {
-  opacity: 0.6;
-}
-.tab-close-btn:hover {
-  opacity: 1;
-}
-.tab-add-btn {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  cursor: pointer;
-  padding: 2px 8px;
-  font-family: var(--term-font);
-}
-.tab-add-btn:hover {
-  color: var(--term-fg);
-}
-.tab-add-dropdown-btn {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  cursor: pointer;
-  padding: 2px 4px;
-  font-family: var(--term-font);
-  font-size: 10px;
-}
-.tab-add-dropdown-btn:hover {
-  color: var(--term-fg);
-}
-
-.shell-profile-menu {
-  position: fixed;
-  z-index: 100;
-  min-width: 160px;
-  max-height: 320px;
-  overflow-y: auto;
-  background: #181825;
-  border: 1px solid #313244;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  padding: 4px 0;
-}
-.shell-profile-menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  font-family: var(--term-font);
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.shell-profile-menu-item:hover {
-  background: #313244;
-  color: var(--term-fg);
-}
-
 .tile-content {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
-}
-
-.sidebar-workspace-header {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 8px;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  font-family: var(--term-font);
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.sidebar-workspace-header.active {
-  color: var(--term-fg);
-}
-
-.sidebar-tab {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 4px 8px 4px 16px;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  font-family: var(--term-font);
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.sidebar-tab.active {
-  background: var(--term-bg);
-  color: var(--term-fg);
 }
 
 .tab-content {
@@ -357,47 +222,23 @@ body {
   min-height: 0;
 }
 
+/*
+ * min-heightは中身（Button size="icon-xs"=24px, Input h-7=28px）+ padding 4px*2の実測値。
+ * Reactの初回root.render()はappendChild時点でまだ非同期コミット前で空のことがあり、
+ * これが無いとElectrobun側のOverlaySyncControllerが高さ0近辺でwebviewの初期位置を
+ * 計算してしまい、ツールバーにwebviewが重なって表示されなくなることがあるため必須
+ * （CSSはJSのレンダリングタイミングに関係なく最初のレイアウトパスから確定するため、
+ * flushSyncのようなJS側の同期化より確実）
+ */
 .browser-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
+  min-height: 36px;
   padding: 4px 6px;
   background: #181825;
   border-bottom: 1px solid #313244;
-}
-.browser-toolbar button {
-  flex: 0 0 auto;
-  border: none;
-  background: transparent;
-  color: #a6adc8;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.browser-toolbar button:hover:not(:disabled) {
-  background: #313244;
-  color: var(--term-fg);
-}
-.browser-toolbar button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.browser-url-input {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 8px;
-  border: 1px solid #313244;
-  border-radius: 4px;
-  background: var(--term-bg);
-  color: var(--term-fg);
-  font-family: var(--term-font);
-  font-size: 12px;
-  outline: none;
-}
-.browser-url-input:focus {
-  border-color: #89b4fa;
 }
 
 .divider {
