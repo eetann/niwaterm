@@ -1,4 +1,5 @@
 import type { ShellProfile } from "@niwaterm/config";
+import { ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -73,13 +74,13 @@ export function TileTabBar({
           ))}
         </TabsList>
       </Tabs>
-      <Button variant="ghost" size="icon-xs" onClick={onAddTab}>
-        +
+      <Button variant="ghost" size="icon-xs" onClick={onAddTab} title="新しいタブ">
+        <Plus />
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-xs" title="シェルを選択">
-            ⌄
+            <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

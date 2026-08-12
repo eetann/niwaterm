@@ -21,6 +21,7 @@
 		"clsx": "^2.1.1",
 		"electrobun": "latest",
 		"hono": "^4.12.32",
+		"lucide-react": "^1.31.0",
 		"radix-ui": "^1.6.7",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
