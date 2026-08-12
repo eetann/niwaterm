@@ -1,3 +1,9 @@
+---
+type: Plan
+title: 進行計画（roadmap）
+description: niwatermの実装ロードマップ。h2セクション1つ=1セッションの作業単位で上から順に進める
+---
+
 # roadmap
 
 各h2セクション = 1セッションの会話で実装する粒度。上から順に進める。

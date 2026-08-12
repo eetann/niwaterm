@@ -1,3 +1,9 @@
+---
+type: Runbook
+title: Windowsでのビルド・実行手順
+description: Windows実機でniwatermをビルド・実行するための手順（ネイティブライブラリのWSLからのクロスビルド含む）
+---
+
 # Windowsでのビルド・実行手順
 
 Windowsでniwatermをビルド・実行するための手順。

@@ -1,3 +1,9 @@
+---
+type: Reference
+title: 設定ファイル
+description: niwatermのTypeScript設定ファイル（キーバインド・外観など）のセットアップと書き方
+---
+
 # 設定ファイル
 
 niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`@niwaterm/config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。

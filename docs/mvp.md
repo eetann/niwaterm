@@ -1,3 +1,9 @@
+---
+type: Concept
+title: MVP コンセプト
+description: niwatermのプロダクトコンセプト（ターミナル・マルチプレクサ・ワークスペース統合、カスタマイズ性、日本語対応、GUI統合の方針）
+---
+
 # MVP
 
 ## コンセプト

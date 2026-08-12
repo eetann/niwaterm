@@ -1,3 +1,9 @@
+---
+type: ADR
+title: "ADR 0001: 画面構成の概念を Window > Workspace > Tile > Tab の4階層とする"
+description: 画面・作業単位の概念と名前をWindow > Workspace > Tile > Tabの4階層に確定する意思決定
+---
+
 # ADR 0001: 画面構成の概念を Window > Workspace > Tile > Tab の4階層とする
 
 ## Status

@@ -1,3 +1,9 @@
+---
+type: Reference
+title: CLIからの操作
+description: niwaterm CLI（niwatermコマンド）のセットアップとサブコマンド一覧
+---
+
 # CLIからの操作
 
 niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。

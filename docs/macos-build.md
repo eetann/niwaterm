@@ -1,3 +1,9 @@
+---
+type: Runbook
+title: macOSでのビルド・実行手順
+description: macOS実機でniwatermをビルド・実行するための手順（ネイティブライブラリのローカルビルド含む）
+---
+
 # macOSでのビルド・実行手順
 
 macOSでniwatermをビルド・実行するための手順。
