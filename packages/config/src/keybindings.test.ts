@@ -120,13 +120,16 @@ describe("isKeybindAction", () => {
   });
 });
 
+// macOS側では既定キーを持たないアクション。理由はケースごとに異なる（下記テスト参照）
+const MACOS_UNASSIGNED_ACTIONS = ["new-custom-view-tab", "copy-selection", "paste-clipboard"];
+
 describe("defaultKeybindings", () => {
-  test("new-custom-view-tab以外の15個のアクションに1つずつ割り当てられている", () => {
+  test("MACOS_UNASSIGNED_ACTIONS以外の15個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings);
     expect(actions.length).toBe(15);
     expect(new Set(actions).size).toBe(15);
     for (const action of KEYBIND_ACTIONS) {
-      if (action === "new-custom-view-tab") continue;
+      if (MACOS_UNASSIGNED_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
     }
   });
@@ -134,13 +137,18 @@ describe("defaultKeybindings", () => {
   test("new-custom-view-tabはcustomView未設定時に無意味なため既定キーを持たない（ユーザー設定での割り当てを想定）", () => {
     expect(Object.values(defaultKeybindings)).not.toContain("new-custom-view-tab");
   });
+
+  test("copy-selection/paste-clipboardはCmd+C/Cmd+VがApplicationMenu経由で既に機能するため既定キーを持たない", () => {
+    expect(Object.values(defaultKeybindings)).not.toContain("copy-selection");
+    expect(Object.values(defaultKeybindings)).not.toContain("paste-clipboard");
+  });
 });
 
 describe("defaultWindowsKeybindings", () => {
-  test("macOS版と同じアクション集合をカバーする", () => {
-    expect(new Set(Object.values(defaultWindowsKeybindings))).toEqual(
-      new Set(Object.values(defaultKeybindings)),
-    );
+  test("macOS版のアクション集合 + Windows専用のcopy-selection/paste-clipboardをカバーする", () => {
+    const macActions = new Set(Object.values(defaultKeybindings));
+    const winActions = new Set(Object.values(defaultWindowsKeybindings));
+    expect(winActions).toEqual(new Set([...macActions, "copy-selection", "paste-clipboard"]));
   });
 
   test("全エントリがctrl始まりで、ターミナルの制御文字と衝突しないようshiftを伴う", () => {
@@ -184,8 +192,8 @@ describe("compileKeybindings", () => {
     expect(compiled.size).toBe(15);
   });
 
-  test("defaultWindowsKeybindingsは15エントリ全てコンパイルできる", () => {
+  test("defaultWindowsKeybindingsは17エントリ全てコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
-    expect(compiled.size).toBe(15);
+    expect(compiled.size).toBe(17);
   });
 });

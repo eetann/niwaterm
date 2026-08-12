@@ -36,6 +36,8 @@ export const KEYBIND_ACTIONS = [
   "next-workspace",
   "prev-workspace",
   "toggle-sidebar",
+  "copy-selection",
+  "paste-clipboard",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -80,6 +82,10 @@ export const defaultWindowsKeybindings: KeybindingsConfig = {
   "ctrl+alt+]": "next-workspace",
   "ctrl+alt+[": "prev-workspace",
   "ctrl+shift+b": "toggle-sidebar",
+  // Ctrl+C/Ctrl+VはSIGINT/制御文字としてターミナルへ素通りさせるため、
+  // Windows Terminal等の慣習に倣いctrl+shiftをコピー・ペーストに割り当てる
+  "ctrl+shift+c": "copy-selection",
+  "ctrl+shift+v": "paste-clipboard",
 };
 
 /** 実行プラットフォームに対応するデフォルトキーバインド（値はprocess.platformと同じ表記） */

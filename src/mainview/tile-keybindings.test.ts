@@ -193,6 +193,18 @@ describe("resolveTileCommand（Windowsのデフォルトキーバインド）", 
     expect(resolveTileCommand(key("c", { ctrlKey: true }), winCompiled)).toBeNull();
   });
 
+  test("Ctrl+Shift+C -> 選択テキストをコピー", () => {
+    expect(resolveTileCommand(key("C", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
+      type: "copySelection",
+    });
+  });
+
+  test("Ctrl+Shift+V -> クリップボードから貼り付け", () => {
+    expect(resolveTileCommand(key("V", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
+      type: "pasteClipboard",
+    });
+  });
+
   test("Ctrl+D / Ctrl+B もターミナルへ素通りする", () => {
     expect(resolveTileCommand(key("d", { ctrlKey: true }), winCompiled)).toBeNull();
     expect(resolveTileCommand(key("b", { ctrlKey: true }), winCompiled)).toBeNull();

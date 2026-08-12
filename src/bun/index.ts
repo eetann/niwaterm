@@ -8,6 +8,7 @@ import type {
 } from "@niwaterm/config";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
+import { readClipboardText, writeClipboardText } from "./clipboard";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
@@ -53,6 +54,8 @@ export type NiwaRPC = {
       ready: {};
       input: { tabId: TabId; data: string };
       paste: { tabId: TabId; data: string };
+      copySelection: { text: string };
+      pasteFromClipboard: { tabId: TabId };
       resize: {
         tabId: TabId;
         cols: number;
@@ -266,6 +269,14 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
         workspaceManager.handlePaste(tabId, data);
+      },
+      copySelection: ({ text }: { text: string }) => {
+        writeClipboardText(text);
+      },
+      pasteFromClipboard: ({ tabId }: { tabId: TabId }) => {
+        readClipboardText().then((text) => {
+          if (text) workspaceManager.handlePaste(tabId, text);
+        });
       },
       resize: (p: {
         tabId: TabId;

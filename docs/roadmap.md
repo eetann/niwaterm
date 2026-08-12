@@ -123,7 +123,7 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
 
 ## リファクタリング
 
-- [ ] クリップボードがWindows非対応なので対応させたい
+- [x] クリップボードがWindows非対応なので対応させたい（OSC52書き込み・Ctrl+Shift+C/Vによる選択コピー・貼り付けをPowerShell経由で実装。Windows実機で3パターンとも動作確認済み）
 - [ ] niwatermでのみうまく起動しないTUIがある
   - lazygit
 - [ ] ドキュメント整備

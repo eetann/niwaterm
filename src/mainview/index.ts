@@ -1024,6 +1024,15 @@ function handleTileCommand(cmd: TileCommand): void {
       sendMessage("switchWorkspace", { workspaceId });
       break;
     }
+    case "copySelection": {
+      const text = window.getSelection()?.toString();
+      if (text) sendMessage("copySelection", { text });
+      break;
+    }
+    case "pasteClipboard":
+      if (!currentTabId) return;
+      sendMessage("pasteFromClipboard", { tabId: currentTabId });
+      break;
   }
 }
 

@@ -1,6 +1,7 @@
 // PTY(forkpty) + libghostty-vt(VTパーサ) を束ねた「1ターミナルセッション」。
 // index.tsはPTY/FFIの詳細を知らずにこのモジュールだけを使う。
 // 将来のタブ実装は createTerminalSession() 1呼び出し = タブ1つに対応させる想定。
+import { writeClipboardText } from "./clipboard";
 import { createGhosttyTerminal } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 
@@ -41,7 +42,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   // OSC 52によるクリップボード書き込みをシステムクリップボードへ流す
   term.onClipboardWrite((data) => {
-    writeClipboard(data);
+    writeClipboardText(new TextDecoder().decode(data));
   });
 
   pty.onData((data) => {
@@ -101,9 +102,3 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 }
 
 export type TerminalSession = ReturnType<typeof createTerminalSession>;
-
-function writeClipboard(data: Uint8Array): void {
-  const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
-  proc.stdin.write(data);
-  proc.stdin.end();
-}
