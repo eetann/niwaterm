@@ -19,3 +19,25 @@ rsync -a --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude '
   ./ "$NIWATERM_WIN_REPO/"
 echo "synced to $NIWATERM_WIN_REPO"
 '''
+
+# ログは固定パスに毎回上書き（ファイルが際限なく増えないようにするため）。
+# 起動コマンド自体は .claude/skills/windows-gui-testing/SKILL.md の定型と同じ。
+[tasks."win:start"]
+description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み）"
+run = '''
+LOG_FILE=/tmp/niwaterm-win-dev.log
+nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun run start" > "$LOG_FILE" 2>&1 &
+disown
+echo "起動しました（バックグラウンド）。ログ: $LOG_FILE"
+echo "停止するには: mise run win:stop"
+'''
+
+# WSL→Windows間はプロセスグループもシグナルも共有しないため、win:startをCtrl+Cで止めても
+# Windows側のbun.exe/electrobun.exeは残り続ける。停止は明示的なプロセスkillが必須。
+[tasks."win:stop"]
+description = "Windows実機で起動中のniwaterm（bun.exe/electrobun.exe）を停止する"
+run = '''
+PS_PREFIX='[Console]::OutputEncoding=[Text.Encoding]::UTF8; $env:PATH=[Environment]::GetEnvironmentVariable("PATH","User")+";"+[Environment]::GetEnvironmentVariable("PATH","Machine"); '
+powershell.exe -NoProfile -Command "$PS_PREFIX Get-Process | Where-Object { \$_.ProcessName -match 'bun|electrobun' } | Stop-Process -Force -ErrorAction SilentlyContinue"
+echo "停止コマンドを送りました"
+'''
