@@ -1,4 +1,8 @@
 import type { ElectrobunConfig } from "electrobun";
+import tailwind from "bun-plugin-tailwind";
+import { createMainviewAliasPlugin } from "./bun-mainview-alias-plugin";
+
+const mainviewRoot = `${import.meta.dir}/src/mainview`;
 
 export default {
 	app: {
@@ -14,11 +18,15 @@ export default {
 		views: {
 			mainview: {
 				entrypoint: "src/mainview/index.ts",
+				// ElectrobunのCLIはコンパイル済みバイナリとして動くため、内部のBun.build()は
+				// tsconfig.jsonの"paths"エイリアス(@/*)を解決できない（実機検証で確認済み）。
+				// 自前のonResolveプラグインでエイリアス解決を肩代わりする
+				plugins: [createMainviewAliasPlugin(mainviewRoot), tailwind],
+				jsx: { runtime: "automatic" },
 			},
 		},
 		copy: {
 			"src/mainview/index.html": "views/mainview/index.html",
-			"src/mainview/index.css": "views/mainview/index.css",
 		},
 		mac: {
 			bundleCEF: false,

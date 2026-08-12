@@ -1,3 +1,4 @@
+import "./index.css";
 import Electrobun, { Electroview, type WebviewTagElement } from "electrobun/view";
 import {
   compileKeybindings,
@@ -24,6 +25,7 @@ import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
+import { mountReactRoot } from "./react/mount";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
@@ -1234,6 +1236,7 @@ setupPalette();
 applyAppearance(defaultAppearance);
 applySidebarVisibility();
 measureCell();
+mountReactRoot();
 sendMessage("ready");
 window.addEventListener("error", (e) => {
   sendMessage("log", { msg: `error: ${e.message}` });
