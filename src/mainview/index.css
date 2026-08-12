@@ -381,6 +381,17 @@ body {
   overflow: hidden;
 }
 
+/*
+ * フォーマッタは各セルの背景色を <div style="display: inline;..."> で出力するが、
+ * display:inline要素の背景色ボックスの高さはline-height計算（フォントmetricsとの
+ * half-leading配分）に依存し、サブピクセルの丸め誤差で行の下端にターミナル地の背景色が
+ * 透けて見える隙間ができることがある。inline-blockにすると高さがline-height指定値に
+ * 確定するため、この隙間を防げる（幅はinline同様コンテンツ幅に自動追従する）。
+ */
+.tile .term div[style^="display: inline;"] {
+  display: inline-block !important;
+}
+
 /* 全角文字を必ず2セル幅に揃える（CJKフォールバックグリフの実幅は2×セル幅と一致しないため） */
 .wide {
   display: inline-block;
