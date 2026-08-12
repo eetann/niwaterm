@@ -62,19 +62,11 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
     args: [FFIType.ptr, FFIType.u64, FFIType.bool, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
-  ghostty_formatter_format_buf: {
-    args: [FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
-    returns: FFIType.i32,
-  },
-  ghostty_formatter_free: {
-    args: [FFIType.ptr],
-    returns: FFIType.void,
-  },
 });
 
 const shim = dlopen(join(libDir, nativeLayout.shim), {
-  niwa_formatter_new: {
-    args: [FFIType.ptr, FFIType.ptr, FFIType.i32],
+  niwa_dump_active: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
 });
@@ -113,14 +105,6 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   // （ghostty_terminal_newは構造体値渡しをやめてcols/rowsのみ受け取る形になった）
   const scrollbackLimit = new BigUint64Array([BigInt(maxScrollback)]);
   vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(scrollbackLimit));
-
-  rc = shim.symbols.niwa_formatter_new(ptr(handle), term, FORMAT_HTML);
-  if (rc !== 0) throw new Error(`ghostty_formatter_new failed: ${rc}`);
-  const formatter = read.ptr(ptr(handle)) as Pointer;
-
-  rc = shim.symbols.niwa_formatter_new(ptr(handle), term, FORMAT_PLAIN);
-  if (rc !== 0) throw new Error(`ghostty_formatter_new(plain) failed: ${rc}`);
-  const textFormatter = read.ptr(ptr(handle)) as Pointer;
 
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
@@ -244,13 +228,14 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     return { x, y, visible: u8Out[0] !== 0 };
   }
 
-  /** formatterから現在の画面を文字列として取り出す関数を作る（HTML/PLAINで共用） */
-  function createFormatterDumper(target: Pointer): () => string {
+  /** アクティブエリア（スクロールバックを除く可視範囲）を文字列として取り出す関数を作る（HTML/PLAINで共用） */
+  function createFormatterDumper(emit: number): () => string {
     let buf = new Uint8Array(256 * 1024);
     return function dump(): string {
       for (;;) {
-        const rc = vt.symbols.ghostty_formatter_format_buf(
-          target,
+        const rc = shim.symbols.niwa_dump_active(
+          term,
+          emit,
           ptr(buf),
           BigInt(buf.length),
           ptr(writtenBuf),
@@ -263,20 +248,18 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
           buf = new Uint8Array(written + 1024);
           continue;
         }
-        throw new Error(`ghostty_formatter_format_buf failed: ${rc}`);
+        throw new Error(`niwa_dump_active failed: ${rc}`);
       }
     };
   }
 
   /** 現在の画面をHTML文字列として取り出す */
-  const dumpHtml = createFormatterDumper(formatter);
+  const dumpHtml = createFormatterDumper(FORMAT_HTML);
 
   /** 現在の画面をプレーンテキストとして取り出す */
-  const dumpText = createFormatterDumper(textFormatter);
+  const dumpText = createFormatterDumper(FORMAT_PLAIN);
 
   function free(): void {
-    vt.symbols.ghostty_formatter_free(formatter);
-    vt.symbols.ghostty_formatter_free(textFormatter);
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
     clipboardCallback?.close();
