@@ -210,7 +210,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           if (!renderState || renderState.kind !== "terminal") continue;
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
-          termEl.innerHTML = renderState.html;
+          termEl.innerHTML = stripFormatterLeadingBlankLine(renderState.html);
           fixWideChars(termEl);
           updateCursorForTab(
             tabId,
@@ -259,6 +259,14 @@ function measureCell() {
   if (rect.height > 0) cellHeight = rect.height;
   // .wide の幅計算（2セル幅）用にCSS変数へ反映する
   document.documentElement.style.setProperty("--cell-w", `${cellWidth}px`);
+}
+
+// libghostty-vtのHTMLフォーマッタは、アクティブエリアが一度でも実際にスクロールすると
+// 出力の先頭に余分な空行(\n)を1つ付け足す（<pre>タグの「先頭改行1つを無視する」挙動を
+// 前提にしているとみられる）。.termは<pre>ではなくwhite-space:pre指定の<div>なので
+// その先頭改行がそのまま空行として描画され、cursorY基準のカーソル位置と1行分ズレる。
+function stripFormatterLeadingBlankLine(html: string): string {
+  return html.replace(/^(<div[^>]*>)\n/, "$1");
 }
 
 // ---- 全角文字の幅補正 ----
