@@ -1,13 +1,13 @@
 # niwaterm エージェント統合
 
-タイル内で動くAIエージェント（Claude Code等）の種別・状態をniwatermのサイドバーへ通知するための設定集。
-`contrib/shell-integration/`（gitブランチをタイル変数へ送るシェル統合）と対になる仕組みで、
+タブ内で動くAIエージェント（Claude Code等）の種別・状態をniwatermのサイドバーへ通知するための設定集。
+`contrib/shell-integration/`（gitブランチをタブ変数へ送るシェル統合）と対になる仕組みで、
 「エージェント自身のhooks機構から能動的に`niwaterm set-var`を呼ぶ」プッシュ型を採用している
 （herdr方式のようなプロセス走査・画面内容照合は行わない）。
 
 ## 予約キー
 
-タイル変数（`niwaterm set-var`、詳細は`niwaterm docs show cli`）のうち、以下の2キーをエージェント状態通知用に予約する。
+タブ変数（`niwaterm set-var`、詳細は`niwaterm docs show cli`）のうち、以下の2キーをエージェント状態通知用に予約する。
 
 | キー | 値 | 説明 |
 |---|---|---|
@@ -22,13 +22,13 @@
 niwaterm外のプロジェクト・ターミナルで誤発火してエラーにならないよう、**hookのコマンド文字列自体に毎回ガードを入れる**。
 
 ```sh
-if [ -n "$NIWATERM_TILE_ID" ] && command -v niwaterm >/dev/null 2>&1; then
+if [ -n "$NIWATERM_TAB_ID" ] && command -v niwaterm >/dev/null 2>&1; then
   niwaterm set-var agent_status working >/dev/null 2>&1
 fi
 exit 0
 ```
 
-- `$NIWATERM_TILE_ID`はniwaterm内で起動したシェル（PTY）にのみ自動設定される環境変数。niwaterm外では未設定なのでガードが効く
+- `$NIWATERM_TAB_ID`はniwaterm内で起動したシェル（PTY）にのみ自動設定される環境変数。niwaterm外では未設定なのでガードが効く
 - `command -v niwaterm`で`niwaterm` CLIが未セットアップの環境でも安全にno-opにする
 - 常に`exit 0`で終える。エージェント本体の動作（ツール実行のブロック等）に一切影響を与えないことを設計上の必須条件とする
 

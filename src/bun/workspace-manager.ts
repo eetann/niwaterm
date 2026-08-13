@@ -11,13 +11,13 @@ import {
 } from "./tile-layout";
 import {
   createWorkspace,
-  type GetTileVarResult,
+  type GetTabVarResult,
   type Workspace,
   type WorkspaceOptions,
   type WorkspaceRenderState,
 } from "./workspace";
 
-export type { GetTileVarResult } from "./workspace";
+export type { GetTabVarResult } from "./workspace";
 
 export type WorkspaceId = string;
 
@@ -36,8 +36,8 @@ export interface WorkspaceListEntry {
   active: boolean;
   focusedTileId: TileId;
   layout: TileNode;
-  /** サイドバー表示用。タイルごとのkey-value変数（branch等） */
-  tileVars: Record<TileId, Record<string, string>>;
+  /** サイドバー表示用。タブごとのkey-value変数（branch等） */
+  tabVars: Record<TabId, Record<string, string>>;
 }
 
 export interface TabLocation {
@@ -234,16 +234,18 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return order.map((id) => {
       const ws = workspaces.get(id) as Workspace;
       const layout = ws.getLayout();
-      const tileVars: Record<TileId, Record<string, string>> = {};
+      const tabVars: Record<TabId, Record<string, string>> = {};
       for (const leaf of listLeaves(layout)) {
-        tileVars[leaf.id] = ws.listTileVars(leaf.id) ?? {};
+        for (const tabId of leaf.tabIds) {
+          tabVars[tabId] = ws.listTabVars(tabId) ?? {};
+        }
       }
       return {
         workspaceId: id,
         active: id === activeId,
         focusedTileId: ws.getFocusedTileId(),
         layout,
-        tileVars,
+        tabVars,
       };
     });
   }
@@ -256,18 +258,18 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId)?.getTabText(tabId) ?? null;
   }
 
-  function setTileVar(tileId: TileId, key: string, value: string): boolean {
-    return findOwnerByTileId(tileId)?.setTileVar(tileId, key, value) ?? false;
+  function setTabVar(tabId: TabId, key: string, value: string): boolean {
+    return findOwnerByTabId(tabId)?.setTabVar(tabId, key, value) ?? false;
   }
 
-  function getTileVar(tileId: TileId, key: string): GetTileVarResult {
-    const owner = findOwnerByTileId(tileId);
-    if (!owner) return { found: false, reason: "tile-not-found" };
-    return owner.getTileVar(tileId, key);
+  function getTabVar(tabId: TabId, key: string): GetTabVarResult {
+    const owner = findOwnerByTabId(tabId);
+    if (!owner) return { found: false, reason: "tab-not-found" };
+    return owner.getTabVar(tabId, key);
   }
 
-  function listTileVars(tileId: TileId): Record<string, string> | null {
-    return findOwnerByTileId(tileId)?.listTileVars(tileId) ?? null;
+  function listTabVars(tabId: TabId): Record<string, string> | null {
+    return findOwnerByTabId(tabId)?.listTabVars(tabId) ?? null;
   }
 
   function snapshot(): AppRenderState {
@@ -319,9 +321,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     locateBrowserTab,
     isWorkspaceActive,
     getTabText,
-    setTileVar,
-    getTileVar,
-    listTileVars,
+    setTabVar,
+    getTabVar,
+    listTabVars,
     serializeForPersistence,
     dispose,
   };

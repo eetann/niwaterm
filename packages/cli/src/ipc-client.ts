@@ -332,27 +332,27 @@ export function showTab(socketPath: string, tabId: TabId): Promise<ShowTabResult
   return postJson(socketPath, "/show-tab", { tabId });
 }
 
-export type SetTileVarResult = { ok: true } | { ok: false; error: string };
+export type SetTabVarResult = { ok: true } | { ok: false; error: string };
 
-export function setTileVar(
+export function setTabVar(
   socketPath: string,
-  tileId: TileId,
+  tabId: TabId,
   key: string,
   value: string,
-): Promise<SetTileVarResult> {
-  return postJson(socketPath, "/set-var", { tileId, key, value });
+): Promise<SetTabVarResult> {
+  return postJson(socketPath, "/set-var", { tabId, key, value });
 }
 
-export type GetTileVarResult = { ok: true; value: string } | { ok: false; error: string };
+export type GetTabVarResult = { ok: true; value: string } | { ok: false; error: string };
 
-export async function getTileVar(
+export async function getTabVar(
   socketPath: string,
-  tileId: TileId,
+  tabId: TabId,
   key: string,
-): Promise<GetTileVarResult> {
+): Promise<GetTabVarResult> {
   try {
     const res = await fetch(
-      `http://localhost/get-var?tileId=${encodeURIComponent(tileId)}&key=${encodeURIComponent(key)}`,
+      `http://localhost/get-var?tabId=${encodeURIComponent(tabId)}&key=${encodeURIComponent(key)}`,
       { unix: socketPath },
     );
     const body = (await res.json().catch(() => null)) as {
@@ -367,16 +367,13 @@ export async function getTileVar(
   }
 }
 
-export type ListTileVarsResult =
+export type ListTabVarsResult =
   | { ok: true; vars: Record<string, string> }
   | { ok: false; error: string };
 
-export async function listTileVars(
-  socketPath: string,
-  tileId: TileId,
-): Promise<ListTileVarsResult> {
+export async function listTabVars(socketPath: string, tabId: TabId): Promise<ListTabVarsResult> {
   try {
-    const res = await fetch(`http://localhost/list-vars?tileId=${encodeURIComponent(tileId)}`, {
+    const res = await fetch(`http://localhost/list-vars?tabId=${encodeURIComponent(tabId)}`, {
       unix: socketPath,
     });
     const body = (await res.json().catch(() => null)) as { vars?: unknown; error?: unknown } | null;

@@ -135,20 +135,20 @@ function parseTileTabBody(body: unknown): TileTabRequestBody | null {
 }
 
 /** 英数字・_・-・. のみ、1〜128文字。CLI出力（list-varsのkey=value整形）を壊す空白・改行等を排除する */
-const TILE_VAR_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+const TAB_VAR_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
 
-interface SetVarRequestBody extends TileIdRequestBody {
+interface SetVarRequestBody extends TabIdRequestBody {
   key: string;
   value: string;
 }
 
 function parseSetVarBody(body: unknown): SetVarRequestBody | null {
-  const tileIdBody = parseTileIdBody(body);
-  if (!tileIdBody) return null;
+  const tabIdBody = parseTabIdBody(body);
+  if (!tabIdBody) return null;
   const b = body as { key?: unknown; value?: unknown };
-  if (typeof b.key !== "string" || !TILE_VAR_KEY_PATTERN.test(b.key)) return null;
+  if (typeof b.key !== "string" || !TAB_VAR_KEY_PATTERN.test(b.key)) return null;
   if (typeof b.value !== "string") return null;
-  return { ...tileIdBody, key: b.key, value: b.value };
+  return { ...tabIdBody, key: b.key, value: b.value };
 }
 
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
@@ -301,38 +301,38 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { tileId: string, key: string (英数字・_・-・.のみ、1〜128文字), value: string }",
+            "expected { tabId: string, key: string (英数字・_・-・.のみ、1〜128文字), value: string }",
         },
         400,
       );
     }
-    const ok = workspaceManager.setTileVar(parsed.tileId, parsed.key, parsed.value);
-    if (!ok) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    const ok = workspaceManager.setTabVar(parsed.tabId, parsed.key, parsed.value);
+    if (!ok) return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
     return c.json({ ok: true });
   });
 
   app.get("/get-var", (c) => {
-    const tileId = c.req.query("tileId");
+    const tabId = c.req.query("tabId");
     const key = c.req.query("key");
-    if (!tileId || !key) {
-      return c.json({ ok: false, error: "expected ?tileId=<tileId>&key=<key>" }, 400);
+    if (!tabId || !key) {
+      return c.json({ ok: false, error: "expected ?tabId=<tabId>&key=<key>" }, 400);
     }
-    const result = workspaceManager.getTileVar(tileId, key);
+    const result = workspaceManager.getTabVar(tabId, key);
     if (!result.found) {
       const error =
-        result.reason === "tile-not-found"
-          ? `tile not found: ${tileId}`
-          : `variable not set: ${key} (tile: ${tileId})`;
+        result.reason === "tab-not-found"
+          ? `tab not found: ${tabId}`
+          : `variable not set: ${key} (tab: ${tabId})`;
       return c.json({ ok: false, error }, 404);
     }
     return c.json({ ok: true, value: result.value });
   });
 
   app.get("/list-vars", (c) => {
-    const tileId = c.req.query("tileId");
-    if (!tileId) return c.json({ ok: false, error: "expected ?tileId=<tileId>" }, 400);
-    const vars = workspaceManager.listTileVars(tileId);
-    if (vars === null) return c.json({ ok: false, error: `tile not found: ${tileId}` }, 404);
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const vars = workspaceManager.listTabVars(tabId);
+    if (vars === null) return c.json({ ok: false, error: `tab not found: ${tabId}` }, 404);
     return c.json({ ok: true, vars });
   });
 

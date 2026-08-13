@@ -10,14 +10,14 @@ function leaf(id: string, tabIds: string[], activeTabId: string): TileLeaf {
 function workspace(
   workspaceId: string,
   layout: TileLeaf,
-  tileVars: Record<string, Record<string, string>> = {},
+  tabVars: Record<string, Record<string, string>> = {},
 ): WorkspaceListEntry {
   return {
     workspaceId,
     active: false,
     focusedTileId: layout.id,
     layout,
-    tileVars,
+    tabVars,
   };
 }
 
@@ -72,10 +72,10 @@ describe("buildSidebarWorkspaceItems", () => {
     ]);
   });
 
-  test("tileVarsのbranchは独立フィールドとして返る（ラベルには含めない）", () => {
+  test("tabVarsのbranchは独立フィールドとして返る（ラベルには含めない）", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tile-1": { branch: "main" },
+        "tab-1": { branch: "main" },
       }),
     ];
 
@@ -96,7 +96,7 @@ describe("buildSidebarWorkspaceItems", () => {
   test("agent設定・agent_status未設定時はstatus:idleへフォールバックする", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tile-1": { agent: "claude-code" },
+        "tab-1": { agent: "claude-code" },
       }),
     ];
 
@@ -108,10 +108,10 @@ describe("buildSidebarWorkspaceItems", () => {
   test("agent_statusにworking/blockedを設定した場合はそのまま反映される", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tile-1": { agent: "claude-code", agent_status: "working" },
+        "tab-1": { agent: "claude-code", agent_status: "working" },
       }),
       workspace("ws-2", leaf("tile-2", ["tab-2"], "tab-2"), {
-        "tile-2": { agent: "claude-code", agent_status: "blocked" },
+        "tab-2": { agent: "claude-code", agent_status: "blocked" },
       }),
     ];
 
@@ -124,7 +124,7 @@ describe("buildSidebarWorkspaceItems", () => {
   test("agent_statusが未知の値の場合はidleへ正規化する", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tile-1": { agent: "claude-code", agent_status: "foo" },
+        "tab-1": { agent: "claude-code", agent_status: "foo" },
       }),
     ];
 
@@ -136,7 +136,7 @@ describe("buildSidebarWorkspaceItems", () => {
   test("agentが空文字列（SessionEnd後を想定）の場合はagent:null", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tile-1": { agent: "", agent_status: "" },
+        "tab-1": { agent: "", agent_status: "" },
       }),
     ];
 
@@ -152,6 +152,20 @@ describe("buildSidebarWorkspaceItems", () => {
 
     expect(items[0]?.active).toBe(false);
     expect(items[0]?.tabs[0]?.active).toBe(false);
+  });
+
+  test("同一タイル内の複数タブが別々のagent状態を持てる（タブ単位化の主目的）", () => {
+    const workspaces = [
+      workspace("ws-1", leaf("tile-1", ["tab-1", "tab-2"], "tab-1"), {
+        "tab-1": { agent: "claude-code", agent_status: "working" },
+        "tab-2": { agent: "codex-cli", agent_status: "idle" },
+      }),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.tabs[0]?.agent).toEqual({ agent: "claude-code", status: "working" });
+    expect(items[0]?.tabs[1]?.agent).toEqual({ agent: "codex-cli", status: "idle" });
   });
 });
 

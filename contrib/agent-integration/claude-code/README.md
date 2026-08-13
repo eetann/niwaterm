@@ -1,12 +1,12 @@
 # Claude Code 統合
 
-Claude Codeのhooks機構から、タイル内で動くセッションの状態（idle/working/blocked）をniwatermのサイドバーへ通知する。
+Claude Codeのhooks機構から、タブ内で動くセッションの状態（idle/working/blocked）をniwatermのサイドバーへ通知する。
 
 ## 導入
 
 `hooks.json`の中身（`"hooks"`キー配下）を、自分の`~/.claude/settings.json`（全プロジェクト共通で使えるので推奨）または`.claude/settings.json`/`.claude/settings.local.json`（プロジェクト単位）へマージする。
 
-各hookコマンドは`$NIWATERM_TILE_ID`が未設定の環境（niwaterm外のターミナル）では何もしないため、グローバル（`~/.claude/settings.json`）に追加しても他のプロジェクト・他のターミナルアプリで悪さをしない（詳細は[../README.md](../README.md)のガードパターン参照）。
+各hookコマンドは`$NIWATERM_TAB_ID`が未設定の環境（niwaterm外のターミナル）では何もしないため、グローバル（`~/.claude/settings.json`）に追加しても他のプロジェクト・他のターミナルアプリで悪さをしない（詳細は[../README.md](../README.md)のガードパターン参照）。
 
 既に`hooks`キーに他の設定がある場合は、**イベント名ごとに配列として追記する**（既存のイベントに追加する場合は配列の要素として追加、無いイベントは新規キーとして追加）。既存設定を上書きしないよう注意する。
 
@@ -36,5 +36,5 @@ mv /tmp/merged-settings.json ~/.claude/settings.json
 
 この機能は開発時にmacOS/Windows実機でのGUI確認ができない環境（Linux/WSL）で実装されたため、以下は導入後に実地で確認すること。
 
-- `$NIWATERM_TILE_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されるか（PTY→シェル→`claude`→hookサブプロセスという経路で、通常のUnixプロセス環境変数継承であれば伝播するはずだが未確認）
+- `$NIWATERM_TAB_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されるか（PTY→シェル→`claude`→hookサブプロセスという経路で、通常のUnixプロセス環境変数継承であれば伝播するはずだが未確認）
 - `niwaterm set-var agent ""`のように値に空文字列を渡した場合、CLI（gunshi製）がpositional引数として正しく空文字列を受け取れるか

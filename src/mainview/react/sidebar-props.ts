@@ -57,21 +57,23 @@ export function buildSidebarWorkspaceItems(
     workspaceId: entry.workspaceId,
     label: `Workspace ${workspaceIndex + 1}`,
     active: entry.workspaceId === currentActiveWorkspaceId,
-    tabs: listLeaves(entry.layout).flatMap((leaf, tileIndex) => {
-      const vars = entry.tileVars[leaf.id];
-      const branch = vars?.["branch"] || null;
-      const agentName = vars?.["agent"] || null;
-      const agent: SidebarTabAgentInfo | null = agentName
-        ? { agent: agentName, status: normalizeAgentStatus(vars?.["agent_status"]) }
-        : null;
-      return leaf.tabIds.map((tabId, tabIndex) => ({
-        tabId,
-        tileId: leaf.id,
-        label: `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`,
-        active: entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
-        branch,
-        agent,
-      }));
-    }),
+    tabs: listLeaves(entry.layout).flatMap((leaf, tileIndex) =>
+      leaf.tabIds.map((tabId, tabIndex) => {
+        const vars = entry.tabVars[tabId];
+        const branch = vars?.["branch"] || null;
+        const agentName = vars?.["agent"] || null;
+        const agent: SidebarTabAgentInfo | null = agentName
+          ? { agent: agentName, status: normalizeAgentStatus(vars?.["agent_status"]) }
+          : null;
+        return {
+          tabId,
+          tileId: leaf.id,
+          label: `Tile ${tileIndex + 1} / Tab ${tabIndex + 1}`,
+          active: entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
+          branch,
+          agent,
+        };
+      }),
+    ),
   }));
 }

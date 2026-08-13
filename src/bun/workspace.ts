@@ -30,9 +30,9 @@ export interface WorkspaceRenderState {
   tabs: Record<TabId, TabRenderState>;
 }
 
-export type GetTileVarResult =
+export type GetTabVarResult =
   | { found: true; value: string }
-  | { found: false; reason: "tile-not-found" | "not-set" };
+  | { found: false; reason: "tab-not-found" | "not-set" };
 
 export type WorkspaceOptions = {
   initialCols: number;
@@ -60,25 +60,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const sessions = new Map<TabId, TerminalSession>();
   const browserTabs = new Map<TabId, BrowserTabState>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
-  const tileVars = new Map<TileId, Map<string, string>>();
+  const tabVars = new Map<TabId, Map<string, string>>();
 
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
-  function spawnSession(
-    tabId: TabId,
-    tileId: TileId,
-    cols: number,
-    rows: number,
-    shellOverride?: string,
-  ): void {
+  function spawnSession(tabId: TabId, cols: number, rows: number, shellOverride?: string): void {
     sizeByTabId.set(tabId, { cols, rows });
     const session = createSession({
       cols,
       rows,
       shell: shellOverride ?? opts.getDefaultShell?.(),
-      // シェル統合スクリプトやタイル内のCLI呼び出しが`--tile`省略でこのタイルを指せるようにする
-      env: { NIWATERM_TILE_ID: tileId },
+      // シェル統合スクリプトやタブ内のCLI呼び出しが`--tab`省略でこのタブを指せるようにする
+      env: { NIWATERM_TAB_ID: tabId },
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
     });
@@ -93,7 +87,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     focusedTileId = leaves[0].id;
     for (const leaf of leaves) {
       for (const tabId of leaf.tabIds) {
-        spawnSession(tabId, leaf.id, opts.initialCols, opts.initialRows);
+        spawnSession(tabId, opts.initialCols, opts.initialRows);
       }
     }
   } else {
@@ -101,7 +95,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const firstTileId = genTileId();
     tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
     focusedTileId = firstTileId;
-    spawnSession(firstTabId, firstTileId, opts.initialCols, opts.initialRows);
+    spawnSession(firstTabId, opts.initialCols, opts.initialRows);
   }
 
   function disposeSessions(tabIds: TabId[]): void {
@@ -113,10 +107,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     }
   }
 
-  function applyCloseResult(newTree: TileNode, closedTabIds: TabId[], closedTileId?: TileId): void {
+  function applyCloseResult(newTree: TileNode, closedTabIds: TabId[]): void {
     tree = newTree;
     disposeSessions(closedTabIds);
-    if (closedTileId !== undefined) tileVars.delete(closedTileId);
+    for (const tabId of closedTabIds) tabVars.delete(tabId);
     if (!findNode(tree, focusedTileId)) {
       focusedTileId = listLeaves(tree)[0]?.id ?? focusedTileId;
     }
@@ -135,7 +129,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       opts.onAllTabsClosed();
       return;
     }
-    applyCloseResult(result.tree, [tabId], result.tileClosed ? leaf.id : undefined);
+    applyCloseResult(result.tree, [tabId]);
   }
 
   function splitTileById(
@@ -161,7 +155,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, newTileId, size.cols, size.rows);
+    spawnSession(newTabId, size.cols, size.rows);
     focusedTileId = newTileId;
     opts.onDirty();
     return { tileId: newTileId, tabId: newTabId };
@@ -178,7 +172,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, tileId, size.cols, size.rows, shellOverride);
+    spawnSession(newTabId, size.cols, size.rows, shellOverride);
     opts.onDirty();
     return newTabId;
   }
@@ -293,32 +287,33 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return sessions.get(tabId)?.dumpText() ?? null;
   }
 
-  /** leaf以外（split）・不存在のtileIdはfalse */
-  function setTileVar(tileId: TileId, key: string, value: string): boolean {
-    const target = findNode(tree, tileId);
-    if (!target || target.kind !== "leaf") return false;
-    let vars = tileVars.get(tileId);
+  /** terminalセッション・ブラウザタブいずれとしても存在しないtabIdはfalse */
+  function hasAnyTab(tabId: TabId): boolean {
+    return hasTab(tabId) || hasBrowserTab(tabId);
+  }
+
+  function setTabVar(tabId: TabId, key: string, value: string): boolean {
+    if (!hasAnyTab(tabId)) return false;
+    let vars = tabVars.get(tabId);
     if (!vars) {
       vars = new Map();
-      tileVars.set(tileId, vars);
+      tabVars.set(tabId, vars);
     }
     vars.set(key, value);
     opts.onDirty();
     return true;
   }
 
-  function getTileVar(tileId: TileId, key: string): GetTileVarResult {
-    const target = findNode(tree, tileId);
-    if (!target || target.kind !== "leaf") return { found: false, reason: "tile-not-found" };
-    const value = tileVars.get(tileId)?.get(key);
+  function getTabVar(tabId: TabId, key: string): GetTabVarResult {
+    if (!hasAnyTab(tabId)) return { found: false, reason: "tab-not-found" };
+    const value = tabVars.get(tabId)?.get(key);
     return value === undefined ? { found: false, reason: "not-set" } : { found: true, value };
   }
 
-  /** tile不存在（またはleafでない）はnull。存在するが未設定は空オブジェクト */
-  function listTileVars(tileId: TileId): Record<string, string> | null {
-    const target = findNode(tree, tileId);
-    if (!target || target.kind !== "leaf") return null;
-    const vars = tileVars.get(tileId);
+  /** tabId不存在はnull。存在するが未設定は空オブジェクト */
+  function listTabVars(tabId: TabId): Record<string, string> | null {
+    if (!hasAnyTab(tabId)) return null;
+    const vars = tabVars.get(tabId);
     return vars ? Object.fromEntries(vars) : {};
   }
 
@@ -326,7 +321,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
     browserTabs.clear();
-    tileVars.clear();
+    tabVars.clear();
   }
 
   return {
@@ -348,9 +343,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     hasBrowserTab,
     findTileIdForTab,
     getTabText,
-    setTileVar,
-    getTileVar,
-    listTileVars,
+    setTabVar,
+    getTabVar,
+    listTabVars,
     dispose,
   };
 }

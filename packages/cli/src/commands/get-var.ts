@@ -1,16 +1,16 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { getTileVar, ipcSocketPath } from "../ipc-client";
-import { resolveTileId } from "../resolve-tile";
+import { getTabVar, ipcSocketPath } from "../ipc-client";
+import { resolveTabId } from "../resolve-tab";
 
 export default define({
   name: "get-var",
-  description: "指定したタイルの変数を取得する",
+  description: "指定したタブの変数を取得する",
   args: {
-    tile: {
+    tab: {
       type: "string",
       short: "t",
-      description: "対象のtileId（niwaterm listで確認）。省略時はNIWATERM_TILE_ID環境変数を使う",
+      description: "対象のtabId（niwaterm listで確認）。省略時はNIWATERM_TAB_ID環境変数を使う",
     },
     key: {
       type: "positional",
@@ -18,8 +18,8 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const tileId = resolveTileId(ctx.values.tile);
-    const result = await getTileVar(ipcSocketPath(), tileId, ctx.values.key);
+    const tabId = resolveTabId(ctx.values.tab);
+    const result = await getTabVar(ipcSocketPath(), tabId, ctx.values.key);
     if (!result.ok) {
       failAndExit(`get-varに失敗しました: ${result.error}`);
     }

@@ -12,9 +12,9 @@ Accepted
 
 ## Context
 
-niwatermはサイドバーにワークスペース・タイル・タブの一覧を表示しており、タイルごとのkey-value変数（`niwaterm set-var`、tmuxのペイン変数相当）を持つ。gitブランチ名は既に「シェル統合プッシュ型」（zsh/bash/fish/PowerShell向けスクリプトがprecmdフックで`niwaterm set-var branch`を呼ぶ、`contrib/shell-integration/`）で検知・表示されている。
+niwatermはサイドバーにワークスペース・タイル・タブの一覧を表示しており、タブごとのkey-value変数（`niwaterm set-var`、tmuxのペイン変数相当）を持つ。gitブランチ名は既に「シェル統合プッシュ型」（zsh/bash/fish/PowerShell向けスクリプトがprecmdフックで`niwaterm set-var branch`を呼ぶ、`contrib/shell-integration/`）で検知・表示されている。
 
-残る課題は、タイル内で動くAIエージェント（Claude Code等）の種別・状態（idle/working/blocked等）をどう検知するかである。cmux（manaflow-ai/cmux）・herdr（ogulcancelik/herdr）という2つの先行AI連携ターミナルをopensrcでソースコードを取得して調査し、検知方式を決定した。
+残る課題は、タブ内で動くAIエージェント（Claude Code等）の種別・状態（idle/working/blocked等）をどう検知するかである。cmux（manaflow-ai/cmux）・herdr（ogulcancelik/herdr）という2つの先行AI連携ターミナルをopensrcでソースコードを取得して調査し、検知方式を決定した。
 
 ### 解決したい課題
 
@@ -33,8 +33,8 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 | 観点 | 1. herdr方式 | 2. cmux動的注入方式 | 3. 静的JSON配布方式（採用） |
 |------|---|---|---|
 | ゼロコンフィグ性 | 高い（設定不要） | 高い（設定不要） | 低い（ユーザーが手動マージ） |
-| 実装コスト | 高い（OS別プロセス走査＋状態判定ルールの新規実装） | 高い（シム生成・PATH差し込み・二重起動ガード等） | 低い（既存のtileVars/set-var基盤にそのまま乗る） |
-| 既存のブランチ検知方式との一貫性 | 低い（パッシブ型で設計思想が異なる） | 中（プッシュ型だが独自機構） | 高い（同じプッシュ型・同じtileVars経路） |
+| 実装コスト | 高い（OS別プロセス走査＋状態判定ルールの新規実装） | 高い（シム生成・PATH差し込み・二重起動ガード等） | 低い（既存のtabVars/set-var基盤にそのまま乗る） |
+| 既存のブランチ検知方式との一貫性 | 低い（パッシブ型で設計思想が異なる） | 中（プッシュ型だが独自機構） | 高い（同じプッシュ型・同じtabVars経路） |
 | 複数エージェントへの拡張性 | ルールマニフェストを増やせば対応可 | エージェントごとに個別のシム実装が要る | キー規約とディレクトリ規約を揃えるだけで対応可 |
 | 誤検知・精度 | プロセス名・画面テキストの正規表現照合に依存し曖昧 | 明確（hooksイベントに基づく） | 明確（hooksイベントに基づく） |
 
@@ -42,16 +42,16 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 
 **AIエージェントの種別・状態検知は、herdr方式（プロセス走査）ではなく、エージェント自身のhooks機構からniwatermへ能動的に通知する「hooks能動通知型」を採用する。配布形態は、cmuxの動的コマンドラッパー注入ではなく、静的なhooks設定JSON片をユーザーが手動マージする、よりシンプルな方式とする。**
 
-### 1. タイル変数の予約キー
+### 1. タブ変数の予約キー
 
-既存の`niwaterm set-var`（タイル変数）の仕組みに、以下2キーを予約する。
+既存の`niwaterm set-var`（タブ変数）の仕組みに、以下2キーを予約する。
 
 | キー | 値 | 説明 |
 |---|---|---|
 | `agent` | 任意の種別文字列（例: `claude-code`） | エージェントの種類。空文字列・未設定は「エージェントなし」 |
 | `agent_status` | `idle` \| `working` \| `blocked` | エージェントの状態。未設定・未知の値は`idle`へ正規化する |
 
-bun側（`tileVars: Record<TileId, Record<string, string>>`）は元々汎用key-valueのため、この2キーを追加してもスキーマ変更は不要である。
+bun側（`tabVars: Record<TabId, Record<string, string>>`。当初は`tileVars: Record<TileId, ...>`だったが、1タイルに複数タブがある場合に非アクティブタブの状態更新が他タブの表示を上書きする問題が実機検証で判明したため、付与単位をタイル単位からタブ単位へ移行した。詳細は本ADRのNotes「タブ単位への移行」参照）は元々汎用key-valueのため、この2キーを追加してもスキーマ変更は不要である。
 
 ### 2. Claude Codeのhooksイベントとの対応
 
@@ -71,13 +71,13 @@ SessionEnd        → agent / agent_status を空文字列にクリア
 全hookコマンドに、cmuxの`CMUX_SURFACE_ID`環境変数ガードを参考にしたガードを埋め込む。
 
 ```sh
-if [ -n "$NIWATERM_TILE_ID" ] && command -v niwaterm >/dev/null 2>&1; then
+if [ -n "$NIWATERM_TAB_ID" ] && command -v niwaterm >/dev/null 2>&1; then
   niwaterm set-var agent_status working >/dev/null 2>&1
 fi
 exit 0
 ```
 
-`$NIWATERM_TILE_ID`はniwaterm内で起動したシェル（PTY）にのみ自動設定される環境変数であるため、このガードによりグローバル（`~/.claude/settings.json`）にhooks設定を追加しても、niwaterm外のプロジェクト・ターミナルでは常にno-opになる。これにより「ユーザーのグローバル設定を一度だけ変更すればよい」という運用が安全に成立する。
+`$NIWATERM_TAB_ID`はniwaterm内で起動したシェル（PTY）にのみ自動設定される環境変数であるため、このガードによりグローバル（`~/.claude/settings.json`）にhooks設定を追加しても、niwaterm外のプロジェクト・ターミナルでは常にno-opになる。これにより「ユーザーのグローバル設定を一度だけ変更すればよい」という運用が安全に成立する。
 
 ### 4. 複数エージェント対応の規約
 
@@ -95,13 +95,13 @@ contrib/agent-integration/
 
 ### 5. 副次的なバグ修正
 
-実装の過程で、`workspace.ts`の`setTileVar()`が状態変更時に`opts.onDirty()`（サイドバーの再描画スケジューリング）を呼んでいないことが判明した。既存のブランチ表示は、シェルのprecmdフックによる`set-var`の直後にPTY出力（プロンプト再描画）が伴うため、そちらの`onDirty()`呼び出しに便乗して偶然反映されていた。hooksベースの状態更新（`Stop`イベント等）はPTY出力を伴わないことがあるため、この問題を修正し、`setTileVar()`自体が`onDirty()`を呼ぶようにした。
+実装の過程で、`workspace.ts`の`setTabVar()`（当時は`setTileVar()`）が状態変更時に`opts.onDirty()`（サイドバーの再描画スケジューリング）を呼んでいないことが判明した。既存のブランチ表示は、シェルのprecmdフックによる`set-var`の直後にPTY出力（プロンプト再描画）が伴うため、そちらの`onDirty()`呼び出しに便乗して偶然反映されていた。hooksベースの状態更新（`Stop`イベント等）はPTY出力を伴わないことがあるため、この問題を修正し、`setTabVar()`自体が`onDirty()`を呼ぶようにした。
 
 ## Consequences
 
 ### Positive
 
-- 既存のブランチ検知（シェル統合プッシュ型）と全く同じ経路（`set-var` → `tileVars` → サイドバー）に乗るため、bun側・IPC・CLIのコード変更が一切不要だった
+- 既存のブランチ検知（シェル統合プッシュ型）と全く同じ経路（`set-var` → `tabVars` → サイドバー）に乗るため、bun側・IPC・CLIのコード変更が一切不要だった
 - hooksイベントに基づく明確な状態遷移のため、herdr方式のような画面テキストの正規表現照合による誤検知が起きにくい
 - `contrib/agent-integration/<agent-name>/`という規約により、他エージェント対応時の実装パターンが明確
 
@@ -110,11 +110,11 @@ contrib/agent-integration/
 - ゼロコンフィグではない。ユーザーが`~/.claude/settings.json`へ手動でJSONをマージする作業が必要
   - → `contrib/agent-integration/claude-code/README.md`に`jq`を使ったマージ手順を記載し、作業コストを下げた
 - Claude Code以外のエージェント対応は、hooks.json相当の設定ファイルを追加実装しないと使えない（herdr方式ならゼロコンフィグで新規エージェントも検知できた可能性がある）
-  - → 複数エージェント対応の需要が高まった場合、herdr方式をフォールバック検知として後から追加することも設計上排除していない（tileVarsの汎用性により両方式は共存できる）
+  - → 複数エージェント対応の需要が高まった場合、herdr方式をフォールバック検知として後から追加することも設計上排除していない（tabVarsの汎用性により両方式は共存できる）
 
 ### Risks
 
-- `$NIWATERM_TILE_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されない可能性がある（PTY→シェル→`claude`→hookサブプロセスという経路が未検証）
+- `$NIWATERM_TAB_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されない可能性がある（PTY→シェル→`claude`→hookサブプロセスという経路が未検証）
   - → `contrib/agent-integration/claude-code/README.md`に未検証事項として明記し、導入時の実地確認を促す
 - `niwaterm set-var agent ""`のような空文字列のpositional引数が、gunshi製CLIパーサーで正しく渡るか未確認
   - → 同READMEに明記。誤動作した場合でも影響範囲は`SessionEnd`時のクリア処理のみ
@@ -123,11 +123,14 @@ contrib/agent-integration/
 
 | 項目 | 決めない理由 | いつ決めるか |
 |------|------------|------------|
-| タブ単位（現状はタイル単位で共有）の状態管理 | 1タイルに複数タブがある場合の状態上書き問題は、ブランチ検知でも既に残る既知の制約であり、本ADRのスコープ外 | roadmap「タブ状態の可視化」節の残項目として別途検討 |
 | Claude Code以外のエージェント（Codex CLI等）向けのhooks.json実装 | 対応するエージェントの実際の需要が出てから、そのエージェント固有のhooks/設定機構を調査すべき | 対象エージェントの利用ニーズが生じたとき |
 | herdr方式（プロセス走査）をフォールバックとして併用するか | hooks未設定のエージェント・エディタ拡張等をゼロコンフィグで検知したい場合に必要になるが、現時点でその需要は顕在化していない | 複数エージェント対応が進み、hooks非対応のツールを検知したいニーズが出たとき |
 
 ## Notes
+
+### タブ単位への移行
+
+本ADR採択当初は「決めていないこと」としてタブ単位の状態管理を保留していた（1タイルに複数タブがある場合の状態上書き問題自体は当初から認識していたが、ブランチ検知でも既に残る既知の制約であり本ADRのスコープ外としていた）。その後、Windows実機での動作検証で実際に問題が顕在化した（Claude Code稼働中のタブとPowerShellのみのタブが同一タイルに同居すると、両方が同じ`agent_status`表示になる）ため、変数の付与単位をタイル単位（`tileVars`）からタブ単位（`tabVars`）へ全面的に移行した。ADR 0001の「Tab = PTYを保持する末端」という定義により忠実になる方向の変更であり、本ADRの根幹（hooks能動通知型・予約キー・ガードパターン）自体への影響はない。CLIの`--tile`オプションは`--tab`へ、PTY起動時の環境変数`NIWATERM_TILE_ID`は`NIWATERM_TAB_ID`へ、それぞれ後方互換なしで置き換えた。
 
 ### 参考資料
 
@@ -137,4 +140,4 @@ contrib/agent-integration/
 - [cmux](https://github.com/manaflow-ai/cmux) — opensrcで取得したソースコードを調査（`CLI/CMUXCLI+AgentHookCatalog.swift`、`CLI/CMUXCLI+AgentHookDefinitions.swift`、`Resources/bin/cmux-claude-wrapper`等）
 - [herdr](https://github.com/ogulcancelik/herdr) — プロセス走査＋マニフェスト照合方式の先行調査（roadmap.md記載のサマリを参照）
 - [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks.md)、[Hooks Guide](https://code.claude.com/docs/en/hooks-guide.md)
-- ADR 0001（Window > Workspace > Tile > Tab の4階層） — タイル単位でのタイル変数管理の前提となる階層構造
+- ADR 0001（Window > Workspace > Tile > Tab の4階層） — タブ単位でのタブ変数管理の前提となる階層構造（Tab = PTYを保持する末端という定義に整合）

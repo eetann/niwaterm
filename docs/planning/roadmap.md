@@ -99,18 +99,19 @@ cmux・herdrなど最近のAI連携ターミナルは、サイドバーにペイ
 - **cmux（アクティブ/プッシュ型）**: シェル統合スクリプト（zsh/bash/fish）をrcに注入し、`precmd`フックで`git branch`やpwdを取得してcontrol socket経由でアプリへ能動的に送る（`report_git_branch`等）。エージェント状態は各エージェントのセッションDBを直接覗くなど、エージェント別に深く統合する
 - **herdr（パッシブ/ポーリング型）**: PTY子プロセスの「フォアグラウンドプロセスグループ」をOS別（Linux/proc、Windowsはプロセススナップショット+親子関係）に取得し、プロセス名を既知エージェント一覧と照合。状態（idle/working/blocked）は画面末尾テキスト＋OSCタイトル/プログレスを、エージェントごとのTOMLルール（`contains`/`regex`/`line_regex`の論理式、優先度付き）と照合して判定する。ブランチは`.git/HEAD`を直接ファイル読み。ゼロコンフィグだが、OS別のプロセス走査コードとルールマニフェストの新規実装が要る
 
-niwatermは既にIPCサーバー・CLI・タイル変数（`niwaterm set-var`）を持っているため、cmux型の「シェルフックが能動的に状態を通知する」方式がそのまま乗る。まずはこちらを採用し、ゼロコンフィグなherdr型のプロセス走査・状態マニフェストは将来検討する。
+niwatermは既にIPCサーバー・CLI・タブ変数（`niwaterm set-var`）を持っているため、cmux型の「シェルフックが能動的に状態を通知する」方式がそのまま乗る。まずはこちらを採用し、ゼロコンフィグなherdr型のプロセス走査・状態マニフェストは将来検討する。
 
-- [x] 調査: cmux（シェル統合プッシュ型）とherdr（パッシブ検知型）の仕組みを比較し、niwatermの既存IPC/CLI/タイル変数基盤にそのまま乗る「シェル統合プッシュ型」を採用する
-- [x] PTY起動時に`NIWATERM_TILE_ID`環境変数を設定し、シェル統合スクリプトやタイル内のシェルから`--tile`省略で`set-var`/`get-var`/`list-vars`を呼べる
+- [x] 調査: cmux（シェル統合プッシュ型）とherdr（パッシブ検知型）の仕組みを比較し、niwatermの既存IPC/CLI/タブ変数基盤にそのまま乗る「シェル統合プッシュ型」を採用する
+- [x] PTY起動時に`NIWATERM_TAB_ID`環境変数を設定し、シェル統合スクリプトやタブ内のシェルから`--tab`省略で`set-var`/`get-var`/`list-vars`を呼べる
 - [x] zsh向けシェル統合スニペット（precmdフックでgitブランチを`set-var`する）を用意し、導入手順をdocsに書く
-- [x] サイドバーのタブ行にタイル変数（ブランチ等）を表示する
+- [x] サイドバーのタブ行にタブ変数（ブランチ等）を表示する
 - [x] bash/fish/PowerShell向けのシェル統合スニペットも用意する
 - [x] エージェント種別・状態（idle/working/blocked等）の検知方式を決定する。herdr方式（フォアグラウンドプロセス走査+画面内容マニフェスト照合）か、各エージェントのhooks機構（Claude Codeのhooksなど）を使った能動通知か
-      ブランチ検知と同じ「hooks能動通知型」を採用（cmux/herdrをopensrcで比較調査した結果、詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。エージェントのhooks機構から静的なJSON設定（`contrib/agent-integration/claude-code/hooks.json`）をユーザーが`~/.claude/settings.json`等へ手動マージする方式。タイル変数`agent`/`agent_status`を予約キーとして使う
+      ブランチ検知と同じ「hooks能動通知型」を採用（cmux/herdrをopensrcで比較調査した結果、詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。エージェントのhooks機構から静的なJSON設定（`contrib/agent-integration/claude-code/hooks.json`）をユーザーが`~/.claude/settings.json`等へ手動マージする方式。タブ変数`agent`/`agent_status`を予約キーとして使う
 - [x] 検知したエージェント状態をサイドバーに色分け等で表示する
       サイドバーのタブ行に状態ドット（idle=緑/working=青/blocked=黄）とブランチ名を表示（src/mainview/react/sidebar-props.ts・sidebar-workspace-list.tsx）
-- [ ] タブ単位（現状はタイル単位で共有）の状態管理が必要か検討する。1タイルに複数タブがある場合、非アクティブタブのシェルのブランチ更新が他タブの表示を上書きする既知の制約がある
+- [x] タブ単位（現状はタイル単位で共有）の状態管理が必要か検討する。1タイルに複数タブがある場合、非アクティブタブのシェルのブランチ更新が他タブの表示を上書きする既知の制約がある
+      実機検証で実際に問題（Claude Code稼働中のタブとPowerShellのみのタブが同一タイルにあると両方同じagent_status表示になる）が判明したため、変数の付与単位をタイル単位からタブ単位へ全面移行した。`niwaterm set-var/get-var/list-vars`は`--tile`ではなく`--tab`を取るようになり、PTY起動時の環境変数も`NIWATERM_TAB_ID`になった（詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）
 
 ## シェルプロファイル選択（複数シェル・WSLディストロ対応）
 
@@ -142,11 +143,11 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
   - [ ] タブ名・タブIDの文字数が短いと誤クリックしてしまうので最小幅を設定
 - [ ] カーソル形状が四角のみになっている
 
-## タイル変数
+## タブ変数
 
-- [x] タイルごとにkey-valueの変数を設定できる（`niwaterm set-var`相当。tmuxのペイン変数に相当）
-- [x] タイルの変数を取得・一覧できる（`niwaterm get-var`/`list-vars`相当）
-- [x] 別タイルの変数をCLI経由で読み書きし、タイル間でデータをやり取りする自動化ができることを確認する
+- [x] タブごとにkey-valueの変数を設定できる（`niwaterm set-var`相当。tmuxのペイン変数に相当）
+- [x] タブの変数を取得・一覧できる（`niwaterm get-var`/`list-vars`相当）
+- [x] 別タブの変数をCLI経由で読み書きし、タブ間でデータをやり取りする自動化ができることを確認する
 
 ## GUI統合（内蔵ブラウザ・HTML UI）
 

@@ -228,58 +228,74 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
   });
 });
 
-describe("タイル変数(setTileVar/getTileVar/listTileVars)", () => {
-  test("非アクティブなワークスペースのタイルへも届く", () => {
+describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
+  test("非アクティブなワークスペースのタブへも届く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    mgr.newWorkspace(); // 以後、firstTileId所属のworkspaceは非アクティブ
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace(); // 以後、firstTabId所属のworkspaceは非アクティブ
 
-    expect(mgr.setTileVar(firstTileId, "status", "running")).toBe(true);
-    expect(mgr.getTileVar(firstTileId, "status")).toEqual({ found: true, value: "running" });
-    expect(mgr.listTileVars(firstTileId)).toEqual({ status: "running" });
+    expect(mgr.setTabVar(firstTabId, "status", "running")).toBe(true);
+    expect(mgr.getTabVar(firstTabId, "status")).toEqual({ found: true, value: "running" });
+    expect(mgr.listTabVars(firstTabId)).toEqual({ status: "running" });
   });
 
-  test("タイルAが書いた変数をタイルBから読める（tileIdを指定すれば所属workspaceに関わらずアクセスできる）", () => {
+  test("タブAが書いた変数をタブBから読める（tabIdを指定すれば所属workspaceに関わらずアクセスできる）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
-    const tileB = splitResult?.tileId as string;
+    const tabB = splitResult?.tabId as string;
 
-    // タイルAが自身の状態をtileVarに書く
-    mgr.setTileVar(tileA, "status", "running");
-    // タイルBが送信元（タイルA）のtileVarを読む
-    expect(mgr.getTileVar(tileA, "status")).toEqual({ found: true, value: "running" });
+    // タブAが自身の状態をtabVarに書く
+    mgr.setTabVar(tabA, "status", "running");
+    // タブBが送信元（タブA）のtabVarを読む
+    expect(mgr.getTabVar(tabA, "status")).toEqual({ found: true, value: "running" });
 
-    // タイルBが読んでいる間にタイルAが値を更新する
-    mgr.setTileVar(tileA, "status", "done");
-    expect(mgr.getTileVar(tileA, "status")).toEqual({ found: true, value: "done" });
+    // タブBが読んでいる間にタブAが値を更新する
+    mgr.setTabVar(tabA, "status", "done");
+    expect(mgr.getTabVar(tabA, "status")).toEqual({ found: true, value: "done" });
 
-    // tileBには影響しない（namespace分離）
-    expect(mgr.getTileVar(tileB, "status")).toEqual({ found: false, reason: "not-set" });
+    // tabBには影響しない（namespace分離）
+    expect(mgr.getTabVar(tabB, "status")).toEqual({ found: false, reason: "not-set" });
   });
 
-  test("異なるタイル間で変数が混ざらない", () => {
+  test("異なるタブ間で変数が混ざらない", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
-    const tileB = splitResult?.tileId as string;
+    const tabB = splitResult?.tabId as string;
 
-    mgr.setTileVar(tileA, "k", "a-value");
-    mgr.setTileVar(tileB, "k", "b-value");
+    mgr.setTabVar(tabA, "k", "a-value");
+    mgr.setTabVar(tabB, "k", "b-value");
 
-    expect(mgr.getTileVar(tileA, "k")).toEqual({ found: true, value: "a-value" });
-    expect(mgr.getTileVar(tileB, "k")).toEqual({ found: true, value: "b-value" });
+    expect(mgr.getTabVar(tabA, "k")).toEqual({ found: true, value: "a-value" });
+    expect(mgr.getTabVar(tabB, "k")).toEqual({ found: true, value: "b-value" });
   });
 
-  test("存在しないtileIdはsetがfalse、getがtile-not-found、listがnull", () => {
+  test("同一タイル内の複数タブでも変数が混ざらない（タブ単位化の主目的）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    expect(mgr.setTileVar("not-found", "k", "v")).toBe(false);
-    expect(mgr.getTileVar("not-found", "k")).toEqual({ found: false, reason: "tile-not-found" });
-    expect(mgr.listTileVars("not-found")).toBeNull();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabB = mgr.newTab(tileId) as string;
+
+    mgr.setTabVar(tabA, "agent_status", "working");
+    mgr.setTabVar(tabB, "agent_status", "idle");
+
+    expect(mgr.getTabVar(tabA, "agent_status")).toEqual({ found: true, value: "working" });
+    expect(mgr.getTabVar(tabB, "agent_status")).toEqual({ found: true, value: "idle" });
+  });
+
+  test("存在しないtabIdはsetがfalse、getがtab-not-found、listがnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setTabVar("not-found", "k", "v")).toBe(false);
+    expect(mgr.getTabVar("not-found", "k")).toEqual({ found: false, reason: "tab-not-found" });
+    expect(mgr.listTabVars("not-found")).toBeNull();
   });
 });
 
@@ -443,17 +459,34 @@ describe("listWorkspaces", () => {
     expect(mgr.snapshot().workspaces).toEqual(mgr.listWorkspaces());
   });
 
-  test("tileVarsに各leafタイルのタイル変数がtileIdをキーに含まれる（未設定なら空オブジェクト）", () => {
+  test("tabVarsに各タブのタブ変数がtabIdをキーに含まれる（未設定なら空オブジェクト）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
     const split = mgr.splitTile(firstTileId, "vertical");
-    mgr.setTileVar(firstTileId, "branch", "main");
+    mgr.setTabVar(firstTabId, "branch", "main");
 
     const entry = mgr.listWorkspaces()[0];
-    expect(entry?.tileVars).toEqual({
-      [firstTileId]: { branch: "main" },
-      [split?.tileId as string]: {},
+    expect(entry?.tabVars).toEqual({
+      [firstTabId]: { branch: "main" },
+      [split?.tabId as string]: {},
+    });
+  });
+
+  test("1タイル内に複数タブがあると、tabVarsのキーはタイル単位ではなくタブ単位で並ぶ", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const secondTabId = mgr.newTab(tileId) as string;
+    mgr.setTabVar(firstTabId, "agent_status", "working");
+    mgr.setTabVar(secondTabId, "agent_status", "idle");
+
+    const entry = mgr.listWorkspaces()[0];
+    expect(entry?.tabVars).toEqual({
+      [firstTabId]: { agent_status: "working" },
+      [secondTabId]: { agent_status: "idle" },
     });
   });
 });

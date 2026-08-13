@@ -40,8 +40,28 @@ function shellCommand(shell: string | undefined): string[] {
   return isWindows ? ["powershell.exe", "-NoLogo"] : ["/bin/zsh", "-il"];
 }
 
+/**
+ * WSLは`wsl.exe`起動時にWindows側の環境変数を既定では継承しない
+ * （`WSLENV`にコロン区切りで明示リストした変数名だけがLinux側へ渡る仕様）。
+ * niwatermがPTY起動時に注入する変数（NIWATERM_TAB_ID等）をWSL内のシェルまで
+ * 届けるため、WSLプロファイル起動時のみWSLENVへ追記する
+ */
+function buildEnv(
+  cmd: string[],
+  term: string,
+  extraEnv: Record<string, string> | undefined,
+): Record<string, string> {
+  const env: Record<string, string> = { ...process.env, TERM: term, ...extraEnv };
+  if (isWindows && extraEnv && cmd[0]?.toLowerCase() === "wsl.exe") {
+    const existing = env["WSLENV"]?.split(":").filter((v) => v.length > 0) ?? [];
+    env["WSLENV"] = [...new Set([...existing, ...Object.keys(extraEnv)])].join(":");
+  }
+  return env;
+}
+
 export function createPty(opts: PtyOptions): Pty {
   const term = opts.term ?? "xterm-256color";
+  const cmd = shellCommand(opts.shell);
 
   let onDataFn: ((data: Uint8Array) => void) | null = null;
   let onExitFn: ((code: number) => void) | null = null;
@@ -55,10 +75,10 @@ export function createPty(opts: PtyOptions): Pty {
     },
   });
 
-  const proc = Bun.spawn(shellCommand(opts.shell), {
+  const proc = Bun.spawn(cmd, {
     cwd: opts.cwd ?? homedir(),
     // TerminalOptions.nameはTERM環境変数を設定しないため明示的に渡す
-    env: { ...process.env, TERM: term, ...opts.env },
+    env: buildEnv(cmd, term, opts.env),
     terminal,
     onExit(_proc, exitCode) {
       onExitFn?.(exitCode ?? 0);

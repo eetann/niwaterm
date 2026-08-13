@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タイル変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -77,44 +77,44 @@ niwaterm capture-tab --tab <tabId>
 指定したタブの現在の画面内容をプレーンテキストで標準出力へ表示する（tmuxの`capture-pane -p`相当）。エスケープシーケンス・色情報は含まれず、現在画面（viewport）の内容のみが対象でスクロールバックは含まれない。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm set-var --tile <tileId> <key> <value>
-niwaterm get-var --tile <tileId> <key>
-niwaterm list-vars --tile <tileId>
+niwaterm set-var --tab <tabId> <key> <value>
+niwaterm get-var --tab <tabId> <key>
+niwaterm list-vars --tab <tabId>
 ```
 
-タイルごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。**変数は永続化されず、アプリを終了する・対象タイルを閉じると消える**（tileId自体がアプリ再起動のたびに再採番されるため）。`tileId`を指定すればどのタイルからでも別タイルの変数を読み書きできるため、送信元タイルが自身の状態を`set-var`で書き、別タイルがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタイル間の自動化に使える。指定した`tileId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
+タブごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。**変数は永続化されず、アプリを終了する・対象タブを閉じると消える**（tabId自体がアプリ再起動のたびに再採番されるため）。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`set-var`で書き、別タブがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
-`--tile`は省略可能で、その場合`NIWATERM_TILE_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタイル自身の変数を読み書きする分にはタイルIDを調べる必要がない（別タイルの変数を操作する場合は`--tile`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`set-var`する。`--tile`省略かつ`NIWATERM_TILE_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`set-var`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
 ## シェル統合
 
-`contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタイル変数`branch`へ自動反映する（`niwaterm set-var branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
+`contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm set-var branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
 
 ```sh
 # ~/.zshrc
-[ -n "$NIWATERM_TILE_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.zsh
+[ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.zsh
 ```
 
 ```sh
 # ~/.bashrc
-[ -n "$NIWATERM_TILE_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
+[ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
 ```
 
 ```fish
 # ~/.config/fish/config.fish
-test -n "$NIWATERM_TILE_ID"; and source /path/to/niwaterm/contrib/shell-integration/niwaterm.fish
+test -n "$NIWATERM_TAB_ID"; and source /path/to/niwaterm/contrib/shell-integration/niwaterm.fish
 ```
 
 ```powershell
 # $PROFILE
-if ($env:NIWATERM_TILE_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwaterm.ps1 }
+if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwaterm.ps1 }
 ```
 
-`NIWATERM_TILE_ID`が無いシェル（niwaterm外のターミナル）では何もしない。PowerShell版は`prompt`関数を上書きするが、既存の`prompt`関数（他ツールのプロンプトカスタマイズ等）を保持して末尾で呼び直すため、他のプロンプト拡張と共存できる。
+`NIWATERM_TAB_ID`が無いシェル（niwaterm外のターミナル）では何もしない。PowerShell版は`prompt`関数を上書きするが、既存の`prompt`関数（他ツールのプロンプトカスタマイズ等）を保持して末尾で呼び直すため、他のプロンプト拡張と共存できる。
 
 ## エージェント統合
 
-`contrib/agent-integration/`配下の設定を導入すると、タイル内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタイル変数`agent`/`agent_status`へ自動反映する（`niwaterm set-var agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
+`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する（`niwaterm set-var agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
 
 ```sh
 # ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
@@ -126,7 +126,7 @@ jq -s '.[0] * {hooks: (.[0].hooks * .[1].hooks)}' \
 mv /tmp/merged-settings.json ~/.claude/settings.json
 ```
 
-`branch`と同様、`agent`/`agent_status`もタイル変数の予約キーである（値は`niwaterm set-var`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TILE_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
+`branch`と同様、`agent`/`agent_status`もタブ変数の予約キーである（値は`niwaterm set-var`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TAB_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
 
 ```sh
 niwaterm browser-navigate --tab <tabId> --url <url>
@@ -178,9 +178,9 @@ niwaterm docs show cli
   - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
   - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404
   - `GET /capture-tab` — `?tabId=<tabId>`を受け取り、そのタブの現在画面をプレーンテキスト（`GhosttyFormatterFormat`の`PLAIN`）で`{ok: true, text}`として返す。tabId未指定は400、tabId不存在は404
-  - `POST /set-var` — `{tileId: string, key: string, value: string}`を受け取り、タイル変数を設定する。keyは`^[A-Za-z0-9_.-]{1,128}$`のみ許可、不一致・valueが非stringは400。tileId不存在時は404
-  - `GET /get-var` — `?tileId=<tileId>&key=<key>`を受け取り、タイル変数を`{ok: true, value}`として返す。クエリ未指定は400、tileId不存在または未設定のkeyは404
-  - `GET /list-vars` — `?tileId=<tileId>`を受け取り、そのタイルの変数を`{ok: true, vars: Record<string,string>}`として返す。tileId未指定は400、tileId不存在は404
+  - `POST /set-var` — `{tabId: string, key: string, value: string}`を受け取り、タブ変数を設定する。keyは`^[A-Za-z0-9_.-]{1,128}$`のみ許可、不一致・valueが非stringは400。tabId不存在時は404
+  - `GET /get-var` — `?tabId=<tabId>&key=<key>`を受け取り、タブ変数を`{ok: true, value}`として返す。クエリ未指定は400、tabId不存在または未設定のkeyは404
+  - `GET /list-vars` — `?tabId=<tabId>`を受け取り、そのタブの変数を`{ok: true, vars: Record<string,string>}`として返す。tabId未指定は400、tabId不存在は404
   - `POST /browser-navigate` — `{tabId: string, url: string}`を受け取り、ブラウザタブのURLを遷移する。成功時`{ok: true}`。tabId不存在またはterminalタブは404、対象ワークスペースが非アクティブ・ページ未ロード・遷移タイムアウトは409、不正なボディは400
   - `GET /browser-get-text` — `?tabId=<tabId>`を受け取り、ブラウザタブの表示内容を`{ok: true, text}`として返す。404/409/400の条件は`/browser-navigate`と同様
   - `GET /browser-get-html` — `?tabId=<tabId>`を受け取り、ブラウザタブのHTMLを`{ok: true, html}`として返す。404/409/400の条件は`/browser-navigate`と同様

@@ -1,12 +1,12 @@
 # niwatermシェル統合（bash）
-# タイル内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
+# タブ内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
 # プロンプト表示のたびに`niwaterm set-var branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: ~/.bashrcに以下を追記する
-#   [ -n "$NIWATERM_TILE_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
+#   [ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
 #
-# NIWATERM_TILE_IDはniwaterm内で起動したシェルにのみ自動設定される環境変数なので、
+# NIWATERM_TAB_IDはniwaterm内で起動したシェルにのみ自動設定される環境変数なので、
 # niwaterm外のターミナル（この行を無条件でsourceした場合を含む）では何もしない。
-if [[ -n "$NIWATERM_TILE_ID" ]] && command -v niwaterm >/dev/null 2>&1; then
+if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwaterm >/dev/null 2>&1; then
   _NIWATERM_LAST_BRANCH=""
 
   _niwaterm_report_branch() {
