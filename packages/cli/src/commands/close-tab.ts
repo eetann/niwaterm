@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { closeTab, ipcSocketPath } from "../ipc-client";
+import { closeTab, resolveIpcEndpoint } from "../ipc-client";
 
 export default define({
   name: "close-tab",
@@ -19,7 +19,7 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await closeTab(ipcSocketPath(), ctx.values.tile, ctx.values.tab);
+    const result = await closeTab(resolveIpcEndpoint(), ctx.values.tile, ctx.values.tab);
     if (!result.ok) {
       failAndExit(`close-tabに失敗しました: ${result.error}`);
     }

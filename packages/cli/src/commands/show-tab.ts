@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { ipcSocketPath, showTab } from "../ipc-client";
+import { resolveIpcEndpoint, showTab } from "../ipc-client";
 
 export default define({
   name: "show-tab",
@@ -15,7 +15,7 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await showTab(ipcSocketPath(), ctx.values.tab);
+    const result = await showTab(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
       failAndExit(`show-tabに失敗しました: ${result.error}`);
     }

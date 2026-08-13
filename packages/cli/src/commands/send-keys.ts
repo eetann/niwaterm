@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { ipcSocketPath, sendKeys } from "../ipc-client";
+import { resolveIpcEndpoint, sendKeys } from "../ipc-client";
 
 export default define({
   name: "send-keys",
@@ -26,7 +26,7 @@ export default define({
         "送信するキーを1つ以上指定してください（例: niwaterm send-keys --tab tab-3 'ls -la' Enter）",
       );
     }
-    const result = await sendKeys(ipcSocketPath(), ctx.values.tab, keys);
+    const result = await sendKeys(resolveIpcEndpoint(), ctx.values.tab, keys);
     if (!result.ok) {
       failAndExit(`send-keysに失敗しました: ${result.error}`);
     }

@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { browserScreenshot, ipcSocketPath } from "../ipc-client";
+import { browserScreenshot, resolveIpcEndpoint } from "../ipc-client";
 
 export default define({
   name: "browser-screenshot",
@@ -21,7 +21,7 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await browserScreenshot(ipcSocketPath(), ctx.values.tab);
+    const result = await browserScreenshot(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
       failAndExit(`browser-screenshotに失敗しました: ${result.error}`);
     }

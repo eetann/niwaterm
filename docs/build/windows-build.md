@@ -8,11 +8,12 @@ description: Windows実機でniwatermをビルド・実行するための手順�
 
 Windowsでniwatermをビルド・実行するための手順。
 
-> **状態**（2026-08-10時点）: Windows 11 x64で**動作確認済み**。
+> **状態**（2026-08-13時点）: Windows 11 x64で**動作確認済み**。
 > 確認できたのは、アプリ起動・PowerShellの起動と入出力・タイル分割（`ctrl+shift+d`）・
 > IPCサーバー起動・CLI（`ping` / `list` / `send-keys` / `capture-tab`）・
 > ブラウザタブ（`new-tab --url` / `browser-navigate` / `browser-get-text` / `browser-get-html`）・
-> customView（`new-tab --custom-view`）まで。
+> customView（`new-tab --custom-view`）・
+> WSL(NixOS)ディストロからのCLI接続（後述の「6. WSLディストロからniwaterm CLIを使う」）まで。
 > **`browser-screenshot`のみ、Bun本体側の既知issue（Windows上でChrome/Edgeの自動起動に失敗する）により動作しない**（後述）。
 
 ## 全体像
@@ -273,6 +274,62 @@ Electrobunは**Windowsではコンソールを持たないGUIアプリとして�
 $env:ELECTROBUN_CONSOLE=1
 ```
 
+## 6. WSLディストロからniwaterm CLIを使う
+
+niwatermはWSLディストロ（NixOS等）をシェルプロファイルとしてタブに開ける。そのタブ内から
+`niwaterm` CLI（シェル統合のブランチ表示・エージェント統合のhooksが内部で呼び出す）を
+使うには、以下の2つの対応が要る。
+
+### 6-1. WSLディストロ内でも別途CLIセットアップが要る
+
+CLI本体はWindows側リポジトリで`bun link`しても、WSLディストロは別のLinux環境なので
+そちらには反映されない。**WSLディストロの中でも別途セットアップする**:
+
+```bash
+# WSLディストロ内で実行
+cd /mnt/c/Users/<ユーザー名>/niwaterm/packages/cli
+bun link
+```
+
+`niwaterm --version`で疎通確認する。
+
+### 6-2. WSL→WindowsはTCPブリッジ経由で接続する
+
+WSLディストロからは、Windows側アプリが`Bun.serve({unix})`で開いているUnix domain socketへ
+**直接は接続できない**。ソケットファイルは`/mnt/c/...`（9p/drvfs）越しにWSL側から見えるが、
+`stat`すると`regular empty file`と出る（＝Linux側からはUnix domain socketとして認識されない）。
+DrvFsはNTFS上にソケット等の特殊ファイルを表現できないため、これはWSL自体の制約であり、
+niwaterm固有の問題ではない。
+
+この制約を回避するため、`src/bun/ipc-server.ts`はWindows限定で、Unix domain socketに加えて
+**WSL用のTCPブリッジ**も追加でlistenする:
+
+- **待受先**: `0.0.0.0`ではなく、`os.networkInterfaces()`で見つけた
+  WSL用Hyper-V仮想アダプタ（`vEthernet (WSL)`等、名前に`wsl`を含むもの）のIPv4アドレスに限定する。
+  このアダプタはWindowsホスト⇔WSL VM間の内部NATに閉じており、LANの他端末からは到達できない
+  （`0.0.0.0`だと同一LAN上の他端末からも到達しうるため、意図的に避けている）
+- **ポート**: 固定ポート`47831`（`packages/cli/src/ipc-client.ts`の`WSL_BRIDGE_PORT`と
+  `src/bun/ipc-server.ts`の`WSL_BRIDGE_PORT`に意図的に重複させている。変更時は両方揃えること）
+- **接続元(WSL側)の判定**: `packages/cli/src/ipc-client.ts`が`/proc/version`の内容で
+  WSL上かどうかを判定し、WSL上であれば`/proc/net/route`からデフォルトゲートウェイ
+  （＝Windowsホスト側の上記アダプタのIP）を読み取ってTCP接続する。ゲートウェイIPは
+  WSL VM再起動のたびに変わりうるため、実行のたびに動的に読み直す（キャッシュしない）
+
+対応済みのため、WSLディストロのタブ内でも他プラットフォーム同様にCLIが使える:
+
+```bash
+# WSL(NixOS)タブ内で実行
+niwaterm ping
+# pong (pid ...)
+
+niwaterm set-var mykey myvalue
+niwaterm get-var mykey
+# myvalue
+```
+
+macOS・Windows実機（PowerShell等、WSL外）からの接続は従来どおりUnix domain socketのみを使う。
+WSL判定に該当しない限りTCPブリッジ側は使われない。
+
 ## トラブルシューティング
 
 | 症状                                                                        | 原因・対処                                                                                                                                                                                                                                                                                                                                                                            |
@@ -286,6 +343,8 @@ $env:ELECTROBUN_CONSOLE=1
 | WebViewが真っ白                                                             | WebView2 Runtime未導入                                                                                                                                                                                                                                                                                                                                                                |
 | `browser-screenshot` が `unexpected status 500` で失敗する                  | Bun本体のWindows版`Bun.WebView`の既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)）。`BUN_CHROME_PATH`を設定しても直らない。niwaterm側の回避策は無く、Bun側の修正待ち                                                                                                                                                                                    |
 | `niwaterm ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
+| WSLディストロのタブ内で`niwaterm`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
+| WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、WSL用仮想アダプタが見つからない、ポート`47831`が別プロセスに使われている、のいずれか                                                                                                                                                                                                    |
 
 ## 既知の差異・制約
 

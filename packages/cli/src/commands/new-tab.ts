@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { ipcSocketPath, newTab } from "../ipc-client";
+import { resolveIpcEndpoint, newTab } from "../ipc-client";
 
 export default define({
   name: "new-tab",
@@ -41,7 +41,7 @@ export default define({
       failAndExit("new-tabに失敗しました: --url・--custom-view・--shellは同時に指定できません");
     }
     const result = await newTab(
-      ipcSocketPath(),
+      resolveIpcEndpoint(),
       ctx.values.tile,
       ctx.values.url,
       ctx.values["custom-view"],

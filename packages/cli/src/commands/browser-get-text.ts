@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { browserGetText, ipcSocketPath } from "../ipc-client";
+import { browserGetText, resolveIpcEndpoint } from "../ipc-client";
 
 export default define({
   name: "browser-get-text",
@@ -14,7 +14,7 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await browserGetText(ipcSocketPath(), ctx.values.tab);
+    const result = await browserGetText(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
       failAndExit(`browser-get-textに失敗しました: ${result.error}`);
     }

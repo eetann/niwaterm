@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { ipcSocketPath, splitTile } from "../ipc-client";
+import { resolveIpcEndpoint, splitTile } from "../ipc-client";
 
 export default define({
   name: "split-tile",
@@ -20,7 +20,7 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await splitTile(ipcSocketPath(), ctx.values.tile, ctx.values.orientation);
+    const result = await splitTile(resolveIpcEndpoint(), ctx.values.tile, ctx.values.orientation);
     if (!result.ok) {
       failAndExit(`split-tileに失敗しました: ${result.error}`);
     }

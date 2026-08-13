@@ -4,6 +4,7 @@
 
 import { unlinkSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
 import type { ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
@@ -26,6 +27,31 @@ type CaptureScreenshot = (url: string) => Promise<ScreenshotResult>;
 
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
+}
+
+/**
+ * WSL(NixOS等)からniwatermアプリ本体へ接続するためのTCPブリッジのポート。
+ * WSLディストロ内からはWindows側のUnix domain socketへ接続できない
+ * （9p/drvfs越しにソケットファイルとして扱えず、Linux側から見るとただの空の
+ * regular fileになるため。実機検証済み）ため、Windows限定でこのポートも追加でlistenする。
+ * packages/cli/src/ipc-client.tsに同じ値を意図的に重複させている（変更時は両方揃えること）。
+ */
+export const WSL_BRIDGE_PORT = 47831;
+
+/**
+ * WSL用のHyper-V仮想アダプタ（"vEthernet (WSL)"等、名前に"wsl"を含むもの）のIPv4アドレスを返す。
+ * このアダプタはWindowsホスト⇔WSL VM間の内部NATに閉じており、LAN上の他端末からは到達できない。
+ * 0.0.0.0にbindするとLAN全体に露出してしまうため、必ずこのアダプタのIPだけにbindする。
+ */
+function findWslAdapterAddresses(): string[] {
+  const addresses: string[] = [];
+  for (const [name, entries] of Object.entries(networkInterfaces())) {
+    if (!/wsl/i.test(name) || !entries) continue;
+    for (const entry of entries) {
+      if (entry.family === "IPv4" && !entry.internal) addresses.push(entry.address);
+    }
+  }
+  return addresses;
 }
 
 export interface IpcServer {
@@ -480,12 +506,26 @@ export async function createIpcServer(
     getShellProfiles,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
+  // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で
+  // WSL用仮想アダプタのIPにだけ追加でTCP listenする。bind失敗はbest effortで無視する
+  // （WSLが無効/未使用の環境や、まれなポート競合でIPCサーバー自体を落とさないため）
+  const tcpServers =
+    process.platform === "win32"
+      ? findWslAdapterAddresses().flatMap((hostname) => {
+          try {
+            return [Bun.serve({ hostname, port: WSL_BRIDGE_PORT, fetch: app.fetch })];
+          } catch {
+            return [];
+          }
+        })
+      : [];
   let closed = false;
   return {
     close() {
       if (closed) return;
       closed = true;
       server.stop();
+      for (const tcpServer of tcpServers) tcpServer.stop();
       try {
         unlinkSync(path);
       } catch {

@@ -1,6 +1,6 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
-import { getTabVar, ipcSocketPath } from "../ipc-client";
+import { getTabVar, resolveIpcEndpoint } from "../ipc-client";
 import { resolveTabId } from "../resolve-tab";
 
 export default define({
@@ -19,7 +19,7 @@ export default define({
   },
   run: async (ctx) => {
     const tabId = resolveTabId(ctx.values.tab);
-    const result = await getTabVar(ipcSocketPath(), tabId, ctx.values.key);
+    const result = await getTabVar(resolveIpcEndpoint(), tabId, ctx.values.key);
     if (!result.ok) {
       failAndExit(`get-varに失敗しました: ${result.error}`);
     }

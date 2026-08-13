@@ -1,7 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
 import {
-  ipcSocketPath,
+  resolveIpcEndpoint,
   listWorkspaces,
   type TileSummary,
   type WorkspaceListEntry,
@@ -34,7 +34,7 @@ export default define({
   name: "list",
   description: "ワークスペース・タイル・タブの一覧を表示",
   run: async () => {
-    const result = await listWorkspaces(ipcSocketPath());
+    const result = await listWorkspaces(resolveIpcEndpoint());
     if (!result.ok) {
       failAndExit(`niwatermに接続できませんでした: ${result.error}`);
     }

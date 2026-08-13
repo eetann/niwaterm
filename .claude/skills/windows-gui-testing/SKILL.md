@@ -50,6 +50,18 @@ powershell.exe -NoProfile -Command "$PS_PREFIX cd \$env:USERPROFILE\niwaterm\pac
 `niwaterm --version`で疎通確認。`command not found`になる場合は上記PS_PREFIXの
 `\.bun\bin`付与を忘れていないか確認する（`bin`フィールド経由で`~/.bun/bin`に登録されるため）。
 
+**NixOS(WSL)タブの動作確認をする場合は、このBashツールが動いているWSLディストロ自体にも
+別途`bun link`が要る**（Windows側でlinkしても別のLinux環境なので反映されない）。
+
+```bash
+cd /mnt/c/Users/<ユーザー名>/niwaterm/packages/cli
+bun link
+```
+
+WSLディストロからWindows側アプリ本体への接続はTCPブリッジ（固定ポート、WSL用仮想アダプタに
+バインド）経由になる。仕組みの詳細はdocs/build/windows-build.md「6. WSLディストロから
+niwaterm CLIを使う」参照。アプリ起動後、WSLディストロ側で`niwaterm ping`が通れば疎通確認完了。
+
 ## アプリの起動・停止
 
 devモードはGUIアプリなのでバックグラウンド起動し、ログをファイルへリダイレクトする。
