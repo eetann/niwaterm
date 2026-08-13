@@ -540,6 +540,86 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   });
 });
 
+describe("タブ名・タイル名(setTabName/setTileName/listTabNames/listTileNames)", () => {
+  test("set→listで同じ値が返る。上書きもできる", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    expect(ws.setTabName(tabId, "roadmap")).toBe(true);
+    expect(ws.listTabNames()).toEqual({ [tabId]: "roadmap" });
+
+    expect(ws.setTabName(tabId, "notes")).toBe(true);
+    expect(ws.listTabNames()).toEqual({ [tabId]: "notes" });
+  });
+
+  test("空文字列（前後空白のみも含む）を渡すと名前が削除されデフォルトへ戻る", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.setTileName(tileId, "作業ペイン");
+
+    expect(ws.setTileName(tileId, "  ")).toBe(true);
+
+    expect(ws.listTileNames()).toEqual({});
+  });
+
+  test("未設定のタブ・タイルはlistTabNames/listTileNamesに含まれない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.listTabNames()).toEqual({});
+    expect(ws.listTileNames()).toEqual({});
+  });
+
+  test("存在しないtabId/tileIdへのsetはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.setTabName("not-found", "x")).toBe(false);
+    expect(ws.setTileName("not-found", "x")).toBe(false);
+  });
+
+  test("closeTabで閉じたタブの名前は消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const secondTabId = ws.newTab(tileId) as string;
+    ws.setTabName(secondTabId, "sub");
+
+    ws.closeTab(tileId, secondTabId);
+
+    expect(ws.listTabNames()).toEqual({});
+  });
+
+  test("タイル自体が畳まれて閉じられると、そのタイル名も消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.setTileName(firstTileId, "keep");
+    ws.splitTile(firstTileId, "vertical");
+    const splitTree = ws.snapshot().layout;
+    const secondLeaf = (splitTree as typeof splitTree & { kind: "split" }).second as TileLeaf;
+    ws.setTileName(secondLeaf.id, "gone");
+
+    ws.closeTab(secondLeaf.id, secondLeaf.activeTabId);
+
+    expect(ws.listTileNames()).toEqual({ [firstTileId]: "keep" });
+  });
+
+  test("setTabName/setTileNameはonDirtyを呼ぶ（サイドバーへの即時反映のため）", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    dirtyCount = 0;
+
+    ws.setTabName(tabId, "roadmap");
+    ws.setTileName(tileId, "作業ペイン");
+
+    expect(dirtyCount).toBe(2);
+  });
+});
+
 describe("シェルプロセス終了時の挙動(onExit経由)", () => {
   test("複数タブがあるタイルで1つのプロセスが終了しても、そのタブだけ消えタイルは残る", () => {
     const { created, factory } = createFakeSessionFactory();

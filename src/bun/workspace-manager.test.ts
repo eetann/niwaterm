@@ -299,6 +299,57 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   });
 });
 
+describe("タブ名・タイル名(setTabName/setTileName)", () => {
+  test("setTabNameで設定した名前がlistWorkspaces()のtabNamesに反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+
+    expect(mgr.setTabName(tabId, "roadmap")).toBe(true);
+
+    expect(mgr.listWorkspaces()[0]?.tabNames).toEqual({ [tabId]: "roadmap" });
+  });
+
+  test("setTileNameで設定した名前がlistWorkspaces()のtileNamesに反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+
+    expect(mgr.setTileName(tileId, "作業ペイン")).toBe(true);
+
+    expect(mgr.listWorkspaces()[0]?.tileNames).toEqual({ [tileId]: "作業ペイン" });
+  });
+
+  test("空文字列を設定すると名前がクリアされデフォルトへ戻る", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+
+    mgr.setTabName(tabId, "roadmap");
+    mgr.setTabName(tabId, "");
+
+    expect(mgr.listWorkspaces()[0]?.tabNames).toEqual({});
+  });
+
+  test("存在しないtabId/tileIdへのsetはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setTabName("not-found", "x")).toBe(false);
+    expect(mgr.setTileName("not-found", "x")).toBe(false);
+  });
+
+  test("非アクティブなワークスペースのタブ・タイルへも届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace(); // 以後、firstTileId/firstTabId所属のworkspaceは非アクティブ
+
+    expect(mgr.setTabName(firstTabId, "roadmap")).toBe(true);
+    expect(mgr.setTileName(firstTileId, "作業ペイン")).toBe(true);
+  });
+});
+
 describe("ワークスペースが空になった時の挙動", () => {
   test("あるワークスペースの最後のタブのプロセスが終了すると、そのワークスペースは削除されアクティブが切り替わる", () => {
     const { created, factory } = createFakeSessionFactory();

@@ -38,6 +38,10 @@ export interface WorkspaceListEntry {
   layout: TileNode;
   /** サイドバー表示用。タブごとのkey-value変数（branch等） */
   tabVars: Record<TabId, Record<string, string>>;
+  /** ユーザーがサイドバーから設定したタブ名。未設定のタブは含まれない */
+  tabNames: Record<TabId, string>;
+  /** ユーザーがサイドバーから設定したタイル名。未設定のタイルは含まれない */
+  tileNames: Record<TileId, string>;
 }
 
 export interface TabLocation {
@@ -246,6 +250,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         focusedTileId: ws.getFocusedTileId(),
         layout,
         tabVars,
+        tabNames: ws.listTabNames(),
+        tileNames: ws.listTileNames(),
       };
     });
   }
@@ -270,6 +276,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   function listTabVars(tabId: TabId): Record<string, string> | null {
     return findOwnerByTabId(tabId)?.listTabVars(tabId) ?? null;
+  }
+
+  function setTabName(tabId: TabId, name: string): boolean {
+    return findOwnerByTabId(tabId)?.setTabName(tabId, name) ?? false;
+  }
+
+  function setTileName(tileId: TileId, name: string): boolean {
+    return findOwnerByTileId(tileId)?.setTileName(tileId, name) ?? false;
   }
 
   function snapshot(): AppRenderState {
@@ -324,6 +338,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setTabVar,
     getTabVar,
     listTabVars,
+    setTabName,
+    setTileName,
     serializeForPersistence,
     dispose,
   };

@@ -28,6 +28,10 @@ export interface WorkspaceRenderState {
   layout: TileNode;
   focusedTileId: TileId;
   tabs: Record<TabId, TabRenderState>;
+  /** ユーザーがサイドバーから設定したタブ名。未設定のタブは含まれない（表示側で連番にフォールバック） */
+  tabNames: Record<TabId, string>;
+  /** ユーザーがサイドバーから設定したタイル名。未設定のタイルは含まれない（表示側で連番にフォールバック） */
+  tileNames: Record<TileId, string>;
 }
 
 export type GetTabVarResult =
@@ -61,6 +65,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const browserTabs = new Map<TabId, BrowserTabState>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
   const tabVars = new Map<TabId, Map<string, string>>();
+  // タブ・タイル名はセッション内のみ保持する（アプリ再起動をまたいだ永続化はしない）
+  const tabNames = new Map<TabId, string>();
+  const tileNames = new Map<TileId, string>();
 
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
@@ -107,10 +114,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     }
   }
 
-  function applyCloseResult(newTree: TileNode, closedTabIds: TabId[]): void {
+  function applyCloseResult(newTree: TileNode, closedTabIds: TabId[], closedTileId?: TileId): void {
     tree = newTree;
     disposeSessions(closedTabIds);
-    for (const tabId of closedTabIds) tabVars.delete(tabId);
+    for (const tabId of closedTabIds) {
+      tabVars.delete(tabId);
+      tabNames.delete(tabId);
+    }
+    if (closedTileId) tileNames.delete(closedTileId);
     if (!findNode(tree, focusedTileId)) {
       focusedTileId = listLeaves(tree)[0]?.id ?? focusedTileId;
     }
@@ -126,10 +137,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (!result) return;
     if (result.tree === null) {
       disposeSessions([tabId]);
+      tabNames.delete(tabId);
       opts.onAllTabsClosed();
       return;
     }
-    applyCloseResult(result.tree, [tabId]);
+    applyCloseResult(result.tree, [tabId], result.tileClosed ? leaf.id : undefined);
   }
 
   function splitTileById(
@@ -202,7 +214,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   function closeTab(tileId: TileId, tabId: TabId): boolean {
     const result = closeTabInTile(tree, tileId, tabId);
     if (!result || result.tree === null) return false;
-    applyCloseResult(result.tree, [result.closedTabId]);
+    applyCloseResult(result.tree, [result.closedTabId], result.tileClosed ? tileId : undefined);
     return true;
   }
 
@@ -257,7 +269,23 @@ export function createWorkspace(opts: WorkspaceOptions) {
     for (const [tabId, state] of browserTabs) {
       tabs[tabId] = { kind: "browser", url: state.url };
     }
-    return { layout: tree, focusedTileId, tabs };
+    return {
+      layout: tree,
+      focusedTileId,
+      tabs,
+      tabNames: Object.fromEntries(tabNames),
+      tileNames: Object.fromEntries(tileNames),
+    };
+  }
+
+  /** サイドバー一覧用の軽量な参照。PTY内容のrenderStateは計算しない */
+  function listTabNames(): Record<TabId, string> {
+    return Object.fromEntries(tabNames);
+  }
+
+  /** サイドバー一覧用の軽量な参照。PTY内容のrenderStateは計算しない */
+  function listTileNames(): Record<TileId, string> {
+    return Object.fromEntries(tileNames);
   }
 
   /** workspace-managerがtileId/tabIdの所属先を判定するための軽量な参照。renderStateは計算しない */
@@ -317,11 +345,37 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return vars ? Object.fromEntries(vars) : {};
   }
 
+  /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
+  function setTabName(tabId: TabId, name: string): boolean {
+    if (!hasAnyTab(tabId)) return false;
+    if (name.trim() === "") {
+      tabNames.delete(tabId);
+    } else {
+      tabNames.set(tabId, name);
+    }
+    opts.onDirty();
+    return true;
+  }
+
+  /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
+  function setTileName(tileId: TileId, name: string): boolean {
+    if (!findNode(tree, tileId)) return false;
+    if (name.trim() === "") {
+      tileNames.delete(tileId);
+    } else {
+      tileNames.set(tileId, name);
+    }
+    opts.onDirty();
+    return true;
+  }
+
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
     browserTabs.clear();
     tabVars.clear();
+    tabNames.clear();
+    tileNames.clear();
   }
 
   return {
@@ -346,6 +400,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setTabVar,
     getTabVar,
     listTabVars,
+    setTabName,
+    setTileName,
+    listTabNames,
+    listTileNames,
     dispose,
   };
 }

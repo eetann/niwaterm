@@ -81,6 +81,8 @@ let focusedTileId: TileId | null = null;
 let currentTabId: TabId | null = null;
 // 直近のrender()で受け取ったlayout。cycleTab等、キー操作時にDOM待ちせず参照するために保持する
 let lastLayout: TileNode | null = null;
+// 直近のrender()で受け取ったアクティブワークスペースのタブ名。タブバーのラベル表示に使う
+let lastTabNames: Record<TabId, string> = {};
 // ワークスペース切替（Cmd+Option+]/[）の次/前の対象を解決するために保持する
 let activeWorkspaceId: WorkspaceId | null = null;
 let workspaceIds: WorkspaceId[] = [];
@@ -178,6 +180,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         activeWorkspaceId = p.activeWorkspaceId;
         workspaceIds = p.workspaceIds;
         lastLayout = p.workspace.layout;
+        lastTabNames = p.workspace.tabNames;
         renderLayout(p.workspace.layout, p.workspace.tabs);
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
@@ -584,7 +587,10 @@ function renderTileTabBar(tileId: TileId): void {
   root.render(
     createElement(TileTabBar, {
       tileId,
-      tabs: leaf.tabIds.map((tabId, index) => ({ tabId, label: String(index + 1) })),
+      tabs: leaf.tabIds.map((tabId, index) => ({
+        tabId,
+        label: lastTabNames[tabId] || String(index + 1),
+      })),
       activeTabId: leaf.activeTabId,
       shellProfiles,
       onSelectTab: (tabId) => {
@@ -670,6 +676,8 @@ function renderSidebar(
       workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
       onSelectWorkspaceHeader: activateSidebarWorkspace,
       onSelectTab: activateSidebarTab,
+      onRenameTab: renameSidebarTab,
+      onRenameTile: renameSidebarTile,
     }),
   );
 }
@@ -678,6 +686,18 @@ function renderSidebar(
 function activateSidebarWorkspace(workspaceId: WorkspaceId): void {
   if (workspaceId === activeWorkspaceId) return;
   sendMessage("switchWorkspace", { workspaceId });
+  imeEl.focus({ preventScroll: true });
+}
+
+/** サイドバーからのタブ名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+function renameSidebarTab(tabId: TabId, name: string): void {
+  sendMessage("renameTab", { tabId, name });
+  imeEl.focus({ preventScroll: true });
+}
+
+/** サイドバーからのタイル名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+function renameSidebarTile(tileId: TileId, name: string): void {
+  sendMessage("renameTile", { tileId, name });
   imeEl.focus({ preventScroll: true });
 }
 

@@ -78,7 +78,7 @@ export function buildSidebarWorkspaceItems(
     active: entry.workspaceId === currentActiveWorkspaceId,
     tiles: listLeaves(entry.layout).map((leaf, tileIndex) => ({
       tileId: leaf.id,
-      label: `Tile ${tileIndex + 1}`,
+      label: entry.tileNames[leaf.id] || `Tile ${tileIndex + 1}`,
       tabs: leaf.tabIds.map((tabId, tabIndex) => {
         const vars = entry.tabVars[tabId];
         const branch = vars?.["branch"] || null;
@@ -92,7 +92,7 @@ export function buildSidebarWorkspaceItems(
           : null;
         return {
           tabId,
-          label: `Tab ${tabIndex + 1}`,
+          label: entry.tabNames[tabId] || `Tab ${tabIndex + 1}`,
           active: entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
           branch,
           agent,

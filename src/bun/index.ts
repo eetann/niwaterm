@@ -75,6 +75,8 @@ export type NiwaRPC = {
       newWorkspace: {};
       switchWorkspace: { workspaceId: WorkspaceId };
       closeWorkspace: { workspaceId: WorkspaceId };
+      renameTab: { tabId: TabId; name: string };
+      renameTile: { tileId: TileId; name: string };
     };
   }>;
   webview: RPCSchema<{
@@ -331,6 +333,12 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
         workspaceManager.closeWorkspace(workspaceId);
+      },
+      renameTab: ({ tabId, name }: { tabId: TabId; name: string }) => {
+        workspaceManager.setTabName(tabId, name);
+      },
+      renameTile: ({ tileId, name }: { tileId: TileId; name: string }) => {
+        workspaceManager.setTileName(tileId, name);
       },
     },
   },

@@ -19,6 +19,8 @@ function workspace(
   workspaceId: string,
   layout: TileNode,
   tabVars: Record<string, Record<string, string>> = {},
+  tabNames: Record<string, string> = {},
+  tileNames: Record<string, string> = {},
 ): WorkspaceListEntry {
   return {
     workspaceId,
@@ -26,6 +28,8 @@ function workspace(
     focusedTileId: layout.id,
     layout,
     tabVars,
+    tabNames,
+    tileNames,
   };
 }
 
@@ -103,6 +107,24 @@ describe("buildSidebarWorkspaceItems", () => {
       { tileId: "tile-1", label: "Tile 1" },
       { tileId: "tile-2", label: "Tile 2" },
     ]);
+  });
+
+  test("tabNames/tileNamesに設定があればデフォルトの連番の代わりにそれを使う", () => {
+    const workspaces = [
+      workspace(
+        "ws-1",
+        leaf("tile-1", ["tab-1", "tab-2"], "tab-1"),
+        {},
+        { "tab-1": "roadmap" },
+        { "tile-1": "作業ペイン" },
+      ),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.tiles[0]?.label).toBe("作業ペイン");
+    expect(items[0]?.tiles[0]?.tabs[0]?.label).toBe("roadmap");
+    expect(items[0]?.tiles[0]?.tabs[1]?.label).toBe("Tab 2");
   });
 
   test("tabVarsのbranchは独立フィールドとして返る（ラベルには含めない）", () => {
