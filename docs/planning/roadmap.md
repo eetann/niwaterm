@@ -93,25 +93,16 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 
 ## タブ状態の可視化（ブランチ・エージェント状態）
 
-cmux・herdrなど最近のAI連携ターミナルは、サイドバーにペインごとの「ブランチ・画面名・AIエージェントの種類と状態」を表示する。
-その仕組みをopensrcで調査した結果、2方式があった。
+サイドバーのタブ行に、gitブランチ名とAIエージェントの種別・状態（idle/working/blocked）を表示する機能。
+方式は「シェル統合・hooksによる能動プッシュ型」を採用（比較検討の経緯: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。
 
-- **cmux（アクティブ/プッシュ型）**: シェル統合スクリプト（zsh/bash/fish）をrcに注入し、`precmd`フックで`git branch`やpwdを取得してcontrol socket経由でアプリへ能動的に送る（`report_git_branch`等）。エージェント状態は各エージェントのセッションDBを直接覗くなど、エージェント別に深く統合する
-- **herdr（パッシブ/ポーリング型）**: PTY子プロセスの「フォアグラウンドプロセスグループ」をOS別（Linux/proc、Windowsはプロセススナップショット+親子関係）に取得し、プロセス名を既知エージェント一覧と照合。状態（idle/working/blocked）は画面末尾テキスト＋OSCタイトル/プログレスを、エージェントごとのTOMLルール（`contains`/`regex`/`line_regex`の論理式、優先度付き）と照合して判定する。ブランチは`.git/HEAD`を直接ファイル読み。ゼロコンフィグだが、OS別のプロセス走査コードとルールマニフェストの新規実装が要る
-
-niwatermは既にIPCサーバー・CLI・タブ変数（`niwaterm set-var`）を持っているため、cmux型の「シェルフックが能動的に状態を通知する」方式がそのまま乗る。まずはこちらを採用し、ゼロコンフィグなherdr型のプロセス走査・状態マニフェストは将来検討する。
-
-- [x] 調査: cmux（シェル統合プッシュ型）とherdr（パッシブ検知型）の仕組みを比較し、niwatermの既存IPC/CLI/タブ変数基盤にそのまま乗る「シェル統合プッシュ型」を採用する
-- [x] PTY起動時に`NIWATERM_TAB_ID`環境変数を設定し、シェル統合スクリプトやタブ内のシェルから`--tab`省略で`set-var`/`get-var`/`list-vars`を呼べる
-- [x] zsh向けシェル統合スニペット（precmdフックでgitブランチを`set-var`する）を用意し、導入手順をdocsに書く
-- [x] サイドバーのタブ行にタブ変数（ブランチ等）を表示する
-- [x] bash/fish/PowerShell向けのシェル統合スニペットも用意する
-- [x] エージェント種別・状態（idle/working/blocked等）の検知方式を決定する。herdr方式（フォアグラウンドプロセス走査+画面内容マニフェスト照合）か、各エージェントのhooks機構（Claude Codeのhooksなど）を使った能動通知か
-      ブランチ検知と同じ「hooks能動通知型」を採用（cmux/herdrをopensrcで比較調査した結果、詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。エージェントのhooks機構から静的なJSON設定（`contrib/agent-integration/claude-code/hooks.json`）をユーザーが`~/.claude/settings.json`等へ手動マージする方式。タブ変数`agent`/`agent_status`を予約キーとして使う
-- [x] 検知したエージェント状態をサイドバーに色分け等で表示する
-      サイドバーのタブ行に状態ドット（idle=緑/working=青/blocked=黄）とブランチ名を表示（src/mainview/react/sidebar-props.ts・sidebar-workspace-list.tsx）
-- [x] タブ単位（現状はタイル単位で共有）の状態管理が必要か検討する。1タイルに複数タブがある場合、非アクティブタブのシェルのブランチ更新が他タブの表示を上書きする既知の制約がある
-      実機検証で実際に問題（Claude Code稼働中のタブとPowerShellのみのタブが同一タイルにあると両方同じagent_status表示になる）が判明したため、変数の付与単位をタイル単位からタブ単位へ全面移行した。`niwaterm set-var/get-var/list-vars`は`--tile`ではなく`--tab`を取るようになり、PTY起動時の環境変数も`NIWATERM_TAB_ID`になった（詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）
+- [x] PTY起動時の`NIWATERM_TAB_ID`環境変数、タブ変数（`set-var`/`get-var`/`list-vars`）基盤を用意する
+- [x] zsh/bash/fish/PowerShell向けのシェル統合スニペット（precmdフックでブランチを`set-var`）を用意する
+- [x] Claude Codeのhooks経由でエージェント種別・状態を`set-var`する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`）
+- [x] サイドバーのタブ行にブランチ名・エージェント状態（色分けドット）を表示する
+- [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する（1タイル複数タブでの表示混線を解消）
+- [ ] ブランチ表示が実際には機能していない不具合を調査・修正する
+- [ ] エージェント状態表示が他のAI連携ターミナル（cmux等）と比べて貧弱（idle/working/blockedの3値と色分けドットのみ）。表示内容の拡充を検討する
 
 ## シェルプロファイル選択（複数シェル・WSLディストロ対応）
 
