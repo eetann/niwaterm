@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、ワークスペースの作成・切替・削除（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -63,6 +63,20 @@ niwaterm focus-tile --tile <tileId>
 - `focus-tile` — 指定タイルへフォーカスを移す
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
+niwaterm new-workspace
+niwaterm switch-workspace --workspace <workspaceId>
+niwaterm close-workspace --workspace <workspaceId>
+```
+
+ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。
+
+- `new-workspace` — 新規ワークスペースを作成し、アクティブにする。成功時、新規`workspaceId`を表示する
+- `switch-workspace` — 指定したワークスペースへ切り替える
+- `close-workspace` — 指定したワークスペースを閉じる。最後の1つのワークスペースは誤操作防止のため閉じられない
+
+いずれも対象の`workspaceId`が存在しない場合、`close-workspace`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm shell-profiles
@@ -170,6 +184,9 @@ niwaterm docs show cli
 - 通信: `Bun.serve({unix, fetch})` + Hono
   - `GET /ping` — `{ok: true, pid: <number>}`を返す
   - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`）
+  - `POST /new-workspace` — ボディ不要。新規ワークスペースを作成しアクティブにする。成功時`{ok: true, workspaceId}`を返す
+  - `POST /switch-workspace` — `{workspaceId: string}`を受け取り、アクティブなワークスペースを切り替える。workspaceId不存在時は404
+  - `POST /close-workspace` — `{workspaceId: string}`を受け取り、ワークスペースを閉じる。workspaceId不存在時は404、最後の1つを指定した場合は409
   - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
   - `POST /split-tile` — `{tileId: string, orientation: "horizontal"|"vertical"}`を受け取り、タイルを分割する。成功時`{ok: true, tileId, tabId}`（新規作成分）を返す。tileId不存在時は404、不正なボディは400
   - `POST /new-tab` — `{tileId: string, url?: string, customView?: boolean, shellProfileId?: string}`を受け取り、新規タブを作成する。`url`指定時はそのURLのブラウザタブ、`customView: true`指定時は設定済みの`customView`を開くブラウザタブ、`shellProfileId`指定時はそのプロファイルのシェルでターミナルタブ、いずれも省略時はデフォルトシェルのターミナルタブ。成功時`{ok: true, tabId}`を返す。tileId不存在時は404、urlが空文字列・3つのうち2つ以上の同時指定・customView未設定時のcustomView:true・未知のshellProfileIdはいずれも400

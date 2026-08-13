@@ -192,7 +192,7 @@ tmux用のvde-layoutはYAML設定＋N分割（ratio配列）だが、niwatermは
 
 CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用先は`--new-workspace`（デフォルト、既存作業を壊さない安全側）と`--replace`（現在のワークスペースを置き換え）を選べるようにする。
 
-- [ ] ワークスペース単位のCLI操作を追加する（前提整備）。`workspace-manager.ts`が既に持つ`newWorkspace`/`switchWorkspace`/`closeWorkspace`をIPCサーバー（`/new-workspace`・`/switch-workspace`・`/close-workspace`）とCLIから呼べるようにする。現状これらはwebview側のキーボード操作からしか届かない
+- [x] ワークスペース単位のCLI操作を追加する（前提整備）。`workspace-manager.ts`が既に持つ`newWorkspace`/`switchWorkspace`/`closeWorkspace`をIPCサーバー（`/new-workspace`・`/switch-workspace`・`/close-workspace`）とCLI（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`）から呼べるようにした。あわせて`newWorkspace`が新規`workspaceId`を返す・`switchWorkspace`が成否をboolean で返す・`closeWorkspace`が`{ok:false, reason:"not-found"|"last-workspace"}`を返すようmanager層のシグネチャも変更した（従来は全てvoidで、CLI/IPCから成否や新規IDを判別できなかったため）
 - [ ] タブ起動時のcwd指定を配線する。`pty.ts`の`PtyOptions.cwd`は存在するが誰も渡していない（`workspace.ts`の`spawnSession`が常に`homedir()`にフォールバック）。RPC `newTab`・IPC `/new-tab`にも`cwd`を通す。下の「起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる」と配線を共有できないか検討する
 - [ ] `@niwaterm/config`にレイアウト設定のスキーマを追加する（`layouts?: Record<string, LayoutPreset>`。プリセットはタイル木構造（2分割ratioのネスト）と各タブの`command`/`cwd`/`vars`/`focus`を持つ）
 - [ ] レイアウト適用エンジンを実装する。設定のツリーからTileNode木構造とタブのスポーン計画を構築する（`persistence.ts`の`buildTreeFromPersisted`のID再採番パターンを流用できそう）。各タブは「作成 →（`cwd`があれば適用）→（`command`があれば`delay`後にsend-keys）→（`vars`があれば`set-var`）」の順で組み立てる

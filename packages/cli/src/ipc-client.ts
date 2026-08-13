@@ -255,6 +255,30 @@ export function newTab(
   return postJson(endpoint, "/new-tab", body);
 }
 
+export type NewWorkspaceResult = { ok: true; workspaceId: string } | { ok: false; error: string };
+
+export function newWorkspace(endpoint: IpcEndpoint): Promise<NewWorkspaceResult> {
+  return postJson(endpoint, "/new-workspace", {});
+}
+
+export type SwitchWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export function switchWorkspace(
+  endpoint: IpcEndpoint,
+  workspaceId: string,
+): Promise<SwitchWorkspaceResult> {
+  return postJson(endpoint, "/switch-workspace", { workspaceId });
+}
+
+export type CloseWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export function closeWorkspace(
+  endpoint: IpcEndpoint,
+  workspaceId: string,
+): Promise<CloseWorkspaceResult> {
+  return postJson(endpoint, "/close-workspace", { workspaceId });
+}
+
 export interface ShellProfileEntry {
   id: string;
   name: string;

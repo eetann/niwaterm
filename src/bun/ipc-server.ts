@@ -81,6 +81,16 @@ function parseTileIdBody(body: unknown): TileIdRequestBody | null {
   return { tileId: b.tileId };
 }
 
+interface WorkspaceIdRequestBody {
+  workspaceId: string;
+}
+
+function parseWorkspaceIdBody(body: unknown): WorkspaceIdRequestBody | null {
+  const b = body as { workspaceId?: unknown };
+  if (typeof b.workspaceId !== "string" || b.workspaceId.length === 0) return null;
+  return { workspaceId: b.workspaceId };
+}
+
 interface TabIdRequestBody {
   tabId: string;
 }
@@ -199,6 +209,36 @@ function buildApp(
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
 
   app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
+
+  app.post("/new-workspace", (c) => {
+    const workspaceId = workspaceManager.newWorkspace();
+    return c.json({ ok: true, workspaceId });
+  });
+
+  app.post("/switch-workspace", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseWorkspaceIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { workspaceId: string }" }, 400);
+    const ok = workspaceManager.switchWorkspace(parsed.workspaceId);
+    if (!ok) return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post("/close-workspace", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseWorkspaceIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { workspaceId: string }" }, 400);
+    const result = workspaceManager.closeWorkspace(parsed.workspaceId);
+    if (!result.ok) {
+      if (result.reason === "not-found") {
+        return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
+      }
+      return c.json({ ok: false, error: "cannot close the last workspace" }, 409);
+    }
+    return c.json({ ok: true });
+  });
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
 

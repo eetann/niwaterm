@@ -1,7 +1,7 @@
 ---
 name: niwaterm-cli
 description: |
-  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示）。
+  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示）。
   トリガー: "niwaterm", "niwatermを操作", "niwaterm CLI", "タイルを分割して", "タブにキー送信", "niwatermのブラウザタブを操作", "niwatermで確認したい"
 user-invocable: true
 allowed-tools: Bash(niwaterm:*)
@@ -21,6 +21,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `list` — ワークスペース・タイル・タブの一覧（操作対象のIDを確認する起点）
 - `send-keys` — 指定タブへのキー送信（tmuxのsend-keys相当）
 - `split-tile` / `new-tab` / `switch-tab` / `close-tab` / `focus-tile` — レイアウト操作
+- `new-workspace` / `switch-workspace` / `close-workspace` — ワークスペースの作成・切替・削除
 - `capture-tab` — タブの画面内容（プレーンテキスト）取得
 - `set-var` / `get-var` / `list-vars` — タブごとのkey-value変数（タブ間の連携に使える）
 - `browser-navigate` / `browser-get-text` / `browser-get-html` / `browser-screenshot` — ブラウザタブ操作

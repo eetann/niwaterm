@@ -21,6 +21,10 @@ export type { GetTabVarResult } from "./workspace";
 
 export type WorkspaceId = string;
 
+export type CloseWorkspaceResult =
+  | { ok: true }
+  | { ok: false; reason: "not-found" | "last-workspace" };
+
 export interface AppRenderState {
   activeWorkspaceId: WorkspaceId;
   /** 表示順。ウィンドウタイトルの "2/3" 表示に使う */
@@ -158,19 +162,24 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaceId === activeId;
   }
 
-  function newWorkspace(): void {
+  function newWorkspace(): WorkspaceId {
     activeId = createAndRegisterWorkspace();
     opts.onDirty();
+    return activeId;
   }
 
-  function switchWorkspace(workspaceId: WorkspaceId): void {
-    if (!workspaces.has(workspaceId) || activeId === workspaceId) return;
-    activeId = workspaceId;
-    opts.onDirty();
+  function switchWorkspace(workspaceId: WorkspaceId): boolean {
+    if (!workspaces.has(workspaceId)) return false;
+    if (activeId !== workspaceId) {
+      activeId = workspaceId;
+      opts.onDirty();
+    }
+    return true;
   }
 
-  function closeWorkspace(workspaceId: WorkspaceId): void {
-    if (workspaces.size === 1 || !workspaces.has(workspaceId)) return; // 最後の1つは閉じない（誤操作防止）
+  function closeWorkspace(workspaceId: WorkspaceId): CloseWorkspaceResult {
+    if (!workspaces.has(workspaceId)) return { ok: false, reason: "not-found" };
+    if (workspaces.size === 1) return { ok: false, reason: "last-workspace" }; // 最後の1つは閉じない（誤操作防止）
     workspaces.get(workspaceId)?.dispose();
     workspaces.delete(workspaceId);
     order = order.filter((id) => id !== workspaceId);
@@ -178,6 +187,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       activeId = order[order.length - 1];
     }
     opts.onDirty();
+    return { ok: true };
   }
 
   function splitTile(

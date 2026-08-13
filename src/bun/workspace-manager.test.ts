@@ -97,33 +97,34 @@ describe("createWorkspaceManager", () => {
 });
 
 describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
-  test("newWorkspaceで新規ワークスペースが増え、アクティブになる", () => {
+  test("newWorkspaceで新規ワークスペースが増え、アクティブになり、新規workspaceIdを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    mgr.newWorkspace();
+    const newId = mgr.newWorkspace();
     const snap = mgr.snapshot();
     expect(snap.workspaceIds.length).toBe(2);
     expect(snap.activeWorkspaceId).not.toBe(firstId);
+    expect(newId).toBe(snap.activeWorkspaceId);
   });
 
-  test("switchWorkspaceでアクティブなワークスペースの描画データが切り替わる", () => {
+  test("switchWorkspaceでアクティブなワークスペースの描画データが切り替わり、trueを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
     mgr.newWorkspace();
     const secondId = mgr.snapshot().activeWorkspaceId;
-    mgr.switchWorkspace(firstId);
+    expect(mgr.switchWorkspace(firstId)).toBe(true);
     expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
-    mgr.switchWorkspace(secondId);
+    expect(mgr.switchWorkspace(secondId)).toBe(true);
     expect(mgr.snapshot().activeWorkspaceId).toBe(secondId);
   });
 
-  test("存在しないworkspaceIdへのswitchWorkspaceは無視される", () => {
+  test("存在しないworkspaceIdへのswitchWorkspaceは無視されfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const activeId = mgr.snapshot().activeWorkspaceId;
-    mgr.switchWorkspace("not-found");
+    expect(mgr.switchWorkspace("not-found")).toBe(false);
     expect(mgr.snapshot().activeWorkspaceId).toBe(activeId);
   });
 
@@ -135,7 +136,7 @@ describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
     const secondId = mgr.snapshot().activeWorkspaceId;
     mgr.switchWorkspace(firstId);
 
-    mgr.closeWorkspace(secondId);
+    expect(mgr.closeWorkspace(secondId)).toEqual({ ok: true });
 
     expect(mgr.snapshot().workspaceIds).toEqual([firstId]);
     expect(created[1]?.disposed).toBe(true);
@@ -153,11 +154,19 @@ describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
     expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
   });
 
-  test("最後の1つのワークスペースはcloseWorkspaceしても閉じられない（誤操作防止）", () => {
+  test("存在しないworkspaceIdへのcloseWorkspaceはnot-found理由を返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    mgr.newWorkspace();
+    expect(mgr.closeWorkspace("not-found")).toEqual({ ok: false, reason: "not-found" });
+    expect(mgr.snapshot().workspaceIds.length).toBe(2);
+  });
+
+  test("最後の1つのワークスペースはcloseWorkspaceしても閉じられず、last-workspace理由を返す（誤操作防止）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const onlyId = mgr.snapshot().activeWorkspaceId;
-    mgr.closeWorkspace(onlyId);
+    expect(mgr.closeWorkspace(onlyId)).toEqual({ ok: false, reason: "last-workspace" });
     expect(mgr.snapshot().workspaceIds).toEqual([onlyId]);
   });
 });

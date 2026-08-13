@@ -718,6 +718,124 @@ describe("POST /focus-tile", () => {
   });
 });
 
+describe("POST /new-workspace, POST /switch-workspace, POST /close-workspace", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("new-workspace: 新規ワークスペースを作成しアクティブにして、workspaceIdを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; workspaceId: string };
+    expect(body.ok).toBe(true);
+    expect(body.workspaceId).not.toBe(firstId);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(body.workspaceId);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, body.workspaceId]);
+  });
+
+  test("switch-workspace: 指定したワークスペースへ切り替える", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: firstId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
+  });
+
+  test("switch-workspace: 存在しないworkspaceIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("close-workspace: 非アクティブなワークスペースを閉じる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+    mgr.switchWorkspace(firstId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: secondId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId]);
+  });
+
+  test("close-workspace: 存在しないworkspaceIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("close-workspace: 最後の1つのワークスペースは409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: onlyId }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+});
+
 describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html", () => {
   let dir: string;
   let socketPath: string;
