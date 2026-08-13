@@ -103,7 +103,7 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 - [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する（1タイル複数タブでの表示混線を解消）
 - [x] ブランチ表示が実際には機能していない不具合を調査・修正する（原因: IPC・シェル統合・bun側のtabVars更新は正常に動作していたが、`sidebar-workspace-list.tsx`のブランチ表示行が`tab.agent && tab.branch`という条件になっており、AIエージェントが紐づいていない大半のタブでブランチ名が一切表示されない状態だった。`tab.branch`単体の条件に修正し、エージェントなしタブでもbranchがあれば2行目に表示するようにした。Windows実機でCLI経由のset-var→サイドバー表示まで動作確認済み）
 - [x] サイドバーのタブ行をリッチカード型に刷新する（`.mywork/tmp/sidebar-ui-mockups/pattern-b-card.html`のパターンBを採用。エージェント紐づきタブはアイコン+名前+working/blockedバッジ、状態テキスト（`agent_status_text`変数）、ブランチ名の3行カード。エージェントなしタブはbranch未設定なら1行、branchがあれば2行目にブランチ名を表示する）
-- [ ] `agent_status_text`変数をClaude Codeのhooksから実際に送信する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドをjqでstdin JSON（`tool_name`/`tool_input`/`message`/`last_assistant_message`）を解析して`set-var`するよう拡張。ADR 0004への追記要否も検討）
+- [x] `agent_status_text`変数をClaude Codeのhooksから実際に送信する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドをjqでstdin JSONを解析して`set-var`するよう拡張。`PreToolUse`は`tool_name`/`tool_input`、`Stop`は`last_assistant_message`、`Notification`(`permission_prompt`)は`notification_data.tool_name`/`notification_data.tool_input`を使用——当初想定していた`Notification`の`message`フィールドは実在せず、Claude Code公式Hooks Referenceで実際のペイロード形状を確認して修正した。`jq`未インストール環境では`agent_status_text`の更新のみスキップされる設計。ADR 0004のNotesに追記済み）
 - [x] サイドバーのワークスペース表示の改善
   - [x] ワークスペースごとに折り畳めるようにする
   - [x] タイルごとに折り畳めるようにする(`Tile x / `という表示も消す)（1ワークスペース内のタイルが1つのみの場合はタイル見出し自体を省略し、2つ以上ある場合のみ折り畳み可能な見出しを表示する設計とした）
@@ -140,6 +140,9 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
   - [ ] タブ名があれば表示
   - [ ] タブ名・タブIDの文字数が短いと誤クリックしてしまうので最小幅を設定
 - [ ] カーソル形状が四角のみになっている
+- [ ] ADRの整理とスキルの追加
+  - ADRに書くべきではないことを書いたりあとから追記したりしてるのでそうならないようにする
+- [ ] claudeのhooksに各コマンドをもっとも短くできないか検討
 
 ## タブ変数
 

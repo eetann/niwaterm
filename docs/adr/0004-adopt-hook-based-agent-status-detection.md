@@ -50,6 +50,7 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 |---|---|---|
 | `agent` | 任意の種別文字列（例: `claude-code`） | エージェントの種類。空文字列・未設定は「エージェントなし」 |
 | `agent_status` | `idle` \| `working` \| `blocked` | エージェントの状態。未設定・未知の値は`idle`へ正規化する |
+| `agent_status_text` | 任意の状態テキスト文字列 | エージェントの状態を補足する短い説明文。hookペイロードから機械的に組み立てる（追加のトークン消費なし）。詳細はNotes「agent_status_textの追加」参照 |
 
 bun側（`tabVars: Record<TabId, Record<string, string>>`。当初は`tileVars: Record<TileId, ...>`だったが、1タイルに複数タブがある場合に非アクティブタブの状態更新が他タブの表示を上書きする問題が実機検証で判明したため、付与単位をタイル単位からタブ単位へ移行した。詳細は本ADRのNotes「タブ単位への移行」参照）は元々汎用key-valueのため、この2キーを追加してもスキーマ変更は不要である。
 
@@ -131,6 +132,20 @@ contrib/agent-integration/
 ### タブ単位への移行
 
 本ADR採択当初は「決めていないこと」としてタブ単位の状態管理を保留していた（1タイルに複数タブがある場合の状態上書き問題自体は当初から認識していたが、ブランチ検知でも既に残る既知の制約であり本ADRのスコープ外としていた）。その後、Windows実機での動作検証で実際に問題が顕在化した（Claude Code稼働中のタブとPowerShellのみのタブが同一タイルに同居すると、両方が同じ`agent_status`表示になる）ため、変数の付与単位をタイル単位（`tileVars`）からタブ単位（`tabVars`）へ全面的に移行した。ADR 0001の「Tab = PTYを保持する末端」という定義により忠実になる方向の変更であり、本ADRの根幹（hooks能動通知型・予約キー・ガードパターン）自体への影響はない。CLIの`--tile`オプションは`--tab`へ、PTY起動時の環境変数`NIWATERM_TILE_ID`は`NIWATERM_TAB_ID`へ、それぞれ後方互換なしで置き換えた。
+
+### agent_status_textの追加
+
+roadmap.md「タブ状態の可視化」節の残タスクとして、`agent_status_text`（サイドバーのカード2行目に表示する状態テキスト）をClaude Codeのhooksから実際に送信する仕組みを実装した。`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドを拡張し、`jq`でstdin JSONを解析して`niwaterm set-var agent_status_text "..."`を呼ぶようにした。
+
+| hookイベント | 使うフィールド |
+|---|---|
+| `PreToolUse` | `tool_name`、`tool_input.file_path` \| `.command` \| `.pattern` \| `.url` \| `.description`（優先順） |
+| `Notification`（`matcher: "permission_prompt"`） | `notification_data.tool_name`、`notification_data.tool_input`（同上の優先順） |
+| `Stop` | `last_assistant_message` |
+
+実装前の設計検討（`.mywork/tmp/sidebar-ui-mockups/README.md`、Git管理外）では`Notification`イベントに`message`フィールドがあると想定していたが、[Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks.md)で実際のペイロード形状を確認したところ、`message`フィールドは存在せず、`notification_data.tool_name`/`notification_data.tool_input`が実際の形だった。この差分を踏まえて実装を修正した。また`Stop`の`last_assistant_message`はClaude Code v2.1.196以降が必要という制約があることも確認した（それ未満のバージョンでは`agent_status`のみ`idle`に更新され、`agent_status_text`は前回の値のまま残る）。
+
+`jq`が入っていない環境では`agent_status_text`の更新のみスキップされ（`agent_status`は通常通り更新される）、hook自体は失敗しない設計にした。導入手順・状態対応の詳細は`contrib/agent-integration/claude-code/README.md`を参照。
 
 ### 参考資料
 

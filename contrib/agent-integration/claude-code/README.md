@@ -19,18 +19,32 @@ mv /tmp/merged-settings.json ~/.claude/settings.json
 
 ## 状態の対応
 
-| Claude Codeのhookイベント | niwatermのagent_status |
-|---|---|
-| `SessionStart` | `idle`（同時に`agent=claude-code`を設定） |
-| `UserPromptSubmit` | `working` |
-| `PreToolUse` | `working` |
-| `Stop` | `idle` |
-| `Notification`（`matcher: "permission_prompt"`） | `blocked` |
-| `SessionEnd` | `agent`/`agent_status`をクリア（空文字列） |
+| Claude Codeのhookイベント | niwatermのagent_status | agent_status_text |
+|---|---|---|
+| `SessionStart` | `idle`（同時に`agent=claude-code`を設定） | - |
+| `UserPromptSubmit` | `working` | - |
+| `PreToolUse` | `working` | `tool_name`/`tool_input`から組み立てた実行内容の要約（例: `Edit: sidebar-workspace-list.tsx`） |
+| `Stop` | `idle` | `last_assistant_message`の抜粋（60文字まで、改行はスペースに置換） |
+| `Notification`（`matcher: "permission_prompt"`） | `blocked` | `notification_data`から組み立てた確認内容の要約（例: `Bash: rm -rf /tmp/build の実行に許可が必要です`） |
+| `SessionEnd` | `agent`/`agent_status`/`agent_status_text`をクリア（空文字列） | - |
+
+`agent_status_text`の生成には`jq`を使う。`jq`が入っていない環境では自動的にスキップされ（`agent_status`のみ更新される）、hook自体は失敗しない。
 
 `PermissionRequest`イベントは意図的に使っていない。Claude Codeのネイティブ権限確認フックとして同期的にブロックする性質があり、
 「hookはniwatermへの通知のみを行い、常に`exit 0`でエージェント本体の動作を一切妨げない」という設計方針と相性が悪いため、
 非同期の`Notification`イベントのみで代替している。
+
+### agent_status_textの抽出元フィールド
+
+Claude Code公式ドキュメント（[Hooks Reference](https://code.claude.com/docs/en/hooks.md)）で確認した実際のペイロード形状に基づく。
+`docs/planning/roadmap.md`の初期案では`Notification`に`message`フィールドを使う想定だったが、実際のペイロードにこのフィールドは無く、
+代わりに`notification_data.tool_name`/`notification_data.tool_input`（`permission_prompt`時）を使う形に変更した。
+
+| hookイベント | 使うフィールド |
+|---|---|
+| `PreToolUse` | `tool_name`、`tool_input.file_path` \| `.command` \| `.pattern` \| `.url` \| `.description`（優先順） |
+| `Notification` | `notification_data.tool_name`、`notification_data.tool_input`（同上の優先順） |
+| `Stop` | `last_assistant_message`（**Claude Code v2.1.196以降が必要**。それ未満のバージョンではフィールドが無く、`agent_status`のみ`idle`に更新されて`agent_status_text`は前回の値のまま残る） |
 
 ## 未検証事項
 
@@ -38,3 +52,4 @@ mv /tmp/merged-settings.json ~/.claude/settings.json
 
 - `$NIWATERM_TAB_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されるか（PTY→シェル→`claude`→hookサブプロセスという経路で、通常のUnixプロセス環境変数継承であれば伝播するはずだが未確認）
 - `niwaterm set-var agent ""`のように値に空文字列を渡した場合、CLI（gunshi製）がpositional引数として正しく空文字列を受け取れるか
+- `agent_status_text`はbashのパラメータ展開（`${status_text:0:60}`）で60文字に切り詰めている。マルチバイト文字（日本語等）を文字数単位で正しく切り詰められるかはbashのロケール設定に依存するため、実地でのロケール依存挙動は未確認
