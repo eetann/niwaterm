@@ -518,6 +518,97 @@ describe("POST /new-tab", () => {
 
     expect(res.status).toBe(400);
   });
+
+  test("cwdを指定するとそのタブのセッションへ渡る", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, cwd: "/tmp/project" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(sessionOpts[1]?.cwd).toBe("/tmp/project");
+  });
+
+  test("cwdとshellProfileIdは併用でき、両方がセッションへ渡る", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      undefined,
+      undefined,
+      () => [{ id: "wsl-ubuntu", name: "WSL: Ubuntu", command: "wsl.exe -d Ubuntu" }],
+    );
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, shellProfileId: "wsl-ubuntu", cwd: "/tmp/project" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sessionOpts[1]?.shell).toBe("wsl.exe -d Ubuntu");
+    expect(sessionOpts[1]?.cwd).toBe("/tmp/project");
+  });
+
+  test("空文字列のcwdは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, cwd: "" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("cwdとurlを同時に指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, url: "https://example.com", cwd: "/tmp/project" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("cwdとcustomViewを同時に指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => ({
+      name: "Notes",
+      url: "file:///tmp/notes.html",
+    }));
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customView: true, cwd: "/tmp/project" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("GET /shell-profiles", () => {

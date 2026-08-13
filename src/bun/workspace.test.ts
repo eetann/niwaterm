@@ -231,6 +231,15 @@ describe("newTab", () => {
     // 初期タブはgetDefaultShellのまま（shellOverrideは今回のnewTab呼び出しのみに効く）
     expect(created[0]?.opts.shell).toBe("/bin/bash");
   });
+
+  test("cwdを渡すとそのタブのセッションへ渡る。初期タブはcwd未指定のまま", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    ws.newTab(before.id, undefined, "/tmp/project");
+    expect(created[1]?.opts.cwd).toBe("/tmp/project");
+    expect(created[0]?.opts.cwd).toBeUndefined();
+  });
 });
 
 describe("newBrowserTab", () => {

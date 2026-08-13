@@ -197,8 +197,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.splitTile(tileId, orientation) ?? null;
   }
 
-  function newTab(tileId: TileId, shellOverride?: string): TabId | null {
-    return findOwnerByTileId(tileId)?.newTab(tileId, shellOverride) ?? null;
+  function newTab(tileId: TileId, shellOverride?: string, cwd?: string): TabId | null {
+    return findOwnerByTileId(tileId)?.newTab(tileId, shellOverride, cwd) ?? null;
   }
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {

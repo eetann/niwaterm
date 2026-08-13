@@ -30,6 +30,11 @@ export default define({
       description:
         "指定したシェルプロファイル（idはniwaterm shell-profilesで確認）でターミナルタブを作成する（--url・--custom-viewとは同時指定不可）",
     },
+    cwd: {
+      type: "string",
+      description:
+        "作成するターミナルタブの作業ディレクトリ（--shellと併用可。--url・--custom-viewとは同時指定不可）",
+    },
   },
   run: async (ctx) => {
     const exclusiveFlags = [
@@ -40,12 +45,19 @@ export default define({
     if (exclusiveFlags > 1) {
       failAndExit("new-tabに失敗しました: --url・--custom-view・--shellは同時に指定できません");
     }
+    if (
+      ctx.values.cwd !== undefined &&
+      (ctx.values.url !== undefined || ctx.values["custom-view"])
+    ) {
+      failAndExit("new-tabに失敗しました: --cwdは--url・--custom-viewと同時に指定できません");
+    }
     const result = await newTab(
       resolveIpcEndpoint(),
       ctx.values.tile,
       ctx.values.url,
       ctx.values["custom-view"],
       ctx.values.shell,
+      ctx.values.cwd,
     );
     if (!result.ok) {
       failAndExit(`new-tabに失敗しました: ${result.error}`);

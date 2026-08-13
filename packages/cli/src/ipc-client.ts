@@ -245,13 +245,19 @@ export function newTab(
   url?: string,
   customView?: boolean,
   shellProfileId?: string,
+  cwd?: string,
 ): Promise<NewTabResult> {
-  const body: { tileId: TileId; url?: string; customView?: boolean; shellProfileId?: string } = {
-    tileId,
-  };
+  const body: {
+    tileId: TileId;
+    url?: string;
+    customView?: boolean;
+    shellProfileId?: string;
+    cwd?: string;
+  } = { tileId };
   if (url !== undefined) body.url = url;
   if (customView !== undefined) body.customView = customView;
   if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
+  if (cwd !== undefined) body.cwd = cwd;
   return postJson(endpoint, "/new-tab", body);
 }
 

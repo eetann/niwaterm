@@ -117,6 +117,7 @@ interface NewTabRequestBody extends TileIdRequestBody {
   url?: string;
   customView?: boolean;
   shellProfileId?: string;
+  cwd?: string;
 }
 
 /**
@@ -124,26 +125,43 @@ interface NewTabRequestBody extends TileIdRequestBody {
  * urlが指定されていればブラウザタブ（空文字列は不可）、customView:trueが指定されていれば
  * 設定済みのユーザー定義HTML UIを開く、shellProfileIdが指定されていればそのプロファイルの
  * シェルでターミナルタブを開く。3つは互いに排他とする。
+ * cwdはターミナルタブ（url・customView未指定）専用のオプションで、url・customViewとは同時指定不可
  */
 function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   const tileIdBody = parseTileIdBody(body);
   if (!tileIdBody) return null;
-  const b = body as { url?: unknown; customView?: unknown; shellProfileId?: unknown };
+  const b = body as {
+    url?: unknown;
+    customView?: unknown;
+    shellProfileId?: unknown;
+    cwd?: unknown;
+  };
   const hasUrl = b.url !== undefined;
   const hasCustomView = b.customView !== undefined;
   const hasShellProfileId = b.shellProfileId !== undefined;
+  const hasCwd = b.cwd !== undefined;
   if ([hasUrl, hasCustomView, hasShellProfileId].filter(Boolean).length > 1) return null;
+  if (hasCwd && (hasUrl || hasCustomView)) return null;
+
+  const result: NewTabRequestBody = { ...tileIdBody };
+  if (hasCwd) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
   if (hasShellProfileId) {
     if (typeof b.shellProfileId !== "string" || b.shellProfileId.length === 0) return null;
-    return { ...tileIdBody, shellProfileId: b.shellProfileId };
+    result.shellProfileId = b.shellProfileId;
+    return result;
   }
   if (hasCustomView) {
     if (b.customView !== true) return null;
-    return { ...tileIdBody, customView: true };
+    result.customView = true;
+    return result;
   }
-  if (!hasUrl) return tileIdBody;
+  if (!hasUrl) return result;
   if (typeof b.url !== "string" || b.url.length === 0) return null;
-  return { ...tileIdBody, url: b.url };
+  result.url = b.url;
+  return result;
 }
 
 interface SplitTileRequestBody extends TileIdRequestBody {
@@ -288,7 +306,7 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { tileId: string, url?: string, customView?: boolean, shellProfileId?: string } (url, customView, shellProfileId are mutually exclusive)",
+            "expected { tileId: string, url?: string, customView?: boolean, shellProfileId?: string, cwd?: string } (url, customView, shellProfileId are mutually exclusive; cwd is only valid for terminal tabs)",
         },
         400,
       );
@@ -309,7 +327,7 @@ function buildApp(
     }
     const resolved = resolveShellProfileCommand(getShellProfiles(), parsed.shellProfileId);
     if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 400);
-    const tabId = workspaceManager.newTab(parsed.tileId, resolved.command);
+    const tabId = workspaceManager.newTab(parsed.tileId, resolved.command, parsed.cwd);
     if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true, tabId });
   });

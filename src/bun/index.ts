@@ -64,7 +64,7 @@ export type NiwaRPC = {
         cellHeight: number;
       };
       splitTile: { tileId: TileId; orientation: SplitOrientation };
-      newTab: { tileId: TileId; shellProfileId?: string };
+      newTab: { tileId: TileId; shellProfileId?: string; cwd?: string };
       newBrowserTab: { tileId: TileId; url?: string };
       newCustomViewTab: { tileId: TileId };
       switchTab: { tileId: TileId; tabId: TabId };
@@ -293,13 +293,21 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
         workspaceManager.splitTile(tileId, orientation);
       },
-      newTab: ({ tileId, shellProfileId }: { tileId: TileId; shellProfileId?: string }) => {
+      newTab: ({
+        tileId,
+        shellProfileId,
+        cwd,
+      }: {
+        tileId: TileId;
+        shellProfileId?: string;
+        cwd?: string;
+      }) => {
         const resolved = resolveShellProfileCommand(shellProfiles, shellProfileId);
         if (!resolved.ok) {
           console.log(`[bun] ${resolved.error}`);
           return;
         }
-        workspaceManager.newTab(tileId, resolved.command);
+        workspaceManager.newTab(tileId, resolved.command, cwd);
       },
       newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
         workspaceManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
