@@ -218,6 +218,19 @@ body {
   outline: 1px solid #89b4fa;
   outline-offset: -1px;
 }
+/* タブD&Dのドロップ先ハイライト。::afterのoverlayでタイル全体（タブバー・ターミナル領域とも）を示す */
+.tile.drag-over {
+  outline: 2px dashed #89b4fa;
+  outline-offset: -2px;
+}
+.tile.drag-over::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(137, 180, 250, 0.12);
+  pointer-events: none;
+}
 
 .tab-bar {
   display: flex;

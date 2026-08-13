@@ -68,6 +68,7 @@ export type NiwaRPC = {
       newBrowserTab: { tileId: TileId; url?: string };
       newCustomViewTab: { tileId: TileId };
       switchTab: { tileId: TileId; tabId: TabId };
+      moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
       closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
       focusDirection: { direction: "up" | "down" | "left" | "right" };
@@ -312,6 +313,17 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);
+      },
+      moveTab: ({
+        fromTileId,
+        tabId,
+        toTileId,
+      }: {
+        fromTileId: TileId;
+        tabId: TabId;
+        toTileId: TileId;
+      }) => {
+        workspaceManager.moveTab(fromTileId, tabId, toTileId);
       },
       closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.closeTab(tileId, tabId);

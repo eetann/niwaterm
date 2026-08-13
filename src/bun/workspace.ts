@@ -7,6 +7,7 @@ import {
   findNode,
   focusNeighbor,
   listLeaves,
+  moveTabToTile,
   resizeSplit,
   splitTile,
   switchActiveTab,
@@ -209,6 +210,18 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return true;
   }
 
+  // ドラッグ&ドロップによるタブのタイル間移動。PTYセッション自体はtabId単位で管理しており
+  // tileIdに紐づかないため、moveTabToTileが返すtree（木構造）だけ差し替えればよい
+  function moveTab(fromTileId: TileId, tabId: TabId, toTileId: TileId): boolean {
+    const result = moveTabToTile(tree, fromTileId, tabId, toTileId);
+    if (!result) return false;
+    tree = result.tree;
+    if (result.removedTileId) tileNames.delete(result.removedTileId);
+    focusedTileId = toTileId;
+    opts.onDirty();
+    return true;
+  }
+
   // タイルに複数タブがあればアクティブタブだけ閉じる。最後の1タブだった場合はタイルごと閉じる
   // （そのタイルがワークスペース最後の1枚だった場合のみ、誤操作防止のため何もしない）
   function closeTab(tileId: TileId, tabId: TabId): boolean {
@@ -383,6 +396,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     newTab,
     newBrowserTab,
     switchTab,
+    moveTab,
     closeTab,
     focusTile: focusTileById,
     focusDirection: focusDirectionFrom,

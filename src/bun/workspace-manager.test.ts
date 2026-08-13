@@ -643,3 +643,45 @@ describe("switchTab / closeTab / focusTileの戻り値", () => {
     expect(mgr.focusTile("not-found")).toBe(false);
   });
 });
+
+describe("moveTab", () => {
+  test("同一workspace内のタイル間移動は成功する", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const movingTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const split = mgr.splitTile(firstTileId, "vertical") as { tileId: string };
+
+    const result = mgr.moveTab(firstTileId, movingTabId, split.tileId);
+
+    expect(result).toBe(true);
+    const after = mgr.snapshot().workspace.layout;
+    expect(after.kind).toBe("leaf");
+    expect((after as TileLeaf).tabIds).toContain(movingTabId);
+  });
+
+  test("別workspaceのtileId同士の移動はfalseを返し、木は変化しない（PTYセッションを移管できないため非対応）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace();
+    const secondTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+
+    const result = mgr.moveTab(firstTileId, firstTabId, secondTileId);
+
+    expect(result).toBe(false);
+    mgr.switchWorkspace(firstId);
+    expect((mgr.snapshot().workspace.layout as TileLeaf).tabIds).toEqual([firstTabId]);
+  });
+
+  test("存在しないtileIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+
+    expect(mgr.moveTab("not-found", leaf.activeTabId, leaf.id)).toBe(false);
+    expect(mgr.moveTab(leaf.id, leaf.activeTabId, "not-found")).toBe(false);
+  });
+});

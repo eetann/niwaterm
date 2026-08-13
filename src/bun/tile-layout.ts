@@ -230,6 +230,39 @@ export function closeTabInTile(
   return { tree: recurse(tree), closedTabId: targetTabId, tileClosed: false };
 }
 
+export interface MoveTabResult {
+  tree: TileNode;
+  /** 移動元のtileが最後の1タブだった場合、tileごと畳まれる。その場合のみ元tileIdを返す（呼び出し側の後始末用） */
+  removedTileId?: TileId;
+}
+
+/**
+ * fromTileId内のtabIdを、toTileIdのleaf末尾へ移動する（ドラッグ&ドロップによるタブのタイル間移動）。
+ * closeTabInTile + addTabToTileの合成で実装する: 移動元は「タブを閉じる」規則（最後の1タブなら
+ * tileごと畳む）にそのまま従い、移動先は「タブを追加」規則（末尾に追加しactiveTabIdへ）にそのまま従う。
+ * fromTileIdとtoTileIdが同一、fromTileIdにtabIdが無い、toTileIdがleafでない場合はnullを返す。
+ */
+export function moveTabToTile(
+  tree: TileNode,
+  fromTileId: TileId,
+  tabId: TabId,
+  toTileId: TileId,
+): MoveTabResult | null {
+  if (fromTileId === toTileId) return null;
+  const toLeaf = findNode(tree, toTileId);
+  if (!toLeaf || toLeaf.kind !== "leaf") return null;
+
+  const closeResult = closeTabInTile(tree, fromTileId, tabId);
+  // closeResult.tree === null は「fromTileIdがtree全体で唯一のleafだった」場合のみだが、
+  // その場合toTileIdは存在し得ない（同じtree内にleafが1つしかない）ためここには来ない
+  if (!closeResult || !closeResult.tree) return null;
+
+  const newTree = addTabToTile(closeResult.tree, toTileId, tabId);
+  if (!newTree) return null;
+
+  return { tree: newTree, removedTileId: closeResult.tileClosed ? fromTileId : undefined };
+}
+
 /** leaf内でactiveTabIdからdelta方向へ巡回移動した次/前のtabIdを返す */
 export function nextTabId(leaf: TileLeaf, delta: 1 | -1): TabId {
   const index = leaf.tabIds.indexOf(leaf.activeTabId);

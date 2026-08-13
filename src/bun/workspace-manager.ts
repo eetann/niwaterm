@@ -199,6 +199,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.switchTab(tileId, tabId) ?? false;
   }
 
+  // ドラッグ&ドロップによるタブ移動。PTYセッションはWorkspaceインスタンスのクロージャ内に
+  // 閉じているため、workspaceをまたぐ移動はセッションの移管が必要になり非対応（無視してfalseを返す）
+  function moveTab(fromTileId: TileId, tabId: TabId, toTileId: TileId): boolean {
+    const owner = findOwnerByTileId(fromTileId);
+    if (!owner || owner !== findOwnerByTileId(toTileId)) return false;
+    return owner.moveTab(fromTileId, tabId, toTileId);
+  }
+
   function closeTab(tileId: TileId, tabId: TabId): boolean {
     return findOwnerByTileId(tileId)?.closeTab(tileId, tabId) ?? false;
   }
@@ -321,6 +329,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     newTab,
     newBrowserTab,
     switchTab,
+    moveTab,
     closeTab,
     focusTile,
     focusDirection,

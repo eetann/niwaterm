@@ -22,7 +22,7 @@ import { BrowserToolbar } from "./react/browser-toolbar";
 import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
-import { TileTabBar } from "./react/tile-tab-bar";
+import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
 
@@ -416,13 +416,21 @@ function getOrCreateDivider(splitId: TileId): HTMLDivElement {
   return dividerEl;
 }
 
-/** tabId用の.tab-contentを種別に応じて必要なら生成する。既存の場合は何もしない（種別は初回のrenderで固定） */
+/**
+ * tabId用の.tab-contentを種別に応じて必要なら生成する。
+ * 既に存在する場合は、タブがD&D等で別タイルへ移った可能性があるため、
+ * 親がtileContentElと異なっていればそこへ再appendする（種別自体は初回のrenderで固定）。
+ */
 function ensureTabContent(
   tabId: TabId,
   tileContentEl: HTMLDivElement,
   renderState: TabRenderState,
 ): void {
-  if (tabContentElByTabId.has(tabId)) return;
+  const existing = tabContentElByTabId.get(tabId);
+  if (existing) {
+    if (existing.parentElement !== tileContentEl) tileContentEl.appendChild(existing);
+    return;
+  }
   if (renderState.kind === "terminal") {
     ensureTerminalTabContent(tabId, tileContentEl);
   } else {
@@ -1116,6 +1124,54 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
   imeEl.focus({ preventScroll: true });
 });
+
+// ---- タブD&D移動（別タイルへドロップしたら該当タイルへ移動する）----
+let dragOverTileEl: HTMLElement | null = null;
+
+function clearTabDragOver(): void {
+  dragOverTileEl?.classList.remove("drag-over");
+  dragOverTileEl = null;
+}
+
+tileTreeEl.addEventListener("dragover", (e) => {
+  if (!e.dataTransfer?.types.includes(TAB_DRAG_MIME)) return;
+  const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  if (!tileEl) return;
+  // ブラウザ既定動作（drop不可）を上書きし、このタイル上でのdropを許可する
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  if (dragOverTileEl !== tileEl) {
+    clearTabDragOver();
+    tileEl.classList.add("drag-over");
+    dragOverTileEl = tileEl;
+  }
+});
+tileTreeEl.addEventListener("dragleave", (e) => {
+  // tileTreeEl自体から出た場合のみ解除する（子要素間の行き来ではdragOverTileElを維持する）
+  if (dragOverTileEl && !tileTreeEl.contains(e.relatedTarget as Node)) clearTabDragOver();
+});
+tileTreeEl.addEventListener("drop", (e) => {
+  const raw = e.dataTransfer?.getData(TAB_DRAG_MIME);
+  const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  clearTabDragOver();
+  if (!raw || !tileEl) return;
+  e.preventDefault();
+  const toTileId = tileEl.dataset["tileId"];
+  if (!toTileId) return;
+  let payload: TabDragPayload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (payload.fromTileId === toTileId) return;
+  focusTileLocally(toTileId);
+  sendMessage("moveTab", { fromTileId: payload.fromTileId, tabId: payload.tabId, toTileId });
+  imeEl.focus({ preventScroll: true });
+});
+// ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もハイライトを解除する
+document.addEventListener("dragend", clearTabDragOver);
+
 window.addEventListener("focus", () => {
   // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで
   // imeElへフォーカスを奪われ編集が中断してしまうため、その場合はスキップする

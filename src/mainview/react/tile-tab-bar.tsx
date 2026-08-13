@@ -22,6 +22,14 @@ export interface TileTabBarTabItem {
   label: string;
 }
 
+/** タブD&D移動用のdataTransfer MIMEタイプ。mainview/index.ts側のドロップハンドラと共有する */
+export const TAB_DRAG_MIME = "application/x-niwaterm-tab";
+
+export interface TabDragPayload {
+  tabId: TabId;
+  fromTileId: TileId;
+}
+
 export interface TileTabBarProps {
   tileId: TileId;
   tabs: TileTabBarTabItem[];
@@ -44,6 +52,7 @@ function stopEventPropagation(e: { stopPropagation: () => void }): void {
 }
 
 export function TileTabBar({
+  tileId,
   tabs,
   activeTabId,
   shellProfiles,
@@ -108,13 +117,23 @@ export function TileTabBar({
             ) : (
               <ContextMenu key={tab.tabId}>
                 <ContextMenuTrigger asChild>
-                  <TabsTrigger value={tab.tabId} className="h-7 flex-none gap-1.5 px-2 text-xs">
+                  <TabsTrigger
+                    value={tab.tabId}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      const payload: TabDragPayload = { tabId: tab.tabId, fromTileId: tileId };
+                      e.dataTransfer.setData(TAB_DRAG_MIME, JSON.stringify(payload));
+                    }}
+                    className="h-7 flex-none gap-1.5 px-2 text-xs"
+                  >
                     <span>{tab.label}</span>
                     <Button
                       asChild
                       variant="ghost"
                       size="icon-xs"
                       className="size-4 opacity-60 hover:opacity-100"
+                      draggable={false}
                       onPointerDown={stopEventPropagation}
                       onMouseDown={stopEventPropagation}
                       onClick={(e) => {

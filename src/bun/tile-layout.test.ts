@@ -6,6 +6,7 @@ import {
   findNode,
   focusNeighbor,
   listLeaves,
+  moveTabToTile,
   nextTabId,
   resizeSplit,
   splitTile,
@@ -450,6 +451,132 @@ describe("closeTabInTile", () => {
   test("そのleafのtabIdsに含まれないtabIdはnullを返す", () => {
     const tree = leaf("a");
     expect(closeTabInTile(tree, "a", "not-a-tab")).toBeNull();
+  });
+});
+
+describe("moveTabToTile", () => {
+  test("複数タブのleafから1つ移動すると、移動元は残り、移動先の末尾に追加されactiveになる", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: { kind: "leaf", id: "a", tabIds: ["t1", "t2"], activeTabId: "t1" },
+      second: leaf("b"),
+    };
+    const result = moveTabToTile(tree, "a", "t2", "b");
+    expect(result).toEqual({
+      tree: {
+        kind: "split",
+        id: "root",
+        direction: "row",
+        ratio: 0.5,
+        first: { kind: "leaf", id: "a", tabIds: ["t1"], activeTabId: "t1" },
+        second: { kind: "leaf", id: "b", tabIds: ["b-tab", "t2"], activeTabId: "t2" },
+      },
+    });
+  });
+
+  test("移動元が最後の1タブだった場合、tileごと畳まれ removedTileId が返る", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    const result = moveTabToTile(tree, "a", "a-tab", "b");
+    expect(result).toEqual({
+      tree: { kind: "leaf", id: "b", tabIds: ["b-tab", "a-tab"], activeTabId: "a-tab" },
+      removedTileId: "a",
+    });
+  });
+
+  test("fromTileIdとtoTileIdが同一の場合はnullを返す", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    expect(moveTabToTile(tree, "a", "a-tab", "a")).toBeNull();
+  });
+
+  test("移動元にtabIdが存在しない場合はnullを返す", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    expect(moveTabToTile(tree, "a", "not-a-tab", "b")).toBeNull();
+  });
+
+  test("移動先tileIdが存在しない場合はnullを返す", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    expect(moveTabToTile(tree, "a", "a-tab", "not-found")).toBeNull();
+  });
+
+  test("移動先がsplitノードのidの場合はnullを返す（leafのみ移動先にできる）", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: {
+        kind: "split",
+        id: "inner",
+        direction: "column",
+        ratio: 0.5,
+        first: leaf("b"),
+        second: leaf("c"),
+      },
+    };
+    expect(moveTabToTile(tree, "a", "a-tab", "inner")).toBeNull();
+  });
+
+  test("3階層ネストでの移動でも正しく再親化される", () => {
+    // root(row) = a | (column) = b | c
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.3,
+      first: leaf("a"),
+      second: {
+        kind: "split",
+        id: "inner",
+        direction: "column",
+        ratio: 0.5,
+        first: leaf("b"),
+        second: leaf("c"),
+      },
+    };
+    const result = moveTabToTile(tree, "b", "b-tab", "c");
+    expect(result).toEqual({
+      tree: {
+        kind: "split",
+        id: "root",
+        direction: "row",
+        ratio: 0.3,
+        first: leaf("a"),
+        second: { kind: "leaf", id: "c", tabIds: ["c-tab", "b-tab"], activeTabId: "b-tab" },
+      },
+      removedTileId: "b",
+    });
   });
 });
 
