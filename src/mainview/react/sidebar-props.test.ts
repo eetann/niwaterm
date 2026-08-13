@@ -1,15 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import type { TileLeaf } from "../../bun/tile-layout";
+import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
 import type { WorkspaceListEntry } from "../../bun/workspace-manager";
-import { agentStatusDotClass, buildSidebarWorkspaceItems } from "./sidebar-props";
+import {
+  agentStatusBadgeClass,
+  agentStatusBadgeLabel,
+  buildSidebarWorkspaceItems,
+} from "./sidebar-props";
 
 function leaf(id: string, tabIds: string[], activeTabId: string): TileLeaf {
   return { kind: "leaf", id, tabIds, activeTabId };
 }
 
+function split(id: string, first: TileNode, second: TileNode): TileSplit {
+  return { kind: "split", id, direction: "row", ratio: 0.5, first, second };
+}
+
 function workspace(
   workspaceId: string,
-  layout: TileLeaf,
+  layout: TileNode,
   tabVars: Record<string, Record<string, string>> = {},
 ): WorkspaceListEntry {
   return {
@@ -22,7 +30,7 @@ function workspace(
 }
 
 describe("buildSidebarWorkspaceItems", () => {
-  test("ワークスペース・タブのラベルを1始まりの番号で組み立てる", () => {
+  test("タイル1つのワークスペースはtiles配列に1件、タブラベルは1始まりの番号のみ", () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1", "tab-2"], "tab-2")),
       workspace("ws-2", leaf("tile-2", ["tab-3"], "tab-3")),
@@ -35,22 +43,26 @@ describe("buildSidebarWorkspaceItems", () => {
         workspaceId: "ws-1",
         label: "Workspace 1",
         active: false,
-        tabs: [
+        tiles: [
           {
-            tabId: "tab-1",
             tileId: "tile-1",
-            label: "Tile 1 / Tab 1",
-            active: false,
-            branch: null,
-            agent: null,
-          },
-          {
-            tabId: "tab-2",
-            tileId: "tile-1",
-            label: "Tile 1 / Tab 2",
-            active: false,
-            branch: null,
-            agent: null,
+            label: "Tile 1",
+            tabs: [
+              {
+                tabId: "tab-1",
+                label: "Tab 1",
+                active: false,
+                branch: null,
+                agent: null,
+              },
+              {
+                tabId: "tab-2",
+                label: "Tab 2",
+                active: false,
+                branch: null,
+                agent: null,
+              },
+            ],
           },
         ],
       },
@@ -58,17 +70,38 @@ describe("buildSidebarWorkspaceItems", () => {
         workspaceId: "ws-2",
         label: "Workspace 2",
         active: true,
-        tabs: [
+        tiles: [
           {
-            tabId: "tab-3",
             tileId: "tile-2",
-            label: "Tile 1 / Tab 1",
-            active: true,
-            branch: null,
-            agent: null,
+            label: "Tile 1",
+            tabs: [
+              {
+                tabId: "tab-3",
+                label: "Tab 1",
+                active: true,
+                branch: null,
+                agent: null,
+              },
+            ],
           },
         ],
       },
+    ]);
+  });
+
+  test("タイルが複数ある場合はtilesに複数件、1始まりの番号で並ぶ", () => {
+    const workspaces = [
+      workspace(
+        "ws-1",
+        split("split-1", leaf("tile-1", ["tab-1"], "tab-1"), leaf("tile-2", ["tab-2"], "tab-2")),
+      ),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.tiles.map((t) => ({ tileId: t.tileId, label: t.label }))).toEqual([
+      { tileId: "tile-1", label: "Tile 1" },
+      { tileId: "tile-2", label: "Tile 2" },
     ]);
   });
 
@@ -81,8 +114,8 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.label).toBe("Tile 1 / Tab 1");
-    expect(items[0]?.tabs[0]?.branch).toBe("main");
+    expect(items[0]?.tiles[0]?.tabs[0]?.label).toBe("Tab 1");
+    expect(items[0]?.tiles[0]?.tabs[0]?.branch).toBe("main");
   });
 
   test("agent未設定時はagent:null", () => {
@@ -90,7 +123,7 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent).toBeNull();
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toBeNull();
   });
 
   test("agent設定・agent_status未設定時はstatus:idleへフォールバックする", () => {
@@ -102,7 +135,11 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent).toEqual({ agent: "claude-code", status: "idle" });
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toEqual({
+      agent: "claude-code",
+      status: "idle",
+      statusText: null,
+    });
   });
 
   test("agent_statusにworking/blockedを設定した場合はそのまま反映される", () => {
@@ -117,8 +154,8 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent?.status).toBe("working");
-    expect(items[1]?.tabs[0]?.agent?.status).toBe("blocked");
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.status).toBe("working");
+    expect(items[1]?.tiles[0]?.tabs[0]?.agent?.status).toBe("blocked");
   });
 
   test("agent_statusが未知の値の場合はidleへ正規化する", () => {
@@ -130,7 +167,35 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent?.status).toBe("idle");
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.status).toBe("idle");
+  });
+
+  test("agent_status_textを設定した場合はstatusTextへ反映される", () => {
+    const workspaces = [
+      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+        "tab-1": {
+          agent: "claude-code",
+          agent_status: "working",
+          agent_status_text: "Edit: sidebar-workspace-list.tsx",
+        },
+      }),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.statusText).toBe("Edit: sidebar-workspace-list.tsx");
+  });
+
+  test("agent_status_text未設定時はstatusText:null", () => {
+    const workspaces = [
+      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+        "tab-1": { agent: "claude-code" },
+      }),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.statusText).toBeNull();
   });
 
   test("agentが空文字列（SessionEnd後を想定）の場合はagent:null", () => {
@@ -142,7 +207,7 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent).toBeNull();
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toBeNull();
   });
 
   test("非アクティブワークスペースのタブは常にactive:falseになる", () => {
@@ -151,7 +216,7 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-2");
 
     expect(items[0]?.active).toBe(false);
-    expect(items[0]?.tabs[0]?.active).toBe(false);
+    expect(items[0]?.tiles[0]?.tabs[0]?.active).toBe(false);
   });
 
   test("同一タイル内の複数タブが別々のagent状態を持てる（タブ単位化の主目的）", () => {
@@ -164,15 +229,30 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tabs[0]?.agent).toEqual({ agent: "claude-code", status: "working" });
-    expect(items[0]?.tabs[1]?.agent).toEqual({ agent: "codex-cli", status: "idle" });
+    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toEqual({
+      agent: "claude-code",
+      status: "working",
+      statusText: null,
+    });
+    expect(items[0]?.tiles[0]?.tabs[1]?.agent).toEqual({
+      agent: "codex-cli",
+      status: "idle",
+      statusText: null,
+    });
   });
 });
 
-describe("agentStatusDotClass", () => {
-  test("working/blocked/idleそれぞれに対応する色クラスを返す", () => {
-    expect(agentStatusDotClass("working")).toBe("bg-blue-500");
-    expect(agentStatusDotClass("blocked")).toBe("bg-amber-500");
-    expect(agentStatusDotClass("idle")).toBe("bg-emerald-500");
+describe("agentStatusBadgeLabel", () => {
+  test("working/blockedはラベルを返し、idleはバッジを出さずnullを返す", () => {
+    expect(agentStatusBadgeLabel("working")).toBe("作業中");
+    expect(agentStatusBadgeLabel("blocked")).toBe("応答待ち");
+    expect(agentStatusBadgeLabel("idle")).toBeNull();
+  });
+});
+
+describe("agentStatusBadgeClass", () => {
+  test("working/blockedそれぞれに対応する配色クラスを返す", () => {
+    expect(agentStatusBadgeClass("working")).toBe("text-blue-500 bg-blue-500/15");
+    expect(agentStatusBadgeClass("blocked")).toBe("text-amber-500 bg-amber-500/15");
   });
 });
