@@ -183,9 +183,26 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
 - [ ] 画像表示（Kitty graphics protocolなど）ができる
 - [ ] 通知系OSC（OSC 9 / 777）でデスクトップ通知が出る
 
+## レイアウト機能（vde-layoutライク）
+
+vde-layout（参考: https://github.com/yuki-yano/vde-layout）のような、設定ファイルにあらかじめ書いたレイアウトをCLIから名前指定して適用する機能。「現在のワークスペースを置き換える」「新規ワークスペースとして開く」の両方に対応したい。
+tmux用のvde-layoutはYAML設定＋N分割（ratio配列）だが、niwatermは既存の`niwaterm.config.ts`（TypeScript設定、`@niwaterm/config`）に乗せる方針とし、タイル分割は既存のTileSplit同様「2分割ratio(0.1〜0.9)のネスト」で表現する（N分割の配列指定は採用しない。ADR 0001で決めた二分木構造をそのまま踏襲する）。
+
+設定は`niwaterm.config.ts`の新規`layouts`フィールドにプリセットをid付きで並べる想定（`shell.profiles`と同じ「idで指定する名前付きプリセット」パターン）。各タブには`command`（作成後にsend-keysで流し込む起動コマンド。既存のsend-keys機構をそのまま使う方式とし、PTY起動コマンド自体を差し替える`shell.profiles`とは別軸にする）・`cwd`・`vars`（タブ変数を`set-var`相当で注入）・`focus`を指定できるようにしたい。
+
+CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用先は`--new-workspace`（デフォルト、既存作業を壊さない安全側）と`--replace`（現在のワークスペースを置き換え）を選べるようにする。
+
+- [ ] ワークスペース単位のCLI操作を追加する（前提整備）。`workspace-manager.ts`が既に持つ`newWorkspace`/`switchWorkspace`/`closeWorkspace`をIPCサーバー（`/new-workspace`・`/switch-workspace`・`/close-workspace`）とCLIから呼べるようにする。現状これらはwebview側のキーボード操作からしか届かない
+- [ ] タブ起動時のcwd指定を配線する。`pty.ts`の`PtyOptions.cwd`は存在するが誰も渡していない（`workspace.ts`の`spawnSession`が常に`homedir()`にフォールバック）。RPC `newTab`・IPC `/new-tab`にも`cwd`を通す。下の「起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる」と配線を共有できないか検討する
+- [ ] `@niwaterm/config`にレイアウト設定のスキーマを追加する（`layouts?: Record<string, LayoutPreset>`。プリセットはタイル木構造（2分割ratioのネスト）と各タブの`command`/`cwd`/`vars`/`focus`を持つ）
+- [ ] レイアウト適用エンジンを実装する。設定のツリーからTileNode木構造とタブのスポーン計画を構築する（`persistence.ts`の`buildTreeFromPersisted`のID再採番パターンを流用できそう）。各タブは「作成 →（`cwd`があれば適用）→（`command`があれば`delay`後にsend-keys）→（`vars`があれば`set-var`）」の順で組み立てる
+- [ ] IPCエンドポイント`/apply-layout`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加する
+- [ ] `--replace`時の既存タブ・PTYの終了の扱いを決める（無条件close/確認プロンプト等）。下の「プロセスはどうなるのか」の未決定事項と合わせて方針を決める
+- [ ] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記）
+
 ## 磨き込みと配布
 
-- [ ] 起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる
+- [ ] 起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる（「レイアウト機能」節のcwd配線と合わせて検討する）
 - [ ] スクロールバック検索ができる
 - [ ] パフォーマンス計測と改善（大量出力時の描画など）ができている
 - [ ] macOS向けにアプリとしてパッケージング（.app）できる
@@ -194,7 +211,6 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
   - [ ] デスクトップだけではなく、サイドバーみたいにそういうスペースを用意
 - [ ] ステータスバー用意
 - [ ] 自分が指示出した所に飛べる（みとゆーが見せてくれたCodexデスクトップのやつ）
-- [ ] レイアウト機能（vde-layoutみたいなやつ）
 - [ ] ログはlogtapeで入れる
 - [ ] IME中の大きさと下線
 - [ ] プロセスはどうなるのか
