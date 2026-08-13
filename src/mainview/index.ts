@@ -34,6 +34,7 @@ const compositionEl = document.getElementById("composition") as HTMLDivElement;
 const tileTemplate = document.getElementById("tile-template") as HTMLTemplateElement;
 const tabContentTemplate = document.getElementById("tab-content-template") as HTMLTemplateElement;
 const sidebarEl = document.getElementById("sidebar") as HTMLElement;
+const sidebarDividerEl = document.getElementById("sidebar-divider") as HTMLDivElement;
 const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
 const sidebarSwitcherEl = document.getElementById("sidebar-switcher") as HTMLDivElement;
 const sidebarCustomViewEl = document.getElementById("sidebar-custom-view") as HTMLDivElement;
@@ -121,6 +122,38 @@ function saveSidebarOpen(open: boolean): void {
 }
 
 let sidebarOpen = loadSidebarOpen();
+
+const SIDEBAR_WIDTH_STORAGE_KEY = "niwaterm:sidebarWidth";
+const DEFAULT_SIDEBAR_WIDTH_PX = 200;
+const MIN_SIDEBAR_WIDTH_PX = 150;
+const MAX_SIDEBAR_WIDTH_RATIO = 0.5;
+
+function loadSidebarWidth(): number {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    const width = stored === null ? Number.NaN : Number.parseFloat(stored);
+    return Number.isFinite(width) ? width : DEFAULT_SIDEBAR_WIDTH_PX;
+  } catch {
+    return DEFAULT_SIDEBAR_WIDTH_PX;
+  }
+}
+
+function saveSidebarWidth(width: number): void {
+  try {
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, `${width}`);
+  } catch {
+    // 保存できなくても致命的ではない（次回起動時はデフォルト幅にフォールバックする）
+  }
+}
+
+let sidebarWidth = loadSidebarWidth();
+// サイドバーdivider用のドラッグ中フラグ（タイル分割のdraggingSplitIdと同様、
+// ResizeObserver経由のresize送信を抑制するために使う）
+let draggingSidebar = false;
+
+function applySidebarWidth(width: number): void {
+  document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
+}
 
 // ---- 256色パレットのCSS変数を定義する（formatter出力が var(--vt-palette-N) を参照する）----
 // ANSI 0-15（標準色）は外観設定で変更可能なため、外観変更のたびに呼ばれるapplyAnsiPaletteに分離する。
@@ -411,7 +444,7 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
     // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はスキップ。
     // 非アクティブタブ（display:none）はcontent-boxが0になり誤って2x2等のresizeを
     // 送ってしまうため、表示中でない限りスキップする（再表示時に正しいサイズで発火し直す）
-    if (draggingSplitId || pendingSplitRatio) return;
+    if (draggingSplitId || pendingSplitRatio || draggingSidebar) return;
     if (tabContentEl.style.display === "none") return;
     sendResize(tabId);
   });
@@ -764,6 +797,7 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
 
 function applySidebarVisibility(): void {
   sidebarEl.style.display = sidebarOpen ? "" : "none";
+  sidebarDividerEl.style.display = sidebarOpen ? "" : "none";
 }
 
 function toggleSidebar(): void {
@@ -865,6 +899,49 @@ function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
 
     dividerEl.addEventListener("pointermove", onMove);
     dividerEl.addEventListener("pointerup", onUp);
+  });
+}
+
+/** サイドバーと#screen間のdivider。タイル分割と異なりbunのtreeに属さないローカルUI状態
+ * のため、resizeSplitのようなRPC送信はせずlocalStorageへ直接保存する */
+function attachSidebarDividerDrag(): void {
+  sidebarDividerEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    sidebarDividerEl.setPointerCapture(e.pointerId);
+    draggingSidebar = true;
+    const startX = e.clientX;
+    const startWidth = sidebarEl.getBoundingClientRect().width;
+
+    const widthFromEvent = (ev: PointerEvent): number => {
+      const total = document.body.clientWidth;
+      const maxWidth = Math.max(
+        MIN_SIDEBAR_WIDTH_PX,
+        Math.min(total * MAX_SIDEBAR_WIDTH_RATIO, total - MIN_TILE_PX),
+      );
+      const rawWidth = startWidth + (ev.clientX - startX);
+      return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH_PX, rawWidth));
+    };
+
+    const onMove = (ev: PointerEvent): void => {
+      applySidebarWidth(widthFromEvent(ev));
+    };
+
+    const onUp = (ev: PointerEvent): void => {
+      sidebarDividerEl.removeEventListener("pointermove", onMove);
+      sidebarDividerEl.removeEventListener("pointerup", onUp);
+      draggingSidebar = false;
+      sidebarWidth = widthFromEvent(ev);
+      applySidebarWidth(sidebarWidth);
+      saveSidebarWidth(sidebarWidth);
+      imeEl.focus({ preventScroll: true });
+      // ドラッグ中はResizeObserver経由のresize送信を抑制していたため、確定サイズで送り直す
+      for (const tabId of activeTabByTile.values()) {
+        sendResize(tabId);
+      }
+    };
+
+    sidebarDividerEl.addEventListener("pointermove", onMove);
+    sidebarDividerEl.addEventListener("pointerup", onUp);
   });
 }
 
@@ -1050,6 +1127,8 @@ imeEl.focus({ preventScroll: true });
 // ---- 起動 ----
 setupPalette();
 applyAppearance(defaultAppearance);
+applySidebarWidth(sidebarWidth);
+attachSidebarDividerDrag();
 applySidebarVisibility();
 measureCell();
 sendMessage("ready");

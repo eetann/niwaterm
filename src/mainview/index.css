@@ -117,12 +117,16 @@ body {
 }
 
 #sidebar {
-  flex: 0 0 200px;
+  flex: 0 0 var(--sidebar-width, 200px);
   height: 100%;
   display: flex;
   flex-direction: column;
   background: #181825;
   border-right: 1px solid #313244;
+}
+
+#sidebar-divider {
+  cursor: col-resize;
 }
 
 /* :not([hidden])で括るのは、[hidden]属性(UAデフォルトはdisplay:none)より
