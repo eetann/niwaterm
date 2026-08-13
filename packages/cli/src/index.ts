@@ -11,6 +11,7 @@ import closeWorkspaceCommand from "./commands/close-workspace";
 import docsCommand from "./commands/docs";
 import focusTileCommand from "./commands/focus-tile";
 import getVarCommand from "./commands/get-var";
+import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
 import listVarsCommand from "./commands/list-vars";
 import newTabCommand from "./commands/new-tab";
@@ -63,6 +64,7 @@ try {
       "get-var": getVarCommand,
       "list-vars": listVarsCommand,
       "shell-profiles": shellProfilesCommand,
+      layout: layoutCommand,
       docs: docsCommand,
     },
   });

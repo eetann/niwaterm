@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { LayoutsConfig } from "@niwaterm/config";
 import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
@@ -1635,5 +1636,156 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, vars: {} });
+  });
+});
+
+describe("GET /layouts, POST /apply-layout", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const LAYOUTS: LayoutsConfig = {
+    dev: {
+      description: "Editor + terminal",
+      layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] },
+    },
+    broken: {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ focus: true }] },
+        second: { kind: "tile", tabs: [{ focus: true }] },
+      },
+    },
+  };
+
+  function createServerWithLayouts(layouts: LayoutsConfig) {
+    const { mgr } = createTestWorkspaceManager();
+    return {
+      mgr,
+      serverPromise: createIpcServer(
+        socketPath,
+        mgr,
+        () => null,
+        () => {},
+        undefined,
+        undefined,
+        () => [],
+        () => layouts,
+      ),
+    };
+  }
+
+  test("GET /layouts: getLayouts未指定時は空配列を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/layouts", { unix: socketPath });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, layouts: [] });
+  });
+
+  test("GET /layouts: 設定済みプリセットをname/descriptionの一覧として返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/layouts", { unix: socketPath });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; layouts: unknown[] };
+    expect(body.layouts).toEqual([
+      { name: "dev", description: "Editor + terminal" },
+      { name: "broken", description: undefined },
+    ]);
+  });
+
+  test("POST /apply-layout: 新規ワークスペースとして適用し、workspaceIdを返す", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const firstId = mgr.snapshot().activeWorkspaceId;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; workspaceId: string };
+    expect(body.ok).toBe(true);
+    expect(body.workspaceId).not.toBe(firstId);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(body.workspaceId);
+  });
+
+  test("POST /apply-layout: target:replaceは現在のワークスペースを置き換える", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const activeId = mgr.snapshot().activeWorkspaceId;
+    const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", target: "replace" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; workspaceId: string };
+    expect(body.workspaceId).toBe(activeId);
+    expect(mgr.snapshot().workspaceIds.length).toBe(workspaceCountBefore);
+  });
+
+  test("POST /apply-layout: 存在しないnameは404を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("POST /apply-layout: nameが不正なボディは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("POST /apply-layout: 検証に失敗するプリセット（focus重複）は400を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "broken" }),
+    });
+
+    expect(res.status).toBe(400);
   });
 });

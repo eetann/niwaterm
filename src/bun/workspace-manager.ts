@@ -193,8 +193,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   function splitTile(
     tileId: TileId,
     orientation: SplitOrientation,
+    ratio?: number,
   ): { tileId: TileId; tabId: TabId } | null {
-    return findOwnerByTileId(tileId)?.splitTile(tileId, orientation) ?? null;
+    return findOwnerByTileId(tileId)?.splitTile(tileId, orientation, ratio) ?? null;
   }
 
   function newTab(tileId: TileId, shellOverride?: string, cwd?: string): TabId | null {

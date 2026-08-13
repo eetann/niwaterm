@@ -217,6 +217,62 @@ Windows環境では起動時に`wsl.exe --list --quiet`相当でインストー�
 
 利用可能なプロファイル一覧はCLIの`niwaterm shell-profiles`で確認できる（詳細: `docs/guide/cli.md`）。
 
+## レイアウト
+
+`layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`は空一覧を返す。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `description` | `string` | `niwaterm layout list`に表示する説明文（省略可） |
+| `layout` | `LayoutNodeConfig` | タイル構成（後述） |
+
+```ts
+layouts: {
+  dev: {
+    description: "Editor + server + logs",
+    layout: {
+      kind: "split",
+      orientation: "horizontal",
+      ratio: 0.7,
+      first: { kind: "tile", tabs: [{ name: "editor", command: "nvim", focus: true }] },
+      second: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "server", command: "npm run dev", cwd: "~/proj" }] },
+        second: { kind: "tile", tabs: [{ name: "logs", command: "tail -f logs/app.log" }] },
+      },
+    },
+  },
+},
+```
+
+`LayoutNodeConfig`は`kind`で2種類に分かれる。
+
+- `{ kind: "split", orientation: "horizontal" | "vertical", ratio?: number, first: LayoutNodeConfig, second: LayoutNodeConfig }` — タイルを2分割する。既存のタイル分割（`niwaterm split-tile`）と同じく`horizontal`は上下、`vertical`は左右に並べる。`ratio`は`first`が占める比率(0〜1、省略時0.5)。**N分割の配列指定は無く、3分割以上はネストで表現する**（上の例の`second`側を参照）
+- `{ kind: "tile", tabs: LayoutTabConfig[], activeTab?: number }` — タイル1枚とその中のタブ一覧。`tabs`は最低1つ必要。`activeTab`はアクティブにするタブのindex（省略時は最後のタブ）
+
+各タブ（`LayoutTabConfig`）のフィールドはすべて省略可。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `name` | `string` | タブ名（サイドバー・タブバー表示用） |
+| `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profiles`で確認）。省略時はデフォルトシェル |
+| `cwd` | `string` | 作業ディレクトリ。省略時はホームディレクトリ |
+| `command` | `string` | タブ作成後に流し込むコマンド（`send-keys`相当、末尾にEnterを自動送信する） |
+| `delay` | `number` | `command`を送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 |
+| `vars` | `Record<string, string>` | タブ変数（`set-var`相当で注入） |
+| `focus` | `boolean` | このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる |
+
+適用はCLIから行う。
+
+```sh
+niwaterm layout list
+niwaterm layout apply dev
+niwaterm layout apply dev --replace
+```
+
+`niwaterm layout apply <name>`は既定で新規ワークスペースとして適用する（`--new-workspace`を明示してもよい）。`--replace`を指定すると現在のワークスペースを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**、確認プロンプト等は無い）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはワークスペースに一切手を触れずエラーになる。詳細・エラー時の挙動は`docs/guide/cli.md`参照。
+
 ## ホットリロード
 
 `~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewいずれも）。`~/.config/niwaterm/`ディレクトリを監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。

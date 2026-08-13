@@ -2,6 +2,7 @@ import type { AppearanceConfig } from "./appearance";
 import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
+import type { LayoutsConfig } from "./layout";
 import type { ShellConfig } from "./shell";
 
 export interface NiwatermConfig {
@@ -33,6 +34,12 @@ export interface NiwatermConfig {
    * 例: { default: "/bin/bash", profiles: [{ id: "ssh-dev", name: "dev server", command: "ssh dev" }] }
    */
   shell?: ShellConfig;
+  /**
+   * レイアウトプリセット設定。`niwaterm layout apply <name>`で名前指定して適用できる
+   * タイル構成（2分割ratioのネスト）とタブごとのcommand/cwd/vars/focus等を定義する。
+   * 例: { dev: { layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] } } }
+   */
+  layouts?: LayoutsConfig;
 }
 
 /** 型推論とエディタ補完のためのヘルパー。渡された値をそのまま返す */

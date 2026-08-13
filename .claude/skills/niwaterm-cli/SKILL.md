@@ -22,6 +22,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `send-keys` — 指定タブへのキー送信（tmuxのsend-keys相当）
 - `split-tile` / `new-tab` / `switch-tab` / `close-tab` / `focus-tile` — レイアウト操作
 - `new-workspace` / `switch-workspace` / `close-workspace` — ワークスペースの作成・切替・削除
+- `layout list` / `layout apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用（vde-layoutライク）
 - `capture-tab` — タブの画面内容（プレーンテキスト）取得
 - `set-var` / `get-var` / `list-vars` — タブごとのkey-value変数（タブ間の連携に使える）
 - `browser-navigate` / `browser-get-text` / `browser-get-html` / `browser-screenshot` — ブラウザタブ操作

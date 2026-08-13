@@ -7,10 +7,11 @@ import { mkdir } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
-import type { ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
+import type { LayoutsConfig, ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
+import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
@@ -205,6 +206,20 @@ function parseSetVarBody(body: unknown): SetVarRequestBody | null {
   return { ...tabIdBody, key: b.key, value: b.value };
 }
 
+interface ApplyLayoutRequestBody {
+  name: string;
+  target?: ApplyLayoutTarget;
+}
+
+function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
+  const b = body as { name?: unknown; target?: unknown };
+  if (typeof b.name !== "string" || b.name.length === 0) return null;
+  if (b.target !== undefined && b.target !== "new-workspace" && b.target !== "replace") {
+    return null;
+  }
+  return { name: b.name, target: b.target };
+}
+
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
 async function readJsonBody(c: Context): Promise<unknown | undefined> {
   try {
@@ -221,6 +236,7 @@ function buildApp(
   browserBridge: BrowserBridge,
   captureScreenshot: CaptureScreenshot,
   getShellProfiles: () => ShellProfile[],
+  getLayouts: () => LayoutsConfig,
 ) {
   const app = new Hono();
 
@@ -259,6 +275,36 @@ function buildApp(
   });
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
+
+  app.get("/layouts", (c) => {
+    const layouts = Object.entries(getLayouts()).map(([name, preset]) => ({
+      name,
+      description: preset.description,
+    }));
+    return c.json({ ok: true, layouts });
+  });
+
+  app.post("/apply-layout", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseApplyLayoutBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { name: string, target?: "new-workspace"|"replace" }' },
+        400,
+      );
+    }
+    const preset = getLayouts()[parsed.name];
+    if (!preset) return c.json({ ok: false, error: `layout not found: ${parsed.name}` }, 404);
+    const result = applyLayoutPreset(
+      workspaceManager,
+      getShellProfiles(),
+      preset,
+      parsed.target ?? "new-workspace",
+    );
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
+    return c.json({ ok: true, workspaceId: result.workspaceId });
+  });
 
   app.get("/capture-tab", (c) => {
     const tabId = c.req.query("tabId");
@@ -550,6 +596,7 @@ export async function createIpcServer(
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
   getShellProfiles: () => ShellProfile[] = () => [],
+  getLayouts: () => LayoutsConfig = () => ({}),
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -562,6 +609,7 @@ export async function createIpcServer(
     browserBridge,
     captureScreenshot,
     getShellProfiles,
+    getLayouts,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で

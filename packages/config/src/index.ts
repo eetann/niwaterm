@@ -6,6 +6,14 @@ export {
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export { type CustomViewConfig, type ResolvedCustomViewConfig } from "./custom-view";
 export { defineConfig, type NiwatermConfig } from "./define-config";
+export type {
+  LayoutNodeConfig,
+  LayoutPreset,
+  LayoutSplitConfig,
+  LayoutTabConfig,
+  LayoutTileConfig,
+  LayoutsConfig,
+} from "./layout";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export {
   canonicalizeParsed,

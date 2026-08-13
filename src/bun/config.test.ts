@@ -17,6 +17,7 @@ import {
   resolveBrowser,
   resolveCustomView,
   resolveKeybindings,
+  resolveLayouts,
   resolveShell,
   resolveShellProfiles,
 } from "./config";
@@ -291,6 +292,50 @@ describe("resolveShellProfiles", () => {
     try {
       const resolved = resolveShellProfiles({ shell: { profiles: "not-an-array" as never } }, []);
       expect(resolved).toEqual([]);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveLayouts", () => {
+  test("nullを渡すと空オブジェクトを返す", () => {
+    expect(resolveLayouts(null)).toEqual({});
+  });
+
+  test("layouts未指定なら空オブジェクトを返す", () => {
+    expect(resolveLayouts({})).toEqual({});
+  });
+
+  test("有効なプリセットはそのまま返す", () => {
+    const preset = {
+      description: "dev",
+      layout: { kind: "tile" as const, tabs: [{ command: "nvim" }] },
+    };
+    expect(resolveLayouts({ layouts: { dev: preset } })).toEqual({ dev: preset });
+  });
+
+  test("layoutフィールドを欠くエントリは警告付きでスキップする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveLayouts({
+        layouts: {
+          ok: { layout: { kind: "tile", tabs: [{}] } },
+          broken: { description: "no layout field" } as never,
+        },
+      });
+      expect(resolved).toEqual({ ok: { layout: { kind: "tile", tabs: [{}] } } });
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("layouts自体がオブジェクトでない場合は警告付きで空オブジェクトを返す", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveLayouts({ layouts: "not-an-object" as never })).toEqual({});
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

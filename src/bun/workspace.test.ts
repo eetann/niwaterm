@@ -195,6 +195,22 @@ describe("splitTile", () => {
     expect(result).toBeNull();
     expect(ws.snapshot().layout).toEqual(before);
   });
+
+  test("ratioを渡すとその比率でsplitされる。省略時は0.5", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical", 0.7);
+    const splitTree = ws.snapshot().layout as TileNode & { kind: "split" };
+    expect(splitTree.ratio).toBe(0.7);
+
+    const { factory: factory2 } = createFakeSessionFactory();
+    const ws2 = createWorkspace(baseOpts({ createSession: factory2 }));
+    const secondTileId = (ws2.snapshot().layout as TileLeaf).id;
+    ws2.splitTile(secondTileId, "vertical");
+    const splitTree2 = ws2.snapshot().layout as TileNode & { kind: "split" };
+    expect(splitTree2.ratio).toBe(0.5);
+  });
 });
 
 describe("newTab", () => {

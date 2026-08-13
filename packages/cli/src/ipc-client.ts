@@ -312,6 +312,44 @@ export async function listShellProfiles(endpoint: IpcEndpoint): Promise<ListShel
   }
 }
 
+export interface LayoutSummary {
+  name: string;
+  description?: string;
+}
+
+export type ListLayoutsResult =
+  | { ok: true; layouts: LayoutSummary[] }
+  | { ok: false; error: string };
+
+export async function listLayouts(endpoint: IpcEndpoint): Promise<ListLayoutsResult> {
+  try {
+    const res = await fetch(ipcUrl(endpoint, "/layouts"), ipcFetchInit(endpoint));
+    const body = (await res.json().catch(() => null)) as {
+      layouts?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.layouts)) {
+      return { ok: true, layouts: body.layouts as LayoutSummary[] };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
+export type ApplyLayoutTarget = "new-workspace" | "replace";
+
+export type ApplyLayoutResult = { ok: true; workspaceId: string } | { ok: false; error: string };
+
+export function applyLayout(
+  endpoint: IpcEndpoint,
+  name: string,
+  target: ApplyLayoutTarget,
+): Promise<ApplyLayoutResult> {
+  return postJson(endpoint, "/apply-layout", { name, target });
+}
+
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };
 
 export function switchTab(

@@ -155,6 +155,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   function splitTileById(
     tileId: TileId,
     orientation: SplitOrientation,
+    ratio?: number,
   ): { tileId: TileId; tabId: TabId } | null {
     const target = findNode(tree, tileId);
     if (!target || target.kind !== "leaf") return null;
@@ -168,6 +169,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       newSplitId,
       newTileId,
       newTabId,
+      ratio,
     );
     if (!result) return null;
     tree = result.tree;

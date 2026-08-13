@@ -10,6 +10,8 @@ import {
   isKeybindAction,
   type KeyBindingString,
   type KeybindingsConfig,
+  type LayoutPreset,
+  type LayoutsConfig,
   type NiwatermConfig,
   parseKeyBindingString,
   platformDefaultKeybindings,
@@ -49,6 +51,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   if ("shell" in v) {
     const sh = v["shell"];
     if (typeof sh !== "object" || sh === null) return false;
+  }
+  if ("layouts" in v) {
+    const la = v["layouts"];
+    if (typeof la !== "object" || la === null) return false;
   }
   return true;
 }
@@ -277,6 +283,36 @@ export function resolveShellProfiles(
   return [...byId.values()];
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * レイアウトプリセット設定を解決する。TypeScript設定ファイルのため大半の形状はコンパイル時に
+ * 保証される想定で、ここではプリセット単位の存在チェック（`layout`フィールドを持つオブジェクトか）
+ * のみ行い、不正なプリセットは警告付きで個別にスキップする（1箇所のtypoで全体がデフォルトに
+ * 落ちるのを防ぐ、他のresolveXと同じper-entry方針）。タイル木構造の意味的な検証
+ * （ratio範囲・shellProfile存在確認・focus重複等）は実行時の状態に依存するためapply時
+ * （layout-apply.ts）に行う
+ */
+export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig {
+  const user = userConfig?.layouts;
+  if (user === undefined) return {};
+  if (!isPlainObject(user)) {
+    console.log(`[bun] ignoring invalid layouts: ${String(user)}`);
+    return {};
+  }
+  const result: LayoutsConfig = {};
+  for (const [name, preset] of Object.entries(user)) {
+    if (!isPlainObject(preset) || !isPlainObject(preset["layout"])) {
+      console.log(`[bun] ignoring invalid layouts entry: ${name}`);
+      continue;
+    }
+    result[name] = preset as unknown as LayoutPreset;
+  }
+  return result;
+}
+
 /**
  * 設定ファイルを読み込み、キーバインド・外観・ブラウザ・カスタムビュー・シェル設定を解決する（起動時・ホットリロード時共通）。
  * detectedShellProfilesはOS依存の非同期処理（Windows起動時のwsl.exe呼び出し等）を伴うため、
@@ -292,6 +328,7 @@ export async function loadAndResolveConfig(
   customView: ResolvedCustomViewConfig | null;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
+  layouts: LayoutsConfig;
 }> {
   const userConfig = await loadUserConfig(path);
   return {
@@ -301,5 +338,6 @@ export async function loadAndResolveConfig(
     customView: resolveCustomView(userConfig),
     defaultShell: resolveShell(userConfig),
     shellProfiles: resolveShellProfiles(userConfig, detectedShellProfiles),
+    layouts: resolveLayouts(userConfig),
   };
 }

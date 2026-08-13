@@ -1,6 +1,7 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
 import type {
   KeybindingsConfig,
+  LayoutsConfig,
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
@@ -175,13 +176,14 @@ let browser: ResolvedBrowserConfig;
 let customView: ResolvedCustomViewConfig | null;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
+let layouts: LayoutsConfig;
 
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
 const detectedShellProfiles = await detectShellProfiles();
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance, browser, customView, defaultShell, shellProfiles } =
+  ({ keybindings, appearance, browser, customView, defaultShell, shellProfiles, layouts } =
     await loadAndResolveConfig(configFilePath(), detectedShellProfiles));
 }
 
@@ -236,6 +238,7 @@ try {
     createBrowserBridge(() => rpc),
     captureUrlScreenshot,
     () => shellProfiles,
+    () => layouts,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {

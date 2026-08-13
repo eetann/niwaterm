@@ -136,6 +136,7 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
   - いつの間にか治ってた
 - [x] ドキュメント整備
 - [x] デザインをdaisyUIかshadcnにする
+- [ ] タイルに所属しないpopup(floating)の表示を追加
 - [ ] タブ表示のタブ部分改善
   - [ ] タブ名があれば表示
   - [ ] タブ名・タブIDの文字数が短いと誤クリックしてしまうので最小幅を設定
@@ -194,11 +195,11 @@ CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用�
 
 - [x] ワークスペース単位のCLI操作を追加する（前提整備）。`workspace-manager.ts`が既に持つ`newWorkspace`/`switchWorkspace`/`closeWorkspace`をIPCサーバー（`/new-workspace`・`/switch-workspace`・`/close-workspace`）とCLI（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`）から呼べるようにした。あわせて`newWorkspace`が新規`workspaceId`を返す・`switchWorkspace`が成否をboolean で返す・`closeWorkspace`が`{ok:false, reason:"not-found"|"last-workspace"}`を返すようmanager層のシグネチャも変更した（従来は全てvoidで、CLI/IPCから成否や新規IDを判別できなかったため）
 - [x] タブ起動時のcwd指定を配線する。`pty.ts`・`terminal-session.ts`は元々`cwd`を素通しできる作りだったため、欠けていたのは`workspace.ts`の`spawnSession`/`newTab`だけだった（`shellOverride`と同様の追加引数として`cwd`を通し、`workspace-manager.ts`→RPC `newTab`→IPC `POST /new-tab`→CLI `niwaterm new-tab --cwd <dir>`まで配線）。`cwd`はターミナルタブ専用オプションとし、`--url`・`--custom-view`とは同時指定不可（`--shell`とは併用可）とした。`spawnSession`が`cwd`引数を受け取れるようになったことで、下の「起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる」（永続化からの復元パス）は同じ引数をそのまま使って実装できる見込み（今回は新規タブ作成パスのみの対応で、永続化側の保存・復元はまだ未着手）
-- [ ] `@niwaterm/config`にレイアウト設定のスキーマを追加する（`layouts?: Record<string, LayoutPreset>`。プリセットはタイル木構造（2分割ratioのネスト）と各タブの`command`/`cwd`/`vars`/`focus`を持つ）
-- [ ] レイアウト適用エンジンを実装する。設定のツリーからTileNode木構造とタブのスポーン計画を構築する（`persistence.ts`の`buildTreeFromPersisted`のID再採番パターンを流用できそう）。各タブは「作成 →（`cwd`があれば適用）→（`command`があれば`delay`後にsend-keys）→（`vars`があれば`set-var`）」の順で組み立てる
-- [ ] IPCエンドポイント`/apply-layout`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加する
-- [ ] `--replace`時の既存タブ・PTYの終了の扱いを決める（無条件close/確認プロンプト等）。下の「プロセスはどうなるのか」の未決定事項と合わせて方針を決める
-- [ ] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記）
+- [x] `@niwaterm/config`にレイアウト設定のスキーマを追加する（`packages/config/src/layout.ts`。`LayoutNodeConfig`は`{kind:"split", orientation, ratio?, first, second}`と`{kind:"tile", tabs: LayoutTabConfig[], activeTab?}`の判別共用体とし、`LayoutTabConfig`は`name`/`shellProfile`/`cwd`/`command`/`delay`/`vars`/`focus`を持つ。`NiwatermConfig.layouts?: LayoutsConfig`として追加し、`src/bun/config.ts`に`resolveLayouts`を実装した（プリセット単位の浅い存在チェックのみ行い、ratio範囲・shellProfile実在確認・focus重複等の意味的検証はTypeScript設定ゆえ実行時状態に依存するためapply時に回した））
+- [x] レイアウト適用エンジンを実装する（`src/bun/layout-apply.ts`）。当初想定していた`persistence.ts`の`buildTreeFromPersisted`パターン（TileNode木を直接組み立てる）ではなく、`splitTile`/`newTab`/`setTabVar`/`setTabName`/`handleInput`(send-keys)/`closeTab`/`switchTab`/`focusTile`という既存の高レベル操作を「タイルは常にタブ1つのプレースホルダーから始まる」という不変条件のもとに積み木のように呼び出して組み立てる方式を採用した（workspace.ts/tile-layout.tsの内部構造には一切手を入れずに済む）。副産物として`splitTile`が`ratio`を受け取れるよう`workspace.ts`/`workspace-manager.ts`を拡張した（既存のIPC/CLIには公開せずlayout-apply.ts内部利用のみ）。適用前に全体を検証し（ratio範囲・shellProfile実在・focus重複最大1つ）、検証を通過するまでワークスペースには一切触れない設計とした
+- [x] IPCエンドポイント`/apply-layout`・`GET /layouts`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加した。`--replace`は既存のワークスペースを`closeTab`の繰り返しだけで単一タイルへ畳んでから組み立て直す方式とし、既存タブ・PTYは無条件でcloseする（下の「プロセスはどうなるのか」の未決定事項とは別に、レイアウト適用という明示操作の一部として今回は確認プロンプト無しの単純な仕様にした）。ドキュメントは`docs/guide/config.md`「レイアウト」節・`docs/guide/cli.md`に追記済み
+- [x] `--replace`時の既存タブ・PTYの終了の扱いを決める。`niwaterm layout apply --replace`固有の挙動としては「無条件close、確認プロンプト無し」に決めて実装・ドキュメント化した（CLIはスクリプトから叩く前提が強く対話確認になじまないこと、`--replace`という明示フラグ自体が「壊してよい」という意思表示になることが理由）。ただし下の「プロセスはどうなるのか」（ウィンドウを閉じる際の挙動という、より一般的な未決定事項）はこれとは別に残っている
+- [x] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記した）
 
 ## 磨き込みと配布
 
