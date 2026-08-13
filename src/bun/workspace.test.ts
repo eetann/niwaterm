@@ -484,6 +484,29 @@ describe("タイル変数(setTileVar/getTileVar/listTileVars)", () => {
 
     expect(ws.getTileVar(tileId, "k")).toEqual({ found: true, value: "v" });
   });
+
+  test("setTileVarはonDirtyを呼ぶ（サイドバーへの即時反映のため）", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    dirtyCount = 0;
+
+    ws.setTileVar(tileId, "agent_status", "working");
+
+    expect(dirtyCount).toBe(1);
+  });
+
+  test("存在しないtileIdへのsetTileVarはonDirtyを呼ばない", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    dirtyCount = 0;
+
+    ws.setTileVar("not-found", "k", "v");
+
+    expect(dirtyCount).toBe(0);
+  });
 });
 
 describe("シェルプロセス終了時の挙動(onExit経由)", () => {

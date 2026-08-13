@@ -303,6 +303,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       tileVars.set(tileId, vars);
     }
     vars.set(key, value);
+    opts.onDirty();
     return true;
   }
 

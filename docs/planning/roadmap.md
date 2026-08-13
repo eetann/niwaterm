@@ -106,8 +106,10 @@ niwatermは既にIPCサーバー・CLI・タイル変数（`niwaterm set-var`）
 - [x] zsh向けシェル統合スニペット（precmdフックでgitブランチを`set-var`する）を用意し、導入手順をdocsに書く
 - [x] サイドバーのタブ行にタイル変数（ブランチ等）を表示する
 - [x] bash/fish/PowerShell向けのシェル統合スニペットも用意する
-- [ ] エージェント種別・状態（idle/working/blocked等）の検知方式を決定する。herdr方式（フォアグラウンドプロセス走査+画面内容マニフェスト照合）か、各エージェントのhooks機構（Claude Codeのhooksなど）を使った能動通知か
-- [ ] 検知したエージェント状態をサイドバーに色分け等で表示する
+- [x] エージェント種別・状態（idle/working/blocked等）の検知方式を決定する。herdr方式（フォアグラウンドプロセス走査+画面内容マニフェスト照合）か、各エージェントのhooks機構（Claude Codeのhooksなど）を使った能動通知か
+      ブランチ検知と同じ「hooks能動通知型」を採用（cmux/herdrをopensrcで比較調査した結果、詳細: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。エージェントのhooks機構から静的なJSON設定（`contrib/agent-integration/claude-code/hooks.json`）をユーザーが`~/.claude/settings.json`等へ手動マージする方式。タイル変数`agent`/`agent_status`を予約キーとして使う
+- [x] 検知したエージェント状態をサイドバーに色分け等で表示する
+      サイドバーのタブ行に状態ドット（idle=緑/working=青/blocked=黄）とブランチ名を表示（src/mainview/react/sidebar-props.ts・sidebar-workspace-list.tsx）
 - [ ] タブ単位（現状はタイル単位で共有）の状態管理が必要か検討する。1タイルに複数タブがある場合、非アクティブタブのシェルのブランチ更新が他タブの表示を上書きする既知の制約がある
 
 ## シェルプロファイル選択（複数シェル・WSLディストロ対応）

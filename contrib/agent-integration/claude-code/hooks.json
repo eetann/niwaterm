@@ -1,0 +1,82 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent claude-code >/dev/null 2>&1; niwaterm set-var agent_status idle >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent_status working >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent_status working >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent_status idle >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent_status blocked >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "async": true,
+            "timeout": 5,
+            "command": "if [ -n \"$NIWATERM_TILE_ID\" ] && command -v niwaterm >/dev/null 2>&1; then niwaterm set-var agent \"\" >/dev/null 2>&1; niwaterm set-var agent_status \"\" >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

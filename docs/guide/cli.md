@@ -112,6 +112,22 @@ if ($env:NIWATERM_TILE_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niw
 
 `NIWATERM_TILE_ID`が無いシェル（niwaterm外のターミナル）では何もしない。PowerShell版は`prompt`関数を上書きするが、既存の`prompt`関数（他ツールのプロンプトカスタマイズ等）を保持して末尾で呼び直すため、他のプロンプト拡張と共存できる。
 
+## エージェント統合
+
+`contrib/agent-integration/`配下の設定を導入すると、タイル内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタイル変数`agent`/`agent_status`へ自動反映する（`niwaterm set-var agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
+
+```sh
+# ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
+# contrib/agent-integration/claude-code/hooks.jsonの中身をマージする
+cp ~/.claude/settings.json ~/.claude/settings.json.bak
+jq -s '.[0] * {hooks: (.[0].hooks * .[1].hooks)}' \
+  ~/.claude/settings.json /path/to/niwaterm/contrib/agent-integration/claude-code/hooks.json \
+  > /tmp/merged-settings.json
+mv /tmp/merged-settings.json ~/.claude/settings.json
+```
+
+`branch`と同様、`agent`/`agent_status`もタイル変数の予約キーである（値は`niwaterm set-var`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TILE_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
+
 ```sh
 niwaterm browser-navigate --tab <tabId> --url <url>
 niwaterm browser-get-text --tab <tabId>
