@@ -612,6 +612,7 @@ function renderTileTabBar(tileId: TileId): void {
         imeEl.focus({ preventScroll: true });
       },
       onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
+      onRenameTab: renameSidebarTab,
     }),
   );
 }

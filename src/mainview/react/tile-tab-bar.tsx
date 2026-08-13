@@ -1,6 +1,13 @@
 import type { ShellProfile } from "@niwaterm/config";
 import { ChevronDown, Plus } from "lucide-react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +32,7 @@ export interface TileTabBarProps {
   onAddTab: () => void;
   onAddTabWithProfile: (shellProfileId: string | undefined) => void;
   onRequestTerminalFocus: () => void;
+  onRenameTab: (tabId: TabId, name: string) => void;
 }
 
 /**
@@ -44,34 +52,99 @@ export function TileTabBar({
   onAddTab,
   onAddTabWithProfile,
   onRequestTerminalFocus,
+  onRenameTab,
 }: TileTabBarProps) {
+  // 名前編集中のタブ。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
+  const [editingTabId, setEditingTabId] = useState<TabId | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  // 「名前を変更」選択によるメニュー閉じ時はinputへautoFocusさせたいため、
+  // onCloseAutoFocus側でonRequestTerminalFocusを呼ばないようにするための一時フラグ
+  const renamingViaMenuRef = useRef(false);
+
+  function startEditing(tabId: TabId, currentLabel: string): void {
+    setEditingTabId(tabId);
+    setEditingValue(currentLabel);
+  }
+
+  function commitEditing(): void {
+    if (!editingTabId) return;
+    onRenameTab(editingTabId, editingValue);
+    setEditingTabId(null);
+    onRequestTerminalFocus();
+  }
+
+  function cancelEditing(): void {
+    if (!editingTabId) return;
+    setEditingTabId(null);
+    onRequestTerminalFocus();
+  }
+
   return (
     <div className="flex w-full items-center">
       <Tabs value={activeTabId} onValueChange={onSelectTab} className="contents">
         <TabsList variant="line" className="h-7 w-fit shrink-0 justify-start p-0">
-          {tabs.map((tab) => (
-            <TabsTrigger
-              key={tab.tabId}
-              value={tab.tabId}
-              className="h-7 flex-none gap-1.5 px-2 text-xs"
-            >
-              <span>{tab.label}</span>
-              <Button
-                asChild
-                variant="ghost"
-                size="icon-xs"
-                className="size-4 opacity-60 hover:opacity-100"
-                onPointerDown={stopEventPropagation}
-                onMouseDown={stopEventPropagation}
-                onClick={(e) => {
+          {tabs.map((tab) =>
+            editingTabId === tab.tabId ? (
+              <input
+                key={tab.tabId}
+                type="text"
+                autoFocus
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onClick={stopEventPropagation}
+                onBlur={cancelEditing}
+                onKeyDown={(e) => {
                   stopEventPropagation(e);
-                  onCloseTab(tab.tabId);
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitEditing();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelEditing();
+                  }
                 }}
-              >
-                <span>×</span>
-              </Button>
-            </TabsTrigger>
-          ))}
+                className="h-7 w-20 flex-none rounded-md border border-ring bg-background px-2 text-xs text-foreground outline-none"
+              />
+            ) : (
+              <ContextMenu key={tab.tabId}>
+                <ContextMenuTrigger asChild>
+                  <TabsTrigger value={tab.tabId} className="h-7 flex-none gap-1.5 px-2 text-xs">
+                    <span>{tab.label}</span>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-4 opacity-60 hover:opacity-100"
+                      onPointerDown={stopEventPropagation}
+                      onMouseDown={stopEventPropagation}
+                      onClick={(e) => {
+                        stopEventPropagation(e);
+                        onCloseTab(tab.tabId);
+                      }}
+                    >
+                      <span>×</span>
+                    </Button>
+                  </TabsTrigger>
+                </ContextMenuTrigger>
+                <ContextMenuContent
+                  onCloseAutoFocus={(e) => {
+                    e.preventDefault();
+                    if (!renamingViaMenuRef.current) onRequestTerminalFocus();
+                    renamingViaMenuRef.current = false;
+                  }}
+                >
+                  <ContextMenuItem
+                    onSelect={() => {
+                      renamingViaMenuRef.current = true;
+                      startEditing(tab.tabId, tab.label);
+                    }}
+                  >
+                    名前を変更
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            ),
+          )}
         </TabsList>
       </Tabs>
       <Button variant="ghost" size="icon-xs" onClick={onAddTab} title="新しいタブ">
