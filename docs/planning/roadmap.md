@@ -101,8 +101,8 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 - [x] Claude Codeのhooks経由でエージェント種別・状態を`set-var`する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`）
 - [x] サイドバーのタブ行にブランチ名・エージェント状態（色分けドット）を表示する
 - [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する（1タイル複数タブでの表示混線を解消）
-- [ ] ブランチ表示が実際には機能していない不具合を調査・修正する
-- [x] サイドバーのタブ行をリッチカード型に刷新する（`.mywork/tmp/sidebar-ui-mockups/pattern-b-card.html`のパターンBを採用。エージェント紐づきタブはアイコン+名前+working/blockedバッジ、状態テキスト（`agent_status_text`変数）、ブランチ名の3行カード、エージェントなしタブは1行のみ表示）
+- [x] ブランチ表示が実際には機能していない不具合を調査・修正する（原因: IPC・シェル統合・bun側のtabVars更新は正常に動作していたが、`sidebar-workspace-list.tsx`のブランチ表示行が`tab.agent && tab.branch`という条件になっており、AIエージェントが紐づいていない大半のタブでブランチ名が一切表示されない状態だった。`tab.branch`単体の条件に修正し、エージェントなしタブでもbranchがあれば2行目に表示するようにした。Windows実機でCLI経由のset-var→サイドバー表示まで動作確認済み）
+- [x] サイドバーのタブ行をリッチカード型に刷新する（`.mywork/tmp/sidebar-ui-mockups/pattern-b-card.html`のパターンBを採用。エージェント紐づきタブはアイコン+名前+working/blockedバッジ、状態テキスト（`agent_status_text`変数）、ブランチ名の3行カード。エージェントなしタブはbranch未設定なら1行、branchがあれば2行目にブランチ名を表示する）
 - [ ] `agent_status_text`変数をClaude Codeのhooksから実際に送信する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドをjqでstdin JSON（`tool_name`/`tool_input`/`message`/`last_assistant_message`）を解析して`set-var`するよう拡張。ADR 0004への追記要否も検討）
 - [x] サイドバーのワークスペース表示の改善
   - [x] ワークスペースごとに折り畳めるようにする

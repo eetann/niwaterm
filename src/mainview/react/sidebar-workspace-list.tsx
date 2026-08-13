@@ -184,7 +184,7 @@ export function SidebarWorkspaceList({
                 {tab.agent.statusText}
               </div>
             )}
-            {tab.agent && tab.branch && (
+            {tab.branch && (
               <div className="flex items-center gap-1 pl-5 text-[10px] text-muted-foreground/70">
                 <GitBranch className="size-2.5 shrink-0" />
                 <span className="min-w-0 truncate">{tab.branch}</span>
