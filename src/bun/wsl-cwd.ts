@@ -27,3 +27,25 @@ export function resolveActualCwd(
   if (!distro) return rawCwd;
   return `\\\\wsl.localhost\\${distro}${rawCwd.replaceAll("/", "\\")}`;
 }
+
+/**
+ * PTY起動コマンド（cmd配列、例: ["wsl.exe", "-d", "NixOS"]）がwsl.exe系プロファイルの場合、
+ * 必要なら`--cd`引数を追記した上で、Bun.spawnへ渡すべきcwd（Windows側のパス）を返す。
+ * wsl.exeはBun.spawnのcwd（Windows側のパス）をそのままLinux側の/mnt/c/...等として
+ * マップしてしまうため、Linux側のパス（cwd省略時はホームディレクトリ、または/始まりの
+ * 明示指定）を使わせるには`--cd`で明示する必要がある。既にUNC形式（\\wsl.localhost\...）
+ * へ変換済みのcwd（resolveActualCwd、前タブからの継承）はWindows側のパスとしてそのまま
+ * 解決できるため対象外（そのままBun.spawnのcwdへ渡してよい）。
+ * cmdは対象時のみ`--cd`引数を追記して変更される（副作用あり）。
+ */
+export function applyWslCdArg(
+  cmd: string[],
+  cwd: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  if (platform !== "win32") return cwd;
+  if (!extractWslDistro(cmd.join(" "))) return cwd;
+  if (cwd !== undefined && !cwd.startsWith("/")) return cwd;
+  cmd.push("--cd", cwd ?? "~");
+  return undefined;
+}

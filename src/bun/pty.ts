@@ -3,6 +3,7 @@
 // WindowsではBun 1.3.14+が必要（ConPTY実装がそのバージョンから入った）。
 
 import { homedir } from "node:os";
+import { applyWslCdArg } from "./wsl-cwd";
 
 const isWindows = process.platform === "win32";
 
@@ -63,6 +64,11 @@ export function createPty(opts: PtyOptions): Pty {
   const term = opts.term ?? "xterm-256color";
   const cmd = shellCommand(opts.shell);
 
+  // wsl.exeプロファイル起動時、Windows側のcwdをそのままBun.spawnへ渡すと
+  // Linux側で/mnt/c/...等にマップされてしまうため、必要ならcmdへ--cdを追記する
+  // （詳細: wsl-cwd.ts）
+  const spawnCwd = applyWslCdArg(cmd, opts.cwd);
+
   let onDataFn: ((data: Uint8Array) => void) | null = null;
   let onExitFn: ((code: number) => void) | null = null;
 
@@ -86,16 +92,16 @@ export function createPty(opts: PtyOptions): Pty {
 
   let proc: Bun.Subprocess;
   try {
-    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: opts.cwd ?? homedir() });
+    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: spawnCwd ?? homedir() });
   } catch (err) {
     // uv_spawnのENOENTはcwd不在・実行ファイル不在いずれでも発生し、エラー自体からは
-    // 区別できない（libuv/Windowsの既知の癖）。opts.cwdを明示指定していた場合は
+    // 区別できない（libuv/Windowsの既知の癖）。spawnCwdを明示指定していた場合は
     // cwd起因（例: WSL側CLIから渡されたパスがWindows側に存在しない）を疑い、
     // homedir()へフォールバックして再試行する。フォールバックでも失敗する場合は
     // シェルコマンド自体の問題とみなしそのまま投げる
-    if (opts.cwd === undefined) throw err;
+    if (spawnCwd === undefined) throw err;
     console.log(
-      `[bun] failed to spawn pty with cwd=${opts.cwd}, falling back to home directory: ${String(err)}`,
+      `[bun] failed to spawn pty with cwd=${spawnCwd}, falling back to home directory: ${String(err)}`,
     );
     proc = Bun.spawn(cmd, { ...spawnOptions, cwd: homedir() });
   }
