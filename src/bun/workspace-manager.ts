@@ -66,6 +66,8 @@ export interface WorkspaceManagerOptions {
   restoreFrom?: PersistedState | null;
   /** 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う */
   getDefaultShell?: WorkspaceOptions["getDefaultShell"];
+  /** 新規ワークスペース作成時の最初のタブに使うデフォルトcwdを取得する。省略時はpty.ts側のOS標準ホームディレクトリを使う */
+  getDefaultCwd?: WorkspaceOptions["getDefaultCwd"];
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: WorkspaceOptions["createSession"];
 }
@@ -94,6 +96,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       onDirty: () => opts.onDirty(),
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
       getDefaultShell: opts.getDefaultShell,
+      getDefaultCwd: opts.getDefaultCwd,
       createSession: opts.createSession,
     });
     workspaces.set(id, ws);

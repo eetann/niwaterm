@@ -176,6 +176,44 @@ describe("getDefaultShellによるシェル指定", () => {
   });
 });
 
+describe("getDefaultCwdによる新規ワークスペースのcwd指定", () => {
+  test("getDefaultCwd省略時はcwdがundefinedのまま渡る（pty.ts側のOS標準ホームディレクトリにフォールバック）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspace(baseOpts({ createSession: factory }));
+    expect(created[0]?.opts.cwd).toBeUndefined();
+  });
+
+  test("getDefaultCwdが返す値が初期タブのセッションへcwdとして渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspace(
+      baseOpts({ createSession: factory, getDefaultCwd: () => "/home/eetann/projects" }),
+    );
+    expect(created[0]?.opts.cwd).toBe("/home/eetann/projects");
+  });
+
+  test("initialCwdを明示指定した場合はgetDefaultCwdより優先される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createWorkspace(
+      baseOpts({
+        createSession: factory,
+        initialCwd: "/explicit/cwd",
+        getDefaultCwd: () => "/home/eetann/projects",
+      }),
+    );
+    expect(created[0]?.opts.cwd).toBe("/explicit/cwd");
+  });
+
+  test("splitTile/newTabで生成されるセッションにはgetDefaultCwdの値は渡らない（前のタブのcwdを継承する既存挙動を優先）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(
+      baseOpts({ createSession: factory, getDefaultCwd: () => "/home/eetann/projects" }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    expect(created[1]?.opts.cwd).toBeUndefined();
+  });
+});
+
 describe("splitTile", () => {
   test("対象タイルを分割し、新規tileId/tabIdを返す", () => {
     const { created, factory } = createFakeSessionFactory();

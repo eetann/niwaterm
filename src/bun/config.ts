@@ -56,6 +56,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
     const la = v["layouts"];
     if (typeof la !== "object" || la === null) return false;
   }
+  if ("workspace" in v) {
+    const ws = v["workspace"];
+    if (typeof ws !== "object" || ws === null) return false;
+  }
   return true;
 }
 
@@ -238,6 +242,19 @@ export function resolveShell(userConfig: NiwatermConfig | null): string | undefi
   return undefined;
 }
 
+/**
+ * 新規ワークスペース作成時に使うデフォルトcwdを解決する。未指定・不正値はundefined
+ * （pty.ts側のOS標準ホームディレクトリにフォールバックする。resolveShellと同じ方針で
+ * 具体的なデフォルト定数は持たない）。
+ */
+export function resolveWorkspaceDefaultCwd(userConfig: NiwatermConfig | null): string | undefined {
+  const user = userConfig?.workspace?.defaultCwd;
+  if (user === undefined) return undefined;
+  if (isNonEmptyString(user)) return user;
+  console.log(`[bun] ignoring invalid workspace.defaultCwd: ${String(user)}`);
+  return undefined;
+}
+
 /** 英数字・_・-・. のみ、1〜64文字。CLI --shellやRPCでの指定値として扱いやすい形式に絞る */
 const SHELL_PROFILE_ID_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
 
@@ -329,6 +346,7 @@ export async function loadAndResolveConfig(
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
+  workspaceDefaultCwd: string | undefined;
 }> {
   const userConfig = await loadUserConfig(path);
   return {
@@ -339,5 +357,6 @@ export async function loadAndResolveConfig(
     defaultShell: resolveShell(userConfig),
     shellProfiles: resolveShellProfiles(userConfig, detectedShellProfiles),
     layouts: resolveLayouts(userConfig),
+    workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
   };
 }

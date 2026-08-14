@@ -181,14 +181,23 @@ let customView: ResolvedCustomViewConfig | null;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
+let workspaceDefaultCwd: string | undefined;
 
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
 const detectedShellProfiles = await detectShellProfiles();
 
 async function refreshConfig(): Promise<void> {
-  ({ keybindings, appearance, browser, customView, defaultShell, shellProfiles, layouts } =
-    await loadAndResolveConfig(configFilePath(), detectedShellProfiles));
+  ({
+    keybindings,
+    appearance,
+    browser,
+    customView,
+    defaultShell,
+    shellProfiles,
+    layouts,
+    workspaceDefaultCwd,
+  } = await loadAndResolveConfig(configFilePath(), detectedShellProfiles));
 }
 
 await refreshConfig();
@@ -226,6 +235,7 @@ const workspaceManager = createWorkspaceManager({
   onDirty,
   restoreFrom,
   getDefaultShell: () => defaultShell,
+  getDefaultCwd: () => workspaceDefaultCwd,
   onAllWorkspacesClosed: () => {
     console.log("all workspaces closed, exiting");
     cleanup();

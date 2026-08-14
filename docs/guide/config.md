@@ -221,6 +221,22 @@ Windows環境では起動時に`wsl.exe --list --quiet`相当でインストー�
 
 利用可能なプロファイル一覧はCLIの`niwaterm shell-profiles`で確認できる（詳細: `docs/guide/cli.md`）。
 
+## ワークスペース設定
+
+`workspace`は、新規ワークスペース作成時（アプリ起動時の最初のワークスペース・`niwaterm new-workspace`）の最初のタブに使うデフォルトcwdを指定するオブジェクト。**未指定ならOS標準のホームディレクトリ**が使われる（niwaterm自体をWSL/Linux環境で動かしている場合は、そのホームディレクトリが自然にデフォルトになる）。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `defaultCwd` | `string` | 新規ワークスペース作成時、最初のタブに使う作業ディレクトリ（絶対パス） |
+
+```ts
+workspace: {
+  defaultCwd: "/home/eetann/projects",
+},
+```
+
+不正な値（空文字列等）を指定した場合、警告付きでOS標準のホームディレクトリにフォールバックする。この設定が影響するのは新規ワークスペース作成時のみで、既存タイルからの新規タブ作成・タイル分割は引き続き分割元/対象タイルの実際のcwd（OSC7シェル統合で追跡した値）を継承する。
+
 ## レイアウト
 
 `layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`は空一覧を返す。

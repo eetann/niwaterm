@@ -48,7 +48,10 @@ export type WorkspaceOptions = {
   genTabId: () => TabId;
   /** 永続化からの復元時に渡す既存の木構造（tileId/tabIdは採番済み）。省略時は単一leaf・単一タブで新規作成する */
   initialTree?: TileNode;
-  /** 新規作成時（initialTree省略時）の最初のタブに使うcwd。省略時はpty.ts側のOS標準（homedir）を使う */
+  /**
+   * 新規作成時（initialTree省略時）の最初のタブに使うcwd。省略時はgetDefaultCwd()（config指定値）、
+   * それも省略時はpty.ts側のOS標準（homedir）を使う
+   */
   initialCwd?: string;
   /** 描画すべき変化が生じた時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onDirty: () => void;
@@ -59,6 +62,12 @@ export type WorkspaceOptions = {
    * 呼び出し毎に評価する（設定ファイルのホットリロードを反映するため、生成時に値を固定しない）
    */
   getDefaultShell?: () => string | undefined;
+  /**
+   * 新規ワークスペース作成時（initialTree省略時）の最初のタブに使うデフォルトcwdを取得する。
+   * 省略時・戻り値undefinedはpty.ts側のOS標準ホームディレクトリを使う。
+   * getDefaultShellと同様、呼び出し毎に評価する（設定ファイルのホットリロードを反映するため）
+   */
+  getDefaultCwd?: () => string | undefined;
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: typeof createTerminalSession;
 };
@@ -120,7 +129,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const firstTileId = genTileId();
     tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
     focusedTileId = firstTileId;
-    spawnSession(firstTabId, opts.initialCols, opts.initialRows, undefined, opts.initialCwd);
+    spawnSession(
+      firstTabId,
+      opts.initialCols,
+      opts.initialRows,
+      undefined,
+      opts.initialCwd ?? opts.getDefaultCwd?.(),
+    );
   }
 
   function disposeSessions(tabIds: TabId[]): void {

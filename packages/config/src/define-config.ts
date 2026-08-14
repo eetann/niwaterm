@@ -4,6 +4,7 @@ import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
 import type { LayoutsConfig } from "./layout";
 import type { ShellConfig } from "./shell";
+import type { WorkspaceConfig } from "./workspace";
 
 export interface NiwatermConfig {
   /**
@@ -40,6 +41,14 @@ export interface NiwatermConfig {
    * 例: { dev: { layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] } } }
    */
   layouts?: LayoutsConfig;
+  /**
+   * ワークスペース設定。新規ワークスペース作成時（アプリ起動時の最初のワークスペース・
+   * `niwaterm new-workspace`）の最初のタブに使うデフォルトcwdを変更できる。
+   * 未指定時はOS標準のホームディレクトリ（WSL上でniwaterm自体を動かしている場合は
+   * 自然にWSL側のホームディレクトリになる）。分割・新規タブ作成時のcwd継承には影響しない。
+   * 例: { defaultCwd: "/home/eetann/projects" }
+   */
+  workspace?: WorkspaceConfig;
 }
 
 /** 型推論とエディタ補完のためのヘルパー。渡された値をそのまま返す */
