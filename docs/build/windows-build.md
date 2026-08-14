@@ -302,6 +302,7 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 | `niwaterm ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
 | WSLディストロのタブ内で`niwaterm`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
 | WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、WSL用仮想アダプタが見つからない、ポート`47831`が別プロセスに使われている、のいずれか                                                                                                                                                                                                    |
+| `send-keys`等でPTYへ書き込んだ直後にniwatermアプリ自体が`Segmentation fault`でクラッシュする | 「PTY出力の直後にプロセスが終了するとBunがネイティブクラッシュする」参照。`;`区切りで出力を伴うコマンドの直後にexitを送っていないか確認する                                                                                                                                                                                                                                          |
 
 ## 既知の差異・制約
 
@@ -311,6 +312,28 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 - ConPTYは子プロセスの出力より前に短いVT初期化シーケンス（`\x1b[?9001h\x1b[?1004h...`）を出力する
 - Windowsにはプロセスグループもシグナルも無いため、macOSで行っているSIGINT/SIGWINCHの補完送出は行わない
   （ConPTY側がCtrl+Cとサイズ変更を子へ伝える）
+
+### PTY出力の直後にプロセスが終了するとBunがネイティブクラッシュする（Bun本体の既知の疑い、未解決）
+
+Windows実機（Bun 1.3.14）で、PTYへの書き込み内容が「何か出力を伴うコマンド」＋「その直後にシェルを終了させる」という組み合わせになると、`panic(thread ...): Segmentation fault`でniwatermアプリ自体（Bunプロセス）がクラッシュすることを確認した。send-keys・`niwaterm.config.ts`のレイアウトプリセットの`command`・popupの`command`実行など、PTYへ書き込みを行う機能全般が対象になりうる。
+
+**再現条件（実機検証済み）**: `;`区切りで1つのコマンドラインとして送った場合のみ発生し、改行で分けて送る場合は発生しない。
+
+| 送信内容（1回のPTY書き込み） | 結果 |
+| --- | --- |
+| `"pwd; exit\r"` | クラッシュ |
+| `"echo a; exit\r"` | クラッシュ |
+| `"cd /tmp; exit\r"`（出力を伴わないコマンド + exit） | 発生しない |
+| `"exit; echo a\r"`（exitが先頭。execで終了しechoは実行されない） | 発生しない |
+| `"exit\r"`単体 | 発生しない |
+| `"echo a; echo b\r"`（exitを含まない） | 発生しない |
+| `"pwd\rexit\r"`（改行で分けて2回のコマンドとして送る） | 発生しない |
+
+つまり「`;`区切りの1コマンドライン内で、何か出力を伴うコマンドの直後にexitが続く」場合にのみ再現する。フルスクリーンTUI（lazygitなど）を実行後に自動でexitを送るケースも同様に踏む。
+
+**原因の見立て**: niwaterm側の特定コードの問題ではなく、Bun本体のWindows ConPTY実装（`Bun.Terminal`、[oven-sh/bun#29522](https://github.com/oven-sh/bun/pull/29522)で実装）側のrace conditionの可能性が高い。同PRのレビューコメントで、自動レビューボットが「テストが`proc.exited`を出力待ちの代替成功条件として使っており、出力(output)とプロセス終了(exit)のイベント順序を保証していない」「`terminal.writer.close()`のパスが`deinit()`と競合してdouble-freeが起きうる」と指摘しており、PTY出力処理とConPTYハンドルのクリーンアップ処理が競合しうることが示唆されている。Bun本体のissueは検索した範囲では見つからなかった（2026-08時点、`Bun.Terminal`のWindows対応自体が新しく関連issueが少ないと見られる）。
+
+**niwaterm側の回避策**: `;`でコマンドを連結せず、改行（Enter）で分けて送信する。popupの`command`実行（`src/bun/workspace.ts`の`openPopup`）はこの方式を採用済み。ただしこの回避策には副作用があり、フルスクリーンTUI（lazygit等）を実行するとワンショット実行後に自動送信される`exit`がTUI起動中のタイミングと重なり、TUI側への意図しない入力として扱われてしまうため、対話的TUIでは自動closeが機能しないことがある（詳細: docs/guide/cli.md「niwaterm popup」）。
 
 ### キーバインドの既定値
 
