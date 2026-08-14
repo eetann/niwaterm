@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、タイル・タブに所属しない一時的なポップアップ画面を開く（`niwaterm popup`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -63,6 +63,16 @@ niwaterm focus-tile --tile <tileId>
 - `focus-tile` — 指定タイルへフォーカスを移す
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
+
+```sh
+niwaterm popup [--cwd <dir>] [--width <1-100>] [--height <1-100>] [command...]
+```
+
+タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxの`popup`/`floating`相当。設計判断の詳細: `docs/adr/0005-adopt-workspace-scoped-single-popup.md`）。アクティブなワークスペースにつき最大1つだけ開ける。`--cwd`省略時はフォーカス中タイルのアクティブタブが実際にいるディレクトリを使う。`--width`/`--height`は表示サイズ（1〜100のパーセント、省略時は既定値）。`command...`を指定すると、通常通りデフォルトシェル（WSLプロファイル等も含む）でポップアップを起動した上でそのコマンドを実行し（例: `niwaterm popup lazygit`）、実行が終わると自動的にポップアップも閉じる（ワンショット実行）。省略時は通常のシェルが起動したままになる。成功時、新規`tabId`を表示する。
+
+開閉・表示/非表示の切り替えはキーバインド（既定: macOSは`cmd+\``、Windowsは`ctrl+shift+\``）でも行える。ポップアップが既に開いている場合、このコマンドはエラーメッセージと共に終了コード1を返す。
+
+**既知の制約**: `command...`は「すぐ実行が完了するコマンド」（`pwd`・`git status`等）でのみ自動closeが確実に機能する。lazygit・nvim等の対話的なフルスクリーンTUIを指定した場合、実行完了直後に自動送信される終了操作がTUI起動中のタイミングと重なり、TUI側への意図しない入力として扱われてしまい、自動closeされないことがある（TUI自体は正常に動作する）。その場合は`q`等でTUIを終了した後、ポップアップ内で手動により`exit`するか、キーバインドで閉じる。
 
 ```sh
 niwaterm new-workspace

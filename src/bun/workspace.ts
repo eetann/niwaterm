@@ -28,6 +28,7 @@ import {
   type TerminalRenderState,
   type TerminalSession,
 } from "./terminal-session";
+import { tmuxKeysToBytes } from "./tmux-keys";
 import { resolveActualCwd } from "./wsl-cwd";
 
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
@@ -42,9 +43,20 @@ export interface WorkspaceRenderState {
   tileNames: Record<TileId, string>;
   /**
    * ワークスペースごとに最大1つ持てる、Tile木構造とは独立したポップアップ画面（ADR 0005）。
-   * 中身のPTY描画状態はtabsに同居させている（popupのtabIdをキーに引ける）ため、ここではメタ情報のみ持つ
+   * 中身のPTY描画状態はtabsに同居させている（popupのtabIdをキーに引ける）ため、ここではメタ情報のみ持つ。
+   * width/heightは表示サイズの指定（1〜100のパーセント）。未指定はCSS側の既定値（80%）に従う
    */
-  popup: { tabId: TabId; visible: boolean } | null;
+  popup: { tabId: TabId; visible: boolean; width?: number; height?: number } | null;
+}
+
+export interface OpenPopupOptions {
+  /** 省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ（split-tile/newTabと同じ方針） */
+  cwd?: string;
+  /** 指定すると、このコマンドをシェルの代わりに実行する（ワンショット実行）。終了すると自動的にポップアップも閉じる */
+  command?: string;
+  /** 表示サイズ（1〜100のパーセント）。省略時はCSS側の既定値に従う */
+  width?: number;
+  height?: number;
 }
 
 export type GetTabVarResult =
@@ -101,6 +113,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // そのまま再利用するため）。popupTabIdで「Tile木構造に属さない特別なタブ」として区別する
   let popupTabId: TabId | null = null;
   let popupVisible = false;
+  let popupWidth: number | undefined;
+  let popupHeight: number | undefined;
 
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
@@ -217,6 +231,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
       disposeSessions([tabId]);
       popupTabId = null;
       popupVisible = false;
+      popupWidth = undefined;
+      popupHeight = undefined;
       opts.onDirty();
       return;
     }
@@ -299,9 +315,20 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   /**
    * ポップアップを開く。既に開いていれば何もしない（同時に1つだけ、ADR 0005）。
-   * cwd省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ（split-tile/newTabと同じ方針）
+   * commandを指定すると、通常通りデフォルトシェル（WSLプロファイル等も含む）でPTYを起動した上で、
+   * 起動直後にそのコマンド文字列とexitをsend-keys相当で流し込む（ワンショット実行）。
+   * layout-apply.tsのcommand実装と同じ方式（PTY自体は短命にしない）。
+   * シェルがexitで終了するとhandleTabProcessExitのpopup分岐で自動的に閉じる。
+   * コマンド文字列をそのままシェル実行ファイルとして直接spawnする方式は、Windows実機で
+   * 短命プロセスがBunのネイティブクラッシュを誘発する既知の問題があるため採用していない
+   * （.mywork/tmp/layout-apply-crush.log、layout-apply.tsのcanReusePlaceholder参照）。
+   * commandとexitは`;`区切りの1コマンドとしてではなく、別々のEnterで区切って送る
+   * （`"<command>; exit"\r`のように1回の改行にまとめて送るとWindows実機でクラッシュする
+   * 既知の問題を実機検証で確認した。原因はniwaterm側の特定コードではなく、シェル(zsh)が
+   * `;`区切りの複合コマンド末尾でexitする際のPTY出力とプロセス終了通知のタイミングに
+   * 起因すると見られる。改行で分けて送る分には問題なく動作する）
    */
-  function openPopup(cwd?: string): TabId | null {
+  function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
     if (popupTabId) return null;
     const newTabId = genTabId();
     const focusedLeaf = findNode(tree, focusedTileId);
@@ -311,9 +338,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows, undefined, cwd ?? inheritedCwd);
+    spawnSession(newTabId, size.cols, size.rows, undefined, popupOpts.cwd ?? inheritedCwd);
     popupTabId = newTabId;
     popupVisible = true;
+    popupWidth = popupOpts.width;
+    popupHeight = popupOpts.height;
+    if (popupOpts.command !== undefined) {
+      handleInput(newTabId, tmuxKeysToBytes([popupOpts.command, "Enter", "exit", "Enter"]));
+    }
     opts.onDirty();
     return newTabId;
   }
@@ -323,6 +355,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     disposeSessions([popupTabId]);
     popupTabId = null;
     popupVisible = false;
+    popupWidth = undefined;
+    popupHeight = undefined;
     opts.onDirty();
     return true;
   }
@@ -460,7 +494,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
       tabs,
       tabNames: Object.fromEntries(tabNames),
       tileNames: Object.fromEntries(tileNames),
-      popup: popupTabId ? { tabId: popupTabId, visible: popupVisible } : null,
+      popup: popupTabId
+        ? { tabId: popupTabId, visible: popupVisible, width: popupWidth, height: popupHeight }
+        : null,
     };
   }
 

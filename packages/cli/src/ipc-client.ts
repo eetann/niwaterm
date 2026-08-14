@@ -385,6 +385,27 @@ export function applyLayout(
   return postJson(endpoint, "/apply-layout", body);
 }
 
+export type OpenPopupResult = { ok: true; tabId: TabId } | { ok: false; error: string };
+
+/**
+ * アクティブなワークスペースにポップアップを開く（tmuxのpopup/floating相当）。
+ * commandを指定すると、シェルの代わりにそのコマンドを実行し、終了すると自動的にポップアップも閉じる（ワンショット実行）
+ */
+export function openPopup(
+  endpoint: IpcEndpoint,
+  cwd?: string,
+  command?: string,
+  width?: number,
+  height?: number,
+): Promise<OpenPopupResult> {
+  const body: { cwd?: string; command?: string; width?: number; height?: number } = {};
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (command !== undefined) body.command = command;
+  if (width !== undefined) body.width = width;
+  if (height !== undefined) body.height = height;
+  return postJson(endpoint, "/popup", body);
+}
+
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };
 
 export function switchTab(

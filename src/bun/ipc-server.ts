@@ -244,6 +244,40 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
   return result;
 }
 
+interface PopupRequestBody {
+  cwd?: string;
+  command?: string;
+  width?: number;
+  height?: number;
+}
+
+/** widthHeightは1〜100の整数パーセントのみ許可する */
+function isValidPopupSize(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 100;
+}
+
+function parsePopupBody(body: unknown): PopupRequestBody | null {
+  const b = body as { cwd?: unknown; command?: unknown; width?: unknown; height?: unknown };
+  const result: PopupRequestBody = {};
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  if (b.command !== undefined) {
+    if (typeof b.command !== "string" || b.command.length === 0) return null;
+    result.command = b.command;
+  }
+  if (b.width !== undefined) {
+    if (!isValidPopupSize(b.width)) return null;
+    result.width = b.width;
+  }
+  if (b.height !== undefined) {
+    if (!isValidPopupSize(b.height)) return null;
+    result.height = b.height;
+  }
+  return result;
+}
+
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
 async function readJsonBody(c: Context): Promise<unknown | undefined> {
   try {
@@ -593,6 +627,30 @@ function buildApp(
     const shotResult = await captureScreenshot(urlResult.url);
     if (!shotResult.ok) return c.json({ ok: false, error: shotResult.error }, 409);
     return new Response(shotResult.data, { status: 200, headers: { "Content-Type": "image/png" } });
+  });
+
+  // アクティブなワークスペースにポップアップを開く（tmuxのpopup/floating相当、ADR 0005）。
+  // cwd省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ。commandを指定すると
+  // デフォルトシェル（WSLプロファイル等も含む）でPTYを起動した上でそのコマンドを流し込み、
+  // 終了すると自動的にポップアップも閉じる（ワンショット実行、詳細: workspace.tsのopenPopup）
+  app.post("/popup", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parsePopupBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "expected { cwd?: string, command?: string, width?: number (1-100), height?: number (1-100) }",
+        },
+        400,
+      );
+    }
+    const tabId = workspaceManager.openPopup(parsed);
+    if (!tabId) return c.json({ ok: false, error: "a popup is already open" }, 409);
+    activateWindow();
+    return c.json({ ok: true, tabId });
   });
 
   // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を

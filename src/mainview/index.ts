@@ -664,7 +664,9 @@ function teardownPopupContent(): void {
  * bunから届いたポップアップのメタ情報をDOM側へ反映する。HTML本体はp.workspace.tabs経由の
  * 既存のterminalタブ更新ループが（termElByTabIdへ登録済みなら）自動的に流し込むためここでは扱わない
  */
-function applyPopupState(popup: { tabId: TabId; visible: boolean } | null): void {
+function applyPopupState(
+  popup: { tabId: TabId; visible: boolean; width?: number; height?: number } | null,
+): void {
   if (!popup) {
     popupVisible = false;
     popupEl.hidden = true;
@@ -677,6 +679,9 @@ function applyPopupState(popup: { tabId: TabId; visible: boolean } | null): void
   }
   popupVisible = popup.visible;
   popupEl.hidden = !popup.visible;
+  // 未指定時は空文字列に戻しCSS側の既定値（80%）を使う
+  popupBoxEl.style.width = popup.width !== undefined ? `${popup.width}%` : "";
+  popupBoxEl.style.height = popup.height !== undefined ? `${popup.height}%` : "";
   // 再表示直後は確定サイズを送り直す（非表示中はResizeObserverが動いてもスキップしているため。setTabVisibleと同じ理由）
   if (popup.visible) sendResize(popup.tabId);
 }

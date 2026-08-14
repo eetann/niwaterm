@@ -17,6 +17,7 @@ import listVarsCommand from "./commands/list-vars";
 import newTabCommand from "./commands/new-tab";
 import newWorkspaceCommand from "./commands/new-workspace";
 import pingCommand from "./commands/ping";
+import popupCommand from "./commands/popup";
 import renameWorkspaceCommand from "./commands/rename-workspace";
 import sendKeysCommand from "./commands/send-keys";
 import setVarCommand from "./commands/set-var";
@@ -62,6 +63,7 @@ try {
       "rename-workspace": renameWorkspaceCommand,
       "show-tab": showTabCommand,
       "capture-tab": captureTabCommand,
+      popup: popupCommand,
       "set-var": setVarCommand,
       "get-var": getVarCommand,
       "list-vars": listVarsCommand,

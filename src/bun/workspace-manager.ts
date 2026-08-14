@@ -17,6 +17,7 @@ import {
 import {
   createWorkspace,
   type GetTabVarResult,
+  type OpenPopupOptions,
   type Workspace,
   type WorkspaceOptions,
   type WorkspaceRenderState,
@@ -234,8 +235,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   // ポップアップはワークスペースごとの状態のため「現在アクティブなワークスペース」へルーティングする
   // （focusDirectionと同様、idを取らない例外的な操作。ADR 0005）
-  function openPopup(cwd?: string): TabId | null {
-    return workspaces.get(activeId)?.openPopup(cwd) ?? null;
+  function openPopup(popupOpts?: OpenPopupOptions): TabId | null {
+    return workspaces.get(activeId)?.openPopup(popupOpts) ?? null;
   }
 
   function closePopup(): boolean {

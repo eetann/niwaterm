@@ -57,6 +57,7 @@ customViewまで実機確認済み。`browser-screenshot`のみBun本体側の�
 - **キーバインドはOSで別テーブル**: macOSはcmd系、Windowsはctrl+shift系（`defaultKeybindings` / `defaultWindowsKeybindings`）。ctrl単独はCtrl+C/Ctrl+D/Ctrl+B等ターミナルの制御文字と衝突するため必ずshiftかaltを伴わせる
 - Windowsにはプロセスグループもシグナルも無いため、pty.tsのSIGINT/SIGWINCH補完はmacOSのみ実行する
 - IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
+- **既知の重大バグ: `;`区切りの複合コマンド末尾に`exit`を含む文字列を1回のPTY書き込みで送るとBunがネイティブクラッシュする**（Windows実機、Bun 1.3.14。例: `send-keys`で`"pwd; exit"`+Enterを1回で送信）。原因はniwaterm側の特定コードではなくBun（Windows/ConPTY実装）側の挙動と見られる（`;`を使わず改行で分けて送る分には問題ない）。再現条件の詳細・検証過程はADR 0005実装セッションの会話ログ参照。send-keys・レイアウトの`command`・popupの`command`いずれも、ユーザー/呼び出し元が`;`区切りでexitを含む文字列を組み立てないよう注意が必要
 
 ## bun:ffiのハマりどころ
 
