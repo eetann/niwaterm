@@ -112,29 +112,20 @@ function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
   return node.tabIds[0] as TabId;
 }
 
-function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): void {
-  const placeholderTabId = getSoleTabId(ctx, tileId);
-  const tabIds: TabId[] = [];
-
-  for (const tabConfig of node.tabs) {
-    tabIds.push(createTab(ctx, tileId, tabConfig));
-  }
-
-  if (!ctx.workspaceManager.closeTab(tileId, placeholderTabId)) {
-    throw new Error(`internal error: failed to close placeholder tab in tile ${tileId}`);
-  }
-
-  const activeIndex = node.activeTab ?? tabIds.length - 1;
-  const activeTabId = tabIds[activeIndex];
-  if (activeTabId !== undefined) ctx.workspaceManager.switchTab(tileId, activeTabId);
+// プレースホルダータブは既定シェル・既定cwdで既に生成済みのPTYを持つ。tabConfigが
+// shellProfile/cwdを指定していなければ結果は既定シェル生成と同一になるため、newTab+closeTabで
+// 新規PTYを作って即座に古いPTYを破棄する（Windows実機でネイティブ層のクラッシュを誘発した。
+// layout-apply-crush.log参照）代わりに、プレースホルダーをそのまま最初のタブとして使い回す
+function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
+  return tabConfig.shellProfile === undefined && tabConfig.cwd === undefined;
 }
 
-function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig): TabId {
-  const resolved = resolveShellProfileCommand(ctx.profiles, tabConfig.shellProfile);
-  const shellOverride = resolved.ok ? resolved.command : undefined;
-  const tabId = ctx.workspaceManager.newTab(tileId, shellOverride, tabConfig.cwd);
-  if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
-
+function configureTab(
+  ctx: BuildContext,
+  tileId: TileId,
+  tabId: TabId,
+  tabConfig: LayoutTabConfig,
+): void {
   if (tabConfig.name) ctx.workspaceManager.setTabName(tabId, tabConfig.name);
 
   if (tabConfig.vars) {
@@ -154,7 +145,38 @@ function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig
   }
 
   if (tabConfig.focus) ctx.focusTarget = { tileId, tabId };
+}
 
+function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): void {
+  const placeholderTabId = getSoleTabId(ctx, tileId);
+  const tabIds: TabId[] = [];
+  let placeholderReused = false;
+
+  for (const [i, tabConfig] of node.tabs.entries()) {
+    if (i === 0 && canReusePlaceholder(tabConfig)) {
+      configureTab(ctx, tileId, placeholderTabId, tabConfig);
+      tabIds.push(placeholderTabId);
+      placeholderReused = true;
+    } else {
+      tabIds.push(createTab(ctx, tileId, tabConfig));
+    }
+  }
+
+  if (!placeholderReused && !ctx.workspaceManager.closeTab(tileId, placeholderTabId)) {
+    throw new Error(`internal error: failed to close placeholder tab in tile ${tileId}`);
+  }
+
+  const activeIndex = node.activeTab ?? tabIds.length - 1;
+  const activeTabId = tabIds[activeIndex];
+  if (activeTabId !== undefined) ctx.workspaceManager.switchTab(tileId, activeTabId);
+}
+
+function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig): TabId {
+  const resolved = resolveShellProfileCommand(ctx.profiles, tabConfig.shellProfile);
+  const shellOverride = resolved.ok ? resolved.command : undefined;
+  const tabId = ctx.workspaceManager.newTab(tileId, shellOverride, tabConfig.cwd);
+  if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
+  configureTab(ctx, tileId, tabId, tabConfig);
   return tabId;
 }
 
