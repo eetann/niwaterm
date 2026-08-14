@@ -8,7 +8,7 @@ description: tmuxのpopup/floating相当の一時的な画面を、Tile木構造
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
