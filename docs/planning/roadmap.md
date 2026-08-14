@@ -9,6 +9,8 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 各h2セクション = 1セッションの会話で実装する粒度。上から順に進める。
 完了タスクの実装詳細・work-log参照は開発中のメモ（`.mywork/work-logs/`、Git管理外）に残しており、ここには載せていない。
 
+詳細は書かない。
+
 ## 技術検証スパイク（Electrobun + libghostty）
 
 - [x] Electrobunでウィンドウが起動し、Hello Worldが表示できる
@@ -94,7 +96,6 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 ## タブ状態の可視化（ブランチ・エージェント状態）
 
 サイドバーのタブ行に、gitブランチ名とAIエージェントの種別・状態（idle/working/blocked）を表示する機能。
-方式は「シェル統合・hooksによる能動プッシュ型」を採用（比較検討の経緯: docs/adr/0004-adopt-hook-based-agent-status-detection.md）。
 
 - [x] PTY起動時の`NIWATERM_TAB_ID`環境変数、タブ変数（`set-var`/`get-var`/`list-vars`）基盤を用意する
 - [x] zsh/bash/fish/PowerShell向けのシェル統合スニペット（precmdフックでブランチを`set-var`）を用意する
@@ -113,7 +114,7 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 
 ## シェルプロファイル選択（複数シェル・WSLディストロ対応）
 
-Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを選べるようにしたい。WindowsのWSL環境では複数ディストロが同居することもあるため、それも選択肢に含める。プロファイル一覧の管理方式は「自動検出（WSLディストロ）＋config.ts併用」を採用する（詳細: docs/guide/config.md「シェルプロファイル」節、docs/guide/cli.md）。
+Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを選べるようにしたい。
 
 - [x] 設計: プロファイル管理方式を検討し、「自動検出＋config.ts併用」方式を採用する
 - [x] `niwaterm.config.ts`に`shell.default`を追加し、新規タブ作成時のデフォルトシェルを設定できるようにする
@@ -185,15 +186,10 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
 
 ## レイアウト機能（vde-layoutライク）
 
-vde-layout（参考: https://github.com/yuki-yano/vde-layout）のような、設定ファイルにあらかじめ書いたレイアウトをCLIから名前指定して適用する機能。「現在のワークスペースを置き換える」「新規ワークスペースとして開く」の両方に対応したい。
-tmux用のvde-layoutはYAML設定＋N分割（ratio配列）だが、niwatermは既存の`niwaterm.config.ts`（TypeScript設定、`@niwaterm/config`）に乗せる方針とし、タイル分割は既存のTileSplit同様「2分割ratio(0.1〜0.9)のネスト」で表現する（N分割の配列指定は採用しない。ADR 0001で決めた二分木構造をそのまま踏襲する）。
-
-設定は`niwaterm.config.ts`の新規`layouts`フィールドにプリセットをid付きで並べる想定（`shell.profiles`と同じ「idで指定する名前付きプリセット」パターン）。各タブには`command`（作成後にsend-keysで流し込む起動コマンド。既存のsend-keys機構をそのまま使う方式とし、PTY起動コマンド自体を差し替える`shell.profiles`とは別軸にする）・`cwd`・`vars`（タブ変数を`set-var`相当で注入）・`focus`を指定できるようにしたい。
-
-CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用先は`--new-workspace`（デフォルト、既存作業を壊さない安全側）と`--replace`（現在のワークスペースを置き換え）を選べるようにする。
+vde-layout（参考: https://github.com/yuki-yano/vde-layout）のような、設定ファイルにあらかじめ書いたレイアウトをCLIから名前指定して適用する機能
 
 - [x] ワークスペース単位のCLI操作を追加する（前提整備）
-- [x] タブ起動時のcwd指定を配線する
+- [x] タブ起動時のcwd指定
 - [x] `@niwaterm/config`にレイアウト設定のスキーマを追加する
 - [x] レイアウト適用エンジンを実装する
 - [x] IPCエンドポイント`/apply-layout`・`GET /layouts`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加する
@@ -205,8 +201,7 @@ CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用�
 
 ## 磨き込みと配布
 
-- [x] 起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる（「レイアウト機能」節のcwd配線と合わせて検討する）
-      ワークスペース・タイル・タブの名前、レイアウト、terminalタブのcwd/起動シェル、タブ変数、ブラウザ/customViewタブのURLを永続化・復元する（`src/bun/persistence.ts`のスキーマをv2化）。実行中コマンドの再実行・PTYスクロールバック・ブラウザのDOM/スクロール位置/ログイン状態は対象外。旧v1形式のファイルは新バリデーションで拒否され新規ワークスペースにフォールバックする（後方互換なし）
+- [x] 起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる
 - [ ] スクロールバック検索ができる
 - [ ] パフォーマンス計測と改善（大量出力時の描画など）ができている
 - [ ] macOS向けにアプリとしてパッケージング（.app）できる
