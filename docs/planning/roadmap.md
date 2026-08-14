@@ -181,7 +181,8 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
 - [ ] OSC 133（プロンプトマーク）でコマンド単位のジャンプができる
 - [ ] 画像表示（Kitty graphics protocolなど）ができる
 - [ ] 通知系OSC（OSC 9 / 777）でデスクトップ通知が出る
-- [ ] 各タブが今いる実際のディレクトリをシェル統合（OSC 7等、`docs/adr/0004-adopt-hook-based-agent-status-detection.md`のプッシュ型と同様の方式を想定）で追跡する。`niwaterm split-tile`/`niwaterm new-tab`はCLI経由だと（今フォーカスしているとは限らない）任意のtileIdを指定できるため、cwd省略時の既定値をCLI実行時のディレクトリではなく「分割元・対象タイルのアクティブタブが実際にいるディレクトリ」にできるようにしたい（`niwaterm layout apply`はCLI実行ディレクトリを使う設計で対応済み。分割元タブが無い＝新規ワークスペースを組み立てる操作のため、この2つは区別する）
+- [x] 各タブが今いる実際のディレクトリをシェル統合（OSC 7、`docs/adr/0004-adopt-hook-based-agent-status-detection.md`のプッシュ型と同様の方式）で追跡する。`niwaterm split-tile`/`niwaterm new-tab`はCLI経由だと（今フォーカスしているとは限らない）任意のtileIdを指定できるため、cwd省略時の既定値をCLI実行時のディレクトリではなく「分割元・対象タイルのアクティブタブが実際にいるディレクトリ」にした（`niwaterm layout apply`はCLI実行ディレクトリを使う設計で対応済み。分割元タブが無い＝新規ワークスペースを組み立てる操作のため、この2つは区別している）。
+      実装: libghostty-vt（vt-only版）の`GHOSTTY_TERMINAL_OPT_PWD_CHANGED`/`GHOSTTY_TERMINAL_DATA_PWD`はURIを未パースのまま返す仕様（フルGhosttyアプリ用のtermio層とは別実装）と実機検証で判明したため、niwaterm側（`src/bun/pwd-report.ts`）でURIデコードを行っている。ghostty本家が行うホスト名検証（SSH越しの偽装対策）はあえて実装していない。niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、この場合シェル側（WSL VM）とniwaterm本体側（Windows）のホスト名は常に不一致になり検証で弾かれてしまうため（実機検証で発覚）。この機能自体はWindows（WSLプロファイル含む）でも動く（vt-only版の`reportPwd`にOS分岐は無い、実機のWSL/Linux上でPTY→OSC7パース→デコードのE2E動作を確認済み）。WSLプロファイルのタブが報告するLinuxパスはWindows側の`Bun.spawn`が解釈できるUNC形式（`\\wsl.localhost\<distro>\...`）へ自動変換する（`src/bun/wsl-cwd.ts`）。PowerShell向けシェル統合（`niwaterm.ps1`）へのOSC 7送信追加は未対応（今後の対応）
 
 ## レイアウト機能（vde-layoutライク）
 

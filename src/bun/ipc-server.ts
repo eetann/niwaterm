@@ -167,14 +167,20 @@ function parseNewTabBody(body: unknown): NewTabRequestBody | null {
 
 interface SplitTileRequestBody extends TileIdRequestBody {
   orientation: SplitOrientation;
+  cwd?: string;
 }
 
 function parseSplitTileBody(body: unknown): SplitTileRequestBody | null {
   const tileIdBody = parseTileIdBody(body);
   if (!tileIdBody) return null;
-  const b = body as { orientation?: unknown };
+  const b = body as { orientation?: unknown; cwd?: unknown };
   if (b.orientation !== "horizontal" && b.orientation !== "vertical") return null;
-  return { ...tileIdBody, orientation: b.orientation };
+  const result: SplitTileRequestBody = { ...tileIdBody, orientation: b.orientation };
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  return result;
 }
 
 interface TileTabRequestBody extends TileIdRequestBody {
@@ -368,11 +374,19 @@ function buildApp(
     const parsed = parseSplitTileBody(body);
     if (!parsed) {
       return c.json(
-        { ok: false, error: 'expected { tileId: string, orientation: "horizontal"|"vertical" }' },
+        {
+          ok: false,
+          error: 'expected { tileId: string, orientation: "horizontal"|"vertical", cwd?: string }',
+        },
         400,
       );
     }
-    const result = workspaceManager.splitTile(parsed.tileId, parsed.orientation);
+    const result = workspaceManager.splitTile(
+      parsed.tileId,
+      parsed.orientation,
+      undefined,
+      parsed.cwd,
+    );
     if (!result) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
     return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
   });

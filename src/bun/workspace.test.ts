@@ -262,6 +262,51 @@ describe("newTab", () => {
   });
 });
 
+describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
+  test("onPwdChangedが呼ばれるとtabVarsの'cwd'へ反映される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    created[0]?.opts.onPwdChanged?.("/home/user/project");
+    expect(ws.getTabVar(tabId, "cwd")).toEqual({ found: true, value: "/home/user/project" });
+  });
+
+  test("newTabでcwd省略時、対象タイルのアクティブタブが報告済みのcwdをデフォルトとして使う", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    created[0]?.opts.onPwdChanged?.("/home/user/project");
+    ws.newTab(tileId);
+    expect(created[1]?.opts.cwd).toBe("/home/user/project");
+  });
+
+  test("newTabでcwdを明示指定した場合は報告済みのcwdより優先する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    created[0]?.opts.onPwdChanged?.("/home/user/project");
+    ws.newTab(tileId, undefined, "/explicit/dir");
+    expect(created[1]?.opts.cwd).toBe("/explicit/dir");
+  });
+
+  test("splitTileでもcwd省略時、分割元タイルのアクティブタブが報告済みのcwdをデフォルトとして使う", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    created[0]?.opts.onPwdChanged?.("/home/user/project");
+    ws.splitTile(tileId, "vertical");
+    expect(created[1]?.opts.cwd).toBe("/home/user/project");
+  });
+
+  test("報告が無いタブを対象にnewTab/splitTileしてもcwdはundefinedのまま", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    expect(created[1]?.opts.cwd).toBeUndefined();
+  });
+});
+
 describe("newBrowserTab", () => {
   test("対象タイルにタブを追加するが、PTYセッションは増やさない。snapshotはkind:browserを返す", () => {
     const { created, factory } = createFakeSessionFactory();

@@ -33,7 +33,7 @@ export default define({
     cwd: {
       type: "string",
       description:
-        "作成するターミナルタブの作業ディレクトリ（--shellと併用可。--url・--custom-viewとは同時指定不可）",
+        "作成するターミナルタブの作業ディレクトリ（省略時は対象タイルのアクティブタブが実際にいるディレクトリ。シェル統合が未導入等で不明な場合はOS標準。--shellと併用可、--url・--custom-viewとは同時指定不可）",
     },
   },
   run: async (ctx) => {

@@ -1,5 +1,5 @@
 # niwatermシェル統合（bash）
-# タブ内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
+# タブ内のシェルが自分のgitブランチ・カレントディレクトリをniwatermのサイドバーへ通知する。
 # プロンプト表示のたびに`niwaterm set-var branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: ~/.bashrcに以下を追記する
 #   [ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
@@ -21,6 +21,11 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwaterm >/dev/null 2>&1; then
     fi
   }
 
+  # カレントディレクトリをOSC 7で通知する。libghostty-vtがネイティブにパースするため
+  # niwaterm CLIのサブプロセス起動は不要（毎回送ってもコストはほぼゼロ）
+  _niwaterm_report_pwd() { printf '\e]7;kitty-shell-cwd://%s%s\a' "$HOSTNAME" "$PWD"; }
+
   # 既存のPROMPT_COMMANDを壊さないよう先頭に追加する（bash 3.2でも動く文字列連結形式）
-  PROMPT_COMMAND="_niwaterm_report_branch${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+  PROMPT_COMMAND="_niwaterm_report_branch;_niwaterm_report_pwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+  _niwaterm_report_pwd
 fi

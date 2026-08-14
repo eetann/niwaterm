@@ -18,9 +18,19 @@ export default define({
       default: "vertical",
       description: "分割方向（デフォルト: vertical）",
     },
+    cwd: {
+      type: "string",
+      description:
+        "新規タブの作業ディレクトリ（省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ。シェル統合が未導入等で不明な場合はOS標準）",
+    },
   },
   run: async (ctx) => {
-    const result = await splitTile(resolveIpcEndpoint(), ctx.values.tile, ctx.values.orientation);
+    const result = await splitTile(
+      resolveIpcEndpoint(),
+      ctx.values.tile,
+      ctx.values.orientation,
+      ctx.values.cwd,
+    );
     if (!result.ok) {
       failAndExit(`split-tileに失敗しました: ${result.error}`);
     }

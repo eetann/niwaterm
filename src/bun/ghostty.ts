@@ -79,6 +79,7 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
 const OPT_WRITE_PTY = 1;
 const OPT_CLIPBOARD_WRITE = 26;
 const OPT_SCROLLBACK_MAX_LINES = 28;
+const OPT_PWD_CHANGED = 25;
 
 // GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。2004はDEC privateなのでフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
@@ -89,6 +90,7 @@ const DATA_CURSOR_Y = 4;
 const DATA_CURSOR_VISIBLE = 7;
 const DATA_VIEWPORT_ACTIVE = 32;
 const DATA_MODE = 37;
+const DATA_PWD = 13;
 
 // GhosttyFormatterFormat
 const FORMAT_PLAIN = 0;
@@ -118,6 +120,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
 
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
+  let pwdChangedCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
   const u16Out = new Uint16Array(1);
   const u8Out = new Uint8Array(1);
@@ -173,6 +176,33 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
       },
     );
     vt.symbols.ghostty_terminal_set(term, OPT_CLIPBOARD_WRITE, clipboardCallback.ptr);
+  }
+
+  const pwdBuf = new Uint8Array(16); // GhosttyString { const uint8_t* ptr; size_t len; }
+
+  /**
+   * カレントディレクトリの変化を受けるコールバックを登録する（OSC 7 / OSC 9 / OSC 1337）。
+   * libghostty-vt（vt-only版）はURIパースを行わず、シェルが送った生のペイロードをそのまま返す
+   * （OSC 7なら`file://host/path`等のURI丸ごと、OSC 9/1337なら生パス）。
+   * デコードは呼び出し側（terminal-session.ts）の責務。
+   * シェル側が空文字列を送った場合（pwd不明の通知）はfnを呼ばない。
+   */
+  function onPwdChanged(fn: (cwd: string) => void): void {
+    pwdChangedCallback = new JSCallback(
+      (_term: Pointer, _userdata: Pointer) => {
+        const rc = vt.symbols.ghostty_terminal_get(term, DATA_PWD, ptr(pwdBuf));
+        if (rc !== 0) return;
+        const strPtr = read.ptr(ptr(pwdBuf), 0) as Pointer;
+        const len = Number(read.u64(ptr(pwdBuf), 8));
+        if (!strPtr || len === 0) return;
+        fn(new TextDecoder().decode(new Uint8Array(toArrayBuffer(strPtr, 0, len))));
+      },
+      {
+        args: [FFIType.ptr, FFIType.ptr],
+        returns: FFIType.void,
+      },
+    );
+    vt.symbols.ghostty_terminal_set(term, OPT_PWD_CHANGED, pwdChangedCallback.ptr);
   }
 
   // GhosttyTerminalModeConfig { GhosttyMode mode(uint16); bool value; } のレイアウト（4バイト）。
@@ -300,11 +330,13 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
     clipboardCallback?.close();
+    pwdChangedCallback?.close();
   }
 
   return {
     onWritePty,
     onClipboardWrite,
+    onPwdChanged,
     bracketedPaste,
     encodePaste,
     write,

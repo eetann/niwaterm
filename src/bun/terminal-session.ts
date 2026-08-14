@@ -4,12 +4,15 @@
 import { writeClipboardText } from "./clipboard";
 import { createGhosttyTerminal } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
+import { decodePwdReport } from "./pwd-report";
 
 export type TerminalSessionOptions = PtyOptions & {
   maxScrollback?: number;
   /** PTY出力によりVT状態が変わった時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onOutput?: () => void;
   onExit?: (code: number) => void;
+  /** シェル統合が送るOSC 7/9/1337でカレントディレクトリが変化した時に呼ばれる */
+  onPwdChanged?: (cwd: string) => void;
 };
 
 export interface TerminalRenderState {
@@ -45,6 +48,13 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   // OSC 52によるクリップボード書き込みをシステムクリップボードへ流す
   term.onClipboardWrite((data) => {
     writeClipboardText(new TextDecoder().decode(data));
+  });
+
+  // OSC 7/9/1337によるカレントディレクトリの変化を呼び出し側へ伝える。
+  // libghostty-vtは生ペイロードのまま渡すため、ここでURIデコードを行う（ホスト検証はしない、pwd-report.ts参照）
+  term.onPwdChanged((raw) => {
+    const cwd = decodePwdReport(raw);
+    if (cwd !== null) opts.onPwdChanged?.(cwd);
   });
 
   pty.onData((data) => {

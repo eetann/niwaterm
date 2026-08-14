@@ -1,5 +1,5 @@
 # niwatermシェル統合（fish）
-# タブ内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
+# タブ内のシェルが自分のgitブランチ・カレントディレクトリをniwatermのサイドバーへ通知する。
 # プロンプト表示のたびに`niwaterm set-var branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: ~/.config/fish/config.fishに以下を追記する
 #   test -n "$NIWATERM_TAB_ID"; and source /path/to/niwaterm/contrib/shell-integration/niwaterm.fish
@@ -19,4 +19,11 @@ if test -n "$NIWATERM_TAB_ID"; and type -q niwaterm
             disown
         end
     end
+
+    # カレントディレクトリをOSC 7で通知する。libghostty-vtがネイティブにパースするため
+    # niwaterm CLIのサブプロセス起動は不要。--on-variable PWDでcd時のみ発火する
+    function _niwaterm_report_pwd --on-variable PWD
+        printf '\e]7;kitty-shell-cwd://%s%s\a' (hostname) "$PWD"
+    end
+    _niwaterm_report_pwd
 end

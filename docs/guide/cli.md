@@ -47,7 +47,7 @@ niwaterm send-keys -t tab-3 C-c
 対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm split-tile --tile <tileId> [--orientation horizontal|vertical]
+niwaterm split-tile --tile <tileId> [--orientation horizontal|vertical] [--cwd <dir>]
 niwaterm new-tab --tile <tileId> [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
 niwaterm switch-tab --tile <tileId> --tab <tabId>
 niwaterm close-tab --tile <tileId> --tab <tabId>
@@ -56,8 +56,8 @@ niwaterm focus-tile --tile <tileId>
 
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
 
-- `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。成功時、新規`tabId`を表示する
+- `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
+- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`split-tile`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
 - `switch-tab` — 指定タイル内でアクティブタブを切り替える
 - `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
 - `focus-tile` — 指定タイルへフォーカスを移す
@@ -117,6 +117,8 @@ niwaterm list-vars --tab <tabId>
 ## シェル統合
 
 `contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm set-var branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
+
+同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm set-var`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている（ホスト名検証はしない。ghostty本家はSSH越しの偽装対策として行うが、niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている）。`niwaterm split-tile`/`niwaterm new-tab`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる（Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される。`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**（OSC 7自体はlibghostty-vt側に制約は無いが、niwaterm.ps1へのOSC 7送信追加は今後の対応）。
 
 ```sh
 # ~/.zshrc

@@ -323,6 +323,37 @@ describe("POST /split-tile", () => {
 
     expect(res.status).toBe(400);
   });
+
+  test("cwdを指定すると新規タブのセッションへ渡る", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/split-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, orientation: "vertical", cwd: "/tmp/project" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sessionOpts[1]?.cwd).toBe("/tmp/project");
+  });
+
+  test("空文字列のcwdは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/split-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, orientation: "vertical", cwd: "" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("POST /new-tab", () => {

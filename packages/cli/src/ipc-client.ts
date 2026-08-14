@@ -249,8 +249,14 @@ export function splitTile(
   endpoint: IpcEndpoint,
   tileId: TileId,
   orientation: SplitOrientation,
+  cwd?: string,
 ): Promise<SplitTileResult> {
-  return postJson(endpoint, "/split-tile", { tileId, orientation });
+  const body: { tileId: TileId; orientation: SplitOrientation; cwd?: string } = {
+    tileId,
+    orientation,
+  };
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  return postJson(endpoint, "/split-tile", body);
 }
 
 export type NewTabResult = { ok: true; tabId: TabId } | { ok: false; error: string };

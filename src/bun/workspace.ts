@@ -22,6 +22,7 @@ import {
   type TerminalRenderState,
   type TerminalSession,
 } from "./terminal-session";
+import { resolveActualCwd } from "./wsl-cwd";
 
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
 
@@ -67,6 +68,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const sessions = new Map<TabId, TerminalSession>();
   const browserTabs = new Map<TabId, BrowserTabState>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
+  // 実際に使われた起動シェルコマンド（例: "wsl.exe -d NixOS"）。OSC7報告のcwdをWindows側から
+  // アクセス可能な形式へ変換する要否判定（wsl-cwd.ts）に使う
+  const shellByTabId = new Map<TabId, string | undefined>();
   const tabVars = new Map<TabId, Map<string, string>>();
   // タブ・タイル名はセッション内のみ保持する（アプリ再起動をまたいだ永続化はしない）
   const tabNames = new Map<TabId, string>();
@@ -83,15 +87,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
     cwd?: string,
   ): void {
     sizeByTabId.set(tabId, { cols, rows });
+    const shell = shellOverride ?? opts.getDefaultShell?.();
+    shellByTabId.set(tabId, shell);
     const session = createSession({
       cols,
       rows,
-      shell: shellOverride ?? opts.getDefaultShell?.(),
+      shell,
       cwd,
       // シェル統合スクリプトやタブ内のCLI呼び出しが`--tab`省略でこのタブを指せるようにする
       env: { NIWATERM_TAB_ID: tabId },
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
+      // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）
+      onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
     });
     sessions.set(tabId, session);
   }
@@ -120,6 +128,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       sessions.get(tabId)?.dispose();
       sessions.delete(tabId);
       sizeByTabId.delete(tabId);
+      shellByTabId.delete(tabId);
       browserTabs.delete(tabId);
     }
   }
@@ -154,6 +163,16 @@ export function createWorkspace(opts: WorkspaceOptions) {
     applyCloseResult(result.tree, [tabId], result.tileClosed ? leaf.id : undefined);
   }
 
+  /**
+   * OSC 7等でタブが実際に報告してきたcwd（tabVarsの"cwd"）。未報告ならundefined。
+   * WSLプロファイルのタブはWindows側のBun.spawnが解釈できるUNC形式へ変換する（wsl-cwd.ts）
+   */
+  function actualCwdOf(tabId: TabId): string | undefined {
+    const raw = tabVars.get(tabId)?.get("cwd");
+    if (raw === undefined) return undefined;
+    return resolveActualCwd(raw, shellByTabId.get(tabId));
+  }
+
   function splitTileById(
     tileId: TileId,
     orientation: SplitOrientation,
@@ -180,7 +199,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows, undefined, cwd);
+    spawnSession(newTabId, size.cols, size.rows, undefined, cwd ?? actualCwdOf(target.activeTabId));
     focusedTileId = newTileId;
     opts.onDirty();
     return { tileId: newTileId, tabId: newTabId };
@@ -197,7 +216,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows, shellOverride, cwd);
+    spawnSession(
+      newTabId,
+      size.cols,
+      size.rows,
+      shellOverride,
+      cwd ?? actualCwdOf(target.activeTabId),
+    );
     opts.onDirty();
     return newTabId;
   }
