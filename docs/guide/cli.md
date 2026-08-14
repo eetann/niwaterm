@@ -192,38 +192,6 @@ niwaterm docs show cli
 
 `niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show cli`はこのドキュメント（`docs/guide/cli.md`）の内容そのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでこのドキュメント全体を取得できる。
 
-## IPCサーバーの仕組み
-
-- ソケットパス: `~/Library/Application Support/niwaterm/niwaterm.sock`（固定）
-- 通信: `Bun.serve({unix, fetch})` + Hono
-  - `GET /ping` — `{ok: true, pid: <number>}`を返す
-  - `GET /list` — `{workspaces: WorkspaceListEntry[]}`を返す（各entryは`workspaceId`/`active`/`focusedTileId`/`layout`/`name`）
-  - `POST /new-workspace` — ボディ不要。新規ワークスペースを作成しアクティブにする。成功時`{ok: true, workspaceId}`を返す
-  - `POST /switch-workspace` — `{workspaceId: string}`を受け取り、アクティブなワークスペースを切り替える。workspaceId不存在時は404
-  - `POST /close-workspace` — `{workspaceId: string}`を受け取り、ワークスペースを閉じる。workspaceId不存在時は404、最後の1つを指定した場合は409
-  - `POST /rename-workspace` — `{workspaceId: string, name: string}`を受け取り、ワークスペース名を変更する（`name`が空文字列ならデフォルトの連番ラベルへ戻す）。workspaceId不存在時は404、不正なボディは400
-  - `POST /send-keys` — `{tabId: string, keys: string[]}`を受け取り、tmux風キー名をバイト列に変換してPTYへ書き込む（変換テーブルは`src/bun/tmux-keys.ts`、サーバー側に一元化）。tabId不存在時は404、不正なボディは400を返す
-  - `POST /split-tile` — `{tileId: string, orientation: "horizontal"|"vertical"}`を受け取り、タイルを分割する。成功時`{ok: true, tileId, tabId}`（新規作成分）を返す。tileId不存在時は404、不正なボディは400
-  - `POST /new-tab` — `{tileId: string, url?: string, customView?: boolean, shellProfileId?: string, cwd?: string}`を受け取り、新規タブを作成する。`url`指定時はそのURLのブラウザタブ、`customView: true`指定時は設定済みの`customView`を開くブラウザタブ、`shellProfileId`指定時はそのプロファイルのシェルでターミナルタブ、いずれも省略時はデフォルトシェルのターミナルタブ。`cwd`はターミナルタブ専用（`shellProfileId`とは併用可）で、指定した作業ディレクトリでPTYを起動する。成功時`{ok: true, tabId}`を返す。tileId不存在時は404、urlが空文字列・cwdが空文字列・url/customView/shellProfileIdのうち2つ以上の同時指定・cwdとurl/customViewの同時指定・customView未設定時のcustomView:true・未知のshellProfileIdはいずれも400
-  - `GET /shell-profiles` — 利用可能なシェルプロファイル一覧を`{ok: true, profiles: {id, name, command}[]}`として返す
-  - `GET /layouts` — 定義済みレイアウトプリセット一覧を`{ok: true, layouts: {name, description?}[]}`として返す
-  - `POST /apply-layout` — `{name: string, target?: "new-workspace"|"replace"}`を受け取り、レイアウトプリセットを適用する（`target`省略時は`"new-workspace"`）。成功時`{ok: true, workspaceId}`を返す。nameが不正・未指定は400、未定義のnameは404、プリセットの検証失敗（未知のshellProfile・focus重複・ratio範囲外等）は400
-  - `POST /switch-tab` — `{tileId: string, tabId: string}`を受け取り、アクティブタブを切り替える。tileId/tabId不存在時は404
-  - `POST /close-tab` — `{tileId: string, tabId: string}`を受け取り、タブを閉じる。tileId/tabId不存在、または最後の1枚のタイルの最後のタブの場合は404
-  - `POST /focus-tile` — `{tileId: string}`を受け取り、フォーカスを移す。tileId不存在時は404
-  - `GET /capture-tab` — `?tabId=<tabId>`を受け取り、そのタブの現在画面をプレーンテキスト（`GhosttyFormatterFormat`の`PLAIN`）で`{ok: true, text}`として返す。tabId未指定は400、tabId不存在は404
-  - `POST /set-var` — `{tabId: string, key: string, value: string}`を受け取り、タブ変数を設定する。keyは`^[A-Za-z0-9_.-]{1,128}$`のみ許可、不一致・valueが非stringは400。tabId不存在時は404
-  - `GET /get-var` — `?tabId=<tabId>&key=<key>`を受け取り、タブ変数を`{ok: true, value}`として返す。クエリ未指定は400、tabId不存在または未設定のkeyは404
-  - `GET /list-vars` — `?tabId=<tabId>`を受け取り、そのタブの変数を`{ok: true, vars: Record<string,string>}`として返す。tabId未指定は400、tabId不存在は404
-  - `POST /browser-navigate` — `{tabId: string, url: string}`を受け取り、ブラウザタブのURLを遷移する。成功時`{ok: true}`。tabId不存在またはterminalタブは404、対象ワークスペースが非アクティブ・ページ未ロード・遷移タイムアウトは409、不正なボディは400
-  - `GET /browser-get-text` — `?tabId=<tabId>`を受け取り、ブラウザタブの表示内容を`{ok: true, text}`として返す。404/409/400の条件は`/browser-navigate`と同様
-  - `GET /browser-get-html` — `?tabId=<tabId>`を受け取り、ブラウザタブのHTMLを`{ok: true, html}`として返す。404/409/400の条件は`/browser-navigate`と同様
-  - `GET /browser-screenshot` — `?tabId=<tabId>`を受け取り、対象タブの現在URLをheadlessな`Bun.WebView`で別途開き直してスクリーンショットを撮り、`image/png`のバイナリを返す。404/409/400の条件は`/browser-navigate`と同様（URL取得失敗・スクショ取得失敗もいずれも409）
-  - `POST /show-tab` — `{tabId: string}`を受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化をまとめて行う。成功時`{ok: true, workspaceId, tileId}`。tabId不存在時は404。対象ワークスペースが非アクティブであること自体は正常系（それを直すのがこのコマンドの役割）なので409にはしない
-  - ブラウザタブ操作（`/browser-navigate`・`/browser-get-text`・`/browser-get-html`）は、bunメインプロセスとniwaterm自身のUI（mainview）間のRPC request/response往復、およびmainviewとブラウザタブ（OOPIF）間のJS実行＋`host-message`イベントによる結果返送、という2段階の非同期処理を経由する
-- アプリ起動時、同じソケットで別のniwatermプロセスが既に生きている（多重起動）場合はIPCサーバーの起動だけをスキップし、警告ログを出してGUI本体は通常通り起動する（fail-open）
-- 前回のアプリがクラッシュ等でソケットファイルを残したまま終了した場合（stale socket）、起動時に生死判定をして自動的に古いファイルを削除してから再listenする
-
 ## AIエージェント向けの導線
 
 - `packages/cli/README.md` — CLIパッケージのセットアップ手順・基本的な使い方

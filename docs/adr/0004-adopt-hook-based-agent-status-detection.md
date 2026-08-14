@@ -42,61 +42,9 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 
 **AIエージェントの種別・状態検知は、herdr方式（プロセス走査）ではなく、エージェント自身のhooks機構からniwatermへ能動的に通知する「hooks能動通知型」を採用する。配布形態は、cmuxの動的コマンドラッパー注入ではなく、静的なhooks設定JSON片をユーザーが手動マージする、よりシンプルな方式とする。**
 
-### 1. タブ変数の予約キー
+### 1. 複数エージェント対応の規約
 
-既存の`niwaterm set-var`（タブ変数）の仕組みに、以下2キーを予約する。
-
-| キー | 値 | 説明 |
-|---|---|---|
-| `agent` | 任意の種別文字列（例: `claude-code`） | エージェントの種類。空文字列・未設定は「エージェントなし」 |
-| `agent_status` | `idle` \| `working` \| `blocked` | エージェントの状態。未設定・未知の値は`idle`へ正規化する |
-| `agent_status_text` | 任意の状態テキスト文字列 | エージェントの状態を補足する短い説明文。hookペイロードから機械的に組み立てる（追加のトークン消費なし）。詳細はNotes「agent_status_textの追加」参照 |
-
-bun側（`tabVars: Record<TabId, Record<string, string>>`。当初は`tileVars: Record<TileId, ...>`だったが、1タイルに複数タブがある場合に非アクティブタブの状態更新が他タブの表示を上書きする問題が実機検証で判明したため、付与単位をタイル単位からタブ単位へ移行した。詳細は本ADRのNotes「タブ単位への移行」参照）は元々汎用key-valueのため、この2キーを追加してもスキーマ変更は不要である。
-
-### 2. Claude Codeのhooksイベントとの対応
-
-```
-SessionStart      → agent=claude-code, agent_status=idle
-UserPromptSubmit  → agent_status=working
-PreToolUse        → agent_status=working
-Stop              → agent_status=idle
-Notification（matcher: "permission_prompt"） → agent_status=blocked
-SessionEnd        → agent / agent_status を空文字列にクリア
-```
-
-`PermissionRequest`イベント（Claude Codeのネイティブ権限確認と同期的にブロックする性質を持つ）は意図的に不採用とした。hookコマンドは「niwatermへの通知のみを行い、常に`exit 0`でエージェント本体の動作を一切妨げない」ことを設計上の必須条件としており、同期ブロッキング系のイベントとは相性が悪いためである。代わりに非同期の`Notification`イベントで代替する。
-
-### 3. niwaterm外への誤発火防止（環境変数ガード）
-
-全hookコマンドに、cmuxの`CMUX_SURFACE_ID`環境変数ガードを参考にしたガードを埋め込む。
-
-```sh
-if [ -n "$NIWATERM_TAB_ID" ] && command -v niwaterm >/dev/null 2>&1; then
-  niwaterm set-var agent_status working >/dev/null 2>&1
-fi
-exit 0
-```
-
-`$NIWATERM_TAB_ID`はniwaterm内で起動したシェル（PTY）にのみ自動設定される環境変数であるため、このガードによりグローバル（`~/.claude/settings.json`）にhooks設定を追加しても、niwaterm外のプロジェクト・ターミナルでは常にno-opになる。これにより「ユーザーのグローバル設定を一度だけ変更すればよい」という運用が安全に成立する。
-
-### 4. 複数エージェント対応の規約
-
-`contrib/shell-integration/`と対になる`contrib/agent-integration/<agent-name>/`というディレクトリ構成を定めた。
-
-```
-contrib/agent-integration/
-  README.md                  # 予約キー規約・ガードパターン・拡張手順
-  claude-code/
-    hooks.json                 # ~/.claude/settings.jsonへ手動マージするJSON片
-    README.md                   # 導入手順・未検証事項
-```
-
-他エージェント（例: 将来のCodex CLI）を追加する場合も、同じ`agent`/`agent_status`キーと3値の状態語彙、同じガードパターンに乗せる。
-
-### 5. 副次的なバグ修正
-
-実装の過程で、`workspace.ts`の`setTabVar()`（当時は`setTileVar()`）が状態変更時に`opts.onDirty()`（サイドバーの再描画スケジューリング）を呼んでいないことが判明した。既存のブランチ表示は、シェルのprecmdフックによる`set-var`の直後にPTY出力（プロンプト再描画）が伴うため、そちらの`onDirty()`呼び出しに便乗して偶然反映されていた。hooksベースの状態更新（`Stop`イベント等）はPTY出力を伴わないことがあるため、この問題を修正し、`setTabVar()`自体が`onDirty()`を呼ぶようにした。
+`contrib/shell-integration/`と対になる`contrib/agent-integration/<agent-name>/`というディレクトリ構成を定めた。他エージェント（例: 将来のCodex CLI）を追加する場合も、同じ規約（予約キー・ガードパターン）に乗せる。
 
 ## Consequences
 
@@ -128,24 +76,6 @@ contrib/agent-integration/
 | herdr方式（プロセス走査）をフォールバックとして併用するか | hooks未設定のエージェント・エディタ拡張等をゼロコンフィグで検知したい場合に必要になるが、現時点でその需要は顕在化していない | 複数エージェント対応が進み、hooks非対応のツールを検知したいニーズが出たとき |
 
 ## Notes
-
-### タブ単位への移行
-
-本ADR採択当初は「決めていないこと」としてタブ単位の状態管理を保留していた（1タイルに複数タブがある場合の状態上書き問題自体は当初から認識していたが、ブランチ検知でも既に残る既知の制約であり本ADRのスコープ外としていた）。その後、Windows実機での動作検証で実際に問題が顕在化した（Claude Code稼働中のタブとPowerShellのみのタブが同一タイルに同居すると、両方が同じ`agent_status`表示になる）ため、変数の付与単位をタイル単位（`tileVars`）からタブ単位（`tabVars`）へ全面的に移行した。ADR 0001の「Tab = PTYを保持する末端」という定義により忠実になる方向の変更であり、本ADRの根幹（hooks能動通知型・予約キー・ガードパターン）自体への影響はない。CLIの`--tile`オプションは`--tab`へ、PTY起動時の環境変数`NIWATERM_TILE_ID`は`NIWATERM_TAB_ID`へ、それぞれ後方互換なしで置き換えた。
-
-### agent_status_textの追加
-
-roadmap.md「タブ状態の可視化」節の残タスクとして、`agent_status_text`（サイドバーのカード2行目に表示する状態テキスト）をClaude Codeのhooksから実際に送信する仕組みを実装した。`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドを拡張し、`jq`でstdin JSONを解析して`niwaterm set-var agent_status_text "..."`を呼ぶようにした。
-
-| hookイベント | 使うフィールド |
-|---|---|
-| `PreToolUse` | `tool_name`、`tool_input.file_path` \| `.command` \| `.pattern` \| `.url` \| `.description`（優先順） |
-| `Notification`（`matcher: "permission_prompt"`） | `notification_data.tool_name`、`notification_data.tool_input`（同上の優先順） |
-| `Stop` | `last_assistant_message` |
-
-実装前の設計検討（`.mywork/tmp/sidebar-ui-mockups/README.md`、Git管理外）では`Notification`イベントに`message`フィールドがあると想定していたが、[Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks.md)で実際のペイロード形状を確認したところ、`message`フィールドは存在せず、`notification_data.tool_name`/`notification_data.tool_input`が実際の形だった。この差分を踏まえて実装を修正した。また`Stop`の`last_assistant_message`はClaude Code v2.1.196以降が必要という制約があることも確認した（それ未満のバージョンでは`agent_status`のみ`idle`に更新され、`agent_status_text`は前回の値のまま残る）。
-
-`jq`が入っていない環境では`agent_status_text`の更新のみスキップされ（`agent_status`は通常通り更新される）、hook自体は失敗しない設計にした。導入手順・状態対応の詳細は`contrib/agent-integration/claude-code/README.md`を参照。
 
 ### 参考資料
 

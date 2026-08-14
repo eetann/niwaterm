@@ -98,39 +98,34 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 
 - [x] PTY起動時の`NIWATERM_TAB_ID`環境変数、タブ変数（`set-var`/`get-var`/`list-vars`）基盤を用意する
 - [x] zsh/bash/fish/PowerShell向けのシェル統合スニペット（precmdフックでブランチを`set-var`）を用意する
-- [x] Claude Codeのhooks経由でエージェント種別・状態を`set-var`する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`）
+- [x] Claude Codeのhooks経由でエージェント種別・状態を`set-var`する仕組みを用意する
 - [x] サイドバーのタブ行にブランチ名・エージェント状態（色分けドット）を表示する
-- [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する（1タイル複数タブでの表示混線を解消）
-- [x] ブランチ表示が実際には機能していない不具合を調査・修正する（原因: IPC・シェル統合・bun側のtabVars更新は正常に動作していたが、`sidebar-workspace-list.tsx`のブランチ表示行が`tab.agent && tab.branch`という条件になっており、AIエージェントが紐づいていない大半のタブでブランチ名が一切表示されない状態だった。`tab.branch`単体の条件に修正し、エージェントなしタブでもbranchがあれば2行目に表示するようにした。Windows実機でCLI経由のset-var→サイドバー表示まで動作確認済み）
-- [x] サイドバーのタブ行をリッチカード型に刷新する（`.mywork/tmp/sidebar-ui-mockups/pattern-b-card.html`のパターンBを採用。エージェント紐づきタブはアイコン+名前+working/blockedバッジ、状態テキスト（`agent_status_text`変数）、ブランチ名の3行カード。エージェントなしタブはbranch未設定なら1行、branchがあれば2行目にブランチ名を表示する）
-- [x] `agent_status_text`変数をClaude Codeのhooksから実際に送信する仕組みを用意する（`contrib/agent-integration/claude-code/hooks.json`の各hookコマンドをjqでstdin JSONを解析して`set-var`するよう拡張。`PreToolUse`は`tool_name`/`tool_input`、`Stop`は`last_assistant_message`、`Notification`(`permission_prompt`)は`notification_data.tool_name`/`notification_data.tool_input`を使用——当初想定していた`Notification`の`message`フィールドは実在せず、Claude Code公式Hooks Referenceで実際のペイロード形状を確認して修正した。`jq`未インストール環境では`agent_status_text`の更新のみスキップされる設計。ADR 0004のNotesに追記済み）
+- [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する
+- [x] ブランチ表示が実際には機能していない不具合を修正する
+- [x] サイドバーのタブ行をリッチカード型に刷新する
+- [x] `agent_status_text`変数をClaude Codeのhooksから実際に送信する仕組みを用意する
 - [x] サイドバーのワークスペース表示の改善
   - [x] ワークスペースごとに折り畳めるようにする
-  - [x] タイルごとに折り畳めるようにする(`Tile x / `という表示も消す)（1ワークスペース内のタイルが1つのみの場合はタイル見出し自体を省略し、2つ以上ある場合のみ折り畳み可能な見出しを表示する設計とした）
-  - [x] サイドバーからタイル名・タブ名を変更できるようにする（タブバー本体の表示にも反映される。名前はセッション内のみ保持しアプリ再起動をまたいだ永続化はしない、空文字列に変更するとデフォルトの連番ラベルへ戻る）
+  - [x] タイルごとに折り畳めるようにする
+  - [x] サイドバーからタイル名・タブ名を変更できるようにする
     - [x] 右クリックメニュー
     - [x] ダブルクリック
 
 ## シェルプロファイル選択（複数シェル・WSLディストロ対応）
 
-Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを選べるようにしたい（Windows Terminalの「+」ボタン横の「⌄」ドロップダウンが参考UI）。
-WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同居することもあるため、それも選択肢に含めたい。
+Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを選べるようにしたい。WindowsのWSL環境では複数ディストロが同居することもあるため、それも選択肢に含める。プロファイル一覧の管理方式は「自動検出（WSLディストロ）＋config.ts併用」を採用する（詳細: docs/guide/config.md「シェルプロファイル」節、docs/guide/cli.md）。
 
-プロファイル一覧の管理方式は「自動検出＋config併用」を採用する。Windows起動時に`wsl.exe --list --quiet`相当でインストール済みディストロを自動検出してプロファイル化し（PowerShellは常に固定プロファイルとして追加）、`niwaterm.config.ts`ではSSH先などの追加分だけ書けばよい設計にする。全プロファイルを毎回手で列挙する静的方式は、WSLディストロが増減するたびに設定ファイルの更新が要るため採用しない。
-
-プロファイル配列・WSL自動検出・タブ作成時の選択UIまで実装済み（詳細: docs/guide/config.md「シェルプロファイル」節、docs/guide/cli.md）。WSL自動検出・ドロップダウンUIともにElectrobunがLinux非対応でこの開発環境（WSL）では動かせないため、Windows実機での動作確認は未実施（コード・ユニットテストレベルでの検証のみ）。
-
-- [x] 設計: プロファイル管理方式を検討し、「自動検出（Windowsは`wsl.exe --list`相当）＋config.ts併用」方式を採用する
-- [x] `niwaterm.config.ts`に`shell.default`を追加し、新規タブ作成時のデフォルトシェルを設定できるようにする（PTY起動への配線・ホットリロード対応まで完了。ユニットテストで検証済み。詳細: docs/guide/config.md「シェル設定」節）
+- [x] 設計: プロファイル管理方式を検討し、「自動検出＋config.ts併用」方式を採用する
+- [x] `niwaterm.config.ts`に`shell.default`を追加し、新規タブ作成時のデフォルトシェルを設定できるようにする
 - [x] 複数プロファイル（PowerShell・各WSLディストロ・SSH先など）を`shell.profiles`配列で管理できるようにする
-- [x] Windows起動時にインストール済みWSLディストロを自動検出し、profilesへマージする（`wsl.exe --list --quiet`の出力はUTF-16LEになりうる既知の挙動に対応。Windows実機での最終確認は未実施）
-- [x] タブ作成時にプロファイルを指定できるようにする（RPC `newTab`・IPCサーバー`/new-tab`・CLI `niwaterm new-tab --shell <id>`まで一気通貫で配線。プロファイル一覧を返す`niwaterm shell-profiles`/`GET /shell-profiles`も追加）
-- [x] 「+」ボタン横にWindows Terminal風のドロップダウン（「⌄」ボタン）を追加し、新規タブ作成時にプロファイルを選べるUIを実装する（実機でのUI動作確認は未実施）
+- [x] Windows起動時にインストール済みWSLディストロを自動検出し、profilesへマージする
+- [x] タブ作成時にプロファイルを指定できるようにする
+- [x] 「+」ボタン横にWindows Terminal風のドロップダウンを追加し、新規タブ作成時にプロファイルを選べるUIを実装する
 - [ ] タブバーに現在のシェル/プロファイル名を表示するか検討する（「タブ状態の可視化」節のブランチ表示と統合できるか）
 
 ## リファクタリング
 
-- [x] クリップボードがWindows非対応なので対応させたい（OSC52書き込み・Ctrl+Shift+C/Vによる選択コピー・貼り付けをPowerShell経由で実装。Windows実機で3パターンとも動作確認済み）
+- [x] クリップボードのWindows対応（OSC52書き込み・Ctrl+Shift+C/Vによる選択コピー・貼り付け）
 - [x] niwatermでのみうまく起動しないTUIがある
   - lazygit
   - いつの間にか治ってた
@@ -141,8 +136,7 @@ WindowsのWSL環境では複数ディストロ（Ubuntu・NixOSなど）が同�
   - [ ] タブ名があれば表示
   - [ ] タブ名・タブIDの文字数が短いと誤クリックしてしまうので最小幅を設定
 - [ ] カーソル形状が四角のみになっている
-- [ ] ADRの整理とドキュメント・コメントスキルの追加
-  - ADRに書くべきではないことを書いたりあとから追記したりしてるのでそうならないようにする
+- [x] ADRの整理とドキュメント・コメントスキルの追加
 - [ ] claudeのhooksに各コマンドをもっとも短くできないか検討
 - [ ] スクロールで履歴を辿れる
 - [ ] コマンド命名規則の整理
@@ -198,16 +192,16 @@ tmux用のvde-layoutはYAML設定＋N分割（ratio配列）だが、niwatermは
 
 CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用先は`--new-workspace`（デフォルト、既存作業を壊さない安全側）と`--replace`（現在のワークスペースを置き換え）を選べるようにする。
 
-- [x] ワークスペース単位のCLI操作を追加する（前提整備）。`workspace-manager.ts`が既に持つ`newWorkspace`/`switchWorkspace`/`closeWorkspace`をIPCサーバー（`/new-workspace`・`/switch-workspace`・`/close-workspace`）とCLI（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`）から呼べるようにした。あわせて`newWorkspace`が新規`workspaceId`を返す・`switchWorkspace`が成否をboolean で返す・`closeWorkspace`が`{ok:false, reason:"not-found"|"last-workspace"}`を返すようmanager層のシグネチャも変更した（従来は全てvoidで、CLI/IPCから成否や新規IDを判別できなかったため）
-- [x] タブ起動時のcwd指定を配線する。`pty.ts`・`terminal-session.ts`は元々`cwd`を素通しできる作りだったため、欠けていたのは`workspace.ts`の`spawnSession`/`newTab`だけだった（`shellOverride`と同様の追加引数として`cwd`を通し、`workspace-manager.ts`→RPC `newTab`→IPC `POST /new-tab`→CLI `niwaterm new-tab --cwd <dir>`まで配線）。`cwd`はターミナルタブ専用オプションとし、`--url`・`--custom-view`とは同時指定不可（`--shell`とは併用可）とした。`spawnSession`が`cwd`引数を受け取れるようになったことで、下の「起動時に前回のワークスペースを復元し、各タブで作業ディレクトリを引き継げる」（永続化からの復元パス）は同じ引数をそのまま使って実装できる見込み（今回は新規タブ作成パスのみの対応で、永続化側の保存・復元はまだ未着手）
-- [x] `@niwaterm/config`にレイアウト設定のスキーマを追加する（`packages/config/src/layout.ts`。`LayoutNodeConfig`は`{kind:"split", orientation, ratio?, first, second}`と`{kind:"tile", tabs: LayoutTabConfig[], activeTab?}`の判別共用体とし、`LayoutTabConfig`は`name`/`shellProfile`/`cwd`/`command`/`delay`/`vars`/`focus`を持つ。`NiwatermConfig.layouts?: LayoutsConfig`として追加し、`src/bun/config.ts`に`resolveLayouts`を実装した（プリセット単位の浅い存在チェックのみ行い、ratio範囲・shellProfile実在確認・focus重複等の意味的検証はTypeScript設定ゆえ実行時状態に依存するためapply時に回した））
-- [x] レイアウト適用エンジンを実装する（`src/bun/layout-apply.ts`）。当初想定していた`persistence.ts`の`buildTreeFromPersisted`パターン（TileNode木を直接組み立てる）ではなく、`splitTile`/`newTab`/`setTabVar`/`setTabName`/`handleInput`(send-keys)/`closeTab`/`switchTab`/`focusTile`という既存の高レベル操作を「タイルは常にタブ1つのプレースホルダーから始まる」という不変条件のもとに積み木のように呼び出して組み立てる方式を採用した（workspace.ts/tile-layout.tsの内部構造には一切手を入れずに済む）。副産物として`splitTile`が`ratio`を受け取れるよう`workspace.ts`/`workspace-manager.ts`を拡張した（既存のIPC/CLIには公開せずlayout-apply.ts内部利用のみ）。適用前に全体を検証し（ratio範囲・shellProfile実在・focus重複最大1つ）、検証を通過するまでワークスペースには一切触れない設計とした
-- [x] IPCエンドポイント`/apply-layout`・`GET /layouts`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加した。`--replace`は既存のワークスペースを`closeTab`の繰り返しだけで単一タイルへ畳んでから組み立て直す方式とし、既存タブ・PTYは無条件でcloseする（下の「プロセスはどうなるのか」の未決定事項とは別に、レイアウト適用という明示操作の一部として今回は確認プロンプト無しの単純な仕様にした）。ドキュメントは`docs/guide/config.md`「レイアウト」節・`docs/guide/cli.md`に追記済み
-- [x] `--replace`時の既存タブ・PTYの終了の扱いを決める。`niwaterm layout apply --replace`固有の挙動としては「無条件close、確認プロンプト無し」に決めて実装・ドキュメント化した（CLIはスクリプトから叩く前提が強く対話確認になじまないこと、`--replace`という明示フラグ自体が「壊してよい」という意思表示になることが理由）。ただし下の「プロセスはどうなるのか」（ウィンドウを閉じる際の挙動という、より一般的な未決定事項）はこれとは別に残っている
-- [x] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記した）
-- [x] Windows実機で`niwaterm layout apply`実行時にネイティブクラッシュ（`ghostty-vt.dll`でのセグフォ）が発生する不具合を修正した。原因は`buildTile`が各タイルで「プレースホルダータブ生成→本命タブ生成→プレースホルダーを閉じる」を同期的に連発しており、`dispose()`（`term.free()`+`pty.kill()`）と`Bun.spawn`の非同期プロセス起動がレースしていたためとみられる。tabConfigが`shellProfile`/`cwd`を指定していない場合はプレースホルダーをそのまま最初のタブとして再構成して使い回すよう変更し、生成→即破棄のペアを回避した
-- [x] タブの`cwd`未指定時の既定値がホームディレクトリ固定になっていた点を修正した。`niwaterm layout apply`に`--cwd`（省略時はコマンド実行ディレクトリ）を追加し、`workspaceManager.newWorkspace`/`splitTile`にcwdを渡せるよう拡張、`layout-apply.ts`の`BuildContext`に`invocationCwd`を持たせてtabConfig.cwd未指定時のデフォルトに使うようにした（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かない点は既知の限定事項として残した）。`niwaterm split-tile`/`new-tab`はCLI経由だと分割元タブとは限らない任意のtileIdを指定できるため、cwd省略時のデフォルトを「分割元タブの実際のディレクトリ」にするには別途シェル統合が必要（上の「ターミナル高度機能」に追記済み、今回は対応しない）
-- [x] 上のcwdデフォルト化により、WSL上のCLIから`niwaterm layout apply`（Windows側アプリへTCPブリッジ経由で接続）を実行するとWindows側の`Bun.spawn`がLinux絶対パスをcwdとして解決できずENOENTでリクエストが失敗する不具合が発覚し、修正した。`packages/cli/src/ipc-client.ts`に`toWindowsAccessibleCwd`を追加し、WSLブリッジ経由の接続時のみcwdを`\\wsl.localhost\<WSL_DISTRO_NAME>\...`形式のUNCパスへ変換して送るようにした（`new-tab --cwd`にも同じ変換を適用）。あわせて`pty.ts`の`createPty`に保険を追加し、明示cwd指定でのspawn失敗時はhomedir()へフォールバックして再試行するようにした（変換できないケースやcwdが実在しないケース全般で、PTY起動失敗がリクエスト単位のエラーで収まらず未処理例外として表に出ていたのを防ぐ）
+- [x] ワークスペース単位のCLI操作を追加する（前提整備）
+- [x] タブ起動時のcwd指定を配線する
+- [x] `@niwaterm/config`にレイアウト設定のスキーマを追加する
+- [x] レイアウト適用エンジンを実装する
+- [x] IPCエンドポイント`/apply-layout`・`GET /layouts`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加する
+- [x] `--replace`時の既存タブ・PTYの終了の扱いを決める（無条件close、確認プロンプト無し）
+- [x] ドキュメント整備
+- [x] Windows実機で`niwaterm layout apply`実行時のネイティブクラッシュを修正する
+- [x] タブの`cwd`未指定時の既定値がホームディレクトリ固定になっていた不具合を修正する
+- [x] WSL上のCLIから`niwaterm layout apply`実行時のENOENT不具合を修正する
 
 ## 磨き込みと配布
 

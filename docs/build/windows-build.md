@@ -8,13 +8,7 @@ description: Windows実機でniwatermをビルド・実行するための手順�
 
 Windowsでniwatermをビルド・実行するための手順。
 
-> **状態**（2026-08-13時点）: Windows 11 x64で**動作確認済み**。
-> 確認できたのは、アプリ起動・PowerShellの起動と入出力・タイル分割（`ctrl+shift+d`）・
-> IPCサーバー起動・CLI（`ping` / `list` / `send-keys` / `capture-tab`）・
-> ブラウザタブ（`new-tab --url` / `browser-navigate` / `browser-get-text` / `browser-get-html`）・
-> customView（`new-tab --custom-view`）・
-> WSL(NixOS)ディストロからのCLI接続（後述の「6. WSLディストロからniwaterm CLIを使う」）まで。
-> **`browser-screenshot`のみ、Bun本体側の既知issue（Windows上でChrome/Edgeの自動起動に失敗する）により動作しない**（後述）。
+> **状態**: Windows 11 x64で動作確認済み。`browser-screenshot`のみBun本体側の既知issue（後述）により動作しない。
 
 ## 全体像
 
@@ -212,43 +206,6 @@ powershell.exe -NoProfile -Command "\
 > **初回起動は数分かかる。** Electrobunが自分のCLIバイナリ（数十MB）とコアバイナリ
 > （`bun.exe` / `bsdiff.exe` / `bspatch.exe` / `libNativeWrapper.dll`）を
 > GitHub Releasesからダウンロードするため。2回目以降はキャッシュが効く。
-
-### 動作確認できたこと
-
-起動後、次まで確認済み:
-
-- PowerShellのプロンプト表示と入出力（`echo` の実行と結果表示、シンタックスハイライト）
-- `ctrl+shift+d` によるタイル分割（分割先で新しいPTYが起動する）
-- IPCサーバーの起動 → CLIからの操作
-
-```powershell
-bun packages/cli/src/index.ts ping
-# pong (pid 29032)
-
-bun packages/cli/src/index.ts send-keys --tab tab-3 'echo cli-from-windows' Enter
-bun packages/cli/src/index.ts capture-tab --tab tab-3
-# PS C:\Users\eetann> echo cli-from-windows
-# cli-from-windows
-```
-
-`Bun.serve({unix})` と `fetch(..., {unix})` はWindowsでも動作する。
-
-さらに、ブラウザタブ・customViewも動作確認できた:
-
-```powershell
-bun packages/cli/src/index.ts new-tab --tile tile-2 --url 'https://example.com'
-bun packages/cli/src/index.ts browser-navigate --tab tab-6 --url 'https://www.wikipedia.org'
-bun packages/cli/src/index.ts browser-get-text --tab tab-6
-bun packages/cli/src/index.ts browser-get-html --tab tab-6
-
-bun packages/cli/src/index.ts new-tab --tile tile-4 --custom-view
-bun packages/cli/src/index.ts browser-get-text --tab tab-8
-```
-
-customViewの検証には `~/.config/niwaterm/` のセットアップが要る（`docs/guide/config.md`参照）。
-`@niwaterm/config` パッケージ側の`file:`参照はWindowsでも`bun link`方式で問題なく解決できた。
-
-`browser-screenshot` のみ失敗する（後述のBun側issue）。
 
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 

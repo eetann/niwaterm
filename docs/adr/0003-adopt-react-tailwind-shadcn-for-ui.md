@@ -48,50 +48,7 @@ daisyUIはJavaScript非依存のCSSプラグインであり、Reactを導入す�
 
 ### 1. 適用範囲
 
-既存の描画性能がクリティカルな部分（ターミナルグリッドの描画、タイル分割ロジック）はReact化のスコープに含めない。今回導入するのは、今後追加する新規UI（ダイアログ、サイドバー拡張等）から使える基盤であり、`src/mainview/index.ts`の既存の初期化フローに`mountReactRoot()`を1行追加する形で、独立した`#react-root`コンテナにReactをマウントしている。
-
-### 2. Tailwind CSSのビルド連携
-
-ElectrobunのビューバンドラーはBun.build()そのものであり、`electrobun.config.ts`の`build.views.mainview`はBun.build()の全オプションをそのまま受け付ける。この性質を利用し、`bun-plugin-tailwind`（Bunの公式`bun init`テンプレートで使われているBunバンドラー用プラグイン）を`plugins`に渡すことで、Tailwindの処理をBun.build()の一部として組み込んでいる。
-
-```ts
-// electrobun.config.ts
-mainview: {
-  entrypoint: "src/mainview/index.ts",
-  plugins: [createMainviewAliasPlugin(mainviewRoot), tailwind],
-  jsx: { runtime: "automatic" },
-},
-```
-
-`src/mainview/index.ts`が`import "./index.css"`することで、entrypointと同じベース名（`index.css`）のCSSバンドルが自動出力される。これにより既存の`index.html`の`<link href="index.css">`をそのまま使える。
-
-既存の444行の手書きCSSには独自の`* { box-sizing: border-box }`リセットがあり、Tailwindのpreflight（グローバルリセット、button/inputの見た目除去等）をそのまま読み込むと既存の見た目が意図せず変わる。そのため`index.css`では`tailwindcss/theme.css`と`tailwindcss/utilities.css`のみをimportし、`tailwindcss/preflight.css`は意図的に除外している。
-
-### 3. Electrobunのコンパイル済みCLIバイナリによる制約とその回避
-
-実装時に、tsconfig.jsonの`paths`エイリアス（`@/*`、shadcnが生成するコード全体が依存する規約）が、Windows実機での`electrobun dev`実行時にのみ解決できないという問題が発覚した。`bun run <script>.ts`で同等のBun.build()呼び出しを手動で再現すると常に成功するのに、実際の`electrobun dev`コマンド経由では毎回同じ箇所（`@/components/ui/button`のimport）で解決に失敗する、という形で切り分けた。
-
-原因は、Electrobunの`electrobun`コマンドが`bin/electrobun.cjs`から**コンパイル済みスタンドアロンバイナリ**（`node_modules/electrobun/dist-win-x64/bun.exe`等、`bun build --compile`相当の成果物）を子プロセスとして起動する構成になっており、この成果物内部から呼ばれる`Bun.build()`はtsconfig由来のpathsエイリアス解決を行わない、という制約があるためと考えられる（`electrobun.config.ts`にtsconfigパスを明示的に渡しても解消しなかった一方、同じ設定を通常の`bun run`で実行すると常に解決できたことから、コンパイル済みバイナリという実行形態そのものに起因すると判断した）。
-
-この制約を回避するため、自前のBunプラグイン（`bun-mainview-alias-plugin.ts`の`createMainviewAliasPlugin`）を用意し、`onResolve`フックで`@/`から始まるimportを`src/mainview/`配下の実ファイルへ手動で解決している。tsconfig.json自体の`paths`設定はエディタの補完・型チェック用に残しつつ、実際のビルド時解決はこのプラグインが担う。
-
-```ts
-// bun-mainview-alias-plugin.ts
-export function createMainviewAliasPlugin(mainviewRoot: string): BunPlugin {
-  return {
-    name: "mainview-alias",
-    setup(build) {
-      build.onResolve({ filter: /^@\// }, (args) => {
-        // args.path (例: "@/components/ui/button") を mainviewRoot 配下の実ファイルへ解決する
-      });
-    },
-  };
-}
-```
-
-### 4. shadcn/uiの導入方法
-
-shadcnの対話式`bunx shadcn@latest init`はTTYでの応答を前提としており、Electrobunは未知のフレームワークとして自動検出されないため実行しなかった。代わりにBun公式の`bun init react-shadcn`テンプレートが持つ`components.json`を土台に、niwaterm用（`@/*` → `src/mainview/*`）に書き換えて手動で作成した。以降のコンポーネント追加は`bunx shadcn@latest add <component>`で行う。
+既存の描画性能がクリティカルな部分（ターミナルグリッドの描画、タイル分割ロジック）はReact化のスコープに含めない。今回導入するのは、今後追加する新規UI（ダイアログ、サイドバー拡張等）から使える基盤である。
 
 ## Consequences
 
