@@ -78,7 +78,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const genTabId = (): TabId => `tab-${counter++}`;
   const genWorkspaceId = (): WorkspaceId => `workspace-${counter++}`;
 
-  function createAndRegisterWorkspace(initialTree?: TileNode): WorkspaceId {
+  function createAndRegisterWorkspace(initialTree?: TileNode, initialCwd?: string): WorkspaceId {
     const id = genWorkspaceId();
     const ws = createWorkspace({
       initialCols: opts.initialCols,
@@ -86,6 +86,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       genTileId,
       genTabId,
       initialTree,
+      initialCwd,
       onDirty: () => opts.onDirty(),
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
       getDefaultShell: opts.getDefaultShell,
@@ -162,8 +163,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaceId === activeId;
   }
 
-  function newWorkspace(): WorkspaceId {
-    activeId = createAndRegisterWorkspace();
+  function newWorkspace(cwd?: string): WorkspaceId {
+    activeId = createAndRegisterWorkspace(undefined, cwd);
     opts.onDirty();
     return activeId;
   }
@@ -194,8 +195,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     tileId: TileId,
     orientation: SplitOrientation,
     ratio?: number,
+    cwd?: string,
   ): { tileId: TileId; tabId: TabId } | null {
-    return findOwnerByTileId(tileId)?.splitTile(tileId, orientation, ratio) ?? null;
+    return findOwnerByTileId(tileId)?.splitTile(tileId, orientation, ratio, cwd) ?? null;
   }
 
   function newTab(tileId: TileId, shellOverride?: string, cwd?: string): TabId | null {

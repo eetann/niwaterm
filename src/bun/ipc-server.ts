@@ -209,15 +209,21 @@ function parseSetVarBody(body: unknown): SetVarRequestBody | null {
 interface ApplyLayoutRequestBody {
   name: string;
   target?: ApplyLayoutTarget;
+  cwd?: string;
 }
 
 function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
-  const b = body as { name?: unknown; target?: unknown };
+  const b = body as { name?: unknown; target?: unknown; cwd?: unknown };
   if (typeof b.name !== "string" || b.name.length === 0) return null;
   if (b.target !== undefined && b.target !== "new-workspace" && b.target !== "replace") {
     return null;
   }
-  return { name: b.name, target: b.target };
+  const result: ApplyLayoutRequestBody = { name: b.name, target: b.target };
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  return result;
 }
 
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
@@ -290,7 +296,10 @@ function buildApp(
     const parsed = parseApplyLayoutBody(body);
     if (!parsed) {
       return c.json(
-        { ok: false, error: 'expected { name: string, target?: "new-workspace"|"replace" }' },
+        {
+          ok: false,
+          error: 'expected { name: string, target?: "new-workspace"|"replace", cwd?: string }',
+        },
         400,
       );
     }
@@ -301,6 +310,7 @@ function buildApp(
       getShellProfiles(),
       preset,
       parsed.target ?? "new-workspace",
+      parsed.cwd,
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
     return c.json({ ok: true, workspaceId: result.workspaceId });

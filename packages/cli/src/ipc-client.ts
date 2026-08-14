@@ -346,8 +346,11 @@ export function applyLayout(
   endpoint: IpcEndpoint,
   name: string,
   target: ApplyLayoutTarget,
+  cwd?: string,
 ): Promise<ApplyLayoutResult> {
-  return postJson(endpoint, "/apply-layout", { name, target });
+  const body: { name: string; target: ApplyLayoutTarget; cwd?: string } = { name, target };
+  if (cwd !== undefined) body.cwd = cwd;
+  return postJson(endpoint, "/apply-layout", body);
 }
 
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };

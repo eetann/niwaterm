@@ -98,6 +98,8 @@ interface BuildContext {
   profiles: ShellProfile[];
   workspaceId: WorkspaceId;
   focusTarget: { tileId: TileId; tabId: TabId } | null;
+  /** `niwaterm layout apply`を実行したCLIのcwd。tabConfig.cwd未指定時のデフォルトに使う */
+  invocationCwd?: string;
 }
 
 /** tileIdが現時点で唯一持つタブのtabIdを返す（不変条件により常に1件のはず） */
@@ -112,10 +114,11 @@ function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
   return node.tabIds[0] as TabId;
 }
 
-// プレースホルダータブは既定シェル・既定cwdで既に生成済みのPTYを持つ。tabConfigが
-// shellProfile/cwdを指定していなければ結果は既定シェル生成と同一になるため、newTab+closeTabで
-// 新規PTYを作って即座に古いPTYを破棄する（Windows実機でネイティブ層のクラッシュを誘発した。
-// layout-apply-crush.log参照）代わりに、プレースホルダーをそのまま最初のタブとして使い回す
+// プレースホルダータブは既定シェル・invocationCwd（buildNode内のsplitTile呼び出しで
+// 既に渡している）で生成済みのPTYを持つ。tabConfigがshellProfile/cwdを指定していなければ
+// 結果は同一になるため、newTab+closeTabで新規PTYを作って即座に古いPTYを破棄する
+// （Windows実機でネイティブ層のクラッシュを誘発した。layout-apply-crush.log参照）代わりに、
+// プレースホルダーをそのまま最初のタブとして使い回す
 function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
   return tabConfig.shellProfile === undefined && tabConfig.cwd === undefined;
 }
@@ -174,7 +177,11 @@ function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): v
 function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig): TabId {
   const resolved = resolveShellProfileCommand(ctx.profiles, tabConfig.shellProfile);
   const shellOverride = resolved.ok ? resolved.command : undefined;
-  const tabId = ctx.workspaceManager.newTab(tileId, shellOverride, tabConfig.cwd);
+  const tabId = ctx.workspaceManager.newTab(
+    tileId,
+    shellOverride,
+    tabConfig.cwd ?? ctx.invocationCwd,
+  );
   if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
   configureTab(ctx, tileId, tabId, tabConfig);
   return tabId;
@@ -185,7 +192,12 @@ function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): v
     buildTile(ctx, tileId, node);
     return;
   }
-  const result = ctx.workspaceManager.splitTile(tileId, node.orientation, node.ratio);
+  const result = ctx.workspaceManager.splitTile(
+    tileId,
+    node.orientation,
+    node.ratio,
+    ctx.invocationCwd,
+  );
   if (!result) throw new Error(`internal error: failed to split tile ${tileId}`);
   // splitTileはfirst=既存(tileIdのまま)/second=新規(result.tileId)で分割する（tile-layout.ts参照）
   buildNode(ctx, tileId, node.first);
@@ -224,27 +236,37 @@ function getRootTileId(workspaceManager: WorkspaceManager, workspaceId: Workspac
  * "replace"は現在のワークスペースを単一タイルへ畳んでから適用する
  * （既存タブ・PTYは無条件でcloseする。確認プロンプト等の要否はroadmap「プロセスはどうなるのか」で別途検討）。
  * 検証エラー時はワークスペースに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
- * ok:falseで返すが、その時点までに行った操作はロールバックされない
+ * ok:falseで返すが、その時点までに行った操作はロールバックされない。
+ * invocationCwdは`niwaterm layout apply`を実行したCLIのcwdで、tabConfig.cwd未指定時のデフォルトになる
+ * （"replace"時、それ以上分割されないまま最初に到達するタイルだけは既存タブを使い回すため、
+ * このデフォルトが効かず元のcwdのまま残る点に注意）
  */
 export function applyLayoutPreset(
   workspaceManager: WorkspaceManager,
   profiles: ShellProfile[],
   preset: LayoutPreset,
   target: ApplyLayoutTarget,
+  invocationCwd?: string,
 ): ApplyLayoutResult {
   const validationError = validateLayoutPreset(preset, profiles);
   if (validationError) return { ok: false, error: validationError };
 
   const workspaceId =
     target === "new-workspace"
-      ? workspaceManager.newWorkspace()
+      ? workspaceManager.newWorkspace(invocationCwd)
       : workspaceManager.snapshot().activeWorkspaceId;
 
   if (target === "replace") {
     resetToSingleTile(workspaceManager, workspaceId);
   }
 
-  const ctx: BuildContext = { workspaceManager, profiles, workspaceId, focusTarget: null };
+  const ctx: BuildContext = {
+    workspaceManager,
+    profiles,
+    workspaceId,
+    focusTarget: null,
+    invocationCwd,
+  };
   try {
     buildNode(ctx, getRootTileId(workspaceManager, workspaceId), preset.layout);
   } catch (err) {

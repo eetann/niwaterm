@@ -47,6 +47,8 @@ export type WorkspaceOptions = {
   genTabId: () => TabId;
   /** 永続化からの復元時に渡す既存の木構造（tileId/tabIdは採番済み）。省略時は単一leaf・単一タブで新規作成する */
   initialTree?: TileNode;
+  /** 新規作成時（initialTree省略時）の最初のタブに使うcwd。省略時はpty.ts側のOS標準（homedir）を使う */
+  initialCwd?: string;
   /** 描画すべき変化が生じた時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onDirty: () => void;
   /** 最後の1タブのプロセスが終了した時に呼ばれる。アプリを終了するかどうかの判断は呼び出し側の責務 */
@@ -110,7 +112,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const firstTileId = genTileId();
     tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
     focusedTileId = firstTileId;
-    spawnSession(firstTabId, opts.initialCols, opts.initialRows);
+    spawnSession(firstTabId, opts.initialCols, opts.initialRows, undefined, opts.initialCwd);
   }
 
   function disposeSessions(tabIds: TabId[]): void {
@@ -156,6 +158,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     tileId: TileId,
     orientation: SplitOrientation,
     ratio?: number,
+    cwd?: string,
   ): { tileId: TileId; tabId: TabId } | null {
     const target = findNode(tree, tileId);
     if (!target || target.kind !== "leaf") return null;
@@ -177,7 +180,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows);
+    spawnSession(newTabId, size.cols, size.rows, undefined, cwd);
     focusedTileId = newTileId;
     opts.onDirty();
     return { tileId: newTileId, tabId: newTabId };

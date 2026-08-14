@@ -1671,9 +1671,10 @@ describe("GET /layouts, POST /apply-layout", () => {
   };
 
   function createServerWithLayouts(layouts: LayoutsConfig) {
-    const { mgr } = createTestWorkspaceManager();
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
     return {
       mgr,
+      sessionOpts,
       serverPromise: createIpcServer(
         socketPath,
         mgr,
@@ -1726,6 +1727,21 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(body.ok).toBe(true);
     expect(body.workspaceId).not.toBe(firstId);
     expect(mgr.snapshot().activeWorkspaceId).toBe(body.workspaceId);
+  });
+
+  test("POST /apply-layout: cwdを指定すると、cwd未指定のタブへ既定値として渡る", async () => {
+    const { sessionOpts, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd: "/invocation/dir" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
   });
 
   test("POST /apply-layout: target:replaceは現在のワークスペースを置き換える", async () => {

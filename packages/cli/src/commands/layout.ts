@@ -36,13 +36,19 @@ const applyCommand = define({
       type: "boolean",
       description: "現在のワークスペースを置き換えて適用する（既存タブ・PTYは無条件で閉じる）",
     },
+    cwd: {
+      type: "string",
+      description:
+        "タブのtabConfig.cwd未指定時に使う作業ディレクトリ（省略時はこのコマンドを実行したディレクトリ）",
+    },
   },
   run: async (ctx) => {
     if (ctx.values["new-workspace"] && ctx.values.replace) {
       failAndExit("layout applyに失敗しました: --new-workspaceと--replaceは同時に指定できません");
     }
     const target = ctx.values.replace ? "replace" : "new-workspace";
-    const result = await applyLayout(resolveIpcEndpoint(), ctx.values.name, target);
+    const cwd = ctx.values.cwd ?? process.cwd();
+    const result = await applyLayout(resolveIpcEndpoint(), ctx.values.name, target, cwd);
     if (!result.ok) {
       failAndExit(`layout applyに失敗しました: ${result.error}`);
     }

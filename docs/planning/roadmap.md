@@ -183,6 +183,7 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
 - [ ] OSC 133（プロンプトマーク）でコマンド単位のジャンプができる
 - [ ] 画像表示（Kitty graphics protocolなど）ができる
 - [ ] 通知系OSC（OSC 9 / 777）でデスクトップ通知が出る
+- [ ] 各タブが今いる実際のディレクトリをシェル統合（OSC 7等、`docs/adr/0004-adopt-hook-based-agent-status-detection.md`のプッシュ型と同様の方式を想定）で追跡する。`niwaterm split-tile`/`niwaterm new-tab`はCLI経由だと（今フォーカスしているとは限らない）任意のtileIdを指定できるため、cwd省略時の既定値をCLI実行時のディレクトリではなく「分割元・対象タイルのアクティブタブが実際にいるディレクトリ」にできるようにしたい（`niwaterm layout apply`はCLI実行ディレクトリを使う設計で対応済み。分割元タブが無い＝新規ワークスペースを組み立てる操作のため、この2つは区別する）
 
 ## レイアウト機能（vde-layoutライク）
 
@@ -200,6 +201,8 @@ CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用�
 - [x] IPCエンドポイント`/apply-layout`・`GET /layouts`とCLI `niwaterm layout apply <name>`（`--new-workspace`/`--replace`）・`niwaterm layout list`を追加した。`--replace`は既存のワークスペースを`closeTab`の繰り返しだけで単一タイルへ畳んでから組み立て直す方式とし、既存タブ・PTYは無条件でcloseする（下の「プロセスはどうなるのか」の未決定事項とは別に、レイアウト適用という明示操作の一部として今回は確認プロンプト無しの単純な仕様にした）。ドキュメントは`docs/guide/config.md`「レイアウト」節・`docs/guide/cli.md`に追記済み
 - [x] `--replace`時の既存タブ・PTYの終了の扱いを決める。`niwaterm layout apply --replace`固有の挙動としては「無条件close、確認プロンプト無し」に決めて実装・ドキュメント化した（CLIはスクリプトから叩く前提が強く対話確認になじまないこと、`--replace`という明示フラグ自体が「壊してよい」という意思表示になることが理由）。ただし下の「プロセスはどうなるのか」（ウィンドウを閉じる際の挙動という、より一般的な未決定事項）はこれとは別に残っている
 - [x] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記した）
+- [x] Windows実機で`niwaterm layout apply`実行時にネイティブクラッシュ（`ghostty-vt.dll`でのセグフォ）が発生する不具合を修正した。原因は`buildTile`が各タイルで「プレースホルダータブ生成→本命タブ生成→プレースホルダーを閉じる」を同期的に連発しており、`dispose()`（`term.free()`+`pty.kill()`）と`Bun.spawn`の非同期プロセス起動がレースしていたためとみられる。tabConfigが`shellProfile`/`cwd`を指定していない場合はプレースホルダーをそのまま最初のタブとして再構成して使い回すよう変更し、生成→即破棄のペアを回避した
+- [x] タブの`cwd`未指定時の既定値がホームディレクトリ固定になっていた点を修正した。`niwaterm layout apply`に`--cwd`（省略時はコマンド実行ディレクトリ）を追加し、`workspaceManager.newWorkspace`/`splitTile`にcwdを渡せるよう拡張、`layout-apply.ts`の`BuildContext`に`invocationCwd`を持たせてtabConfig.cwd未指定時のデフォルトに使うようにした（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かない点は既知の限定事項として残した）。`niwaterm split-tile`/`new-tab`はCLI経由だと分割元タブとは限らない任意のtileIdを指定できるため、cwd省略時のデフォルトを「分割元タブの実際のディレクトリ」にするには別途シェル統合が必要（上の「ターミナル高度機能」に追記済み、今回は対応しない）
 
 ## 磨き込みと配布
 

@@ -232,6 +232,34 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     expect(sessionOpts.some((o) => o.shell === "wsl.exe -d Ubuntu")).toBe(true);
   });
 
+  test("単一タイルのプリセットではinvocationCwdが最初のタブに使われる", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ name: "editor" }] } };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-workspace", "/proj");
+
+    expect(result.ok).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/proj")).toBe(true);
+  });
+
+  test("invocationCwdはcwd未指定のタブすべてに既定値として使われ、tabConfig.cwdがあれば優先される", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "left" }] },
+        second: { kind: "tile", tabs: [{ name: "right", cwd: "/explicit" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-workspace", "/invocation/dir");
+
+    expect(result.ok).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/explicit")).toBe(true);
+  });
+
   test("バリデーションに失敗した場合は新規ワークスペースを作らずエラーを返す", () => {
     const { mgr } = createTestWorkspaceManager();
     const before = mgr.snapshot().workspaceIds.length;

@@ -257,7 +257,7 @@ layouts: {
 |---|---|---|
 | `name` | `string` | タブ名（サイドバー・タブバー表示用） |
 | `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profiles`で確認）。省略時はデフォルトシェル |
-| `cwd` | `string` | 作業ディレクトリ。省略時はホームディレクトリ |
+| `cwd` | `string` | 作業ディレクトリ。省略時は`niwaterm layout apply`を実行したディレクトリ（`--cwd`で上書き可） |
 | `command` | `string` | タブ作成後に流し込むコマンド（`send-keys`相当、末尾にEnterを自動送信する） |
 | `delay` | `number` | `command`を送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 |
 | `vars` | `Record<string, string>` | タブ変数（`set-var`相当で注入） |

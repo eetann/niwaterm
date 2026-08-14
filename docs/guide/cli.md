@@ -80,13 +80,13 @@ niwaterm close-workspace --workspace <workspaceId>
 
 ```sh
 niwaterm layout list
-niwaterm layout apply <name> [--new-workspace | --replace]
+niwaterm layout apply <name> [--new-workspace | --replace] [--cwd <dir>]
 ```
 
 `niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。
 
 - `layout list` — 定義済みプリセットを`name<TAB>description`形式で表示する。1件も定義されていない場合はその旨を表示する
-- `layout apply <name>` — 指定したプリセットを適用する。`--new-workspace`（デフォルト、明示指定も可）は新規ワークスペースとして適用し、成功時にその`workspaceId`を表示する。`--replace`は現在のワークスペースを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**。確認プロンプト等は無い）。`--new-workspace`と`--replace`は同時指定不可
+- `layout apply <name>` — 指定したプリセットを適用する。`--new-workspace`（デフォルト、明示指定も可）は新規ワークスペースとして適用し、成功時にその`workspaceId`を表示する。`--replace`は現在のワークスペースを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**。確認プロンプト等は無い）。`--new-workspace`と`--replace`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
 
 指定した`name`が未定義の場合、プリセットの検証に失敗した場合（`shellProfile`が未知のid、`focus:true`が2つ以上、ratioが範囲外等）はいずれもエラーメッセージと共に終了コード1を返す。検証失敗時はワークスペースに一切変更を加えない。
 
