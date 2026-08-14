@@ -75,15 +75,30 @@ export function createPty(opts: PtyOptions): Pty {
     },
   });
 
-  const proc = Bun.spawn(cmd, {
-    cwd: opts.cwd ?? homedir(),
+  const spawnOptions = {
     // TerminalOptions.nameはTERM環境変数を設定しないため明示的に渡す
     env: buildEnv(cmd, term, opts.env),
     terminal,
-    onExit(_proc, exitCode) {
+    onExit(_proc: Bun.Subprocess, exitCode: number | null) {
       onExitFn?.(exitCode ?? 0);
     },
-  });
+  };
+
+  let proc: Bun.Subprocess;
+  try {
+    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: opts.cwd ?? homedir() });
+  } catch (err) {
+    // uv_spawnのENOENTはcwd不在・実行ファイル不在いずれでも発生し、エラー自体からは
+    // 区別できない（libuv/Windowsの既知の癖）。opts.cwdを明示指定していた場合は
+    // cwd起因（例: WSL側CLIから渡されたパスがWindows側に存在しない）を疑い、
+    // homedir()へフォールバックして再試行する。フォールバックでも失敗する場合は
+    // シェルコマンド自体の問題とみなしそのまま投げる
+    if (opts.cwd === undefined) throw err;
+    console.log(
+      `[bun] failed to spawn pty with cwd=${opts.cwd}, falling back to home directory: ${String(err)}`,
+    );
+    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: homedir() });
+  }
 
   function onData(fn: (data: Uint8Array) => void): void {
     onDataFn = fn;

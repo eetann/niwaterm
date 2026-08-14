@@ -80,6 +80,21 @@ export function resolveIpcEndpoint(): IpcEndpoint {
   return { kind: "unix", path: ipcSocketPath() };
 }
 
+/**
+ * WSL上のCLIからTCPブリッジ経由でWindows側アプリへcwdを渡す際、Linux絶対パス
+ * （例: /home/eetann/proj）のままだとWindows側のBun.spawnがそのパスを解決できず
+ * ENOENTになる（実機確認済み）。WSLディストロの9pマウント経由でWindowsから参照できる
+ * \\wsl.localhost\<distro>\... 形式のUNCパスへ変換する。
+ * WSLブリッジ以外（macOS・Windows実機からの直接接続）やWSL_DISTRO_NAME未設定、
+ * 絶対パスでない場合はそのまま返す（変換できない時に無理に書き換えない）
+ */
+function toWindowsAccessibleCwd(endpoint: IpcEndpoint, cwd: string): string {
+  if (endpoint.kind !== "tcp") return cwd;
+  const distro = process.env["WSL_DISTRO_NAME"];
+  if (!distro || !cwd.startsWith("/")) return cwd;
+  return `\\\\wsl.localhost\\${distro}${cwd.replaceAll("/", "\\")}`;
+}
+
 function ipcUrl(endpoint: IpcEndpoint, path: string): string {
   if (endpoint.kind === "tcp") return `http://${endpoint.host}:${endpoint.port}${path}`;
   return `http://localhost${path}`;
@@ -257,7 +272,7 @@ export function newTab(
   if (url !== undefined) body.url = url;
   if (customView !== undefined) body.customView = customView;
   if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
-  if (cwd !== undefined) body.cwd = cwd;
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
   return postJson(endpoint, "/new-tab", body);
 }
 
@@ -349,7 +364,7 @@ export function applyLayout(
   cwd?: string,
 ): Promise<ApplyLayoutResult> {
   const body: { name: string; target: ApplyLayoutTarget; cwd?: string } = { name, target };
-  if (cwd !== undefined) body.cwd = cwd;
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
   return postJson(endpoint, "/apply-layout", body);
 }
 

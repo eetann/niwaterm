@@ -203,6 +203,7 @@ CLIは`niwaterm layout list` / `niwaterm layout apply <name>`を想定。適用�
 - [x] ドキュメント整備（docs/guide/cli.md・docs/guide/config.mdに新規コマンド・設定フィールドを追記した）
 - [x] Windows実機で`niwaterm layout apply`実行時にネイティブクラッシュ（`ghostty-vt.dll`でのセグフォ）が発生する不具合を修正した。原因は`buildTile`が各タイルで「プレースホルダータブ生成→本命タブ生成→プレースホルダーを閉じる」を同期的に連発しており、`dispose()`（`term.free()`+`pty.kill()`）と`Bun.spawn`の非同期プロセス起動がレースしていたためとみられる。tabConfigが`shellProfile`/`cwd`を指定していない場合はプレースホルダーをそのまま最初のタブとして再構成して使い回すよう変更し、生成→即破棄のペアを回避した
 - [x] タブの`cwd`未指定時の既定値がホームディレクトリ固定になっていた点を修正した。`niwaterm layout apply`に`--cwd`（省略時はコマンド実行ディレクトリ）を追加し、`workspaceManager.newWorkspace`/`splitTile`にcwdを渡せるよう拡張、`layout-apply.ts`の`BuildContext`に`invocationCwd`を持たせてtabConfig.cwd未指定時のデフォルトに使うようにした（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かない点は既知の限定事項として残した）。`niwaterm split-tile`/`new-tab`はCLI経由だと分割元タブとは限らない任意のtileIdを指定できるため、cwd省略時のデフォルトを「分割元タブの実際のディレクトリ」にするには別途シェル統合が必要（上の「ターミナル高度機能」に追記済み、今回は対応しない）
+- [x] 上のcwdデフォルト化により、WSL上のCLIから`niwaterm layout apply`（Windows側アプリへTCPブリッジ経由で接続）を実行するとWindows側の`Bun.spawn`がLinux絶対パスをcwdとして解決できずENOENTでリクエストが失敗する不具合が発覚し、修正した。`packages/cli/src/ipc-client.ts`に`toWindowsAccessibleCwd`を追加し、WSLブリッジ経由の接続時のみcwdを`\\wsl.localhost\<WSL_DISTRO_NAME>\...`形式のUNCパスへ変換して送るようにした（`new-tab --cwd`にも同じ変換を適用）。あわせて`pty.ts`の`createPty`に保険を追加し、明示cwd指定でのspawn失敗時はhomedir()へフォールバックして再試行するようにした（変換できないケースやcwdが実在しないケース全般で、PTY起動失敗がリクエスト単位のエラーで収まらず未処理例外として表に出ていたのを防ぐ）
 
 ## 磨き込みと配布
 
