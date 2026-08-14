@@ -74,7 +74,7 @@ export function buildSidebarWorkspaceItems(
 ): SidebarWorkspaceItem[] {
   return workspaces.map((entry, workspaceIndex) => ({
     workspaceId: entry.workspaceId,
-    label: `Workspace ${workspaceIndex + 1}`,
+    label: entry.name || `Workspace ${workspaceIndex + 1}`,
     active: entry.workspaceId === currentActiveWorkspaceId,
     tiles: listLeaves(entry.layout).map((leaf, tileIndex) => ({
       tileId: leaf.id,

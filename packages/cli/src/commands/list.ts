@@ -26,7 +26,8 @@ function printTile(tile: TileSummary, focusedTileId: string, depth: number): voi
 
 function printWorkspace(entry: WorkspaceListEntry): void {
   const suffix = entry.active ? " (active)" : "";
-  console.log(`${entry.workspaceId}${suffix}`);
+  const nameSuffix = entry.name ? ` "${entry.name}"` : "";
+  console.log(`${entry.workspaceId}${nameSuffix}${suffix}`);
   printTile(entry.layout, entry.focusedTileId, 1);
 }
 

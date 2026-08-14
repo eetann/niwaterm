@@ -46,6 +46,8 @@ export interface WorkspaceListEntry {
   tabNames: Record<TabId, string>;
   /** ユーザーがサイドバーから設定したタイル名。未設定のタイルは含まれない */
   tileNames: Record<TileId, string>;
+  /** ユーザーがサイドバーから設定したワークスペース名。未設定はnull（表示側で連番にフォールバック） */
+  name: string | null;
 }
 
 export interface TabLocation {
@@ -72,6 +74,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const workspaces = new Map<WorkspaceId, Workspace>();
   let order: WorkspaceId[] = [];
   let activeId: WorkspaceId;
+  // タブ・タイル名と同様、ワークスペース名もセッション内のみ保持する（アプリ再起動をまたいだ永続化はしない）
+  const workspaceNames = new Map<WorkspaceId, string>();
 
   let counter = 0;
   const genTileId = (): TileId => `tile-${counter++}`;
@@ -102,6 +106,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   function handleWorkspaceEmptied(id: WorkspaceId): void {
     workspaces.get(id)?.dispose();
     workspaces.delete(id);
+    workspaceNames.delete(id);
     order = order.filter((wid) => wid !== id);
     if (order.length === 0) {
       opts.onAllWorkspacesClosed();
@@ -183,6 +188,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     if (workspaces.size === 1) return { ok: false, reason: "last-workspace" }; // 最後の1つは閉じない（誤操作防止）
     workspaces.get(workspaceId)?.dispose();
     workspaces.delete(workspaceId);
+    workspaceNames.delete(workspaceId);
     order = order.filter((id) => id !== workspaceId);
     if (activeId === workspaceId) {
       activeId = order[order.length - 1];
@@ -273,6 +279,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         tabVars,
         tabNames: ws.listTabNames(),
         tileNames: ws.listTileNames(),
+        name: workspaceNames.get(id) ?? null,
       };
     });
   }
@@ -305,6 +312,18 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   function setTileName(tileId: TileId, name: string): boolean {
     return findOwnerByTileId(tileId)?.setTileName(tileId, name) ?? false;
+  }
+
+  /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
+  function setWorkspaceName(workspaceId: WorkspaceId, name: string): boolean {
+    if (!workspaces.has(workspaceId)) return false;
+    if (name.trim() === "") {
+      workspaceNames.delete(workspaceId);
+    } else {
+      workspaceNames.set(workspaceId, name);
+    }
+    opts.onDirty();
+    return true;
   }
 
   function snapshot(): AppRenderState {
@@ -362,6 +381,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     listTabVars,
     setTabName,
     setTileName,
+    setWorkspaceName,
     serializeForPersistence,
     dispose,
   };

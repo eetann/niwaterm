@@ -197,6 +197,18 @@ interface SetVarRequestBody extends TabIdRequestBody {
   value: string;
 }
 
+interface RenameWorkspaceRequestBody extends WorkspaceIdRequestBody {
+  name: string;
+}
+
+function parseRenameWorkspaceBody(body: unknown): RenameWorkspaceRequestBody | null {
+  const workspaceIdBody = parseWorkspaceIdBody(body);
+  if (!workspaceIdBody) return null;
+  const b = body as { name?: unknown };
+  if (typeof b.name !== "string") return null;
+  return { ...workspaceIdBody, name: b.name };
+}
+
 function parseSetVarBody(body: unknown): SetVarRequestBody | null {
   const tabIdBody = parseTabIdBody(body);
   if (!tabIdBody) return null;
@@ -277,6 +289,18 @@ function buildApp(
       }
       return c.json({ ok: false, error: "cannot close the last workspace" }, 409);
     }
+    return c.json({ ok: true });
+  });
+
+  app.post("/rename-workspace", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseRenameWorkspaceBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { workspaceId: string, name: string }" }, 400);
+    }
+    const ok = workspaceManager.setWorkspaceName(parsed.workspaceId, parsed.name);
+    if (!ok) return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
     return c.json({ ok: true });
   });
 

@@ -720,6 +720,7 @@ function renderSidebar(
       onSelectTab: activateSidebarTab,
       onRenameTab: renameSidebarTab,
       onRenameTile: renameSidebarTile,
+      onRenameWorkspace: renameSidebarWorkspace,
     }),
   );
 }
@@ -740,6 +741,12 @@ function renameSidebarTab(tabId: TabId, name: string): void {
 /** サイドバーからのタイル名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
 function renameSidebarTile(tileId: TileId, name: string): void {
   sendMessage("renameTile", { tileId, name });
+  imeEl.focus({ preventScroll: true });
+}
+
+/** サイドバーからのワークスペース名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+function renameSidebarWorkspace(workspaceId: WorkspaceId, name: string): void {
+  sendMessage("renameWorkspace", { workspaceId, name });
   imeEl.focus({ preventScroll: true });
 }
 

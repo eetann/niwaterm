@@ -168,6 +168,7 @@ export interface WorkspaceListEntry {
   active: boolean;
   focusedTileId: TileId;
   layout: TileSummary;
+  name: string | null;
 }
 
 export type ListResult =
@@ -298,6 +299,16 @@ export function closeWorkspace(
   workspaceId: string,
 ): Promise<CloseWorkspaceResult> {
   return postJson(endpoint, "/close-workspace", { workspaceId });
+}
+
+export type RenameWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export function renameWorkspace(
+  endpoint: IpcEndpoint,
+  workspaceId: string,
+  name: string,
+): Promise<RenameWorkspaceResult> {
+  return postJson(endpoint, "/rename-workspace", { workspaceId, name });
 }
 
 export interface ShellProfileEntry {

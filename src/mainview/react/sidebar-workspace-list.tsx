@@ -22,12 +22,16 @@ export interface SidebarWorkspaceListProps {
   onSelectTab: (workspaceId: WorkspaceId, tileId: TileId, tabId: TabId) => void;
   onRenameTab: (tabId: TabId, name: string) => void;
   onRenameTile: (tileId: TileId, name: string) => void;
+  onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
 }
 
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
 const COLLAPSED_TILES_STORAGE_KEY = "niwaterm:sidebarCollapsedTiles";
 
-type EditingTarget = { kind: "tab"; id: TabId } | { kind: "tile"; id: TileId };
+type EditingTarget =
+  | { kind: "tab"; id: TabId }
+  | { kind: "tile"; id: TileId }
+  | { kind: "workspace"; id: WorkspaceId };
 
 function loadCollapsedIds<T extends string>(storageKey: string): Set<T> {
   try {
@@ -52,6 +56,7 @@ export function SidebarWorkspaceList({
   onSelectTab,
   onRenameTab,
   onRenameTile,
+  onRenameWorkspace,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -98,8 +103,10 @@ export function SidebarWorkspaceList({
     if (!editingTarget) return;
     if (editingTarget.kind === "tab") {
       onRenameTab(editingTarget.id, editingValue);
-    } else {
+    } else if (editingTarget.kind === "tile") {
       onRenameTile(editingTarget.id, editingValue);
+    } else {
+      onRenameWorkspace(editingTarget.id, editingValue);
     }
     setEditingTarget(null);
   }
@@ -208,6 +215,8 @@ export function SidebarWorkspaceList({
         const totalTabs = workspace.tiles.reduce((sum, tile) => sum + tile.tabs.length, 0);
         // タイルが1つだけのワークスペースが多数派のため、その場合はタイル見出しを省略しタブを直接並べる
         const showTileHeaders = workspace.tiles.length > 1;
+        const isEditingThisWorkspace =
+          editingTarget?.kind === "workspace" && editingTarget.id === workspace.workspaceId;
         return (
           <div key={workspace.workspaceId}>
             <div className="flex w-full items-center gap-1 py-1.5 pr-2 pl-1">
@@ -224,17 +233,44 @@ export function SidebarWorkspaceList({
                   )}
                 />
               </button>
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => onSelectWorkspaceHeader(workspace.workspaceId)}
-                className={cn(
-                  "min-w-0 flex-1 truncate text-left text-xs font-bold text-muted-foreground hover:text-foreground",
-                  workspace.active && "text-foreground",
-                )}
-              >
-                {workspace.label}
-              </button>
+              {isEditingThisWorkspace ? (
+                <div className="min-w-0 flex-1">{renderNameInput()}</div>
+              ) : (
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => onSelectWorkspaceHeader(workspace.workspaceId)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        startEditing(
+                          { kind: "workspace", id: workspace.workspaceId },
+                          workspace.label,
+                        );
+                      }}
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-left text-xs font-bold text-muted-foreground hover:text-foreground",
+                        workspace.active && "text-foreground",
+                      )}
+                    >
+                      {workspace.label}
+                    </button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem
+                      onSelect={() =>
+                        startEditing(
+                          { kind: "workspace", id: workspace.workspaceId },
+                          workspace.label,
+                        )
+                      }
+                    >
+                      名前を変更
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              )}
               <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
                 {totalTabs}
               </span>

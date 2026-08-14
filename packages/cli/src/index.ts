@@ -17,6 +17,7 @@ import listVarsCommand from "./commands/list-vars";
 import newTabCommand from "./commands/new-tab";
 import newWorkspaceCommand from "./commands/new-workspace";
 import pingCommand from "./commands/ping";
+import renameWorkspaceCommand from "./commands/rename-workspace";
 import sendKeysCommand from "./commands/send-keys";
 import setVarCommand from "./commands/set-var";
 import shellProfilesCommand from "./commands/shell-profiles";
@@ -58,6 +59,7 @@ try {
       "new-workspace": newWorkspaceCommand,
       "switch-workspace": switchWorkspaceCommand,
       "close-workspace": closeWorkspaceCommand,
+      "rename-workspace": renameWorkspaceCommand,
       "show-tab": showTabCommand,
       "capture-tab": captureTabCommand,
       "set-var": setVarCommand,
