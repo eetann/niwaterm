@@ -535,6 +535,8 @@ function buildApp(
     }
     const result = await browserBridge.navigate(parsed.tabId, parsed.url);
     if (!result.ok) return c.json({ ok: false, error: result.error }, 409);
+    // 永続化対象のURLをここで追従させる（ページ内リンク遷移等の追跡は非対応、既知の制約）
+    workspaceManager.setBrowserTabUrl(parsed.tabId, parsed.url);
     return c.json({ ok: true });
   });
 

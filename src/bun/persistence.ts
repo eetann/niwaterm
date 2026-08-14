@@ -1,17 +1,45 @@
-// ワークスペースのレイアウト骨格（分割構造・タブ数）だけを永続化する。
-// PTYのcwd・スクロールバック・プロセスそのものは対象外（roadmap「磨き込みと配布」で扱う）。
-// 復元時は各タブに対して新規シェルを起動するため、tabIds/tileIdの実体は保存せず
-// 「そのleafに何個タブがあったか」「何番目がアクティブだったか」のみを保持する。
+// ワークスペースの状態（レイアウト骨格・タブごとのcwd/シェル/名前/変数・ブラウザタブのURL）を永続化する。
+// PTYのスクロールバック・実行中プロセスそのものは対象外（roadmap「磨き込みと配布」で明示的にスコープ外とした）。
+// 復元時は各タブに対して新規シェルを起動する（terminalタブのみ）か、ブラウザタブとしてURLを開き直す。
+// tabIds/tileIdの実体は保存せず新規採番するため、木構造の走査順（leafの並び・tabsの並び）で
+// 永続化データと新規採番後のidを対応付ける。
 
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { appSupportDir } from "./app-paths";
 import type { FlexDirection, TabId, TileId, TileNode } from "./tile-layout";
 
+export type PersistedTabKind = "terminal" | "browser";
+
+interface PersistedTabBase {
+  /** ユーザーがサイドバーから設定したタブ名。未設定は省略する */
+  name?: string;
+  /** setTabVar/listTabVarsの内容をそのまま保存する。OSC7報告のcwd("cwd"キー)も特別扱いせずこの中の1エントリとして含める */
+  vars?: Record<string, string>;
+}
+
+export interface PersistedTerminalTab extends PersistedTabBase {
+  kind: "terminal";
+  /** 実際に使われた起動シェルコマンド文字列（例: "wsl.exe -d NixOS"）。省略時は復元時にgetDefaultShell()へフォールバック */
+  shell?: string;
+}
+
+export interface PersistedBrowserTab extends PersistedTabBase {
+  kind: "browser";
+  url: string;
+}
+
+export type PersistedTab = PersistedTerminalTab | PersistedBrowserTab;
+
 export interface PersistedTileLeaf {
   kind: "leaf";
-  tabCount: number;
+  /** 表示順。最低1件 */
+  tabs: PersistedTab[];
   activeTabIndex: number;
+  /** ユーザーがサイドバーから設定したタイル名。未設定は省略する */
+  name?: string;
+  /** このleafがworkspace内でフォーカスされていたか。未フォーカスは省略する */
+  focused?: boolean;
 }
 
 export interface PersistedTileSplit {
@@ -26,67 +54,126 @@ export type PersistedTileNode = PersistedTileLeaf | PersistedTileSplit;
 
 export interface PersistedWorkspace {
   layout: PersistedTileNode;
+  /** ユーザーがサイドバーから設定したワークスペース名。未設定は省略する */
+  name?: string;
 }
 
 export interface PersistedState {
-  version: 1;
+  version: 2;
   workspaces: PersistedWorkspace[];
   activeWorkspaceIndex: number;
 }
 
-export function toPersistedTileNode(tree: TileNode): PersistedTileNode {
+/** toPersistedTileNodeが必要とする、workspace.ts側の現在状態への参照 */
+export interface PersistTreeContext {
+  focusedTileId: TileId;
+  /** workspace.getPersistableTabs()の戻り値をそのまま渡す */
+  tabs: Record<TabId, PersistedTab>;
+  /** workspace.listTileNames()の戻り値をそのまま渡す */
+  tileNames: Record<TileId, string>;
+}
+
+export function toPersistedTileNode(tree: TileNode, ctx: PersistTreeContext): PersistedTileNode {
   if (tree.kind === "leaf") {
-    return {
+    const leaf: PersistedTileLeaf = {
       kind: "leaf",
-      tabCount: tree.tabIds.length,
+      tabs: tree.tabIds.map((tabId): PersistedTab => ctx.tabs[tabId] ?? { kind: "terminal" }),
       activeTabIndex: Math.max(0, tree.tabIds.indexOf(tree.activeTabId)),
     };
+    const name = ctx.tileNames[tree.id];
+    if (name !== undefined) leaf.name = name;
+    if (tree.id === ctx.focusedTileId) leaf.focused = true;
+    return leaf;
   }
   return {
     kind: "split",
     direction: tree.direction,
     ratio: tree.ratio,
-    first: toPersistedTileNode(tree.first),
-    second: toPersistedTileNode(tree.second),
+    first: toPersistedTileNode(tree.first, ctx),
+    second: toPersistedTileNode(tree.second, ctx),
   };
 }
 
-/** tabIds/tileIdは新規採番（genTileId/genTabId）で再構築する。実体は復元しない */
+export interface RestoredTreeMeta {
+  /** 新規採番後のtabIdをキーとした、復元用タブメタ情報 */
+  tabMeta: Map<TabId, PersistedTab>;
+  /** 新規採番後のtileId（leafのみ）をキーとしたタイル名 */
+  tileNames: Map<TileId, string>;
+  /** focused: trueだったleafの新tileId。複数あった場合は最初に見つかったものを採用する。無ければnull */
+  focusedTileId: TileId | null;
+}
+
+export interface RestoredTree extends RestoredTreeMeta {
+  tree: TileNode;
+}
+
+/** tabIds/tileIdは新規採番（genTileId/genTabId）で再構築する。実体（PTY・ブラウザwebview）は復元しない */
 export function buildTreeFromPersisted(
   node: PersistedTileNode,
   genTileId: () => TileId,
   genTabId: () => TabId,
-): TileNode {
-  if (node.kind === "leaf") {
-    const tabCount = Math.max(1, node.tabCount);
-    const tabIds = Array.from({ length: tabCount }, () => genTabId());
-    const activeIndex = Math.min(Math.max(0, node.activeTabIndex), tabIds.length - 1);
-    return {
-      kind: "leaf",
-      id: genTileId(),
-      tabIds,
-      activeTabId: tabIds[activeIndex],
-    };
+): RestoredTree {
+  const tabMeta = new Map<TabId, PersistedTab>();
+  const tileNames = new Map<TileId, string>();
+  let focusedTileId: TileId | null = null;
+
+  function build(n: PersistedTileNode): TileNode {
+    if (n.kind === "leaf") {
+      const id = genTileId();
+      const tabs = n.tabs.length > 0 ? n.tabs : [{ kind: "terminal" as const }];
+      const tabIds = tabs.map((tab) => {
+        const tabId = genTabId();
+        tabMeta.set(tabId, tab);
+        return tabId;
+      });
+      const activeIndex = Math.min(Math.max(0, n.activeTabIndex), tabIds.length - 1);
+      if (n.name !== undefined) tileNames.set(id, n.name);
+      if (n.focused && focusedTileId === null) focusedTileId = id;
+      return { kind: "leaf", id, tabIds, activeTabId: tabIds[activeIndex] };
+    }
+    const id = genTileId();
+    const first = build(n.first);
+    const second = build(n.second);
+    return { kind: "split", id, direction: n.direction, ratio: n.ratio, first, second };
   }
-  return {
-    kind: "split",
-    id: genTileId(),
-    direction: node.direction,
-    ratio: node.ratio,
-    first: buildTreeFromPersisted(node.first, genTileId, genTabId),
-    second: buildTreeFromPersisted(node.second, genTileId, genTabId),
-  };
+
+  const tree = build(node);
+  return { tree, tabMeta, tileNames, focusedTileId };
 }
 
 export function persistedFilePath(): string {
   return join(appSupportDir(), "workspaces.json");
 }
 
+function isVarsRecord(value: unknown): value is Record<string, string> {
+  if (typeof value !== "object" || value === null) return false;
+  return Object.values(value as Record<string, unknown>).every((v) => typeof v === "string");
+}
+
+function isPersistedTab(value: unknown): value is PersistedTab {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  if (v["vars"] !== undefined && !isVarsRecord(v["vars"])) return false;
+  if (v["kind"] === "terminal") {
+    return v["shell"] === undefined || typeof v["shell"] === "string";
+  }
+  if (v["kind"] === "browser") {
+    return typeof v["url"] === "string";
+  }
+  return false;
+}
+
 function isPersistedTileNode(value: unknown): value is PersistedTileNode {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (v["kind"] === "leaf") {
-    return typeof v["tabCount"] === "number" && typeof v["activeTabIndex"] === "number";
+    if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+    if (v["focused"] !== undefined && typeof v["focused"] !== "boolean") return false;
+    const tabs = v["tabs"];
+    return (
+      Array.isArray(tabs) && tabs.every(isPersistedTab) && typeof v["activeTabIndex"] === "number"
+    );
   }
   if (v["kind"] === "split") {
     return (
@@ -99,22 +186,24 @@ function isPersistedTileNode(value: unknown): value is PersistedTileNode {
   return false;
 }
 
+function isPersistedWorkspace(value: unknown): value is PersistedWorkspace {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  return isPersistedTileNode(v["layout"]);
+}
+
 function isPersistedState(value: unknown): value is PersistedState {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  if (v["version"] !== 1) return false;
+  if (v["version"] !== 2) return false;
   if (typeof v["activeWorkspaceIndex"] !== "number") return false;
   const workspaces = v["workspaces"];
   if (!Array.isArray(workspaces)) return false;
-  return workspaces.every(
-    (w) =>
-      typeof w === "object" &&
-      w !== null &&
-      isPersistedTileNode((w as Record<string, unknown>)["layout"]),
-  );
+  return workspaces.every(isPersistedWorkspace);
 }
 
-/** ファイルが無い・JSONとして壊れている・スキーマ不一致のいずれでも例外を投げずnullを返す */
+/** ファイルが無い・JSONとして壊れている・スキーマ不一致（旧バージョンのファイル含む）のいずれでも例外を投げずnullを返す */
 export async function loadPersistedState(path: string): Promise<PersistedState | null> {
   try {
     const file = Bun.file(path);

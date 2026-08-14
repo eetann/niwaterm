@@ -1,6 +1,11 @@
 // 複数のWorkspace（createWorkspaceのインスタンス）を束ね、tile/tabのid採番をアプリ全体で
 // 一元化する層。bun/index.tsはこのモジュールだけを通してワークスペース・タイル・タブ・PTYを操作する。
-import { buildTreeFromPersisted, toPersistedTileNode, type PersistedState } from "./persistence";
+import {
+  buildTreeFromPersisted,
+  toPersistedTileNode,
+  type PersistedState,
+  type RestoredTreeMeta,
+} from "./persistence";
 import {
   findNode,
   listLeaves,
@@ -76,7 +81,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const workspaces = new Map<WorkspaceId, Workspace>();
   let order: WorkspaceId[] = [];
   let activeId: WorkspaceId;
-  // タブ・タイル名と同様、ワークスペース名もセッション内のみ保持する（アプリ再起動をまたいだ永続化はしない）
+  // ワークスペース名。serializeForPersistence経由で永続化対象になる
   const workspaceNames = new Map<WorkspaceId, string>();
 
   let counter = 0;
@@ -84,7 +89,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const genTabId = (): TabId => `tab-${counter++}`;
   const genWorkspaceId = (): WorkspaceId => `workspace-${counter++}`;
 
-  function createAndRegisterWorkspace(initialTree?: TileNode, initialCwd?: string): WorkspaceId {
+  function createAndRegisterWorkspace(
+    initialTree?: TileNode,
+    initialCwd?: string,
+    restoredMeta?: RestoredTreeMeta,
+  ): WorkspaceId {
     const id = genWorkspaceId();
     const ws = createWorkspace({
       initialCols: opts.initialCols,
@@ -93,6 +102,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       genTabId,
       initialTree,
       initialCwd,
+      restoredMeta,
       onDirty: () => opts.onDirty(),
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
       getDefaultShell: opts.getDefaultShell,
@@ -124,9 +134,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const restoreFrom = opts.restoreFrom;
   if (restoreFrom && restoreFrom.workspaces.length > 0) {
     for (const persistedWorkspace of restoreFrom.workspaces) {
-      createAndRegisterWorkspace(
-        buildTreeFromPersisted(persistedWorkspace.layout, genTileId, genTabId),
-      );
+      const restored = buildTreeFromPersisted(persistedWorkspace.layout, genTileId, genTabId);
+      const id = createAndRegisterWorkspace(restored.tree, undefined, {
+        tabMeta: restored.tabMeta,
+        tileNames: restored.tileNames,
+        focusedTileId: restored.focusedTileId,
+      });
+      // setWorkspaceNameは経由しない（onDirtyを呼ぶため。初期構築フェーズはdirty通知しない既存方針）
+      if (persistedWorkspace.name !== undefined) workspaceNames.set(id, persistedWorkspace.name);
     }
     const clampedIndex = Math.min(Math.max(0, restoreFrom.activeWorkspaceIndex), order.length - 1);
     activeId = order[clampedIndex];
@@ -215,6 +230,13 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {
     return findOwnerByTileId(tileId)?.newBrowserTab(tileId, url) ?? null;
+  }
+
+  function setBrowserTabUrl(tabId: TabId, url: string): boolean {
+    for (const ws of workspaces.values()) {
+      if (ws.hasBrowserTab(tabId)) return ws.setBrowserTabUrl(tabId, url);
+    }
+    return false;
   }
 
   function switchTab(tileId: TileId, tabId: TabId): boolean {
@@ -355,10 +377,17 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   function serializeForPersistence(): PersistedState {
     return {
-      version: 1,
-      workspaces: order.map((id) => ({
-        layout: toPersistedTileNode((workspaces.get(id) as Workspace).getLayout()),
-      })),
+      version: 2,
+      workspaces: order.map((id) => {
+        const ws = workspaces.get(id) as Workspace;
+        const layout = toPersistedTileNode(ws.getLayout(), {
+          focusedTileId: ws.getFocusedTileId(),
+          tabs: ws.getPersistableTabs(),
+          tileNames: ws.listTileNames(),
+        });
+        const name = workspaceNames.get(id);
+        return name !== undefined ? { layout, name } : { layout };
+      }),
       activeWorkspaceIndex: order.indexOf(activeId),
     };
   }
@@ -375,6 +404,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     splitTile,
     newTab,
     newBrowserTab,
+    setBrowserTabUrl,
     switchTab,
     moveTab,
     closeTab,

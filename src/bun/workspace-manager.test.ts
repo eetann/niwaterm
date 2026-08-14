@@ -392,7 +392,7 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("workspaces配列の件数分ワークスペースが復元され、各leafの全タブ分セッションが起動する", () => {
     const { created, factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 1,
+      version: 2,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
@@ -400,11 +400,15 @@ describe("restoreFrom（永続化からの復元）", () => {
             kind: "split",
             direction: "row",
             ratio: 0.5,
-            first: { kind: "leaf", tabCount: 1, activeTabIndex: 0 },
-            second: { kind: "leaf", tabCount: 2, activeTabIndex: 1 },
+            first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+            second: {
+              kind: "leaf",
+              tabs: [{ kind: "terminal" }, { kind: "terminal" }],
+              activeTabIndex: 1,
+            },
           },
         },
-        { layout: { kind: "leaf", tabCount: 1, activeTabIndex: 0 } },
+        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
@@ -417,11 +421,11 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("activeWorkspaceIndexで指定したワークスペースがアクティブになる", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 1,
+      version: 2,
       activeWorkspaceIndex: 1,
       workspaces: [
-        { layout: { kind: "leaf", tabCount: 1, activeTabIndex: 0 } },
-        { layout: { kind: "leaf", tabCount: 1, activeTabIndex: 0 } },
+        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
@@ -432,11 +436,11 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("範囲外のactiveWorkspaceIndexは末尾にクランプされる", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 1,
+      version: 2,
       activeWorkspaceIndex: 99,
       workspaces: [
-        { layout: { kind: "leaf", tabCount: 1, activeTabIndex: 0 } },
-        { layout: { kind: "leaf", tabCount: 1, activeTabIndex: 0 } },
+        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
@@ -446,9 +450,104 @@ describe("restoreFrom（永続化からの復元）", () => {
 
   test("workspacesが空のrestoreFromは無視され、単一ワークスペースで初期化される", () => {
     const { factory } = createFakeSessionFactory();
-    const restoreFrom: PersistedState = { version: 1, activeWorkspaceIndex: 0, workspaces: [] };
+    const restoreFrom: PersistedState = { version: 2, activeWorkspaceIndex: 0, workspaces: [] };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
     expect(mgr.snapshot().workspaceIds.length).toBe(1);
+  });
+
+  test("ワークスペース名が復元されlistWorkspaces()のnameに反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const restoreFrom: PersistedState = {
+      version: 2,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          name: "作業env",
+          layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+        },
+      ],
+    };
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    expect(mgr.listWorkspaces()[0]?.name).toBe("作業env");
+  });
+
+  test("terminalタブのshell/vars.cwdがspawnされたセッションへ渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const restoreFrom: PersistedState = {
+      version: 2,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          layout: {
+            kind: "leaf",
+            tabs: [
+              {
+                kind: "terminal",
+                shell: "wsl.exe -d NixOS",
+                vars: { cwd: "/home/eetann/project" },
+              },
+            ],
+            activeTabIndex: 0,
+          },
+        },
+      ],
+    };
+    createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+
+    expect(created[0]?.opts.shell).toBe("wsl.exe -d NixOS");
+    expect(created[0]?.opts.cwd).toBe("/home/eetann/project");
+  });
+
+  test("browserタブはPTYセッションを増やさず復元される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const restoreFrom: PersistedState = {
+      version: 2,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          layout: {
+            kind: "leaf",
+            tabs: [{ kind: "browser", url: "https://example.com" }],
+            activeTabIndex: 0,
+          },
+        },
+      ],
+    };
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+
+    expect(created.length).toBe(0);
+    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+      kind: "browser",
+      url: "https://example.com",
+    });
+  });
+
+  test("フォーカスされていたleafが復元後も同じ相対位置（split.second）でフォーカスされる", () => {
+    const { factory } = createFakeSessionFactory();
+    const restoreFrom: PersistedState = {
+      version: 2,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          layout: {
+            kind: "split",
+            direction: "row",
+            ratio: 0.5,
+            first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+            second: {
+              kind: "leaf",
+              tabs: [{ kind: "terminal" }],
+              activeTabIndex: 0,
+              focused: true,
+            },
+          },
+        },
+      ],
+    };
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    const layout = mgr.snapshot().workspace.layout as TileNode & { kind: "split" };
+    expect(mgr.snapshot().workspace.focusedTileId).toBe((layout.second as TileLeaf).id);
   });
 });
 
@@ -462,13 +561,14 @@ describe("serializeForPersistence", () => {
 
     const persisted = mgr.serializeForPersistence();
 
-    expect(persisted.version).toBe(1);
+    expect(persisted.version).toBe(2);
     expect(persisted.workspaces.length).toBe(2);
     expect(persisted.workspaces[0]?.layout.kind).toBe("split");
     expect(persisted.workspaces[1]?.layout).toEqual({
       kind: "leaf",
-      tabCount: 1,
+      tabs: [{ kind: "terminal" }],
       activeTabIndex: 0,
+      focused: true,
     });
     expect(persisted.activeWorkspaceIndex).toBe(1);
   });
@@ -487,6 +587,53 @@ describe("serializeForPersistence", () => {
     );
 
     expect(restored.serializeForPersistence()).toEqual(persisted);
+  });
+
+  test("ワークスペース名・タイル名・タブ名・タブ変数・shell・cwd・フォーカス・browserタブを含む完全な状態がラウンドトリップする", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    mgr.setTabName(firstTabId, "work");
+    mgr.setTileName(firstTileId, "editor");
+    mgr.setTabVar(firstTabId, "cwd", "/home/eetann");
+    mgr.newBrowserTab(firstTileId, "https://example.com");
+    mgr.setWorkspaceName(mgr.snapshot().activeWorkspaceId, "main");
+    mgr.focusTile(firstTileId);
+
+    const persisted = mgr.serializeForPersistence();
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+
+    expect(restored.serializeForPersistence()).toEqual(persisted);
+    expect(persisted.workspaces[0]?.name).toBe("main");
+  });
+});
+
+describe("setBrowserTabUrl", () => {
+  test("非アクティブなワークスペースのbrowserタブへも届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
+    mgr.newWorkspace();
+
+    expect(mgr.setBrowserTabUrl(tabId, "https://example.com/next")).toBe(true);
+    mgr.switchWorkspace(firstId);
+    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+      kind: "browser",
+      url: "https://example.com/next",
+    });
+  });
+
+  test("存在しないtabIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setBrowserTabUrl("not-found", "https://example.com")).toBe(false);
   });
 });
 

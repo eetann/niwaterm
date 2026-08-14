@@ -1,6 +1,12 @@
 // tile-layout.ts（純粋な木構造）と TerminalSession（I/O）を束ねる、状態を持つ層。
 // bun/index.tsはこのモジュールだけを通してタイル・タブ・PTYを操作する。
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
+import type {
+  PersistedBrowserTab,
+  PersistedTab,
+  PersistedTerminalTab,
+  RestoredTreeMeta,
+} from "./persistence";
 import {
   addTabToTile,
   closeTabInTile,
@@ -48,6 +54,8 @@ export type WorkspaceOptions = {
   genTabId: () => TabId;
   /** 永続化からの復元時に渡す既存の木構造（tileId/tabIdは採番済み）。省略時は単一leaf・単一タブで新規作成する */
   initialTree?: TileNode;
+  /** initialTree指定時のみ意味を持つ。永続化から復元したタブごとのメタ情報・タイル名・フォーカス先leaf。省略時は各タブをterminal・メタ情報なしとして復元する */
+  restoredMeta?: RestoredTreeMeta;
   /**
    * 新規作成時（initialTree省略時）の最初のタブに使うcwd。省略時はgetDefaultCwd()（config指定値）、
    * それも省略時はpty.ts側のOS標準（homedir）を使う
@@ -81,7 +89,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // アクセス可能な形式へ変換する要否判定（wsl-cwd.ts）に使う
   const shellByTabId = new Map<TabId, string | undefined>();
   const tabVars = new Map<TabId, Map<string, string>>();
-  // タブ・タイル名はセッション内のみ保持する（アプリ再起動をまたいだ永続化はしない）
+  // タブ・タイル名。getPersistableTabs/listTileNames経由で永続化対象になる
   const tabNames = new Map<TabId, string>();
   const tileNames = new Map<TileId, string>();
 
@@ -113,15 +121,46 @@ export function createWorkspace(opts: WorkspaceOptions) {
     sessions.set(tabId, session);
   }
 
+  /**
+   * 永続化からの復元専用。初期構築フェーズ（createWorkspace呼び出し中）はonDirtyを呼ばない既存方針を
+   * 踏襲するため、setTabVar/setTabName等の公開セッターは経由せずtabVars/tabNames/browserTabsへ直接書き込む
+   */
+  function restoreTab(
+    tabId: TabId,
+    cols: number,
+    rows: number,
+    meta: PersistedTab | undefined,
+  ): void {
+    if (meta?.name !== undefined) tabNames.set(tabId, meta.name);
+    if (meta?.vars) {
+      const entries = Object.entries(meta.vars);
+      if (entries.length > 0) tabVars.set(tabId, new Map(entries));
+    }
+    if (meta?.kind === "browser") {
+      browserTabs.set(tabId, { url: meta.url });
+      return;
+    }
+    const shell = meta?.kind === "terminal" ? meta.shell : undefined;
+    // vars.cwdはOSC7報告の生値（WSL変換前）。actualCwdOfと同じ変換を復元時にも適用する
+    const rawCwd = meta?.vars?.["cwd"];
+    const cwd = rawCwd !== undefined ? resolveActualCwd(rawCwd, shell) : opts.getDefaultCwd?.();
+    spawnSession(tabId, cols, rows, shell, cwd);
+  }
+
   let tree: TileNode;
   let focusedTileId: TileId;
   if (opts.initialTree) {
     tree = opts.initialTree;
     const leaves = listLeaves(tree);
-    focusedTileId = leaves[0].id;
+    const meta = opts.restoredMeta;
+    const requestedFocus = meta?.focusedTileId;
+    focusedTileId =
+      requestedFocus && findNode(tree, requestedFocus) ? requestedFocus : leaves[0].id;
     for (const leaf of leaves) {
+      const tileName = meta?.tileNames.get(leaf.id);
+      if (tileName !== undefined) tileNames.set(leaf.id, tileName);
       for (const tabId of leaf.tabIds) {
-        spawnSession(tabId, opts.initialCols, opts.initialRows);
+        restoreTab(tabId, opts.initialCols, opts.initialRows, meta?.tabMeta.get(tabId));
       }
     }
   } else {
@@ -254,6 +293,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return newTabId;
   }
 
+  // CLI経由のbrowserNavigate成功後にworkspace.ts側の状態を追従させるためのセッター。webviewの実表示には影響しない
+  function setBrowserTabUrl(tabId: TabId, url: string): boolean {
+    if (!browserTabs.has(tabId)) return false;
+    browserTabs.set(tabId, { url });
+    opts.onDirty();
+    return true;
+  }
+
   function switchTab(tileId: TileId, tabId: TabId): boolean {
     const result = switchActiveTab(tree, tileId, tabId);
     if (!result) return false;
@@ -373,6 +420,30 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return Object.fromEntries(tileNames);
   }
 
+  /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
+  function getPersistableTabs(): Record<TabId, PersistedTab> {
+    const result: Record<TabId, PersistedTab> = {};
+    for (const tabId of sessions.keys()) {
+      const tab: PersistedTerminalTab = { kind: "terminal" };
+      const shell = shellByTabId.get(tabId);
+      if (shell !== undefined) tab.shell = shell;
+      const name = tabNames.get(tabId);
+      if (name !== undefined) tab.name = name;
+      const vars = tabVars.get(tabId);
+      if (vars && vars.size > 0) tab.vars = Object.fromEntries(vars);
+      result[tabId] = tab;
+    }
+    for (const [tabId, state] of browserTabs) {
+      const tab: PersistedBrowserTab = { kind: "browser", url: state.url };
+      const name = tabNames.get(tabId);
+      if (name !== undefined) tab.name = name;
+      const vars = tabVars.get(tabId);
+      if (vars && vars.size > 0) tab.vars = Object.fromEntries(vars);
+      result[tabId] = tab;
+    }
+    return result;
+  }
+
   /** workspace-managerがtileId/tabIdの所属先を判定するための軽量な参照。renderStateは計算しない */
   function getLayout(): TileNode {
     return tree;
@@ -467,6 +538,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     splitTile: splitTileById,
     newTab,
     newBrowserTab,
+    setBrowserTabUrl,
     switchTab,
     moveTab,
     closeTab,
@@ -493,6 +565,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setTileName,
     listTabNames,
     listTileNames,
+    getPersistableTabs,
     dispose,
   };
 }

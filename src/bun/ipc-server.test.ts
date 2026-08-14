@@ -1010,6 +1010,31 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     expect(received).toEqual({ tabId, url: "https://example.org" });
   });
 
+  test("browser-navigate: 成功時にworkspaceManager側のURLも更新される（永続化対象への追従）", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      createFakeBrowserBridge({ navigate: async () => ({ ok: true }) }),
+    );
+
+    await fetch("http://localhost/browser-navigate", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId, url: "https://example.org" }),
+    });
+
+    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+      kind: "browser",
+      url: "https://example.org",
+    });
+  });
+
   test("browser-navigate: 存在しないtabIdは404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(

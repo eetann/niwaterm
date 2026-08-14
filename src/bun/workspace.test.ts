@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { PersistedTab, RestoredTreeMeta } from "./persistence";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import type { TileLeaf, TileNode } from "./tile-layout";
 import { createWorkspace, type WorkspaceOptions } from "./workspace";
@@ -107,6 +108,119 @@ describe("initialTree（永続化からの復元）", () => {
       },
     };
     const ws = createWorkspace(baseOpts({ createSession: factory, initialTree }));
+    expect(ws.snapshot().focusedTileId).toBe("tile-restored-1");
+  });
+});
+
+describe("restoredMeta（永続化からのメタ情報復元）", () => {
+  const initialTree: TileNode = {
+    kind: "split",
+    id: "tile-restored-0",
+    direction: "row",
+    ratio: 0.4,
+    first: {
+      kind: "leaf",
+      id: "tile-restored-1",
+      tabIds: ["tab-restored-1"],
+      activeTabId: "tab-restored-1",
+    },
+    second: {
+      kind: "leaf",
+      id: "tile-restored-2",
+      tabIds: ["tab-restored-2"],
+      activeTabId: "tab-restored-2",
+    },
+  };
+
+  test("terminalタブのshell/name/vars（cwd以外）がspawnされたセッションとws側の状態へ反映される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const tabMeta = new Map<string, PersistedTab>([
+      [
+        "tab-restored-1",
+        { kind: "terminal", shell: "wsl.exe -d NixOS", name: "work", vars: { agent: "claude" } },
+      ],
+    ]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
+    const ws = createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
+    expect(created[0]?.opts.shell).toBe("wsl.exe -d NixOS");
+    expect(ws.listTabNames()).toEqual({ "tab-restored-1": "work" });
+    expect(ws.getTabVar("tab-restored-1", "agent")).toEqual({ found: true, value: "claude" });
+  });
+
+  test("vars.cwdがあればresolveActualCwd適用後の値がspawnSessionのcwdに渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const tabMeta = new Map<string, PersistedTab>([
+      ["tab-restored-1", { kind: "terminal", vars: { cwd: "/home/eetann/project" } }],
+    ]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
+    createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
+    expect(created[0]?.opts.cwd).toBe("/home/eetann/project");
+  });
+
+  test("vars.cwdが無ければgetDefaultCwd()にフォールバックする", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const tabMeta = new Map<string, PersistedTab>([["tab-restored-1", { kind: "terminal" }]]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
+    createWorkspace(
+      baseOpts({
+        createSession: factory,
+        initialTree,
+        restoredMeta,
+        getDefaultCwd: () => "/home/eetann",
+      }),
+    );
+
+    expect(created[0]?.opts.cwd).toBe("/home/eetann");
+  });
+
+  test("browserタブはPTYセッションを増やさず、hasBrowserTab/snapshotへ反映される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const tabMeta = new Map<string, PersistedTab>([
+      ["tab-restored-2", { kind: "browser", url: "https://example.com" }],
+    ]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
+    const ws = createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
+    expect(created.length).toBe(1); // tab-restored-1のみ（terminal、メタ情報なし）
+    expect(ws.hasBrowserTab("tab-restored-2")).toBe(true);
+    expect(ws.snapshot().tabs["tab-restored-2"]).toEqual({
+      kind: "browser",
+      url: "https://example.com",
+    });
+  });
+
+  test("タイル名がws.listTileNames()へ反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const tileNames = new Map([["tile-restored-2", "browser-pane"]]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta: new Map(), tileNames, focusedTileId: null };
+    const ws = createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
+    expect(ws.listTileNames()).toEqual({ "tile-restored-2": "browser-pane" });
+  });
+
+  test("focusedTileIdが木に存在するleafを指す場合、そのleafがフォーカスされる", () => {
+    const { factory } = createFakeSessionFactory();
+    const restoredMeta: RestoredTreeMeta = {
+      tabMeta: new Map(),
+      tileNames: new Map(),
+      focusedTileId: "tile-restored-2",
+    };
+    const ws = createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
+    expect(ws.snapshot().focusedTileId).toBe("tile-restored-2");
+  });
+
+  test("focusedTileIdが木に存在しない場合は先頭leafにフォールバックする", () => {
+    const { factory } = createFakeSessionFactory();
+    const restoredMeta: RestoredTreeMeta = {
+      tabMeta: new Map(),
+      tileNames: new Map(),
+      focusedTileId: "not-found",
+    };
+    const ws = createWorkspace(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+
     expect(ws.snapshot().focusedTileId).toBe("tile-restored-1");
   });
 });
@@ -387,6 +501,44 @@ describe("newBrowserTab", () => {
     const result = ws.newBrowserTab("not-found", "https://example.com");
     expect(result).toBeNull();
     expect(ws.snapshot().layout).toEqual(before);
+  });
+});
+
+describe("setBrowserTabUrl", () => {
+  test("存在するbrowserタブのurlを更新し、onDirtyを呼ぶ", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const tabId = ws.newBrowserTab(tileId, "https://example.com") as string;
+    dirtyCount = 0;
+
+    const result = ws.setBrowserTabUrl(tabId, "https://example.com/next");
+
+    expect(result).toBe(true);
+    expect(ws.snapshot().tabs[tabId]).toEqual({
+      kind: "browser",
+      url: "https://example.com/next",
+    });
+    expect(dirtyCount).toBe(1);
+  });
+
+  test("存在しないtabIdはfalseを返し、onDirtyを呼ばない", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    dirtyCount = 0;
+
+    expect(ws.setBrowserTabUrl("not-found", "https://example.com")).toBe(false);
+    expect(dirtyCount).toBe(0);
+  });
+
+  test("terminalタブのtabIdを渡してもfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    expect(ws.setBrowserTabUrl(tabId, "https://example.com")).toBe(false);
   });
 });
 
@@ -894,5 +1046,45 @@ describe("シェルプロセス終了時の挙動(onExit経由)", () => {
     void ws;
     created[0]?.opts.onExit?.(0);
     expect(allClosed).toBe(true);
+  });
+});
+
+describe("getPersistableTabs", () => {
+  test("terminalタブはkind/shell/name/varsを含む。値が未設定のキーは省略される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    ws.setTabName(tabId, "work");
+    ws.setTabVar(tabId, "cwd", "/home/eetann");
+
+    expect(ws.getPersistableTabs()).toEqual({
+      [tabId]: {
+        kind: "terminal",
+        shell: "/bin/bash",
+        name: "work",
+        vars: { cwd: "/home/eetann" },
+      },
+    });
+  });
+
+  test("メタ情報が何も無いterminalタブはkindのみ", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    expect(ws.getPersistableTabs()).toEqual({ [tabId]: { kind: "terminal" } });
+  });
+
+  test("browserタブはkind/urlを含み、名前・変数があればそれも含む", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const tabId = ws.newBrowserTab(tileId, "https://example.com") as string;
+    ws.setTabName(tabId, "docs");
+
+    const persisted = ws.getPersistableTabs();
+    expect(persisted[tabId]).toEqual({ kind: "browser", url: "https://example.com", name: "docs" });
   });
 });
