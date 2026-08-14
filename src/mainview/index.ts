@@ -607,8 +607,16 @@ function browserNavigate(
  */
 function setTabVisible(tabId: TabId, visible: boolean): void {
   const tabContentEl = tabContentElByTabId.get(tabId);
-  // ""に戻すことでCSS側のdisplay指定（ターミナルはblock、ブラウザは.browserのflex）に委ねる
-  if (tabContentEl) tabContentEl.style.display = visible ? "" : "none";
+  if (tabContentEl) {
+    const wasHidden = tabContentEl.style.display === "none";
+    // ""に戻すことでCSS側のdisplay指定（ターミナルはblock、ブラウザは.browserのflex）に委ねる
+    tabContentEl.style.display = visible ? "" : "none";
+    // 非表示中に他のタブ/ウィンドウ操作でサイズが変わっても、非アクティブタブはresizeObserverの
+    // コールバックがdisplay:none判定でスキップされ続けるため、再表示時に確定サイズで送り直す
+    // （ドラッグ確定後にactiveTabByTile分だけ送り直すのと同じ理由。あちらは表示中のタブしか
+    // 拾えないため、背面にいたタブはここで拾う必要がある）
+    if (visible && wasHidden) sendResize(tabId);
+  }
   browserElByTabId.get(tabId)?.toggleHidden(!visible);
 }
 
