@@ -55,6 +55,9 @@ export type NiwaRPC = {
       ready: {};
       input: { tabId: TabId; data: string };
       paste: { tabId: TabId; data: string };
+      scroll: { tabId: TabId; deltaLines: number };
+      scrollToTop: { tabId: TabId };
+      scrollToBottom: { tabId: TabId };
       copySelection: { text: string };
       pasteFromClipboard: { tabId: TabId };
       resize: {
@@ -276,6 +279,15 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
         workspaceManager.handlePaste(tabId, data);
+      },
+      scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
+        workspaceManager.handleScroll(tabId, deltaLines);
+      },
+      scrollToTop: ({ tabId }: { tabId: TabId }) => {
+        workspaceManager.handleScrollToTop(tabId);
+      },
+      scrollToBottom: ({ tabId }: { tabId: TabId }) => {
+        workspaceManager.handleScrollToBottom(tabId);
       },
       copySelection: ({ text }: { text: string }) => {
         writeClipboardText(text);

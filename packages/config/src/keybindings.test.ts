@@ -124,10 +124,10 @@ describe("isKeybindAction", () => {
 const MACOS_UNASSIGNED_ACTIONS = ["new-custom-view-tab", "copy-selection", "paste-clipboard"];
 
 describe("defaultKeybindings", () => {
-  test("MACOS_UNASSIGNED_ACTIONS以外の15個のアクションに1つずつ割り当てられている", () => {
+  test("MACOS_UNASSIGNED_ACTIONS以外の19個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings);
-    expect(actions.length).toBe(15);
-    expect(new Set(actions).size).toBe(15);
+    expect(actions.length).toBe(19);
+    expect(new Set(actions).size).toBe(19);
     for (const action of KEYBIND_ACTIONS) {
       if (MACOS_UNASSIGNED_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -187,13 +187,13 @@ describe("compileKeybindings", () => {
     expect(compiled.size).toBe(0);
   });
 
-  test("defaultKeybindingsは15エントリ全てコンパイルできる", () => {
+  test("defaultKeybindingsは19エントリ全てコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
-    expect(compiled.size).toBe(15);
+    expect(compiled.size).toBe(19);
   });
 
-  test("defaultWindowsKeybindingsは17エントリ全てコンパイルできる", () => {
+  test("defaultWindowsKeybindingsは21エントリ全てコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
-    expect(compiled.size).toBe(17);
+    expect(compiled.size).toBe(21);
   });
 });

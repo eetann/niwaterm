@@ -251,6 +251,18 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
 
+  function handleScroll(tabId: TabId, deltaLines: number): void {
+    findOwnerByTabId(tabId)?.handleScroll(tabId, deltaLines);
+  }
+
+  function handleScrollToTop(tabId: TabId): void {
+    findOwnerByTabId(tabId)?.handleScrollToTop(tabId);
+  }
+
+  function handleScrollToBottom(tabId: TabId): void {
+    findOwnerByTabId(tabId)?.handleScrollToBottom(tabId);
+  }
+
   function handleResize(
     tabId: TabId,
     cols: number,
@@ -369,6 +381,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     handleInput,
     handlePaste,
     handleResize,
+    handleScroll,
+    handleScrollToTop,
+    handleScrollToBottom,
     snapshot,
     listWorkspaces,
     hasTab,

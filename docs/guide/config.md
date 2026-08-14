@@ -90,7 +90,7 @@ cd ~/.config/niwaterm && bun install
 - キー本体はアルファベット（`d`, `w`, `t`, `n`等）、矢印（`up`/`down`/`left`/`right`）、角括弧（`[`/`]`）のいずれか
 - 例: `"cmd+d"`, `"cmd+shift+d"`, `"cmd+alt+up"`, `"cmd+alt+]"`
 
-**KeybindAction の一覧**（16種類）:
+**KeybindAction の一覧**（22種類）:
 
 | アクション | 意味 |
 |---|---|
@@ -104,6 +104,10 @@ cd ~/.config/niwaterm && bun install
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
+| `copy-selection` | 選択範囲をクリップボードへコピー（既定キーは無い。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
+| `paste-clipboard` | クリップボードの内容をペースト（既定キーは無い。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
+| `scroll-page-up` / `scroll-page-down` | スクロールバックを1ページ分スクロール |
+| `scroll-to-top` / `scroll-to-bottom` | スクロールバックの先頭/最新行へジャンプ |
 
 不正なバインド文字列（未知の修飾子、`cmd`を含まない等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 

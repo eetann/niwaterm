@@ -16,7 +16,9 @@ export type TileCommand =
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "copySelection" }
-  | { type: "pasteClipboard" };
+  | { type: "pasteClipboard" }
+  | { type: "scrollPage"; direction: "up" | "down" }
+  | { type: "scrollToEdge"; edge: "top" | "bottom" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -92,6 +94,14 @@ function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "copySelection" };
     case "paste-clipboard":
       return { type: "pasteClipboard" };
+    case "scroll-page-up":
+      return { type: "scrollPage", direction: "up" };
+    case "scroll-page-down":
+      return { type: "scrollPage", direction: "down" };
+    case "scroll-to-top":
+      return { type: "scrollToEdge", edge: "top" };
+    case "scroll-to-bottom":
+      return { type: "scrollToEdge", edge: "bottom" };
     default: {
       const exhaustive: never = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);

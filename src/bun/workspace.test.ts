@@ -22,12 +22,16 @@ function createFakeSessionFactory() {
       write: () => {},
       paste: () => {},
       resize: () => false,
+      scroll: () => {},
+      scrollToTop: () => {},
+      scrollToBottom: () => {},
       renderState: () => ({
         kind: "terminal",
         html: "",
         cursorX: 0,
         cursorY: 0,
         cursorVisible: true,
+        viewportPinned: true,
       }),
       dumpText: () => "",
       dispose: () => {
@@ -643,6 +647,60 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
     dirtyCount = 0;
 
     ws.setTabVar("not-found", "k", "v");
+
+    expect(dirtyCount).toBe(0);
+  });
+});
+
+// スクロールはPTY出力を経由しないため、input/pasteと違いonOutput経由のonDirtyが起きない。
+// handleScroll系がonDirtyを呼び忘れると、内部の表示位置は変わるのにwebviewへ再描画が
+// 届かず「操作しても画面が動かない」という不具合になる（実機検証で発覚した回帰）
+describe("handleScroll/handleScrollToTop/handleScrollToBottom", () => {
+  test("handleScrollはonDirtyを呼ぶ（再描画をスケジュールするため）", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    dirtyCount = 0;
+
+    ws.handleScroll(tabId, -10);
+
+    expect(dirtyCount).toBe(1);
+  });
+
+  test("handleScrollToTopはonDirtyを呼ぶ", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    dirtyCount = 0;
+
+    ws.handleScrollToTop(tabId);
+
+    expect(dirtyCount).toBe(1);
+  });
+
+  test("handleScrollToBottomはonDirtyを呼ぶ", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    dirtyCount = 0;
+
+    ws.handleScrollToBottom(tabId);
+
+    expect(dirtyCount).toBe(1);
+  });
+
+  test("存在しないtabIdへのhandleScrollはonDirtyを呼ばない", () => {
+    const { factory } = createFakeSessionFactory();
+    let dirtyCount = 0;
+    const ws = createWorkspace(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    dirtyCount = 0;
+
+    ws.handleScroll("not-found", -10);
+    ws.handleScrollToTop("not-found");
+    ws.handleScrollToBottom("not-found");
 
     expect(dirtyCount).toBe(0);
   });

@@ -38,6 +38,10 @@ export const KEYBIND_ACTIONS = [
   "toggle-sidebar",
   "copy-selection",
   "paste-clipboard",
+  "scroll-page-up",
+  "scroll-page-down",
+  "scroll-to-top",
+  "scroll-to-bottom",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -61,6 +65,10 @@ export const defaultKeybindings: KeybindingsConfig = {
   "cmd+alt+]": "next-workspace",
   "cmd+alt+[": "prev-workspace",
   "cmd+b": "toggle-sidebar",
+  "cmd+up": "scroll-page-up",
+  "cmd+down": "scroll-page-down",
+  "cmd+shift+up": "scroll-to-top",
+  "cmd+shift+down": "scroll-to-bottom",
 };
 
 // Windowsのデフォルト。ctrl+shiftを基本とし、Ctrl+C/Ctrl+D/Ctrl+B等はターミナルへ素通りさせる。
@@ -86,6 +94,13 @@ export const defaultWindowsKeybindings: KeybindingsConfig = {
   // Windows Terminal等の慣習に倣いctrl+shiftをコピー・ペーストに割り当てる
   "ctrl+shift+c": "copy-selection",
   "ctrl+shift+v": "paste-clipboard",
+  "ctrl+shift+up": "scroll-page-up",
+  "ctrl+shift+down": "scroll-page-down",
+  // ctrl+shift+up/downはページ単位スクロールとして既に埋まっているため、
+  // ctrl+shift+alt+t（new-browser-tab）と同様にaltを足した組でtop/bottomへの
+  // ジャンプを表す
+  "ctrl+shift+alt+up": "scroll-to-top",
+  "ctrl+shift+alt+down": "scroll-to-bottom",
 };
 
 /** 実行プラットフォームに対応するデフォルトキーバインド（値はprocess.platformと同じ表記） */

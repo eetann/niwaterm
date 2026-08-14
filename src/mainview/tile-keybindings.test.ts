@@ -164,6 +164,28 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
   test("Cmd+Shift+B はデフォルトでは何も割り当てられていない", () => {
     expect(resolveTileCommand(key("b", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
   });
+
+  test.each([
+    ["ArrowUp", "up"],
+    ["ArrowDown", "down"],
+  ] as const)("Cmd+%s -> ページ単位スクロール(%s)", (arrow, direction) => {
+    expect(resolveTileCommand(key(arrow, { metaKey: true }), compiled)).toEqual({
+      type: "scrollPage",
+      direction,
+    });
+  });
+
+  test("Cmd+Shift+Up -> スクロールバック先頭へ", () => {
+    expect(resolveTileCommand(key("ArrowUp", { metaKey: true, shiftKey: true }), compiled)).toEqual(
+      { type: "scrollToEdge", edge: "top" },
+    );
+  });
+
+  test("Cmd+Shift+Down -> 最新行へ", () => {
+    expect(
+      resolveTileCommand(key("ArrowDown", { metaKey: true, shiftKey: true }), compiled),
+    ).toEqual({ type: "scrollToEdge", edge: "bottom" });
+  });
 });
 
 describe("resolveTileCommand（Windowsのデフォルトキーバインド）", () => {
@@ -203,6 +225,34 @@ describe("resolveTileCommand（Windowsのデフォルトキーバインド）", 
     expect(resolveTileCommand(key("V", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
       type: "pasteClipboard",
     });
+  });
+
+  test.each([
+    ["ArrowUp", "up"],
+    ["ArrowDown", "down"],
+  ] as const)("Ctrl+Shift+%s -> ページ単位スクロール(%s)", (arrow, direction) => {
+    expect(resolveTileCommand(key(arrow, { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
+      type: "scrollPage",
+      direction,
+    });
+  });
+
+  test("Ctrl+Shift+Alt+Up -> スクロールバック先頭へ", () => {
+    expect(
+      resolveTileCommand(
+        key("ArrowUp", { ctrlKey: true, shiftKey: true, altKey: true }),
+        winCompiled,
+      ),
+    ).toEqual({ type: "scrollToEdge", edge: "top" });
+  });
+
+  test("Ctrl+Shift+Alt+Down -> 最新行へ", () => {
+    expect(
+      resolveTileCommand(
+        key("ArrowDown", { ctrlKey: true, shiftKey: true, altKey: true }),
+        winCompiled,
+      ),
+    ).toEqual({ type: "scrollToEdge", edge: "bottom" });
   });
 
   test("Ctrl+D / Ctrl+B もターミナルへ素通りする", () => {

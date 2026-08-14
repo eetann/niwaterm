@@ -227,13 +227,16 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           if (!termEl) continue;
           termEl.innerHTML = renderState.html;
           fixWideChars(termEl);
+          // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
+          // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）
           updateCursorForTab(
             tabId,
             renderState.cursorX,
             renderState.cursorY,
-            renderState.cursorVisible,
+            renderState.cursorVisible && renderState.viewportPinned,
           );
-          if (tabId === currentTabId) {
+          updateScrollIndicator(tabId, renderState.viewportPinned);
+          if (tabId === currentTabId && renderState.viewportPinned) {
             updateImePosition(renderState.cursorX, renderState.cursorY);
           }
         }
@@ -675,6 +678,7 @@ function gcStale(
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
+    wheelAccumPxByTabId.delete(tabId);
     browserElByTabId.delete(tabId);
     browserDomReadyByTabId.delete(tabId);
     browserToolbarRootByTabId.get(tabId)?.unmount();
@@ -843,6 +847,12 @@ function updateCursorForTab(tabId: TabId, x: number, y: number, visible: boolean
   cursorEl.style.top = `${y * cellHeight}px`;
 }
 
+/** スクロールバック閲覧中であることを示すバッジの表示切替（CSSの::afterで描画） */
+function updateScrollIndicator(tabId: TabId, viewportPinned: boolean): void {
+  const tabContentEl = tabContentElByTabId.get(tabId);
+  tabContentEl?.classList.toggle("scrolled-history", !viewportPinned);
+}
+
 // IME候補ウィンドウと未確定文字列を、フォーカス中タイルのカーソル位置に追従させる
 function updateImePosition(x: number, y: number): void {
   if (!currentTabId) return;
@@ -867,6 +877,51 @@ function sendResize(tabId: TabId): void {
   const rows = Math.max(2, Math.floor(termEl.clientHeight / cellHeight));
   sendMessage("resize", { tabId, cols, rows, cellWidth, cellHeight });
 }
+
+/** ページ単位スクロール（Cmd+Up/Down等）の1ページ分の行数。表示中の行数をそのまま使う */
+function visibleRows(tabId: TabId): number {
+  const termEl = termElByTabId.get(tabId);
+  if (!termEl) return 1;
+  return Math.max(1, Math.floor(termEl.clientHeight / cellHeight));
+}
+
+// ---- マウスホイールでのスクロールバック閲覧 ----
+// トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
+// 1行に満たない分は次回に持ち越す
+const wheelAccumPxByTabId = new Map<TabId, number>();
+
+function handleWheelScroll(tabId: TabId, deltaPx: number): void {
+  const accumulated = (wheelAccumPxByTabId.get(tabId) ?? 0) + deltaPx;
+  const deltaLines = Math.trunc(accumulated / cellHeight);
+  if (deltaLines === 0) {
+    wheelAccumPxByTabId.set(tabId, accumulated);
+    return;
+  }
+  wheelAccumPxByTabId.set(tabId, accumulated - deltaLines * cellHeight);
+  sendMessage("scroll", { tabId, deltaLines });
+}
+
+tileTreeEl.addEventListener(
+  "wheel",
+  (e) => {
+    const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+    const tileId = tileEl?.dataset["tileId"];
+    if (!tileId) return;
+    const tabId = activeTabByTile.get(tileId);
+    // ターミナルタブのみ対象（ブラウザタブはOOPIF自身のネイティブスクロールに任せる）
+    if (!tabId || !termElByTabId.has(tabId)) return;
+    e.preventDefault();
+    // deltaMode: 0=pixel, 1=line, 2=page（DOM_DELTA_*）。line/pageは行高/表示行数で近似する
+    const deltaPx =
+      e.deltaMode === 1
+        ? e.deltaY * cellHeight
+        : e.deltaMode === 2
+          ? e.deltaY * visibleRows(tabId) * cellHeight
+          : e.deltaY;
+    handleWheelScroll(tabId, deltaPx);
+  },
+  { passive: false },
+);
 
 // ---- 境界ドラッグでのリサイズ ----
 const MIN_TILE_PX = 80;
@@ -1039,6 +1094,19 @@ function handleTileCommand(cmd: TileCommand): void {
     case "pasteClipboard":
       if (!currentTabId) return;
       sendMessage("pasteFromClipboard", { tabId: currentTabId });
+      break;
+    case "scrollPage": {
+      if (!currentTabId) return;
+      const rows = visibleRows(currentTabId);
+      sendMessage("scroll", {
+        tabId: currentTabId,
+        deltaLines: cmd.direction === "up" ? -rows : rows,
+      });
+      break;
+    }
+    case "scrollToEdge":
+      if (!currentTabId) return;
+      sendMessage(cmd.edge === "top" ? "scrollToTop" : "scrollToBottom", { tabId: currentTabId });
       break;
   }
 }

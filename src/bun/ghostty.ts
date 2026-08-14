@@ -65,9 +65,13 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
 });
 
 const shim = dlopen(join(libDir, nativeLayout.shim), {
-  niwa_dump_active: {
-    args: [FFIType.ptr, FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.ptr],
+  niwa_dump_screen: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
+  },
+  niwa_scroll_viewport: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.i64],
+    returns: FFIType.void,
   },
 });
 
@@ -83,11 +87,17 @@ const MODE_BRACKETED_PASTE = 2004;
 const DATA_CURSOR_X = 3;
 const DATA_CURSOR_Y = 4;
 const DATA_CURSOR_VISIBLE = 7;
+const DATA_VIEWPORT_ACTIVE = 32;
 const DATA_MODE = 37;
 
 // GhosttyFormatterFormat
 const FORMAT_PLAIN = 0;
 const FORMAT_HTML = 2;
+
+// GhosttyTerminalScrollViewportTag
+const SCROLL_VIEWPORT_TOP = 0;
+const SCROLL_VIEWPORT_BOTTOM = 1;
+const SCROLL_VIEWPORT_DELTA = 2;
 
 export interface CursorState {
   x: number;
@@ -228,14 +238,19 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     return { x, y, visible: u8Out[0] !== 0 };
   }
 
-  /** アクティブエリア（スクロールバックを除く可視範囲）を文字列として取り出す関数を作る（HTML/PLAINで共用） */
-  function createFormatterDumper(emit: number): () => string {
+  /**
+   * 画面内容を文字列として取り出す関数を作る（HTML/PLAINで共用）。
+   * useViewport=trueならスクロールした位置（ghostty_terminal_scroll_viewport）に追従し、
+   * falseなら常に最新のアクティブエリア（スクロールバック無視）を返す
+   */
+  function createFormatterDumper(emit: number, useViewport: boolean): () => string {
     let buf = new Uint8Array(256 * 1024);
     return function dump(): string {
       for (;;) {
-        const rc = shim.symbols.niwa_dump_active(
+        const rc = shim.symbols.niwa_dump_screen(
           term,
           emit,
+          useViewport ? 1 : 0,
           ptr(buf),
           BigInt(buf.length),
           ptr(writtenBuf),
@@ -248,16 +263,38 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
           buf = new Uint8Array(written + 1024);
           continue;
         }
-        throw new Error(`niwa_dump_active failed: ${rc}`);
+        throw new Error(`niwa_dump_screen failed: ${rc}`);
       }
     };
   }
 
-  /** 現在の画面をHTML文字列として取り出す */
-  const dumpHtml = createFormatterDumper(FORMAT_HTML);
+  /** 現在の画面をHTML文字列として取り出す。スクロール中はその位置の内容を返す */
+  const dumpHtml = createFormatterDumper(FORMAT_HTML, true);
 
-  /** 現在の画面をプレーンテキストとして取り出す */
-  const dumpText = createFormatterDumper(FORMAT_PLAIN);
+  /** 現在の画面をプレーンテキストとして取り出す（CLIの`capture-tab`相当）。常に最新のアクティブエリア */
+  const dumpText = createFormatterDumper(FORMAT_PLAIN, false);
+
+  /** ビューポートがアクティブエリア（最新行）に追従しているか。falseはスクロールバックへ入っている状態 */
+  function viewportPinned(): boolean {
+    const rc = vt.symbols.ghostty_terminal_get(term, DATA_VIEWPORT_ACTIVE, ptr(u8Out));
+    return rc !== 0 || u8Out[0] !== 0;
+  }
+
+  /** ビューポートを相対行数だけスクロールする（上がマイナス）。範囲外は自動でクランプされる */
+  function scrollDelta(lines: number): void {
+    if (lines === 0) return;
+    shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_DELTA, BigInt(Math.trunc(lines)));
+  }
+
+  /** ビューポートをスクロールバックの先頭へ移動する */
+  function scrollToTop(): void {
+    shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_TOP, 0n);
+  }
+
+  /** ビューポートを最新のアクティブエリアへ戻す */
+  function scrollToBottom(): void {
+    shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_BOTTOM, 0n);
+  }
 
   function free(): void {
     vt.symbols.ghostty_terminal_free(term);
@@ -275,6 +312,10 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     cursor,
     dumpHtml,
     dumpText,
+    viewportPinned,
+    scrollDelta,
+    scrollToTop,
+    scrollToBottom,
     free,
   };
 }

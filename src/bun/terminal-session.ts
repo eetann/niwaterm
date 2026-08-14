@@ -18,6 +18,8 @@ export interface TerminalRenderState {
   cursorX: number;
   cursorY: number;
   cursorVisible: boolean;
+  /** ビューポートが最新行に追従しているか。falseはスクロールバックを閲覧中 */
+  viewportPinned: boolean;
 }
 
 export function createTerminalSession(opts: TerminalSessionOptions) {
@@ -54,12 +56,28 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     opts.onExit?.(code);
   });
 
+  // 他の主要ターミナル（xterm系/iTerm2/Ghostty等）と同様、スクロールバック閲覧中に
+  // 何か入力すると自動で最新行へ戻る（tmuxのcopy-mode離脱に相当する挙動）
   function write(data: string | Uint8Array): void {
+    term.scrollToBottom();
     pty.write(data);
   }
 
   function paste(text: string): void {
+    term.scrollToBottom();
     pty.write(term.encodePaste(text));
+  }
+
+  function scroll(deltaLines: number): void {
+    term.scrollDelta(deltaLines);
+  }
+
+  function scrollToTop(): void {
+    term.scrollToTop();
+  }
+
+  function scrollToBottom(): void {
+    term.scrollToBottom();
   }
 
   /** サイズが実際に変わった場合のみ term/pty 双方へ伝え、trueを返す（無駄な再描画を避ける） */
@@ -81,6 +99,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       cursorX: cursor.x,
       cursorY: cursor.y,
       cursorVisible: cursor.visible,
+      viewportPinned: term.viewportPinned(),
     };
   }
 
@@ -98,7 +117,17 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     term.free();
   }
 
-  return { write, paste, resize, renderState, dumpText, dispose };
+  return {
+    write,
+    paste,
+    resize,
+    scroll,
+    scrollToTop,
+    scrollToBottom,
+    renderState,
+    dumpText,
+    dispose,
+  };
 }
 
 export type TerminalSession = ReturnType<typeof createTerminalSession>;

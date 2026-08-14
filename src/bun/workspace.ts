@@ -271,6 +271,26 @@ export function createWorkspace(opts: WorkspaceOptions) {
     sessions.get(tabId)?.paste(data);
   }
 
+  // スクロールはPTYを経由しないため、input/pasteと違いonOutput→onDirtyの連鎖が起きない。
+  // 呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
+  function handleScroll(tabId: TabId, deltaLines: number): void {
+    if (!sessions.has(tabId)) return;
+    sessions.get(tabId)?.scroll(deltaLines);
+    opts.onDirty();
+  }
+
+  function handleScrollToTop(tabId: TabId): void {
+    if (!sessions.has(tabId)) return;
+    sessions.get(tabId)?.scrollToTop();
+    opts.onDirty();
+  }
+
+  function handleScrollToBottom(tabId: TabId): void {
+    if (!sessions.has(tabId)) return;
+    sessions.get(tabId)?.scrollToBottom();
+    opts.onDirty();
+  }
+
   function handleResize(
     tabId: TabId,
     cols: number,
@@ -416,6 +436,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handleInput,
     handlePaste,
     handleResize,
+    handleScroll,
+    handleScrollToTop,
+    handleScrollToBottom,
     snapshot,
     getLayout,
     getFocusedTileId,

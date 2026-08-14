@@ -18,12 +18,16 @@ function createFakeSessionFactory() {
       write: () => {},
       paste: () => {},
       resize: () => false,
+      scroll: () => {},
+      scrollToTop: () => {},
+      scrollToBottom: () => {},
       renderState: () => ({
         kind: "terminal",
         html: "",
         cursorX: 0,
         cursorY: 0,
         cursorVisible: true,
+        viewportPinned: true,
       }),
       dumpText: () => "",
       dispose: () => {

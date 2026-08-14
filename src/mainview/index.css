@@ -360,6 +360,23 @@ body {
   display: none;
 }
 
+/* スクロールバック閲覧中であることを示すバッジ（マウスホイール/Cmd+Up等で表示） */
+.tab-content.scrolled-history::after {
+  content: "SCROLLBACK · キー入力で最新行へ戻る";
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  color: #1e1e2e;
+  background: #f9e2af;
+  border-radius: 4px;
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* IME入力を受けるための不可視textarea。候補ウィンドウ位置のためカーソルに追従する */
 #ime-input {
   position: absolute;
