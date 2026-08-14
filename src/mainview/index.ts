@@ -38,6 +38,10 @@ const sidebarDividerEl = document.getElementById("sidebar-divider") as HTMLDivEl
 const sidebarListEl = document.getElementById("sidebar-list") as HTMLDivElement;
 const sidebarSwitcherEl = document.getElementById("sidebar-switcher") as HTMLDivElement;
 const sidebarCustomViewEl = document.getElementById("sidebar-custom-view") as HTMLDivElement;
+const popupEl = document.getElementById("popup") as HTMLDivElement;
+const popupBoxEl = document.getElementById("popup-box") as HTMLDivElement;
+const popupTermEl = popupBoxEl.querySelector(".term") as HTMLDivElement;
+const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -87,6 +91,10 @@ let lastTabNames: Record<TabId, string> = {};
 // ワークスペース切替（Cmd+Option+]/[）の次/前の対象を解決するために保持する
 let activeWorkspaceId: WorkspaceId | null = null;
 let workspaceIds: WorkspaceId[] = [];
+// ポップアップ（タイルに所属しない一時的な画面。ADR 0005）の現在のtabId・表示状態
+let currentPopupTabId: TabId | null = null;
+let popupVisible = false;
+let popupResizeObserver: ResizeObserver | null = null;
 // ドラッグ中のsplitId。reconcile時にflexスタイルを上書きしないようにするためのガード
 let draggingSplitId: TileId | null = null;
 // ドラッグ確定直後、bun側のtreeがまだ古いratioのままのrenderが届く可能性があるため、
@@ -218,7 +226,12 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = p.workspace.focusedTileId;
-        currentTabId = (focusedTileId && activeTabByTile.get(focusedTileId)) ?? null;
+        applyPopupState(p.workspace.popup);
+        // ポップアップ表示中はキー入力・ペーストの送信先をポップアップへ向ける
+        currentTabId =
+          popupVisible && currentPopupTabId
+            ? currentPopupTabId
+            : ((focusedTileId && activeTabByTile.get(focusedTileId)) ?? null);
         updateFocusHighlight();
         for (const tabId of Object.keys(p.workspace.tabs)) {
           const renderState = p.workspace.tabs[tabId];
@@ -619,6 +632,69 @@ function setTabVisible(tabId: TabId, visible: boolean): void {
   }
   browserElByTabId.get(tabId)?.toggleHidden(!visible);
 }
+
+// ---- ポップアップ（タイルに所属しない一時的な画面。ADR 0005）----
+// 中身は.tile内のターミナルと同じ.term/.cursorのDOM描画方式を流用する。DOM要素自体は
+// index.htmlに静的に用意済みなので、termElByTabId/cursorElByTabIdへの登録・解除のみ行う。
+// tabContentElByTabIdには登録しない（gcStaleがTile木構造由来のtabIdのみを生存対象とするため、
+// 登録すると次のrenderで誤って除去されてしまう）
+function setupPopupContent(tabId: TabId): void {
+  currentPopupTabId = tabId;
+  termElByTabId.set(tabId, popupTermEl);
+  cursorElByTabId.set(tabId, popupCursorEl);
+  popupResizeObserver = new ResizeObserver(() => {
+    if (!popupVisible || !currentPopupTabId) return;
+    sendResize(currentPopupTabId);
+  });
+  popupResizeObserver.observe(popupTermEl);
+}
+
+function teardownPopupContent(): void {
+  if (!currentPopupTabId) return;
+  popupResizeObserver?.disconnect();
+  popupResizeObserver = null;
+  termElByTabId.delete(currentPopupTabId);
+  cursorElByTabId.delete(currentPopupTabId);
+  wheelAccumPxByTabId.delete(currentPopupTabId);
+  popupTermEl.innerHTML = "";
+  currentPopupTabId = null;
+}
+
+/**
+ * bunから届いたポップアップのメタ情報をDOM側へ反映する。HTML本体はp.workspace.tabs経由の
+ * 既存のterminalタブ更新ループが（termElByTabIdへ登録済みなら）自動的に流し込むためここでは扱わない
+ */
+function applyPopupState(popup: { tabId: TabId; visible: boolean } | null): void {
+  if (!popup) {
+    popupVisible = false;
+    popupEl.hidden = true;
+    teardownPopupContent();
+    return;
+  }
+  if (currentPopupTabId !== popup.tabId) {
+    teardownPopupContent();
+    setupPopupContent(popup.tabId);
+  }
+  popupVisible = popup.visible;
+  popupEl.hidden = !popup.visible;
+  // 再表示直後は確定サイズを送り直す（非表示中はResizeObserverが動いてもスキップしているため。setTabVisibleと同じ理由）
+  if (popup.visible) sendResize(popup.tabId);
+}
+
+/** 開いていなければ新規に開き、開いていれば表示⇔非表示を切り替える */
+function togglePopup(): void {
+  if (currentPopupTabId) {
+    sendMessage("togglePopupVisibility");
+  } else {
+    sendMessage("openPopup");
+  }
+}
+
+popupEl.addEventListener("mousedown", () => {
+  if (!currentPopupTabId) return;
+  currentTabId = currentPopupTabId;
+  imeEl.focus({ preventScroll: true });
+});
 
 /** クリック/キー操作でのタブ切替をローカルへ即時反映する（次のrenderを待たず入力送信先を切り替えるため） */
 function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
@@ -1047,9 +1123,13 @@ document.addEventListener("keydown", (e) => {
 });
 
 function handleTileCommand(cmd: TileCommand): void {
-  // サイドバー開閉はbun側の状態を必要としないため、フォーカス中タイル無しでも動作させる
+  // サイドバー開閉・ポップアップ開閉はbun側の状態を必要としないため、フォーカス中タイル無しでも動作させる
   if (cmd.type === "toggleSidebar") {
     toggleSidebar();
+    return;
+  }
+  if (cmd.type === "togglePopup") {
+    togglePopup();
     return;
   }
   if (!focusedTileId) return;

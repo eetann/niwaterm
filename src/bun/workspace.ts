@@ -40,6 +40,11 @@ export interface WorkspaceRenderState {
   tabNames: Record<TabId, string>;
   /** ユーザーがサイドバーから設定したタイル名。未設定のタイルは含まれない（表示側で連番にフォールバック） */
   tileNames: Record<TileId, string>;
+  /**
+   * ワークスペースごとに最大1つ持てる、Tile木構造とは独立したポップアップ画面（ADR 0005）。
+   * 中身のPTY描画状態はtabsに同居させている（popupのtabIdをキーに引ける）ため、ここではメタ情報のみ持つ
+   */
+  popup: { tabId: TabId; visible: boolean } | null;
 }
 
 export type GetTabVarResult =
@@ -92,6 +97,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // タブ・タイル名。getPersistableTabs/listTileNames経由で永続化対象になる
   const tabNames = new Map<TabId, string>();
   const tileNames = new Map<TileId, string>();
+  // ポップアップ用のTerminalSessionはsessionsマップに同居させる（input/resize等の既存tabId経路を
+  // そのまま再利用するため）。popupTabIdで「Tile木構造に属さない特別なタブ」として区別する
+  let popupTabId: TabId | null = null;
+  let popupVisible = false;
 
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
@@ -204,6 +213,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // シェルが1つ終了した時の挙動。そのタブだけ閉じる（同じタイルに他のタブが残っていればタイルは維持）。
   // タイル内最後のタブで、かつワークスペース最後の1枚だった場合のみ「アプリごと終了」を維持する。
   function handleTabProcessExit(tabId: TabId): void {
+    if (tabId === popupTabId) {
+      disposeSessions([tabId]);
+      popupTabId = null;
+      popupVisible = false;
+      opts.onDirty();
+      return;
+    }
     const leaf = listLeaves(tree).find((l) => l.tabIds.includes(tabId));
     if (!leaf) return;
     const result = closeTabInTile(tree, leaf.id, tabId);
@@ -279,6 +295,43 @@ export function createWorkspace(opts: WorkspaceOptions) {
     );
     opts.onDirty();
     return newTabId;
+  }
+
+  /**
+   * ポップアップを開く。既に開いていれば何もしない（同時に1つだけ、ADR 0005）。
+   * cwd省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ（split-tile/newTabと同じ方針）
+   */
+  function openPopup(cwd?: string): TabId | null {
+    if (popupTabId) return null;
+    const newTabId = genTabId();
+    const focusedLeaf = findNode(tree, focusedTileId);
+    const activeTabId = focusedLeaf?.kind === "leaf" ? focusedLeaf.activeTabId : undefined;
+    const inheritedCwd = activeTabId !== undefined ? actualCwdOf(activeTabId) : undefined;
+    const size = (activeTabId !== undefined ? sizeByTabId.get(activeTabId) : undefined) ?? {
+      cols: opts.initialCols,
+      rows: opts.initialRows,
+    };
+    spawnSession(newTabId, size.cols, size.rows, undefined, cwd ?? inheritedCwd);
+    popupTabId = newTabId;
+    popupVisible = true;
+    opts.onDirty();
+    return newTabId;
+  }
+
+  function closePopup(): boolean {
+    if (!popupTabId) return false;
+    disposeSessions([popupTabId]);
+    popupTabId = null;
+    popupVisible = false;
+    opts.onDirty();
+    return true;
+  }
+
+  function togglePopupVisibility(): boolean {
+    if (!popupTabId) return false;
+    popupVisible = !popupVisible;
+    opts.onDirty();
+    return true;
   }
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {
@@ -407,6 +460,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       tabs,
       tabNames: Object.fromEntries(tabNames),
       tileNames: Object.fromEntries(tileNames),
+      popup: popupTabId ? { tabId: popupTabId, visible: popupVisible } : null,
     };
   }
 
@@ -421,9 +475,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
+  /** ポップアップは一時的な画面のため永続化対象から除外する */
   function getPersistableTabs(): Record<TabId, PersistedTab> {
     const result: Record<TabId, PersistedTab> = {};
     for (const tabId of sessions.keys()) {
+      if (tabId === popupTabId) continue;
       const tab: PersistedTerminalTab = { kind: "terminal" };
       const shell = shellByTabId.get(tabId);
       if (shell !== undefined) tab.shell = shell;
@@ -539,6 +595,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     newTab,
     newBrowserTab,
     setBrowserTabUrl,
+    openPopup,
+    closePopup,
+    togglePopupVisibility,
     switchTab,
     moveTab,
     closeTab,

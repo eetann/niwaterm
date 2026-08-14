@@ -36,6 +36,7 @@ export const KEYBIND_ACTIONS = [
   "next-workspace",
   "prev-workspace",
   "toggle-sidebar",
+  "toggle-popup",
   "copy-selection",
   "paste-clipboard",
   "scroll-page-up",
@@ -65,6 +66,7 @@ export const defaultKeybindings: KeybindingsConfig = {
   "cmd+alt+]": "next-workspace",
   "cmd+alt+[": "prev-workspace",
   "cmd+b": "toggle-sidebar",
+  "cmd+`": "toggle-popup",
   "cmd+up": "scroll-page-up",
   "cmd+down": "scroll-page-down",
   "cmd+shift+up": "scroll-to-top",
@@ -90,6 +92,7 @@ export const defaultWindowsKeybindings: KeybindingsConfig = {
   "ctrl+alt+]": "next-workspace",
   "ctrl+alt+[": "prev-workspace",
   "ctrl+shift+b": "toggle-sidebar",
+  "ctrl+shift+`": "toggle-popup",
   // Ctrl+C/Ctrl+VはSIGINT/制御文字としてターミナルへ素通りさせるため、
   // Windows Terminal等の慣習に倣いctrl+shiftをコピー・ペーストに割り当てる
   "ctrl+shift+c": "copy-selection",

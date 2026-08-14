@@ -305,9 +305,40 @@ body {
   inset: -3px;
 }
 
+/*
+ * タイルに所属しないポップアップ画面（ADR 0005）。既存最大z-index（.scrolled-historyの2）より
+ * 確実に上へ表示する。中身は.tile内のターミナルと同じ.term/.cursorのDOM描画方式を流用する
+ * （下のフォント・カーソル関連セレクタも合わせて拡張している）
+ */
+#popup {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.5);
+}
+#popup:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#popup-box {
+  position: relative;
+  width: 80%;
+  height: 80%;
+  max-width: 1200px;
+  padding: 4px;
+  background: var(--term-bg);
+  border: 1px solid #313244;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
 /* フォーマッタ出力はinline styleでfont-family: monospaceを持つため上書きする */
 .tile .term,
 .tile .term *,
+#popup .term,
+#popup .term *,
 #measure,
 #composition,
 #ime-input {
@@ -321,7 +352,8 @@ body {
     "kern" 0;
 }
 
-.tile .term {
+.tile .term,
+#popup .term {
   color: var(--term-fg);
   height: 100%;
   overflow: hidden;
@@ -334,7 +366,8 @@ body {
  * 透けて見える隙間ができることがある。inline-blockにすると高さがline-height指定値に
  * 確定するため、この隙間を防げる（幅はinline同様コンテンツ幅に自動追従する）。
  */
-.tile .term div[style^="display: inline;"] {
+.tile .term div[style^="display: inline;"],
+#popup .term div[style^="display: inline;"] {
   display: inline-block !important;
 }
 
@@ -352,7 +385,8 @@ body {
   white-space: pre;
 }
 
-.tile .cursor {
+.tile .cursor,
+#popup .cursor {
   position: absolute;
   background: #f5e0dc;
   opacity: 0.8;
@@ -393,7 +427,7 @@ body {
   overflow: hidden;
 }
 
-/* IME変換中の未確定文字列をカーソル位置に表示する */
+/* IME変換中の未確定文字列をカーソル位置に表示する。#popup（z-index:10）表示中でも隠れないようそれより上に置く */
 #composition {
   position: absolute;
   display: none;
@@ -402,6 +436,6 @@ body {
   background: var(--term-bg);
   text-decoration: underline;
   text-underline-offset: 3px;
-  z-index: 1;
+  z-index: 11;
   pointer-events: none;
 }

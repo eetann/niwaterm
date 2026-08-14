@@ -15,6 +15,7 @@ export type TileCommand =
   | { type: "newWorkspace" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
+  | { type: "togglePopup" }
   | { type: "copySelection" }
   | { type: "pasteClipboard" }
   | { type: "scrollPage"; direction: "up" | "down" }
@@ -28,10 +29,12 @@ export type KeyboardEventLike = Pick<
 >;
 
 // @niwaterm/configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
-// ブラケットのみcodeで判定する（Shiftで文字自体が変わるためe.keyでは判定できない）。
+// ブラケット・バッククォートのみcodeで判定する（Shiftで文字自体が変わる
+// （例: ` → ~）ためe.keyでは判定できない。toggle-popupのWindows既定"ctrl+shift+`"がこれに該当する）。
 function keyBodyFromEvent(e: KeyboardEventLike): string {
   if (e.code === "BracketRight") return "]";
   if (e.code === "BracketLeft") return "[";
+  if (e.code === "Backquote") return "`";
   switch (e.key) {
     case "ArrowUp":
       return "up";
@@ -90,6 +93,8 @@ function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "switchWorkspace", delta: -1 };
     case "toggle-sidebar":
       return { type: "toggleSidebar" };
+    case "toggle-popup":
+      return { type: "togglePopup" };
     case "copy-selection":
       return { type: "copySelection" };
     case "paste-clipboard":

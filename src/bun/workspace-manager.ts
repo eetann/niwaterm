@@ -232,6 +232,20 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.newBrowserTab(tileId, url) ?? null;
   }
 
+  // ポップアップはワークスペースごとの状態のため「現在アクティブなワークスペース」へルーティングする
+  // （focusDirectionと同様、idを取らない例外的な操作。ADR 0005）
+  function openPopup(cwd?: string): TabId | null {
+    return workspaces.get(activeId)?.openPopup(cwd) ?? null;
+  }
+
+  function closePopup(): boolean {
+    return workspaces.get(activeId)?.closePopup() ?? false;
+  }
+
+  function togglePopupVisibility(): boolean {
+    return workspaces.get(activeId)?.togglePopupVisibility() ?? false;
+  }
+
   function setBrowserTabUrl(tabId: TabId, url: string): boolean {
     for (const ws of workspaces.values()) {
       if (ws.hasBrowserTab(tabId)) return ws.setBrowserTabUrl(tabId, url);
@@ -405,6 +419,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     newTab,
     newBrowserTab,
     setBrowserTabUrl,
+    openPopup,
+    closePopup,
+    togglePopupVisibility,
     switchTab,
     moveTab,
     closeTab,

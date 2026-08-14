@@ -71,6 +71,9 @@ export type NiwaRPC = {
       newTab: { tileId: TileId; shellProfileId?: string; cwd?: string };
       newBrowserTab: { tileId: TileId; url?: string };
       newCustomViewTab: { tileId: TileId };
+      openPopup: {};
+      closePopup: {};
+      togglePopupVisibility: {};
       switchTab: { tileId: TileId; tabId: TabId };
       moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
       closeTab: { tileId: TileId; tabId: TabId };
@@ -344,6 +347,15 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
           return;
         }
         workspaceManager.newBrowserTab(tileId, customView.url);
+      },
+      openPopup: () => {
+        workspaceManager.openPopup();
+      },
+      closePopup: () => {
+        workspaceManager.closePopup();
+      },
+      togglePopupVisibility: () => {
+        workspaceManager.togglePopupVisibility();
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);
