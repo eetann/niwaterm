@@ -406,6 +406,29 @@ export function openPopup(
   return postJson(endpoint, "/popup", body);
 }
 
+export type ClosePopupResult = { ok: true } | { ok: false; error: string };
+
+/** 開いているポップアップを閉じる */
+export function closePopup(endpoint: IpcEndpoint): Promise<ClosePopupResult> {
+  return postJson(endpoint, "/close-popup", {});
+}
+
+export type TogglePopupResult = { ok: true; visible: boolean } | { ok: false; error: string };
+
+/** ポップアップの表示/非表示を切り替える（PTYは維持したまま）。開いていない場合は失敗する */
+export function togglePopupVisibility(endpoint: IpcEndpoint): Promise<TogglePopupResult> {
+  return postJson(endpoint, "/toggle-popup", {});
+}
+
+export type PromotePopupResult =
+  | { ok: true; tileId: TileId; tabId: TabId }
+  | { ok: false; error: string };
+
+/** 開いているポップアップの中身を、フォーカス中タイルへ通常タブとして編入する（ADR 0005） */
+export function promotePopup(endpoint: IpcEndpoint): Promise<PromotePopupResult> {
+  return postJson(endpoint, "/promote-popup", {});
+}
+
 export type SwitchTabResult = { ok: true } | { ok: false; error: string };
 
 export function switchTab(

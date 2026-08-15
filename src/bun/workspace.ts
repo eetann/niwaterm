@@ -361,11 +361,31 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return true;
   }
 
-  function togglePopupVisibility(): boolean {
-    if (!popupTabId) return false;
+  /** ポップアップの表示/非表示を切り替える。戻り値はトグル後の可視状態。popupが開いていなければnull */
+  function togglePopupVisibility(): boolean | null {
+    if (!popupTabId) return null;
     popupVisible = !popupVisible;
     opts.onDirty();
-    return true;
+    return popupVisible;
+  }
+
+  /**
+   * 開いているポップアップの中身を、フォーカス中タイルへ通常タブとして編入する（タブへ昇格。ADR 0005）。
+   * PTYセッションは作り直さない（sessionsマップ上は同じtabIdのまま。popupTabIdによる特別扱いを外すだけ）。
+   * 昇格先は常にフォーカス中タイル（タイル選択UIは作らない方針。openPopup同様の暗黙対象）
+   */
+  function promotePopup(): { tileId: TileId; tabId: TabId } | null {
+    if (!popupTabId) return null;
+    const result = addTabToTile(tree, focusedTileId, popupTabId);
+    if (!result) return null;
+    tree = result;
+    const promoted = { tileId: focusedTileId, tabId: popupTabId };
+    popupTabId = null;
+    popupVisible = false;
+    popupWidth = undefined;
+    popupHeight = undefined;
+    opts.onDirty();
+    return promoted;
   }
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {
@@ -634,6 +654,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     openPopup,
     closePopup,
     togglePopupVisibility,
+    promotePopup,
     switchTab,
     moveTab,
     closeTab,

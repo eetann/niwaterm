@@ -333,6 +333,12 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
+#popup-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+}
 
 /* フォーマッタ出力はinline styleでfont-family: monospaceを持つため上書きする */
 .tile .term,

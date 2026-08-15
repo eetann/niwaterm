@@ -243,8 +243,15 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaces.get(activeId)?.closePopup() ?? false;
   }
 
-  function togglePopupVisibility(): boolean {
-    return workspaces.get(activeId)?.togglePopupVisibility() ?? false;
+  function togglePopupVisibility(): boolean | null {
+    return workspaces.get(activeId)?.togglePopupVisibility() ?? null;
+  }
+
+  // ポップアップの昇格も同様に「現在アクティブなワークスペース」固定でルーティングする
+  // （openPopup/closePopup/togglePopupVisibilityと同じ例外パターン。昇格先は各ワークスペースが
+  // 保持するfocusedTileId固定のため、tileId引数を取らない。ADR 0005）
+  function promotePopup(): { tileId: TileId; tabId: TabId } | null {
+    return workspaces.get(activeId)?.promotePopup() ?? null;
   }
 
   function setBrowserTabUrl(tabId: TabId, url: string): boolean {
@@ -423,6 +430,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     openPopup,
     closePopup,
     togglePopupVisibility,
+    promotePopup,
     switchTab,
     moveTab,
     closeTab,

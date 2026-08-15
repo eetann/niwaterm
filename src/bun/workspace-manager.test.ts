@@ -845,3 +845,90 @@ describe("moveTab", () => {
     expect(mgr.moveTab(leaf.id, leaf.activeTabId, "not-found")).toBe(false);
   });
 });
+
+describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => {
+  test("openPopupは新規タブを作成しtabIdを返す。2回目のopenPopupはnullを返す（同時1つ制約）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const before = created.length;
+
+    const tabId = mgr.openPopup();
+
+    expect(tabId).not.toBeNull();
+    expect(created.length).toBe(before + 1);
+    expect(mgr.snapshot().workspace.popup).toEqual({
+      tabId: tabId as string,
+      visible: true,
+      width: undefined,
+      height: undefined,
+    });
+    expect(mgr.openPopup()).toBeNull();
+  });
+
+  test("closePopupでpopupが閉じ、セッションがdisposeされる。popup無しではfalseを返す", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+
+    expect(mgr.closePopup()).toBe(false);
+
+    mgr.openPopup();
+    const ok = mgr.closePopup();
+
+    expect(ok).toBe(true);
+    expect(mgr.snapshot().workspace.popup).toBeNull();
+    expect(created[created.length - 1]?.disposed).toBe(true);
+  });
+
+  test("togglePopupVisibilityはpopup無しでnull、popup有りでトグル後の可視状態を返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+
+    expect(mgr.togglePopupVisibility()).toBeNull();
+
+    mgr.openPopup();
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
+    expect(mgr.togglePopupVisibility()).toBe(false);
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(false);
+    expect(mgr.togglePopupVisibility()).toBe(true);
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
+  });
+
+  test("promotePopupはpopup無しでnullを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+
+    expect(mgr.promotePopup()).toBeNull();
+  });
+
+  test("promotePopupはフォーカス中タイルへ編入し、セッションを作り直さない", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const popupTabId = mgr.openPopup() as string;
+    const createdCountAfterOpen = created.length;
+
+    const result = mgr.promotePopup();
+
+    expect(result).toEqual({ tileId, tabId: popupTabId });
+    expect(created.length).toBe(createdCountAfterOpen); // セッションが作り直されないこと（ADR 0005）
+    expect(mgr.snapshot().workspace.popup).toBeNull();
+    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    expect(leaf.tabIds).toContain(popupTabId);
+    expect(leaf.activeTabId).toBe(popupTabId);
+  });
+
+  test("promotePopupは常にopenPopup時ではなく実行時点のフォーカス中タイルへ編入する", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.openPopup();
+    const split = mgr.splitTile(firstTileId, "vertical") as { tileId: string };
+    // splitTileはfocusedTileIdを新しいタイルへ切り替える
+
+    const result = mgr.promotePopup();
+
+    expect(result?.tileId).toBe(split.tileId);
+    const leaf = mgr.snapshot().workspace.layout;
+    expect(leaf.kind).toBe("split");
+  });
+});

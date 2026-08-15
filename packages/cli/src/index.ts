@@ -18,6 +18,9 @@ import newTabCommand from "./commands/new-tab";
 import newWorkspaceCommand from "./commands/new-workspace";
 import pingCommand from "./commands/ping";
 import popupCommand from "./commands/popup";
+import popupCloseCommand from "./commands/popup-close";
+import popupPromoteCommand from "./commands/popup-promote";
+import popupToggleCommand from "./commands/popup-toggle";
 import renameWorkspaceCommand from "./commands/rename-workspace";
 import sendKeysCommand from "./commands/send-keys";
 import setVarCommand from "./commands/set-var";
@@ -64,6 +67,9 @@ try {
       "show-tab": showTabCommand,
       "capture-tab": captureTabCommand,
       popup: popupCommand,
+      "popup-close": popupCloseCommand,
+      "popup-promote": popupPromoteCommand,
+      "popup-toggle": popupToggleCommand,
       "set-var": setVarCommand,
       "get-var": getVarCommand,
       "list-vars": listVarsCommand,

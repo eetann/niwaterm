@@ -1865,3 +1865,105 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("close-popup: 開いているポップアップを閉じる。popup無しは409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const noneRes = await fetch("http://localhost/close-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(noneRes.status).toBe(409);
+
+    mgr.openPopup();
+    const res = await fetch("http://localhost/close-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspace.popup).toBeNull();
+  });
+
+  test("toggle-popup: 表示/非表示を切り替え、トグル後のvisibleを返す。popup無しは409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const noneRes = await fetch("http://localhost/toggle-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(noneRes.status).toBe(409);
+
+    mgr.openPopup();
+    const res1 = await fetch("http://localhost/toggle-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res1.status).toBe(200);
+    expect(await res1.json()).toEqual({ ok: true, visible: false });
+
+    const res2 = await fetch("http://localhost/toggle-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res2.status).toBe(200);
+    expect(await res2.json()).toEqual({ ok: true, visible: true });
+  });
+
+  test("promote-popup: フォーカス中タイルへ編入しtileId/tabIdを返す。popup無しは409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const noneRes = await fetch("http://localhost/promote-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(noneRes.status).toBe(409);
+
+    const popupTabId = mgr.openPopup() as string;
+    const res = await fetch("http://localhost/promote-popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, tileId, tabId: popupTabId });
+    expect(mgr.snapshot().workspace.popup).toBeNull();
+    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    expect(leaf.tabIds).toContain(popupTabId);
+  });
+});

@@ -653,6 +653,27 @@ function buildApp(
     return c.json({ ok: true, tabId });
   });
 
+  app.post("/close-popup", (c) => {
+    const ok = workspaceManager.closePopup();
+    if (!ok) return c.json({ ok: false, error: "no popup is open" }, 409);
+    return c.json({ ok: true });
+  });
+
+  app.post("/toggle-popup", (c) => {
+    const visible = workspaceManager.togglePopupVisibility();
+    if (visible === null) return c.json({ ok: false, error: "no popup is open" }, 409);
+    return c.json({ ok: true, visible });
+  });
+
+  // ポップアップの中身をフォーカス中タイルへ通常タブとして編入する（タブへ昇格。ADR 0005）。
+  // PTYセッションは作り直さないため、workspaceManager.promotePopup()はセッション生成を伴わない
+  app.post("/promote-popup", (c) => {
+    const result = workspaceManager.promotePopup();
+    if (!result) return c.json({ ok: false, error: "no popup is open" }, 409);
+    activateWindow();
+    return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
+  });
+
   // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を
   // まとめて行う。人間がAIの操作結果を任意に目視確認するための高レベルコマンド
   // （switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）。

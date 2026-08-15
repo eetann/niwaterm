@@ -74,6 +74,7 @@ export type NiwaRPC = {
       openPopup: {};
       closePopup: {};
       togglePopupVisibility: {};
+      promotePopup: {};
       switchTab: { tileId: TileId; tabId: TabId };
       moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
       closeTab: { tileId: TileId; tabId: TabId };
@@ -356,6 +357,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       togglePopupVisibility: () => {
         workspaceManager.togglePopupVisibility();
+      },
+      promotePopup: () => {
+        workspaceManager.promotePopup();
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);

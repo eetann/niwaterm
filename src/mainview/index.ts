@@ -19,6 +19,7 @@ import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
+import { PopupToolbar } from "./react/popup-toolbar";
 import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
@@ -42,6 +43,7 @@ const popupEl = document.getElementById("popup") as HTMLDivElement;
 const popupBoxEl = document.getElementById("popup-box") as HTMLDivElement;
 const popupTermEl = popupBoxEl.querySelector(".term") as HTMLDivElement;
 const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
+const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -74,6 +76,16 @@ const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 // ---- サイドバー: 起動時に固定のReact root（closeやopen等に応じて中身だけ差し替える）----
 const sidebarSwitcherRoot = createRoot(sidebarSwitcherEl);
 const sidebarWorkspaceListRoot = createRoot(sidebarListEl);
+
+// ---- ポップアップツールバー: 起動時に固定のReact root（propsは不変のため一度だけrenderする）----
+const popupToolbarRoot = createRoot(popupToolbarEl);
+popupToolbarRoot.render(
+  createElement(PopupToolbar, {
+    onPromote: () => sendMessage("promotePopup"),
+    onMinimize: () => sendMessage("togglePopupVisibility"),
+    onClose: () => sendMessage("closePopup"),
+  }),
+);
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
 let customViewWebviewEl: WebviewTagElement | null = null;
@@ -222,6 +234,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         workspaceIds = p.workspaceIds;
         lastLayout = p.workspace.layout;
         lastTabNames = p.workspace.tabNames;
+        // 昇格（promote）時、popupだったtabIdがここで通常タブとしてDOM登録される。
+        // 後続のapplyPopupStateのteardownPopupContentはこの登録が既に上書き済みか判定して
+        // 動くため、renderLayout→applyPopupStateの順序は変更しないこと
         renderLayout(p.workspace.layout, p.workspace.tabs);
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
@@ -653,9 +668,20 @@ function teardownPopupContent(): void {
   if (!currentPopupTabId) return;
   popupResizeObserver?.disconnect();
   popupResizeObserver = null;
-  termElByTabId.delete(currentPopupTabId);
-  cursorElByTabId.delete(currentPopupTabId);
-  wheelAccumPxByTabId.delete(currentPopupTabId);
+  // 昇格（promote）時はrenderLayout()が先に走り、同じtabIdへ新しい.term/.cursorを
+  // 登録し直している可能性がある（ensureTabContentはtabContentElByTabIdに未登録のpopup分を
+  // 「新規タブ」とみなし、termElByTabId/cursorElByTabIdを上書きするため）。
+  // まだpopup自身のDOM要素を指している場合のみ削除し、昇格済みの正しい登録は残す
+  if (termElByTabId.get(currentPopupTabId) === popupTermEl) {
+    termElByTabId.delete(currentPopupTabId);
+  }
+  if (cursorElByTabId.get(currentPopupTabId) === popupCursorEl) {
+    cursorElByTabId.delete(currentPopupTabId);
+  }
+  // 昇格後（tabContentElByTabIdへ通常タブとして登録済み）はスクロール状態をリセットすべきでない
+  if (!tabContentElByTabId.has(currentPopupTabId)) {
+    wheelAccumPxByTabId.delete(currentPopupTabId);
+  }
   popupTermEl.innerHTML = "";
   currentPopupTabId = null;
 }
