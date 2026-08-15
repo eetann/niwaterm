@@ -58,6 +58,7 @@ customViewまで実機確認済み。`browser-screenshot`のみBun本体側の�
 - Windowsにはプロセスグループもシグナルも無いため、pty.tsのSIGINT/SIGWINCH補完はmacOSのみ実行する
 - IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
 - **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。send-keys・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
+- **`mainWindow.activate()`は呼ぶだけでwebviewのOSキーボードフォーカスを壊すことがある**（Windows実機）。呼んだ後はJS側から`imeEl.focus()`を何度呼んでも回復せず、実際のマウスクリックでしか復帰できない。目視確認が主目的で直後にキー入力を想定しない操作（show-tab等）では許容できるが、直後の入力を前提とする操作では呼ばないこと。詳細: docs/known-issues/windows-popup-activatewindow-focus-loss.md
 
 ## bun:ffiのハマりどころ
 

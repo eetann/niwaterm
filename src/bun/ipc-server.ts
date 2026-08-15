@@ -649,7 +649,11 @@ function buildApp(
     }
     const tabId = workspaceManager.openPopup(parsed);
     if (!tabId) return c.json({ ok: false, error: "a popup is already open" }, 409);
-    activateWindow();
+    // activateWindow()は意図的に呼ばない: mainWindow.activate()を呼ぶと、Windows実機で
+    // webviewのOSキーボードフォーカスが壊れ、以後JS側からfocus()を何度呼んでも回復せず
+    // マウスクリックでしか復帰できなくなる不具合がある（詳細: docs/known-issues/
+    // windows-popup-activatewindow-focus-loss.md）。popupは既にniwatermを操作中に開く
+    // ケースが主なので、ウィンドウ前面化なしでも実用上の支障は小さいと判断した
     return c.json({ ok: true, tabId });
   });
 
