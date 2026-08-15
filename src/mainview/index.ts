@@ -703,6 +703,7 @@ function applyPopupState(
     teardownPopupContent();
     setupPopupContent(popup.tabId);
   }
+  const becameVisible = popup.visible && !popupVisible;
   popupVisible = popup.visible;
   popupEl.hidden = !popup.visible;
   // 未指定時は空文字列に戻しCSS側の既定値（80%）を使う
@@ -710,6 +711,10 @@ function applyPopupState(
   popupBoxEl.style.height = popup.height !== undefined ? `${popup.height}%` : "";
   // 再表示直後は確定サイズを送り直す（非表示中はResizeObserverが動いてもスキップしているため。setTabVisibleと同じ理由）
   if (popup.visible) sendResize(popup.tabId);
+  // 開く・再表示のタイミングでキー入力の受け口(imeEl)へ明示的にフォーカスを移す。
+  // これが無いと、開いた直後は一度マウスでクリックするまでキー入力が届かない
+  // （popupEl.mousedownリスナーで初めてfocus()される作りだったため）
+  if (becameVisible) imeEl.focus({ preventScroll: true });
 }
 
 /** 開いていなければ新規に開き、開いていれば表示⇔非表示を切り替える */
