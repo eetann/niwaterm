@@ -57,7 +57,7 @@ customViewまで実機確認済み。`browser-screenshot`のみBun本体側の�
 - **キーバインドはOSで別テーブル**: macOSはcmd系、Windowsはctrl+shift系（`defaultKeybindings` / `defaultWindowsKeybindings`）。ctrl単独はCtrl+C/Ctrl+D/Ctrl+B等ターミナルの制御文字と衝突するため必ずshiftかaltを伴わせる
 - Windowsにはプロセスグループもシグナルも無いため、pty.tsのSIGINT/SIGWINCH補完はmacOSのみ実行する
 - IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- **既知の重大バグ: PTY出力の直後にプロセスが終了するとBunがネイティブクラッシュする**（Windows実機、Bun 1.3.14）。send-keys・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・再現条件・回避策: docs/build/windows-build.md「既知の差異・制約」
+- **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。send-keys・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
 
 ## bun:ffiのハマりどころ
 

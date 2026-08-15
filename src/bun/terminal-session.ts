@@ -57,7 +57,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (cwd !== null) opts.onPwdChanged?.(cwd);
   });
 
+  // Windows実機ではPTYプロセスのonExit発火後にもdataコールバックが非同期に遅延発火することがあり、
+  // dispose()でGhosttyTerminalを解放した後にterm.write()するとuse-after-freeでクラッシュする
+  // （詳細: docs/known-issues/windows-pty-dispose-use-after-free.md）
   pty.onData((data) => {
+    if (disposed) return;
     term.write(data);
     opts.onOutput?.();
   });

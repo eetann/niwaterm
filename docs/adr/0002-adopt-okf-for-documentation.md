@@ -70,7 +70,7 @@ description: niwaterm CLI（niwatermコマンド）のサブコマンド一覧�
 
 ### 3. niwaterm の type 語彙
 
-中央レジストリを持たない OKF の思想に従い、type は niwaterm プロジェクト内で自由に定義・拡張してよい。現時点の語彙は以下の5つ。
+中央レジストリを持たない OKF の思想に従い、type は niwaterm プロジェクト内で自由に定義・拡張してよい。現時点の語彙は以下の6つ。
 
 | type | 用途 | 該当ファイル |
 |------|------|--------------|
@@ -79,6 +79,7 @@ description: niwaterm CLI（niwatermコマンド）のサブコマンド一覧�
 | `ADR` | 意思決定記録 | adr/*.md |
 | `Reference` | コマンド・設定項目のリファレンス | guide/cli.md, guide/config.md |
 | `Runbook` | 手順書 | build/macos-build.md, build/windows-build.md |
+| `Known Issue` | 既知の不具合の原因調査・対処記録 | known-issues/*.md |
 
 未知の type 値が出てきても、OKF の consumer 要件（未知の type を拒否してはならない）に従い、読み手はエラーとして扱わない。新しい種類の文書が必要になったら、この表に語彙を追記する。
 
@@ -133,11 +134,14 @@ docs/
   adr/        # ADR。意思決定記録
     0001-....md
     0002-....md
+  known-issues/  # Known Issue。既知の不具合の原因調査・対処記録
+    windows-pty-dispose-use-after-free.md
 ```
 
-- `planning/`: mvp.md（コンセプト）と roadmap.md（進行計画）をまとめる。両者は「プロダクトが目指す姿と現在地」を示すものであり、MVP 達成という区切りを迎えたら役目を終えて縮小・アーカイブされる性質を持つ点で、他の3分類（ユーザーが使い続ける限り必要な guide/、開発を続ける限り必要な build/、恒久的な記録である adr/）と異なる
+- `planning/`: mvp.md（コンセプト）と roadmap.md（進行計画）をまとめる。両者は「プロダクトが目指す姿と現在地」を示すものであり、MVP 達成という区切りを迎えたら役目を終えて縮小・アーカイブされる性質を持つ点で、他の分類（ユーザーが使い続ける限り必要な guide/、開発を続ける限り必要な build/、恒久的な記録である adr/・known-issues/）と異なる
 - `guide/` と `build/` の境界は「読者が niwaterm を使う人か、ビルドする人か」。CLI・設定ファイルは前者、ネイティブライブラリのビルド手順は後者
-- type 語彙とディレクトリは概ね1対1で対応する（`Concept`/`Plan` → `planning/`、`Reference` → `guide/`、`Runbook` → `build/`、`ADR` → `adr/`）が、規約として強制はしない。将来 type が増えた際に必ずしも新しいディレクトリを切る必要はない
+- `build/`（手順書）と `known-issues/`（不具合調査）の境界は「通常の手順か、原因調査を要した既知の不具合の記録か」。ビルド手順の一部として簡潔に書けるものは `build/` のトラブルシューティング表に留め、原因の切り分けに複数の検証ステップを要したものは `known-issues/` に切り出す
+- type 語彙とディレクトリは概ね1対1で対応する（`Concept`/`Plan` → `planning/`、`Reference` → `guide/`、`Runbook` → `build/`、`ADR` → `adr/`、`Known Issue` → `known-issues/`）が、規約として強制はしない。将来 type が増えた際に必ずしも新しいディレクトリを切る必要はない
 
 ## Consequences
 
