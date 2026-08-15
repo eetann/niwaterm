@@ -30,7 +30,7 @@ import splitTileCommand from "./commands/split-tile";
 import switchTabCommand from "./commands/switch-tab";
 import switchWorkspaceCommand from "./commands/switch-workspace";
 
-const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する（詳細: niwaterm docs show cli）";
+const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
 
 const mainCommand = define({
   name: "niwaterm",
@@ -47,6 +47,7 @@ try {
     name: "niwaterm",
     version: "0.0.1",
     description: DESCRIPTION,
+    renderHeader: null,
     subCommands: {
       ping: pingCommand,
       list: listCommand,
