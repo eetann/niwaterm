@@ -530,6 +530,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return Object.fromEntries(tileNames);
   }
 
+  /**
+   * サイドバー一覧用の軽量な参照。非アクティブワークスペースでも（あるいは表示中で
+   * ウィンドウ上は隠れていても）ポップアップの有無・表示状態を把握できるようにする
+   */
+  function getPopupInfo(): { tabId: TabId; visible: boolean } | null {
+    return popupTabId ? { tabId: popupTabId, visible: popupVisible } : null;
+  }
+
   /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
   /** ポップアップは一時的な画面のため永続化対象から除外する */
   function getPersistableTabs(): Record<TabId, PersistedTab> {
@@ -681,6 +689,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setTileName,
     listTabNames,
     listTileNames,
+    getPopupInfo,
     getPersistableTabs,
     dispose,
   };

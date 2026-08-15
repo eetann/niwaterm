@@ -842,6 +842,7 @@ function renderSidebar(
       workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
       onSelectWorkspaceHeader: activateSidebarWorkspace,
       onSelectTab: activateSidebarTab,
+      onSelectPopup: activateSidebarPopup,
       onRenameTab: renameSidebarTab,
       onRenameTile: renameSidebarTile,
       onRenameWorkspace: renameSidebarWorkspace,
@@ -1302,6 +1303,21 @@ function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: Tab
     sendMessage("switchWorkspace", { workspaceId });
     sendMessage("focusTile", { tileId });
     sendMessage("switchTab", { tileId, tabId });
+  }
+  imeEl.focus({ preventScroll: true });
+}
+
+/**
+ * サイドバーのポップアップ行クリック。非アクティブワークスペースなら先に切り替え、
+ * 最小化（非表示）中なら再表示する。既に表示中ならフォーカスを移すだけ
+ */
+function activateSidebarPopup(workspaceId: WorkspaceId): void {
+  if (workspaceId !== activeWorkspaceId) {
+    sendMessage("switchWorkspace", { workspaceId });
+  }
+  const entry = lastWorkspaces.find((w) => w.workspaceId === workspaceId);
+  if (entry?.popup && !entry.popup.visible) {
+    sendMessage("togglePopupVisibility");
   }
   imeEl.focus({ preventScroll: true });
 }

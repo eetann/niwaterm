@@ -1,4 +1,4 @@
-import { Bot, ChevronRight, GitBranch } from "lucide-react";
+import { Bot, ChevronRight, GitBranch, PictureInPicture2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import {
   ContextMenu,
@@ -12,6 +12,7 @@ import type { WorkspaceId } from "../../bun/workspace-manager";
 import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
+  type SidebarPopupItem,
   type SidebarTabRowItem,
   type SidebarWorkspaceItem,
 } from "./sidebar-props";
@@ -20,6 +21,7 @@ export interface SidebarWorkspaceListProps {
   workspaces: SidebarWorkspaceItem[];
   onSelectWorkspaceHeader: (workspaceId: WorkspaceId) => void;
   onSelectTab: (workspaceId: WorkspaceId, tileId: TileId, tabId: TabId) => void;
+  onSelectPopup: (workspaceId: WorkspaceId) => void;
   onRenameTab: (tabId: TabId, name: string) => void;
   onRenameTile: (tileId: TileId, name: string) => void;
   onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
@@ -54,6 +56,7 @@ export function SidebarWorkspaceList({
   workspaces,
   onSelectWorkspaceHeader,
   onSelectTab,
+  onSelectPopup,
   onRenameTab,
   onRenameTile,
   onRenameWorkspace,
@@ -208,6 +211,30 @@ export function SidebarWorkspaceList({
     );
   }
 
+  /**
+   * ポップアップ（ADR 0005）はTile木構造の外側にあるためrenderTabCardと違いtileIdを持たない。
+   * 最小化（非表示）中でもサイドバーから存在を把握・再表示できるようにする
+   */
+  function renderPopupCard(workspaceId: WorkspaceId, popup: SidebarPopupItem) {
+    return (
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => onSelectPopup(workspaceId)}
+        title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
+        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-accent"
+      >
+        <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
+        {!popup.visible && (
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+            最小化
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <>
       {workspaces.map((workspace) => {
@@ -277,6 +304,7 @@ export function SidebarWorkspaceList({
             </div>
             {!isWorkspaceCollapsed && (
               <div className="flex flex-col gap-1 px-1.5 pb-1.5">
+                {workspace.popup && renderPopupCard(workspace.workspaceId, workspace.popup)}
                 {workspace.tiles.map((tile) => {
                   if (!showTileHeaders) {
                     return (

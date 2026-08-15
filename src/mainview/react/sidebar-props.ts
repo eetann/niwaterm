@@ -25,11 +25,18 @@ export interface SidebarTileItem {
   tabs: SidebarTabRowItem[];
 }
 
+export interface SidebarPopupItem {
+  tabId: TabId;
+  visible: boolean;
+  label: string;
+}
+
 export interface SidebarWorkspaceItem {
   workspaceId: WorkspaceId;
   label: string;
   active: boolean;
   tiles: SidebarTileItem[];
+  popup: SidebarPopupItem | null;
 }
 
 /** 未知の値・未設定はidleへフォールバックする（表示側で例外を出さないための安全側デフォルト） */
@@ -76,6 +83,13 @@ export function buildSidebarWorkspaceItems(
     workspaceId: entry.workspaceId,
     label: entry.name || `Workspace ${workspaceIndex + 1}`,
     active: entry.workspaceId === currentActiveWorkspaceId,
+    popup: entry.popup
+      ? {
+          tabId: entry.popup.tabId,
+          visible: entry.popup.visible,
+          label: entry.tabNames[entry.popup.tabId] || "Popup",
+        }
+      : null,
     tiles: listLeaves(entry.layout).map((leaf, tileIndex) => ({
       tileId: leaf.id,
       label: entry.tileNames[leaf.id] || `Tile ${tileIndex + 1}`,

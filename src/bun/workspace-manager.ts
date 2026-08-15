@@ -54,6 +54,12 @@ export interface WorkspaceListEntry {
   tileNames: Record<TileId, string>;
   /** ユーザーがサイドバーから設定したワークスペース名。未設定はnull（表示側で連番にフォールバック） */
   name: string | null;
+  /**
+   * このワークスペースのポップアップ（ADR 0005）。非アクティブワークスペースや、
+   * 表示中でも最小化（非表示）中のポップアップの有無をサイドバーで把握できるようにするため、
+   * アクティブワークスペースに限らず全ワークスペース分含める
+   */
+  popup: { tabId: TabId; visible: boolean } | null;
 }
 
 export interface TabLocation {
@@ -339,6 +345,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         tabNames: ws.listTabNames(),
         tileNames: ws.listTileNames(),
         name: workspaceNames.get(id) ?? null,
+        popup: ws.getPopupInfo(),
       };
     });
   }

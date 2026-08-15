@@ -22,6 +22,7 @@ function workspace(
   tabNames: Record<string, string> = {},
   tileNames: Record<string, string> = {},
   name: string | null = null,
+  popup: WorkspaceListEntry["popup"] = null,
 ): WorkspaceListEntry {
   return {
     workspaceId,
@@ -32,6 +33,7 @@ function workspace(
     tabNames,
     tileNames,
     name,
+    popup,
   };
 }
 
@@ -49,6 +51,7 @@ describe("buildSidebarWorkspaceItems", () => {
         workspaceId: "ws-1",
         label: "Workspace 1",
         active: false,
+        popup: null,
         tiles: [
           {
             tileId: "tile-1",
@@ -76,6 +79,7 @@ describe("buildSidebarWorkspaceItems", () => {
         workspaceId: "ws-2",
         label: "Workspace 2",
         active: true,
+        popup: null,
         tiles: [
           {
             tileId: "tile-2",
@@ -253,6 +257,37 @@ describe("buildSidebarWorkspaceItems", () => {
 
     expect(items[0]?.active).toBe(false);
     expect(items[0]?.tiles[0]?.tabs[0]?.active).toBe(false);
+  });
+
+  test('popupがあればtabNamesの名前（無ければ固定ラベル"Popup"）とvisibleを含む', () => {
+    const workspaces = [
+      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {}, {}, {}, null, {
+        tabId: "tab-popup",
+        visible: false,
+      }),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.popup).toEqual({ tabId: "tab-popup", visible: false, label: "Popup" });
+  });
+
+  test("popupのtabIdがtabNamesに設定されていればそちらを優先する", () => {
+    const workspaces = [
+      workspace(
+        "ws-1",
+        leaf("tile-1", ["tab-1"], "tab-1"),
+        {},
+        { "tab-popup": "lazygit" },
+        {},
+        null,
+        { tabId: "tab-popup", visible: true },
+      ),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.popup).toEqual({ tabId: "tab-popup", visible: true, label: "lazygit" });
   });
 
   test("同一タイル内の複数タブが別々のagent状態を持てる（タブ単位化の主目的）", () => {
