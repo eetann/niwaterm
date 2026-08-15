@@ -1340,6 +1340,20 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   imeEl.focus({ preventScroll: true });
 });
 
+// ---- OSC 8ハイパーリンク（フォーマッタがHTML出力時に <a href> として埋め込む）----
+// documentレベルで委譲し、タイル・popup両方のターミナル出力内リンクをまとめて扱う
+document.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement;
+  const anchor = target.closest<HTMLAnchorElement>(".term a[href]");
+  if (!anchor) return;
+  // ドラッグでのテキスト選択の終端クリックでは開かない（選択解除も兼ねて素通りさせる）
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) return;
+  e.preventDefault();
+  sendMessage("openLink", { url: anchor.href });
+  imeEl.focus({ preventScroll: true });
+});
+
 // ---- タブD&D移動（別タイルへドロップしたら該当タイルへ移動する）----
 let dragOverTileEl: HTMLElement | null = null;
 

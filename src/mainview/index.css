@@ -377,6 +377,19 @@ body {
   display: inline-block !important;
 }
 
+/* OSC 8ハイパーリンク。地の文字色を引き継ぎつつ、リンクだと分かるよう下線とpointerを付ける */
+.tile .term a,
+#popup .term a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+  cursor: pointer;
+}
+.tile .term a:hover,
+#popup .term a:hover {
+  text-decoration-color: currentColor;
+}
+
 /* 全角文字を必ず2セル幅に揃える（CJKフォールバックグリフの実幅は2×セル幅と一致しないため） */
 .wide {
   display: inline-block;

@@ -1,4 +1,4 @@
-import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
+import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema, Utils } from "electrobun/bun";
 import type {
   KeybindingsConfig,
   LayoutsConfig,
@@ -13,6 +13,7 @@ import { readClipboardText, writeClipboardText } from "./clipboard";
 import { configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
+import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
@@ -60,6 +61,7 @@ export type NiwaRPC = {
       scrollToBottom: { tabId: TabId };
       copySelection: { text: string };
       pasteFromClipboard: { tabId: TabId };
+      openLink: { url: string };
       resize: {
         tabId: TabId;
         cols: number;
@@ -310,6 +312,13 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         readClipboardText().then((text) => {
           if (text) workspaceManager.handlePaste(tabId, text);
         });
+      },
+      openLink: ({ url }: { url: string }) => {
+        if (!isAllowedLinkUrl(url)) {
+          console.log(`[bun] blocked opening link with disallowed scheme: ${url}`);
+          return;
+        }
+        Utils.openExternal(url);
       },
       resize: (p: {
         tabId: TabId;
