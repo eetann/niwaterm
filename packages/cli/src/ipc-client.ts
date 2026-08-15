@@ -455,6 +455,17 @@ export function focusTile(endpoint: IpcEndpoint, tileId: TileId): Promise<FocusT
   return postJson(endpoint, "/focus-tile", { tileId });
 }
 
+export type FocusDirection = "up" | "down" | "left" | "right";
+
+export type FocusDirectionResult = { ok: true } | { ok: false; error: string };
+
+export function focusDirection(
+  endpoint: IpcEndpoint,
+  direction: FocusDirection,
+): Promise<FocusDirectionResult> {
+  return postJson(endpoint, "/focus-direction", { direction });
+}
+
 export type CaptureTabResult = { ok: true; text: string } | { ok: false; error: string };
 
 export async function captureTab(endpoint: IpcEndpoint, tabId: TabId): Promise<CaptureTabResult> {

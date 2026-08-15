@@ -183,6 +183,23 @@ function parseSplitTileBody(body: unknown): SplitTileRequestBody | null {
   return result;
 }
 
+interface DirectionRequestBody {
+  direction: "up" | "down" | "left" | "right";
+}
+
+function parseDirectionBody(body: unknown): DirectionRequestBody | null {
+  const b = body as { direction?: unknown };
+  if (
+    b.direction !== "up" &&
+    b.direction !== "down" &&
+    b.direction !== "left" &&
+    b.direction !== "right"
+  ) {
+    return null;
+  }
+  return { direction: b.direction };
+}
+
 interface TileTabRequestBody extends TileIdRequestBody {
   tabId: string;
 }
@@ -501,6 +518,20 @@ function buildApp(
     if (!parsed) return c.json({ ok: false, error: "expected { tileId: string }" }, 400);
     const ok = workspaceManager.focusTile(parsed.tileId);
     if (!ok) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post("/focus-direction", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseDirectionBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { direction: "up"|"down"|"left"|"right" }' },
+        400,
+      );
+    }
+    workspaceManager.focusDirection(parsed.direction);
     return c.json({ ok: true });
   });
 

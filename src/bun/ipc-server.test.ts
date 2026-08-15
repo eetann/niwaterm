@@ -845,6 +845,56 @@ describe("POST /focus-tile", () => {
   });
 });
 
+describe("POST /focus-direction", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("指定方向の隣接タイルへフォーカスを移す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.splitTile(firstTileId, "vertical");
+    mgr.focusTile(firstTileId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/focus-direction", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ direction: "right" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspace.focusedTileId).not.toBe(firstTileId);
+  });
+
+  test("不正なdirectionは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/focus-direction", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ direction: "diagonal" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /new-workspace, POST /switch-workspace, POST /close-workspace", () => {
   let dir: string;
   let socketPath: string;

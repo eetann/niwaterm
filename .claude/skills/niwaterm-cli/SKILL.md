@@ -20,7 +20,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 - `list` — ワークスペース・タイル・タブの一覧（操作対象のIDを確認する起点）
 - `send-keys` — 指定タブへのキー送信（tmuxのsend-keys相当）
-- `split-tile` / `new-tab` / `switch-tab` / `close-tab` / `focus-tile` — レイアウト操作
+- `split-tile` / `new-tab` / `switch-tab` / `close-tab` / `focus-tile` / `focus-direction` — レイアウト操作
 - `popup` — タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxのpopup/floating相当。`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `new-workspace` / `switch-workspace` / `close-workspace` / `rename-workspace` — ワークスペースの作成・切替・削除・名前変更
 - `layout list` / `layout apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用（vde-layoutライク）

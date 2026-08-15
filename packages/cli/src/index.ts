@@ -9,6 +9,7 @@ import captureTabCommand from "./commands/capture-tab";
 import closeTabCommand from "./commands/close-tab";
 import closeWorkspaceCommand from "./commands/close-workspace";
 import docsCommand from "./commands/docs";
+import focusDirectionCommand from "./commands/focus-direction";
 import focusTileCommand from "./commands/focus-tile";
 import getVarCommand from "./commands/get-var";
 import layoutCommand from "./commands/layout";
@@ -61,6 +62,7 @@ try {
       "switch-tab": switchTabCommand,
       "close-tab": closeTabCommand,
       "focus-tile": focusTileCommand,
+      "focus-direction": focusDirectionCommand,
       "new-workspace": newWorkspaceCommand,
       "switch-workspace": switchWorkspaceCommand,
       "close-workspace": closeWorkspaceCommand,

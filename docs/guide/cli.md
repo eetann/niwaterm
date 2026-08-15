@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`）、タイル・タブに所属しない一時的なポップアップ画面を開く・閉じる・表示/非表示を切り替える・フォーカス中タイルへタブとして昇格する（`niwaterm popup`/`popup-close`/`popup-toggle`/`popup-promote`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`/`focus-direction`）、タイル・タブに所属しない一時的なポップアップ画面を開く・閉じる・表示/非表示を切り替える・フォーカス中タイルへタブとして昇格する（`niwaterm popup`/`popup-close`/`popup-toggle`/`popup-promote`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -52,6 +52,7 @@ niwaterm new-tab --tile <tileId> [--url <url> | --custom-view | [--shell <shellP
 niwaterm switch-tab --tile <tileId> --tab <tabId>
 niwaterm close-tab --tile <tileId> --tab <tabId>
 niwaterm focus-tile --tile <tileId>
+niwaterm focus-direction --direction up|down|left|right
 ```
 
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
@@ -61,6 +62,7 @@ niwaterm focus-tile --tile <tileId>
 - `switch-tab` — 指定タイル内でアクティブタブを切り替える
 - `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
 - `focus-tile` — 指定タイルへフォーカスを移す
+- `focus-direction` — 現在フォーカス中のタイルから見て指定方向にある最も近いタイルへフォーカスを移す。該当タイルが無ければ何もしない（エラーにはならない）。常にアクティブなワークスペース基準で動く（`--tile`のような対象指定は取らない）
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
 
