@@ -23,7 +23,7 @@ export default define({
       type: "positional",
       multiple: true,
       description:
-        "デフォルトシェルの起動後に実行するコマンド（省略時はシェルを起動したままにする）。指定すると実行完了で自動的にポップアップが閉じる（ワンショット実行。例: niwaterm popup lazygit）。既知の制約: lazygit/nvim等の対話的TUIでは自動closeが機能しないことがある（詳細: niwaterm docs show cli）",
+        "デフォルトシェル（WSLプロファイル等も含む）でこのコマンドを実行する（省略時はシェルを起動したままにする）。コマンドが終了すると自動的にポップアップが閉じる（ワンショット実行。lazygit等のフルスクリーンTUIでも機能する。例: niwaterm popup lazygit）",
     },
   },
   run: async (ctx) => {

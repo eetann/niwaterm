@@ -16,6 +16,12 @@ export interface PtyOptions {
   term?: string;
   /** 追加で設定する環境変数（process.envへ上書きマージする） */
   env?: Record<string, string>;
+  /**
+   * 指定すると、シェルの対話セッションの代わりにこのコマンドを実行する（ワンショット実行）。
+   * シェルの-c/-Command相当でexecされるため、コマンド終了=シェルプロセス終了となり、
+   * PTYのonExitが自然に発火する（popupのワンショット実行で使用）
+   */
+  command?: string;
 }
 
 export interface Pty {
@@ -39,6 +45,30 @@ function shellCommand(shell: string | undefined): string[] {
     if (parts.length > 0) return parts;
   }
   return isWindows ? ["powershell.exe", "-NoLogo"] : ["/bin/zsh", "-il"];
+}
+
+/**
+ * cmd（シェル起動コマンド配列）へ、シェルの対話セッションの代わりにcommandを実行させる引数を追記する。
+ * 必ずapplyWslCdArg（--cdの追記）より後に呼ぶこと: wsl.exeの`--`以降は全てLinux側でexecする
+ * コマンドの引数として扱われるため、`--cd`は`--`より前に無ければならない。
+ */
+function appendCommandArgs(cmd: string[], command: string | undefined): void {
+  if (command === undefined) return;
+  const head = cmd[0]?.toLowerCase();
+  if (head === "powershell.exe" || head === "pwsh.exe") {
+    cmd.push("-Command", command);
+    return;
+  }
+  if (head === "wsl.exe") {
+    // wsl.exeの`--`以降は複数の個別引数として渡す必要がある（1つの文字列のままだと
+    // その全体を実行ファイル名として探そうとして失敗する）。shellCommand同様、
+    // スペース区切りで単純分割する（クォート・エスケープ非対応）
+    const parts = command.split(" ").filter((s) => s.length > 0);
+    cmd.push("--", ...parts);
+    return;
+  }
+  // Unix系シェル(zsh/bash/fish等): -cはシェル共通のコマンド実行オプション。実行完了でシェルは自動終了する
+  cmd.push("-c", command);
 }
 
 /**
@@ -68,6 +98,7 @@ export function createPty(opts: PtyOptions): Pty {
   // Linux側で/mnt/c/...等にマップされてしまうため、必要ならcmdへ--cdを追記する
   // （詳細: wsl-cwd.ts）
   const spawnCwd = applyWslCdArg(cmd, opts.cwd);
+  appendCommandArgs(cmd, opts.command);
 
   let onDataFn: ((data: Uint8Array) => void) | null = null;
   let onExitFn: ((code: number) => void) | null = null;

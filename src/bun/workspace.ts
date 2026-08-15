@@ -28,7 +28,6 @@ import {
   type TerminalRenderState,
   type TerminalSession,
 } from "./terminal-session";
-import { tmuxKeysToBytes } from "./tmux-keys";
 import { resolveActualCwd } from "./wsl-cwd";
 
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
@@ -125,6 +124,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     rows: number,
     shellOverride?: string,
     cwd?: string,
+    command?: string,
   ): void {
     sizeByTabId.set(tabId, { cols, rows });
     const shell = shellOverride ?? opts.getDefaultShell?.();
@@ -134,6 +134,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       rows,
       shell,
       cwd,
+      command,
       // シェル統合スクリプトやタブ内のCLI呼び出しが`--tab`省略でこのタブを指せるようにする
       env: { NIWATERM_TAB_ID: tabId },
       onOutput: () => opts.onDirty(),
@@ -315,18 +316,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   /**
    * ポップアップを開く。既に開いていれば何もしない（同時に1つだけ、ADR 0005）。
-   * commandを指定すると、通常通りデフォルトシェル（WSLプロファイル等も含む）でPTYを起動した上で、
-   * 起動直後にそのコマンド文字列とexitをsend-keys相当で流し込む（ワンショット実行）。
-   * layout-apply.tsのcommand実装と同じ方式（PTY自体は短命にしない）。
-   * シェルがexitで終了するとhandleTabProcessExitのpopup分岐で自動的に閉じる。
-   * コマンド文字列をそのままシェル実行ファイルとして直接spawnする方式は、Windows実機で
-   * 短命プロセスがBunのネイティブクラッシュを誘発する既知の問題があるため採用していない
-   * （.mywork/tmp/layout-apply-crush.log、layout-apply.tsのcanReusePlaceholder参照）。
-   * commandとexitは`;`区切りの1コマンドとしてではなく、別々のEnterで区切って送る
-   * （`"<command>; exit"\r`のように1回の改行にまとめて送るとWindows実機でクラッシュする
-   * 既知の問題を実機検証で確認した。原因はniwaterm側の特定コードではなく、シェル(zsh)が
-   * `;`区切りの複合コマンド末尾でexitする際のPTY出力とプロセス終了通知のタイミングに
-   * 起因すると見られる。改行で分けて送る分には問題なく動作する）
+   * commandを指定すると、デフォルトシェル（WSLプロファイル等も含む）の-c/-Command相当で
+   * そのコマンドをexecする（ワンショット実行、pty.tsのappendCommandArgs参照）。
+   * execで置き換わるため、コマンド終了=シェルプロセス終了となりPTYのonExitが自然に発火し、
+   * handleTabProcessExitのpopup分岐で自動的に閉じる（明示的なexit送信は不要）。
+   * 以前は「PTY起動→send-keys相当でcommand+exitを流し込む」方式だったが、シェルの初期化が
+   * 完了する前にコマンド文字列が届いてしまう競合や、フルスクリーンTUI（lazygit等）の起動中に
+   * exitが意図しない入力として吸われてしまう問題があったため、この方式に置き換えた。
    */
   function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
     if (popupTabId) return null;
@@ -338,14 +334,18 @@ export function createWorkspace(opts: WorkspaceOptions) {
       cols: opts.initialCols,
       rows: opts.initialRows,
     };
-    spawnSession(newTabId, size.cols, size.rows, undefined, popupOpts.cwd ?? inheritedCwd);
+    spawnSession(
+      newTabId,
+      size.cols,
+      size.rows,
+      undefined,
+      popupOpts.cwd ?? inheritedCwd,
+      popupOpts.command,
+    );
     popupTabId = newTabId;
     popupVisible = true;
     popupWidth = popupOpts.width;
     popupHeight = popupOpts.height;
-    if (popupOpts.command !== undefined) {
-      handleInput(newTabId, tmuxKeysToBytes([popupOpts.command, "Enter", "exit", "Enter"]));
-    }
     opts.onDirty();
     return newTabId;
   }
