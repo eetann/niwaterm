@@ -24,6 +24,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `popup` — タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxのpopup/floating相当。`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `new-workspace` / `switch-workspace` / `close-workspace` / `rename-workspace` — ワークスペースの作成・切替・削除・名前変更
 - `layout list` / `layout apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用（vde-layoutライク）
+- `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `capture-tab` — タブの画面内容（プレーンテキスト）取得
 - `set-var` / `get-var` / `list-vars` — タブごとのkey-value変数（タブ間の連携に使える）
 - `browser-navigate` / `browser-get-text` / `browser-get-html` / `browser-screenshot` — ブラウザタブ操作

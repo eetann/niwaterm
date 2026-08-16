@@ -1225,6 +1225,9 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// キーバインド1回分のフォントサイズ増減量（px）。上下限のクランプ・実際の適用はbun側が担う
+const FONT_SIZE_STEP = 1;
+
 function handleTileCommand(cmd: TileCommand): void {
   // サイドバー開閉・ポップアップ開閉はbun側の状態を必要としないため、フォーカス中タイル無しでも動作させる
   if (cmd.type === "toggleSidebar") {
@@ -1237,6 +1240,18 @@ function handleTileCommand(cmd: TileCommand): void {
   }
   if (cmd.type === "commandPalette") {
     openCommandPalette();
+    return;
+  }
+  if (cmd.type === "increaseFontSize") {
+    sendMessage("zoomFontSize", { delta: FONT_SIZE_STEP });
+    return;
+  }
+  if (cmd.type === "decreaseFontSize") {
+    sendMessage("zoomFontSize", { delta: -FONT_SIZE_STEP });
+    return;
+  }
+  if (cmd.type === "resetFontSize") {
+    sendMessage("resetFontSizeZoom");
     return;
   }
   if (!focusedTileId) return;

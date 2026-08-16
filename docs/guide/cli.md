@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`/`focus-direction`）、タイル・タブに所属しない一時的なポップアップ画面を開く・閉じる・表示/非表示を切り替える・フォーカス中タイルへタブとして昇格する（`niwaterm popup`/`popup-close`/`popup-toggle`/`popup-promote`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`/`focus-direction`）、タイル・タブに所属しない一時的なポップアップ画面を開く・閉じる・表示/非表示を切り替える・フォーカス中タイルへタブとして昇格する（`niwaterm popup`/`popup-close`/`popup-toggle`/`popup-promote`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -117,6 +117,12 @@ niwaterm layout apply <name> [--new-workspace | --replace] [--cwd <dir>]
 - `layout apply <name>` — 指定したプリセットを適用する。`--new-workspace`（デフォルト、明示指定も可）は新規ワークスペースとして適用し、成功時にその`workspaceId`を表示する。`--replace`は現在のワークスペースを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**。確認プロンプト等は無い）。`--new-workspace`と`--replace`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
 
 指定した`name`が未定義の場合、プリセットの検証に失敗した場合（`shellProfile`が未知のid、`focus:true`が2つ以上、ratioが範囲外等）はいずれもエラーメッセージと共に終了コード1を返す。検証失敗時はワークスペースに一切変更を加えない。
+
+```sh
+niwaterm font-size increase|decrease|reset
+```
+
+ターミナルのフォントサイズを1段階拡大・縮小、またはconfigファイル（`niwaterm.config.ts`の`appearance.fontSize`）の値へリセットする。上限・下限でクランプされる。`niwaterm.config.ts`自体は変更しない実行時のみのズームで、キーバインド（既定: prefix `ctrl+b` → `=`/`-`/`0`）・コマンドパレットからの操作とも共有される。成功時、変更後のフォントサイズをpx単位で表示する。
 
 ```sh
 niwaterm shell-profiles

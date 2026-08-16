@@ -30,7 +30,10 @@ export type TileCommand =
   | { type: "pasteClipboard" }
   | { type: "scrollPage"; direction: "up" | "down" }
   | { type: "scrollToEdge"; edge: "top" | "bottom" }
-  | { type: "commandPalette" };
+  | { type: "commandPalette" }
+  | { type: "increaseFontSize" }
+  | { type: "decreaseFontSize" }
+  | { type: "resetFontSize" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -149,6 +152,12 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "scrollToEdge", edge: "bottom" };
     case "command-palette":
       return { type: "commandPalette" };
+    case "increase-font-size":
+      return { type: "increaseFontSize" };
+    case "decrease-font-size":
+      return { type: "decreaseFontSize" };
+    case "reset-font-size":
+      return { type: "resetFontSize" };
     default: {
       const exhaustive: never = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);

@@ -77,6 +77,8 @@ export type NiwaRPC = {
       closePopup: {};
       togglePopupVisibility: {};
       promotePopup: {};
+      zoomFontSize: { delta: number };
+      resetFontSizeZoom: {};
       switchTab: { tileId: TileId; tabId: TabId };
       moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
       closeTab: { tileId: TileId; tabId: TabId };
@@ -146,7 +148,37 @@ function render() {
 function sendConfig() {
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.config({ keybindings, appearance, customView, shellProfiles });
+  rpcSend.config({ keybindings, appearance: effectiveAppearance(), customView, shellProfiles });
+}
+
+// キーバインド・CLI・コマンドパレットからの実行時フォントサイズ変更（configファイルの
+// appearance.fontSizeとは独立したズーム量として保持する）。設定ファイルのホットリロードでは
+// リセットしない: ユーザーの直近の調整はconfig編集後も維持されるべきという判断
+const MIN_FONT_SIZE = 6;
+const MAX_FONT_SIZE = 48;
+const FONT_SIZE_STEP = 1;
+let fontSizeZoomDelta = 0;
+
+function clampFontSize(size: number): number {
+  return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, size));
+}
+
+function effectiveAppearance(): ResolvedAppearanceConfig {
+  if (fontSizeZoomDelta === 0) return appearance;
+  return { ...appearance, fontSize: clampFontSize(appearance.fontSize + fontSizeZoomDelta) };
+}
+
+function adjustFontSize(delta: number): number {
+  const clamped = clampFontSize(appearance.fontSize + fontSizeZoomDelta + delta);
+  fontSizeZoomDelta = clamped - appearance.fontSize;
+  sendConfig();
+  return clamped;
+}
+
+function resetFontSizeZoom(): number {
+  fontSizeZoomDelta = 0;
+  sendConfig();
+  return appearance.fontSize;
 }
 
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
@@ -259,6 +291,9 @@ try {
     captureUrlScreenshot,
     () => shellProfiles,
     () => layouts,
+    () => adjustFontSize(FONT_SIZE_STEP),
+    () => adjustFontSize(-FONT_SIZE_STEP),
+    () => resetFontSizeZoom(),
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -369,6 +404,12 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       promotePopup: () => {
         workspaceManager.promotePopup();
+      },
+      zoomFontSize: ({ delta }: { delta: number }) => {
+        adjustFontSize(delta);
+      },
+      resetFontSizeZoom: () => {
+        resetFontSizeZoom();
       },
       switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.switchTab(tileId, tabId);

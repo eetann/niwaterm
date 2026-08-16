@@ -304,6 +304,13 @@ async function readJsonBody(c: Context): Promise<unknown | undefined> {
   }
 }
 
+type FontSizeAction = "increase" | "decrease" | "reset";
+
+function parseFontSizeAction(body: unknown): FontSizeAction | null {
+  const action = (body as { action?: unknown } | undefined)?.action;
+  return action === "increase" || action === "decrease" || action === "reset" ? action : null;
+}
+
 function buildApp(
   workspaceManager: WorkspaceManager,
   getCustomView: () => ResolvedCustomViewConfig | null,
@@ -312,6 +319,9 @@ function buildApp(
   captureScreenshot: CaptureScreenshot,
   getShellProfiles: () => ShellProfile[],
   getLayouts: () => LayoutsConfig,
+  increaseFontSize: () => number,
+  decreaseFontSize: () => number,
+  resetFontSize: () => number,
 ) {
   const app = new Hono();
 
@@ -709,6 +719,27 @@ function buildApp(
     return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
   });
 
+  // フォントサイズをキーバインド1回分だけ拡大・縮小、またはconfig値へリセットする
+  // （現在の実効フォントサイズをpxで返す。configファイルのappearance.fontSize自体は変更しない）
+  app.post("/font-size", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const action = parseFontSizeAction(body);
+    if (!action) {
+      return c.json(
+        { ok: false, error: 'expected { action: "increase" | "decrease" | "reset" }' },
+        400,
+      );
+    }
+    const fontSize =
+      action === "increase"
+        ? increaseFontSize()
+        : action === "decrease"
+          ? decreaseFontSize()
+          : resetFontSize();
+    return c.json({ ok: true, fontSize });
+  });
+
   // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を
   // まとめて行う。人間がAIの操作結果を任意に目視確認するための高レベルコマンド
   // （switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）。
@@ -761,6 +792,9 @@ export async function createIpcServer(
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
   getShellProfiles: () => ShellProfile[] = () => [],
   getLayouts: () => LayoutsConfig = () => ({}),
+  increaseFontSize: () => number = () => 0,
+  decreaseFontSize: () => number = () => 0,
+  resetFontSize: () => number = () => 0,
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -774,6 +808,9 @@ export async function createIpcServer(
     captureScreenshot,
     getShellProfiles,
     getLayouts,
+    increaseFontSize,
+    decreaseFontSize,
+    resetFontSize,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で

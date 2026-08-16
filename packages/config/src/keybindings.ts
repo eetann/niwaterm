@@ -48,6 +48,9 @@ export const KEYBIND_ACTIONS = [
   "scroll-to-top",
   "scroll-to-bottom",
   "command-palette",
+  "increase-font-size",
+  "decrease-font-size",
+  "reset-font-size",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -82,6 +85,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   b: "toggle-sidebar",
   "`": "toggle-popup",
   ":": "command-palette",
+  "=": "increase-font-size",
+  "-": "decrease-font-size",
+  "0": "reset-font-size",
   pageup: "scroll-page-up",
   pagedown: "scroll-page-down",
   home: "scroll-to-top",

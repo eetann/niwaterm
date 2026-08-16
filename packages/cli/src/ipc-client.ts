@@ -420,6 +420,18 @@ export function togglePopupVisibility(endpoint: IpcEndpoint): Promise<TogglePopu
   return postJson(endpoint, "/toggle-popup", {});
 }
 
+export type FontSizeAction = "increase" | "decrease" | "reset";
+
+export type AdjustFontSizeResult = { ok: true; fontSize: number } | { ok: false; error: string };
+
+/** ターミナルのフォントサイズを拡大・縮小・リセットする。configファイルのappearance.fontSizeは変更しない実行時ズーム */
+export function adjustFontSize(
+  endpoint: IpcEndpoint,
+  action: FontSizeAction,
+): Promise<AdjustFontSizeResult> {
+  return postJson(endpoint, "/font-size", { action });
+}
+
 export type PromotePopupResult =
   | { ok: true; tileId: TileId; tabId: TabId }
   | { ok: false; error: string };

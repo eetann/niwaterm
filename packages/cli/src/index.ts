@@ -11,6 +11,7 @@ import closeWorkspaceCommand from "./commands/close-workspace";
 import docsCommand from "./commands/docs";
 import focusDirectionCommand from "./commands/focus-direction";
 import focusTileCommand from "./commands/focus-tile";
+import fontSizeCommand from "./commands/font-size";
 import getVarCommand from "./commands/get-var";
 import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
@@ -78,6 +79,7 @@ try {
       "list-vars": listVarsCommand,
       "shell-profiles": shellProfilesCommand,
       layout: layoutCommand,
+      "font-size": fontSizeCommand,
       docs: docsCommand,
     },
   });

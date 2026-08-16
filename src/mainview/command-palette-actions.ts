@@ -24,8 +24,11 @@ import {
   PanelLeft,
   PictureInPicture2,
   Plus,
+  RotateCcw,
   Rows2,
   X,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from "lucide-react";
 import type { KeybindAction } from "@niwaterm/config";
@@ -213,5 +216,29 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "スクロール",
     icon: ArrowDownToLine,
     keywords: ["latest line"],
+  },
+  {
+    action: "increase-font-size",
+    labelEn: "Increase Font Size",
+    label: "フォントサイズを拡大",
+    category: "表示",
+    icon: ZoomIn,
+    keywords: ["zoom in"],
+  },
+  {
+    action: "decrease-font-size",
+    labelEn: "Decrease Font Size",
+    label: "フォントサイズを縮小",
+    category: "表示",
+    icon: ZoomOut,
+    keywords: ["zoom out"],
+  },
+  {
+    action: "reset-font-size",
+    labelEn: "Reset Font Size",
+    label: "フォントサイズをリセット",
+    category: "表示",
+    icon: RotateCcw,
+    keywords: ["zoom reset"],
   },
 ];

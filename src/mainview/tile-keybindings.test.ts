@@ -191,6 +191,29 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("prefix -> =/-/0 でフォントサイズ拡大/縮小/リセット", () => {
+    const increaseResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    increaseResolver.handleKeydown(prefix());
+    expect(increaseResolver.handleKeydown(key("="))).toEqual({
+      kind: "command",
+      command: { type: "increaseFontSize" },
+    });
+
+    const decreaseResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    decreaseResolver.handleKeydown(prefix());
+    expect(decreaseResolver.handleKeydown(key("-"))).toEqual({
+      kind: "command",
+      command: { type: "decreaseFontSize" },
+    });
+
+    const resetResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resetResolver.handleKeydown(prefix());
+    expect(resetResolver.handleKeydown(key("0"))).toEqual({
+      kind: "command",
+      command: { type: "resetFontSize" },
+    });
+  });
+
   test("prefix -> 未割り当てキーはconsumedでキャンセルされる（PTYには送らない）", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());
