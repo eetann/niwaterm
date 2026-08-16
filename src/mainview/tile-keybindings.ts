@@ -29,7 +29,8 @@ export type TileCommand =
   | { type: "copySelection" }
   | { type: "pasteClipboard" }
   | { type: "scrollPage"; direction: "up" | "down" }
-  | { type: "scrollToEdge"; edge: "top" | "bottom" };
+  | { type: "scrollToEdge"; edge: "top" | "bottom" }
+  | { type: "commandPalette" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -98,7 +99,7 @@ function keyboardEventToSecondKeyCanonical(e: KeyboardEventLike): string {
   });
 }
 
-function actionToTileCommand(action: KeybindAction): TileCommand {
+export function actionToTileCommand(action: KeybindAction): TileCommand {
   switch (action) {
     case "split-vertical":
       return { type: "split", orientation: "vertical" };
@@ -146,6 +147,8 @@ function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "scrollToEdge", edge: "top" };
     case "scroll-to-bottom":
       return { type: "scrollToEdge", edge: "bottom" };
+    case "command-palette":
+      return { type: "commandPalette" };
     default: {
       const exhaustive: never = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);

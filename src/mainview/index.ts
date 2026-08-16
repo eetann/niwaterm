@@ -19,12 +19,14 @@ import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
+import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
 import { PopupToolbar } from "./react/popup-toolbar";
+import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
-import { createKeybindResolver, type TileCommand } from "./tile-keybindings";
+import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -44,6 +46,8 @@ const popupBoxEl = document.getElementById("popup-box") as HTMLDivElement;
 const popupTermEl = popupBoxEl.querySelector(".term") as HTMLDivElement;
 const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
 const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
+const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
+const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -86,6 +90,59 @@ popupToolbarRoot.render(
     onClose: () => sendMessage("closePopup"),
   }),
 );
+
+// ---- サイドバーツールバー: 起動時に固定のReact root（propsは不変のため一度だけrenderする）----
+const sidebarToolbarRoot = createRoot(sidebarToolbarEl);
+sidebarToolbarRoot.render(
+  createElement(SidebarToolbar, {
+    onOpenCommandPalette: () => openCommandPalette(),
+  }),
+);
+
+// ---- コマンドパレット: open状態が変わるたびrenderし直す ----
+const commandPaletteRoot = createRoot(commandPaletteRootEl);
+let commandPaletteOpen = false;
+// bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドで表示する（keybindResolverと同様）
+let lastKeybindingsConfig: KeybindingsConfig = defaultKeybindings;
+
+function formatKeyToken(token: string): string {
+  return token
+    .split("+")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("+");
+}
+
+function shortcutLabelForAction(action: NonPaletteKeybindAction): string | undefined {
+  const prefix = lastKeybindingsConfig.prefix;
+  if (!prefix) return undefined;
+  const entry = Object.entries(lastKeybindingsConfig.bindings ?? {}).find(
+    ([, boundAction]) => boundAction === action,
+  );
+  if (!entry) return undefined;
+  return `${formatKeyToken(prefix)} ${formatKeyToken(entry[0])}`;
+}
+
+function renderCommandPalette(): void {
+  commandPaletteRoot.render(
+    createElement(CommandPalette, {
+      open: commandPaletteOpen,
+      onOpenChange: (open: boolean) => {
+        commandPaletteOpen = open;
+        if (!open) imeEl.focus({ preventScroll: true });
+        renderCommandPalette();
+      },
+      onSelectAction: (action: NonPaletteKeybindAction) => {
+        handleTileCommand(actionToTileCommand(action));
+      },
+      shortcutLabelFor: shortcutLabelForAction,
+    }),
+  );
+}
+
+function openCommandPalette(): void {
+  commandPaletteOpen = true;
+  renderCommandPalette();
+}
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
 let customViewWebviewEl: WebviewTagElement | null = null;
@@ -281,12 +338,15 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         shellProfiles: ShellProfile[];
       }) => {
         keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
+        lastKeybindingsConfig = keybindings;
         applyAppearance(appearance);
         applyCustomView(customView);
         shellProfiles = profiles;
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
         // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
+        // ショートカット表示（prefix+2打目キー）を最新のkeybindingsで再renderする
+        renderCommandPalette();
       },
     },
   },
@@ -1175,6 +1235,10 @@ function handleTileCommand(cmd: TileCommand): void {
     togglePopup();
     return;
   }
+  if (cmd.type === "commandPalette") {
+    openCommandPalette();
+    return;
+  }
   if (!focusedTileId) return;
   switch (cmd.type) {
     case "split":
@@ -1427,6 +1491,7 @@ applySidebarWidth(sidebarWidth);
 attachSidebarDividerDrag();
 applySidebarVisibility();
 measureCell();
+renderCommandPalette();
 sendMessage("ready");
 window.addEventListener("error", (e) => {
   sendMessage("log", { msg: `error: ${e.message}` });
