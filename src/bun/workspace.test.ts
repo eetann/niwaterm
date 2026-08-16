@@ -414,6 +414,85 @@ describe("newTab", () => {
   });
 });
 
+describe("resizeTileInDirection", () => {
+  test("first側のleafをrightへ拡大すると祖先splitのratioが増える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical"); // vertical=row split, ratio 0.5
+    const ok = ws.resizeTileInDirection(firstTileId, "right", 0.1);
+    expect(ok).toBe(true);
+    const tree = ws.snapshot().layout as TileNode & { kind: "split" };
+    expect(tree.ratio).toBeCloseTo(0.6);
+  });
+
+  test("軸が一致する祖先splitが無い場合はfalseで木構造は変わらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical"); // rowのみ存在、column方向のsplitは無い
+    const before = ws.snapshot().layout;
+    const ok = ws.resizeTileInDirection(firstTileId, "up", 0.1);
+    expect(ok).toBe(false);
+    expect(ws.snapshot().layout).toEqual(before);
+  });
+
+  test("存在しないtileIdはfalse", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.resizeTileInDirection("not-found", "right", 0.1)).toBe(false);
+  });
+});
+
+describe("respawnTab", () => {
+  test("既存セッションをdisposeし、同じtabId・タイル位置で新しいセッションを起動する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+    const tabId = before.activeTabId;
+    const ok = ws.respawnTab(tabId);
+    expect(ok).toBe(true);
+    expect(created[0]?.disposed).toBe(true);
+    expect(created.length).toBe(2);
+    const after = ws.snapshot().layout as TileLeaf;
+    expect(after.activeTabId).toBe(tabId);
+    expect(after.tabIds).toEqual([tabId]);
+  });
+
+  test("shellOverride/cwd/commandを渡すと新しいセッションへ反映される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    ws.respawnTab(tabId, "wsl.exe -d Ubuntu", "/tmp/project", "lazygit");
+    expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
+    expect(created[1]?.opts.cwd).toBe("/tmp/project");
+    expect(created[1]?.opts.command).toBe("lazygit");
+  });
+
+  test("cwd省略時はOSC7報告済みの直前のcwdを引き継ぐ", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    created[0]?.opts.onPwdChanged?.("/tmp/reported");
+    ws.respawnTab(tabId);
+    expect(created[1]?.opts.cwd).toBe("/tmp/reported");
+  });
+
+  test("存在しないtabIdはfalse", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    expect(ws.respawnTab("not-found")).toBe(false);
+  });
+
+  test("ブラウザタブはfalse（respawn対象外）", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const browserTabId = ws.newBrowserTab(tileId, "https://example.com");
+    expect(ws.respawnTab(browserTabId as string)).toBe(false);
+  });
+});
+
 describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
   test("onPwdChangedが呼ばれるとtabVarsの'cwd'へ反映される", () => {
     const { created, factory } = createFakeSessionFactory();

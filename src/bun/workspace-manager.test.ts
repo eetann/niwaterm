@@ -175,6 +175,49 @@ describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
   });
 });
 
+describe("swapWorkspaces", () => {
+  test("2つのworkspaceIdの表示順を入れ替え、trueを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const thirdId = mgr.snapshot().activeWorkspaceId;
+
+    expect(mgr.swapWorkspaces(firstId, thirdId)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([thirdId, secondId, firstId]);
+  });
+
+  test("中身（レイアウト・アクティブワークスペース）は変更しない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+
+    mgr.swapWorkspaces(firstId, secondId);
+
+    // アクティブなのは相変わらずsecondId（swapはorderの位置だけを動かす）
+    expect(mgr.snapshot().activeWorkspaceId).toBe(secondId);
+  });
+
+  test("同一idを渡すとfalse", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const onlyId = mgr.snapshot().activeWorkspaceId;
+    expect(mgr.swapWorkspaces(onlyId, onlyId)).toBe(false);
+  });
+
+  test("存在しないworkspaceIdを渡すとfalseで順序は変わらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const onlyId = mgr.snapshot().activeWorkspaceId;
+    expect(mgr.swapWorkspaces(onlyId, "not-found")).toBe(false);
+    expect(mgr.snapshot().workspaceIds).toEqual([onlyId]);
+  });
+});
+
 describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルーティングされる", () => {
   test("非アクティブなワークスペースのタイルへもsplitTile/newTab/closeTabが届く", () => {
     const { factory } = createFakeSessionFactory();

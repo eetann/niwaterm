@@ -24,11 +24,23 @@ export interface NiwaSplitOptions {
   cwd?: string;
 }
 
+export interface NiwaTileResizeOptions {
+  /** 拡大する方向。フォーカス中タイルから見てこの方向の軸のsplitのratioを調整する */
+  direction: FocusDirection;
+  /** ratioの増減幅（0〜1）。省略時は既定値（小さめの1ステップ分） */
+  amount?: number;
+}
+
 export interface NiwaTileApi {
   /** フォーカス中タイルの情報を返す */
   current(): NiwaTileInfo | null;
   split(opts: NiwaSplitOptions): { tileId: string; tabId: string } | null;
   focus(direction: FocusDirection): void;
+  /**
+   * フォーカス中タイルをdirection方向へamount分拡大する（tmuxのresize-pane相当）。
+   * direction方向の軸に一致するsplitが祖先に無い場合（例: 単一タイルのワークスペース）はfalse
+   */
+  resize(opts: NiwaTileResizeOptions): boolean;
   /** フォーカス中タイルのアクティブタブを閉じる */
   close(): void;
 }
@@ -46,8 +58,22 @@ export interface NiwaTabVarApi {
   set(tabId: string, key: string, value: string): void;
 }
 
+export interface NiwaTabRespawnOptions {
+  /** 省略時は元のcwdを引き継ごうとする（OSC7報告済みの最新cwd） */
+  cwd?: string;
+  /** shell.profilesで定義したid。省略時はdefaultShell */
+  shellProfile?: string;
+  /** 指定すると、このコマンドをシェルの代わりに実行する（popup.openのcommandと同じ意味） */
+  command?: string;
+}
+
 export interface NiwaTabApi {
   create(opts?: NiwaNewTabOptions): { tabId: string } | null;
+  /**
+   * 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxのrespawn-pane -k相当）。
+   * 対象タブが存在しない・ブラウザタブの場合はfalse
+   */
+  respawn(tabId: string, opts?: NiwaTabRespawnOptions): boolean;
   /**
    * 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。
    * リテラル文字列と特殊キー名（Enter/Escape/Tab/C-a等）を複数個混在指定できる。
@@ -74,6 +100,12 @@ export interface NiwaPopupApi {
 export interface NiwaWorkspaceApi {
   create(cwd?: string): string;
   switch(workspaceId: string): boolean;
+  /**
+   * 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える
+   * （tmuxのswap-window相当）。中身（レイアウト・タブ）は一切変更しない。
+   * どちらかのidが存在しない、または同一idの場合はfalse
+   */
+  swap(workspaceIdA: string, workspaceIdB: string): boolean;
 }
 
 export interface NiwaClipboardApi {

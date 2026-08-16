@@ -302,6 +302,42 @@ export function resizeSplit(tree: TileNode, splitId: TileId, ratio: number): Til
   return recurse(tree);
 }
 
+/**
+ * targetTileIdから見てdirection方向へ拡大されるよう、直近の祖先splitのうちdirectionの軸
+ * （left/right=row, up/down=column）に一致する最初のものを1つだけratio調整する
+ * （tmuxのresize-pane相当）。一致するsplitが祖先に無い場合はnull（例: 上下split内のtileを
+ * left/rightへリサイズしようとした場合）。
+ */
+export function resizeInDirection(
+  tree: TileNode,
+  targetTileId: TileId,
+  direction: "up" | "down" | "left" | "right",
+  delta: number,
+): TileNode | null {
+  const axis: FlexDirection = direction === "left" || direction === "right" ? "row" : "column";
+  const growing = direction === "right" || direction === "down";
+
+  function collectPath(node: TileNode, path: TileSplit[]): TileSplit[] | null {
+    if (node.kind === "leaf") {
+      return node.id === targetTileId ? path : null;
+    }
+    const nextPath = [...path, node];
+    return collectPath(node.first, nextPath) ?? collectPath(node.second, nextPath);
+  }
+
+  const path = collectPath(tree, []);
+  if (!path) return null;
+
+  for (let i = path.length - 1; i >= 0; i--) {
+    const split = path[i];
+    if (split.direction !== axis) continue;
+    const inFirst = findNode(split.first, targetTileId) !== undefined;
+    const signedDelta = inFirst === growing ? delta : -delta;
+    return resizeSplit(tree, split.id, split.ratio + signedDelta);
+  }
+  return null;
+}
+
 /** 正規化座標(0..1)でのbox。focusNeighborの計算にのみ使う内部表現 */
 interface NormalizedRect {
   x: number;

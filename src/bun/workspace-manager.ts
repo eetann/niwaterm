@@ -309,6 +309,37 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTileId(splitId)?.resizeSplit(splitId, ratio);
   }
 
+  // niwa.tile.resize向け（tmuxのresize-pane相当）
+  function resizeTileInDirection(
+    tileId: TileId,
+    direction: "up" | "down" | "left" | "right",
+    delta: number,
+  ): boolean {
+    return findOwnerByTileId(tileId)?.resizeTileInDirection(tileId, direction, delta) ?? false;
+  }
+
+  // niwa.tab.respawn向け（tmuxのrespawn-pane相当）
+  function respawnTab(
+    tabId: TabId,
+    shellOverride?: string,
+    cwd?: string,
+    command?: string,
+  ): boolean {
+    return findOwnerByTabId(tabId)?.respawnTab(tabId, shellOverride, cwd, command) ?? false;
+  }
+
+  // niwa.workspace.swap向け（tmuxのswap-window相当）。orderの位置を交換するだけで
+  // 各ワークスペースの中身（レイアウト・タブ）は一切変更しない
+  function swapWorkspaces(workspaceIdA: WorkspaceId, workspaceIdB: WorkspaceId): boolean {
+    if (workspaceIdA === workspaceIdB) return false;
+    const indexA = order.indexOf(workspaceIdA);
+    const indexB = order.indexOf(workspaceIdB);
+    if (indexA === -1 || indexB === -1) return false;
+    [order[indexA], order[indexB]] = [order[indexB], order[indexA]];
+    opts.onDirty();
+    return true;
+  }
+
   function handleInput(tabId: TabId, data: string): void {
     findOwnerByTabId(tabId)?.handleInput(tabId, data);
   }
@@ -459,6 +490,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     getFocusedTileId,
     getActiveTabId,
     resizeSplit,
+    resizeTileInDirection,
+    respawnTab,
+    swapWorkspaces,
     handleInput,
     handlePaste,
     handleResize,

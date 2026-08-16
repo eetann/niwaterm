@@ -8,6 +8,7 @@ import {
   listLeaves,
   moveTabToTile,
   nextTabId,
+  resizeInDirection,
   resizeSplit,
   splitTile,
   switchActiveTab,
@@ -228,6 +229,66 @@ describe("resizeSplit", () => {
   test("対象外のsplitノードは参照が同一のまま", () => {
     const result = resizeSplit(tree, "inner", 0.7) as TileNode & { kind: "split" };
     expect(result.first).toBe((tree as TileNode & { kind: "split" }).first);
+  });
+});
+
+describe("resizeInDirection", () => {
+  // root(row, 0.5) = a | inner(column, 0.5) = b / c
+  const tree: TileNode = {
+    kind: "split",
+    id: "root",
+    direction: "row",
+    ratio: 0.5,
+    first: leaf("a"),
+    second: {
+      kind: "split",
+      id: "inner",
+      direction: "column",
+      ratio: 0.5,
+      first: leaf("b"),
+      second: leaf("c"),
+    },
+  };
+
+  test("first側のleafをrightへ拡大すると直近祖先のratioが増える", () => {
+    const result = resizeInDirection(tree, "a", "right", 0.1) as TileNode & { kind: "split" };
+    expect(result.ratio).toBeCloseTo(0.6);
+  });
+
+  test("first側のleafをleftへ拡大すると直近祖先のratioが減る", () => {
+    const result = resizeInDirection(tree, "a", "left", 0.1) as TileNode & { kind: "split" };
+    expect(result.ratio).toBeCloseTo(0.4);
+  });
+
+  test("second側配下のleafをrightへ拡大すると祖先のratioが減る（second領域が広がる）", () => {
+    const result = resizeInDirection(tree, "b", "right", 0.1) as TileNode & { kind: "split" };
+    expect(result.ratio).toBeCloseTo(0.4);
+  });
+
+  test("second側の孫leafをdownへ拡大すると直近の祖先(inner)のratioが動き、rootは不変", () => {
+    const result = resizeInDirection(tree, "b", "down", 0.1) as TileNode & {
+      kind: "split";
+      second: TileNode & { kind: "split" };
+    };
+    expect(result.second.ratio).toBeCloseTo(0.6);
+    expect(result.ratio).toBe(0.5);
+  });
+
+  test("second側の孫leafをupへ拡大すると直近の祖先(inner)のratioが減る", () => {
+    const result = resizeInDirection(tree, "b", "up", 0.1) as TileNode & {
+      kind: "split";
+      second: TileNode & { kind: "split" };
+    };
+    expect(result.second.ratio).toBeCloseTo(0.4);
+  });
+
+  test("軸が一致する祖先splitが無い場合はnull", () => {
+    expect(resizeInDirection(tree, "a", "up", 0.1)).toBeNull();
+    expect(resizeInDirection(tree, "a", "down", 0.1)).toBeNull();
+  });
+
+  test("存在しないtileIdはnull", () => {
+    expect(resizeInDirection(tree, "no-such-tile", "right", 0.1)).toBeNull();
   });
 });
 

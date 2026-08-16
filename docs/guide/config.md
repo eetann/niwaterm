@@ -117,13 +117,16 @@ export default defineConfig({
 | `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
 | `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
 | `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |
+| `niwa.tile.resize(opts)` | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false` |
 | `niwa.tile.close()` | フォーカス中タイルのアクティブタブを閉じる |
 | `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
+| `niwa.tab.respawn(tabId, opts?)` | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false` |
 | `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
 | `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当） |
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
 | `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
 | `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
+| `niwa.workspace.swap(workspaceIdA, workspaceIdB)` | 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える（tmuxの`swap-window`相当）。中身は変更しない |
 | `niwa.clipboard.write(text)` / `niwa.clipboard.read()` | クリップボードの読み書き |
 
 **非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
@@ -434,7 +437,6 @@ niwaterm layout apply dev --replace
 
 - **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
 - **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある
-- **niwa APIは現時点でタイルリサイズ・タブ再起動・ワークスペース入れ替え（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を持たない**。今後拡張予定（roadmap参照）
 
 ## スコープ外（roadmap参照）
 

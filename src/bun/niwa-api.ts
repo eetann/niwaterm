@@ -24,6 +24,9 @@ export interface CreateNiwaApiDeps {
   getShellProfiles: () => ShellProfile[];
 }
 
+/** niwa.tile.resizeのamount省略時のratio増減幅 */
+const DEFAULT_RESIZE_AMOUNT = 0.05;
+
 export interface NiwaApiHandle {
   niwa: Niwa;
   /** configファイル実行後に呼び出し、niwa.prefix/keybindで登録された内容を取り出す */
@@ -89,6 +92,14 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       focus(direction) {
         workspaceManager.focusDirection(direction);
       },
+      resize(opts) {
+        const tileId = workspaceManager.getFocusedTileId();
+        return workspaceManager.resizeTileInDirection(
+          tileId,
+          opts.direction,
+          opts.amount ?? DEFAULT_RESIZE_AMOUNT,
+        );
+      },
       close() {
         const tileId = workspaceManager.getFocusedTileId();
         const activeTabId = workspaceManager.getActiveTabId(tileId);
@@ -105,6 +116,14 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         }
         const tabId = workspaceManager.newTab(tileId, resolved.command, opts?.cwd);
         return tabId ? { tabId } : null;
+      },
+      respawn(tabId, opts) {
+        const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);
+        if (!resolved.ok) {
+          console.log(`[bun] niwa.tab.respawn: ${resolved.error}`);
+          return false;
+        }
+        return workspaceManager.respawnTab(tabId, resolved.command, opts?.cwd, opts?.command);
       },
       sendKeys(tabId, ...keys) {
         workspaceManager.handleInput(tabId, tmuxKeysToBytes(keys));
@@ -131,6 +150,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
       switch(workspaceId) {
         return workspaceManager.switchWorkspace(workspaceId);
+      },
+      swap(workspaceIdA, workspaceIdB) {
+        return workspaceManager.swapWorkspaces(workspaceIdA, workspaceIdB);
       },
     },
     clipboard: {

@@ -14,6 +14,7 @@ import {
   focusNeighbor,
   listLeaves,
   moveTabToTile,
+  resizeInDirection,
   resizeSplit,
   splitTile,
   switchActiveTab,
@@ -457,6 +458,39 @@ export function createWorkspace(opts: WorkspaceOptions) {
     opts.onDirty();
   }
 
+  // niwa.tile.resize向け（tmuxのresize-pane相当）。指定tileIdから見てdirection方向の軸に
+  // 一致する祖先splitが無い場合はfalse（例: 単一tileのワークスペースや、上下splitしか無いtileを
+  // left/rightへリサイズしようとした場合）
+  function resizeTileInDirection(
+    tileId: TileId,
+    direction: "up" | "down" | "left" | "right",
+    delta: number,
+  ): boolean {
+    const newTree = resizeInDirection(tree, tileId, direction, delta);
+    if (!newTree) return false;
+    tree = newTree;
+    opts.onDirty();
+    return true;
+  }
+
+  // niwa.tab.respawn向け（tmuxのrespawn-pane -k相当。動作中でも常に強制終了して再起動する）。
+  // tabIdが存在しない・browserタブの場合はfalse
+  function respawnTab(
+    tabId: TabId,
+    shellOverride?: string,
+    cwd?: string,
+    command?: string,
+  ): boolean {
+    if (!sessions.has(tabId) || browserTabs.has(tabId)) return false;
+    const size = sizeByTabId.get(tabId) ?? { cols: opts.initialCols, rows: opts.initialRows };
+    const resolvedCwd = cwd ?? actualCwdOf(tabId);
+    sessions.get(tabId)?.dispose();
+    sessions.delete(tabId);
+    spawnSession(tabId, size.cols, size.rows, shellOverride, resolvedCwd, command);
+    opts.onDirty();
+    return true;
+  }
+
   function handleInput(tabId: TabId, data: string): void {
     sessions.get(tabId)?.write(data);
   }
@@ -669,6 +703,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     focusTile: focusTileById,
     focusDirection: focusDirectionFrom,
     resizeSplit: resizeSplitById,
+    resizeTileInDirection,
+    respawnTab,
     handleInput,
     handlePaste,
     handleResize,

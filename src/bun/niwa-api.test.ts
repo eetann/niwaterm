@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { KeybindingsConfig } from "@niwaterm/config";
-import type { TileLeaf } from "./tile-layout";
+import type { TileLeaf, TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import { createWorkspaceManager, type WorkspaceManagerOptions } from "./workspace-manager";
@@ -151,6 +151,24 @@ describe("niwa.tile", () => {
     // 元のタイルは1タブしかなかったため、閉じるとタイル自体が消える（残り1タイルへ畳まれる）
     expect(workspaceManager.snapshot().workspace.layout.kind).toBe("leaf");
   });
+
+  test("resize()はフォーカス中タイルをdirection方向へ拡大し、trueを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    niwa.tile.split({ orientation: "vertical" }); // row split, ratio 0.5
+    workspaceManager.focusTile(tileId);
+    expect(niwa.tile.resize({ direction: "right", amount: 0.1 })).toBe(true);
+    const tree = workspaceManager.snapshot().workspace.layout as TileNode & { kind: "split" };
+    expect(tree.ratio).toBeCloseTo(0.6);
+  });
+
+  test("resize()は軸が一致する祖先splitが無い場合はfalse", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    niwa.tile.split({ orientation: "vertical" }); // rowのみ、column方向は無い
+    workspaceManager.focusTile(tileId);
+    expect(niwa.tile.resize({ direction: "up" })).toBe(false);
+  });
 });
 
 describe("niwa.tab", () => {
@@ -168,6 +186,24 @@ describe("niwa.tab", () => {
     niwa.tab.var.set(tabId, "role", "editor");
     expect(niwa.tab.var.get(tabId, "role")).toBe("editor");
   });
+
+  test("respawnは既存タブを再起動し、trueを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    expect(niwa.tab.respawn(tabId)).toBe(true);
+    expect(workspaceManager.hasTab(tabId)).toBe(true);
+  });
+
+  test("respawnは未知のshellProfileならfalseを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    expect(niwa.tab.respawn(tabId, { shellProfile: "no-such-profile" })).toBe(false);
+  });
+
+  test("respawnは存在しないtabIdならfalse", () => {
+    const { niwa } = createTestSetup();
+    expect(niwa.tab.respawn("no-such-tab")).toBe(false);
+  });
 });
 
 describe("niwa.workspace", () => {
@@ -181,6 +217,20 @@ describe("niwa.workspace", () => {
   test("switchで存在しないidを渡すとfalse", () => {
     const { niwa } = createTestSetup();
     expect(niwa.workspace.switch("no-such-workspace")).toBe(false);
+  });
+
+  test("swapで2つのworkspaceの表示順を入れ替え、trueを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const firstId = workspaceManager.snapshot().activeWorkspaceId;
+    const secondId = niwa.workspace.create();
+    expect(niwa.workspace.swap(firstId, secondId)).toBe(true);
+    expect(workspaceManager.snapshot().workspaceIds).toEqual([secondId, firstId]);
+  });
+
+  test("swapで存在しないidを渡すとfalse", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const onlyId = workspaceManager.snapshot().activeWorkspaceId;
+    expect(niwa.workspace.swap(onlyId, "no-such-workspace")).toBe(false);
   });
 });
 

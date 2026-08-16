@@ -253,4 +253,4 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] 複数ファイル分割時のホットリロード（`~/.config/niwaterm/`配下のソースを毎回一時ディレクトリへコピーしてimportし直す方式で、importツリー全体を再読み込みする。`node_modules`はシンボリックリンクで参照）
 - [x] ドキュメント（`docs/guide/config.md`、`packages/config/examples/`）を更新する
 - [x] テストを更新・追加する
-- [ ] `niwa.tile`のリサイズ・`niwa.tab`の再起動（respawn）・`niwa.workspace`の入れ替え（swap）API（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を追加する
+- [x] `niwa.tile`のリサイズ・`niwa.tab`の再起動（respawn）・`niwa.workspace`の入れ替え（swap）API（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を追加する
