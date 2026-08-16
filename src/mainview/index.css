@@ -78,6 +78,11 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* shadcnコンポーネントは色指定なしの`border`クラス（例: dropdown-menu.tsxのborder）を
+     多用しており、v3までのpreflightが行っていた「全要素のborder-colorをtheme色にリセット」
+     前提で書かれている。それが無いとborder-colorの初期値currentColor（＝文字色、
+     ダークテーマではほぼ白）がそのまま使われ、白い縁取りとして目立ってしまう */
+  border-color: var(--border);
 }
 
 /*
@@ -109,6 +114,11 @@ body {
   overflow: hidden;
   background: var(--term-bg);
   color: var(--foreground);
+  /* input/textarea等のフォームコントロールはUAスタイルシートでcolor-schemeに応じた
+     独自既定色（light扱いだと黒文字）を持ち、colorプロパティのinherit継承では上書きできない。
+     CommandInput（コマンドパレットの検索欄）等で入力文字が黒く見づらくなるのを防ぐため、
+     ダークテーマ固定であることをブラウザに伝える（スクロールバーの既定配色にも影響する） */
+  color-scheme: dark;
 }
 
 body {
