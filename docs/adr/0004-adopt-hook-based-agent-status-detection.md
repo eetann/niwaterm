@@ -12,7 +12,7 @@ Accepted
 
 ## Context
 
-niwatermはサイドバーにワークスペース・タイル・タブの一覧を表示しており、タブごとのkey-value変数（`niwaterm set-var`、tmuxのペイン変数相当）を持つ。gitブランチ名は既に「シェル統合プッシュ型」（zsh/bash/fish/PowerShell向けスクリプトがprecmdフックで`niwaterm set-var branch`を呼ぶ、`contrib/shell-integration/`）で検知・表示されている。
+niwatermはサイドバーにワークスペース・タイル・タブの一覧を表示しており、タブごとのkey-value変数（`niwaterm tab var set`、tmuxのペイン変数相当）を持つ。gitブランチ名は既に「シェル統合プッシュ型」（zsh/bash/fish/PowerShell向けスクリプトがprecmdフックで`niwaterm tab var set branch`を呼ぶ、`contrib/shell-integration/`）で検知・表示されている。
 
 残る課題は、タブ内で動くAIエージェント（Claude Code等）の種別・状態（idle/working/blocked等）をどう検知するかである。cmux（manaflow-ai/cmux）・herdr（ogulcancelik/herdr）という2つの先行AI連携ターミナルをopensrcでソースコードを取得して調査し、検知方式を決定した。
 
@@ -33,7 +33,7 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 | 観点 | 1. herdr方式 | 2. cmux動的注入方式 | 3. 静的JSON配布方式（採用） |
 |------|---|---|---|
 | ゼロコンフィグ性 | 高い（設定不要） | 高い（設定不要） | 低い（ユーザーが手動マージ） |
-| 実装コスト | 高い（OS別プロセス走査＋状態判定ルールの新規実装） | 高い（シム生成・PATH差し込み・二重起動ガード等） | 低い（既存のtabVars/set-var基盤にそのまま乗る） |
+| 実装コスト | 高い（OS別プロセス走査＋状態判定ルールの新規実装） | 高い（シム生成・PATH差し込み・二重起動ガード等） | 低い（既存のtabVars/tab var set基盤にそのまま乗る） |
 | 既存のブランチ検知方式との一貫性 | 低い（パッシブ型で設計思想が異なる） | 中（プッシュ型だが独自機構） | 高い（同じプッシュ型・同じtabVars経路） |
 | 複数エージェントへの拡張性 | ルールマニフェストを増やせば対応可 | エージェントごとに個別のシム実装が要る | キー規約とディレクトリ規約を揃えるだけで対応可 |
 | 誤検知・精度 | プロセス名・画面テキストの正規表現照合に依存し曖昧 | 明確（hooksイベントに基づく） | 明確（hooksイベントに基づく） |
@@ -50,7 +50,7 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 
 ### Positive
 
-- 既存のブランチ検知（シェル統合プッシュ型）と全く同じ経路（`set-var` → `tabVars` → サイドバー）に乗るため、bun側・IPC・CLIのコード変更が一切不要だった
+- 既存のブランチ検知（シェル統合プッシュ型）と全く同じ経路（`tab var set` → `tabVars` → サイドバー）に乗るため、bun側・IPC・CLIのコード変更が一切不要だった
 - hooksイベントに基づく明確な状態遷移のため、herdr方式のような画面テキストの正規表現照合による誤検知が起きにくい
 - `contrib/agent-integration/<agent-name>/`という規約により、他エージェント対応時の実装パターンが明確
 
@@ -65,7 +65,7 @@ niwatermはサイドバーにワークスペース・タイル・タブの一覧
 
 - `$NIWATERM_TAB_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されない可能性がある（PTY→シェル→`claude`→hookサブプロセスという経路が未検証）
   - → `contrib/agent-integration/claude-code/README.md`に未検証事項として明記し、導入時の実地確認を促す
-- `niwaterm set-var agent ""`のような空文字列のpositional引数が、gunshi製CLIパーサーで正しく渡るか未確認
+- `niwaterm tab var set agent ""`のような空文字列のpositional引数が、gunshi製CLIパーサーで正しく渡るか未確認
   - → 同READMEに明記。誤動作した場合でも影響範囲は`SessionEnd`時のクリア処理のみ
 
 ## 決めていないこと

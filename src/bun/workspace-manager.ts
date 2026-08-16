@@ -170,7 +170,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return undefined;
   }
 
-  /** 種別（terminal/browser）を問わずtabIdの所在を返す。show-tab用 */
+  /** 種別（terminal/browser）を問わずtabIdの所在を返す。tab show用 */
   function locateTab(tabId: TabId): TabLocation | null {
     for (const [workspaceId, ws] of workspaces) {
       const tileId = ws.findTileIdForTab(tabId);

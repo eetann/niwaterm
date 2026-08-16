@@ -10,11 +10,11 @@ export interface LayoutTabConfig {
   shellProfile?: string;
   /** 作業ディレクトリ。省略時はホームディレクトリ */
   cwd?: string;
-  /** タブ作成後に流し込むコマンド（`send-keys`相当、末尾に自動でEnterを送信する） */
+  /** タブ作成後に流し込むコマンド（`tab send-keys`相当、末尾に自動でEnterを送信する） */
   command?: string;
   /** commandを送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 */
   delay?: number;
-  /** タブごとのkey-value変数（`set-var`相当で注入） */
+  /** タブごとのkey-value変数（`tab var set`相当で注入） */
   vars?: Record<string, string>;
   /** このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる */
   focus?: boolean;

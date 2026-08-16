@@ -2,12 +2,12 @@
 
 タブ内で動くAIエージェント（Claude Code等）の種別・状態をniwatermのサイドバーへ通知するための設定集。
 `contrib/shell-integration/`（gitブランチをタブ変数へ送るシェル統合）と対になる仕組みで、
-「エージェント自身のhooks機構から能動的に`niwaterm set-var`を呼ぶ」プッシュ型を採用している
+「エージェント自身のhooks機構から能動的に`niwaterm tab var set`を呼ぶ」プッシュ型を採用している
 （herdr方式のようなプロセス走査・画面内容照合は行わない）。
 
 ## 予約キー
 
-タブ変数（`niwaterm set-var`、詳細は`niwaterm docs show cli`）のうち、以下の2キーをエージェント状態通知用に予約する。
+タブ変数（`niwaterm tab var set`、詳細は`niwaterm docs show cli`）のうち、以下の2キーをエージェント状態通知用に予約する。
 
 | キー | 値 | 説明 |
 |---|---|---|
@@ -23,7 +23,7 @@ niwaterm外のプロジェクト・ターミナルで誤発火してエラーに
 
 ```sh
 if [ -n "$NIWATERM_TAB_ID" ] && command -v niwaterm >/dev/null 2>&1; then
-  niwaterm set-var agent_status working >/dev/null 2>&1
+  niwaterm tab var set agent_status working >/dev/null 2>&1
 fi
 exit 0
 ```

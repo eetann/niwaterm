@@ -8,7 +8,7 @@ description: PTYプロセス終了直後にGhosttyTerminalを解放すると、�
 
 ## 症状
 
-Windows実機（Bun 1.3.14）で、PTYへの書き込み内容が「何か出力を伴うコマンド」＋「その直後にシェルを終了させる」という組み合わせになると、`panic(thread ...): Segmentation fault`でniwatermアプリ自体（Bunプロセス）がクラッシュすることがある。send-keys・`niwaterm.config.ts`のレイアウトプリセットの`command`・popupの`command`実行など、PTYへ書き込みを行う機能全般が対象になりうる。
+Windows実機（Bun 1.3.14）で、PTYへの書き込み内容が「何か出力を伴うコマンド」＋「その直後にシェルを終了させる」という組み合わせになると、`panic(thread ...): Segmentation fault`でniwatermアプリ自体（Bunプロセス）がクラッシュすることがある。`tab send-keys`・`niwaterm.config.ts`のレイアウトプリセットの`command`・popupの`command`実行など、PTYへ書き込みを行う機能全般が対象になりうる。
 
 ## 根本原因
 
@@ -27,7 +27,7 @@ Windows実機（Bun 1.3.14）で、PTYへの書き込み内容が「何か出力
 | 大量出力（2000行）を伴う`;`+exit | 1回 | 再現せず |
 | 実際の`pty.ts`+`ghostty.ts`(libghostty-vt FFI)+`terminal-session.ts`統合。ただし`onExit`は単なるログのみ | 10回 | 再現せず |
 | 上記統合を複数PTY同時起動した状態で実行 | 4回 | 再現せず |
-| 実際のniwatermアプリ（Electrobun、`BrowserWindow`+RPC+IPCサーバー込み）にCLIの`send-keys`で送信。ただし`onExit`は単なるログのみ | 1回 | 再現せず |
+| 実際のniwatermアプリ（Electrobun、`BrowserWindow`+RPC+IPCサーバー込み）にCLIの`tab send-keys`で送信。ただし`onExit`は単なるログのみ | 1回 | 再現せず |
 | 上記に加え`onOutput`内でRPC経由のレンダリング送信（`scheduleRender`相当）を追加 | 1回 | 再現せず |
 | 上記に加え`onExit`内で`session.dispose()`（`pty.kill()`+`term.free()`）を同期的に呼ぶ | 1回 | **再現した**（Electrobunなし） |
 | Electrobunを除いた単体スクリプトで`onExit`内`session.dispose()`のみ再試行 | 1回 | **再現した** |

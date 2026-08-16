@@ -118,7 +118,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     };
   }
 
-  /** 現在の画面内容をプレーンテキストとして取り出す（CLIの`capture-tab`相当） */
+  /** 現在の画面内容をプレーンテキストとして取り出す（CLIの`tab capture`相当） */
   function dumpText(): string {
     return term.dumpText();
   }

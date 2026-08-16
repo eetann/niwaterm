@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { browserScreenshot, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { browserScreenshot, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "browser-screenshot",
+  name: "screenshot",
   description:
     "指定したブラウザタブの現在URLをheadlessで開き直してスクリーンショットをPNGファイルに保存する",
   args: {
@@ -23,7 +23,7 @@ export default define({
   run: async (ctx) => {
     const result = await browserScreenshot(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`browser-screenshotに失敗しました: ${result.error}`);
+      failAndExit(`browser screenshotに失敗しました: ${result.error}`);
     }
     await Bun.write(ctx.values.out, result.data);
     console.log(`saved: ${ctx.values.out}`);

@@ -44,7 +44,7 @@ export interface NiwatermConfig {
   layouts?: LayoutsConfig;
   /**
    * ワークスペース設定。新規ワークスペース作成時（アプリ起動時の最初のワークスペース・
-   * `niwaterm new-workspace`）の最初のタブに使うデフォルトcwdを変更できる。
+   * `niwaterm workspace new`）の最初のタブに使うデフォルトcwdを変更できる。
    * 未指定時はOS標準のホームディレクトリ（WSL上でniwaterm自体を動かしている場合は
    * 自然にWSL側のホームディレクトリになる）。分割・新規タブ作成時のcwd継承には影響しない。
    * 例: { defaultCwd: "/home/eetann/projects" }

@@ -173,7 +173,7 @@ appearance: {
 
 ## ブラウザ設定
 
-`browser`は新規ブラウザタブ（`new-browser-tab`キーバインド、または`niwaterm new-tab`のCLIで`--url`省略時）を開いた際のデフォルトURLを指定するオブジェクト。
+`browser`は新規ブラウザタブ（`new-browser-tab`キーバインド、または`niwaterm tab new`のCLIで`--url`省略時）を開いた際のデフォルトURLを指定するオブジェクト。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
@@ -185,7 +185,7 @@ browser: {
 },
 ```
 
-不正な値（空文字列等）を指定した場合、警告付きで`about:blank`にフォールバックする。CLIから`niwaterm new-tab --tile <tileId> --url <url>`のように`--url`を指定した場合は、この設定に関わらず指定したURLが優先される。
+不正な値（空文字列等）を指定した場合、警告付きで`about:blank`にフォールバックする。CLIから`niwaterm tab new --tile <tileId> --url <url>`のように`--url`を指定した場合は、この設定に関わらず指定したURLが優先される。
 
 ## ユーザー定義HTML UI（customView）
 
@@ -218,7 +218,7 @@ customView: {
     },
   },
   ```
-- CLI: `niwaterm new-tab --tile <tileId> --custom-view`（`--url`と同時指定は不可）
+- CLI: `niwaterm tab new --tile <tileId> --custom-view`（`--url`と同時指定は不可）
 
 内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っており、`customView`のHTMLからniwatermのAPI（タイル・タブ操作等）を呼び出す仕組みは未実装（roadmap参照）。
 
@@ -248,7 +248,7 @@ Windows TerminalやWeztermのように、新規タブ作成時に起動するシ
 
 | フィールド | 型 | 意味 |
 |---|---|---|
-| `id` | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm new-tab --shell <id>`やRPCでの指定に使う |
+| `id` | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm tab new --shell <id>`やRPCでの指定に使う |
 | `name` | `string` | ドロップダウン・`niwaterm shell-profiles`に表示する名前 |
 | `command` | `string` | 実行コマンド（PATHから解決される。スペース区切りで単純分割） |
 
@@ -260,7 +260,7 @@ Windows環境では起動時に`wsl.exe --list --quiet`相当でインストー�
 
 ## ワークスペース設定
 
-`workspace`は、新規ワークスペース作成時（アプリ起動時の最初のワークスペース・`niwaterm new-workspace`）の最初のタブに使うデフォルトcwdを指定するオブジェクト。**未指定ならOS標準のホームディレクトリ**が使われる（niwaterm自体をWSL/Linux環境で動かしている場合は、そのホームディレクトリが自然にデフォルトになる）。
+`workspace`は、新規ワークスペース作成時（アプリ起動時の最初のワークスペース・`niwaterm workspace new`）の最初のタブに使うデフォルトcwdを指定するオブジェクト。**未指定ならOS標準のホームディレクトリ**が使われる（niwaterm自体をWSL/Linux環境で動かしている場合は、そのホームディレクトリが自然にデフォルトになる）。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
@@ -305,7 +305,7 @@ layouts: {
 
 `LayoutNodeConfig`は`kind`で2種類に分かれる。
 
-- `{ kind: "split", orientation: "horizontal" | "vertical", ratio?: number, first: LayoutNodeConfig, second: LayoutNodeConfig }` — タイルを2分割する。既存のタイル分割（`niwaterm split-tile`）と同じく`horizontal`は上下、`vertical`は左右に並べる。`ratio`は`first`が占める比率(0〜1、省略時0.5)。**N分割の配列指定は無く、3分割以上はネストで表現する**（上の例の`second`側を参照）
+- `{ kind: "split", orientation: "horizontal" | "vertical", ratio?: number, first: LayoutNodeConfig, second: LayoutNodeConfig }` — タイルを2分割する。既存のタイル分割（`niwaterm tile split`）と同じく`horizontal`は上下、`vertical`は左右に並べる。`ratio`は`first`が占める比率(0〜1、省略時0.5)。**N分割の配列指定は無く、3分割以上はネストで表現する**（上の例の`second`側を参照）
 - `{ kind: "tile", tabs: LayoutTabConfig[], activeTab?: number }` — タイル1枚とその中のタブ一覧。`tabs`は最低1つ必要。`activeTab`はアクティブにするタブのindex（省略時は最後のタブ）
 
 各タブ（`LayoutTabConfig`）のフィールドはすべて省略可。
@@ -315,9 +315,9 @@ layouts: {
 | `name` | `string` | タブ名（サイドバー・タブバー表示用） |
 | `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profiles`で確認）。省略時はデフォルトシェル |
 | `cwd` | `string` | 作業ディレクトリ。省略時は`niwaterm layout apply`を実行したディレクトリ（`--cwd`で上書き可） |
-| `command` | `string` | タブ作成後に流し込むコマンド（`send-keys`相当、末尾にEnterを自動送信する） |
+| `command` | `string` | タブ作成後に流し込むコマンド（`tab send-keys`相当、末尾にEnterを自動送信する） |
 | `delay` | `number` | `command`を送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 |
-| `vars` | `Record<string, string>` | タブ変数（`set-var`相当で注入） |
+| `vars` | `Record<string, string>` | タブ変数（`tab var set`相当で注入） |
 | `focus` | `boolean` | このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる |
 
 適用はCLIから行う。

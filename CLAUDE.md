@@ -29,7 +29,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはmacOSが`~/Library/Application Support/niwaterm/niwaterm.sock`、Windowsが`%APPDATA%\niwaterm\niwaterm.sock`（src/bun/app-paths.tsで解決）
-- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）
+- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.claude/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
 
@@ -47,7 +47,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 ## プラットフォーム対応
 
 macOSとWindows（x64）に対応する。Windowsは起動・ターミナル・タイル分割・IPC/CLI・ブラウザタブ・
-customViewまで実機確認済み。`browser-screenshot`のみBun本体側の既知issue（Windows上でChrome/Edgeの
+customViewまで実機確認済み。`browser screenshot`のみBun本体側の既知issue（Windows上でChrome/Edgeの
 自動起動に失敗する、oven-sh/bun#29102）により動作しない。手順とハマりどころ: docs/build/windows-build.md
 
 - **Electrobunはクロスビルド不可**。アプリ本体はWindows実機でビルドする。一方ネイティブ成果物（libghostty-vt / シム）はzigでLinux・WSLからクロスコンパイルできるため、Windows側にzigやMSVCは要らない
@@ -57,8 +57,8 @@ customViewまで実機確認済み。`browser-screenshot`のみBun本体側の�
 - **キーバインドはOSで別テーブル**: macOSはcmd系、Windowsはctrl+shift系（`defaultKeybindings` / `defaultWindowsKeybindings`）。ctrl単独はCtrl+C/Ctrl+D/Ctrl+B等ターミナルの制御文字と衝突するため必ずshiftかaltを伴わせる
 - Windowsにはプロセスグループもシグナルも無いため、pty.tsのSIGINT/SIGWINCH補完はmacOSのみ実行する
 - IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。send-keys・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
-- **`mainWindow.activate()`は呼ぶだけでwebviewのOSキーボードフォーカスを壊すことがある**（Windows実機）。呼んだ後はJS側から`imeEl.focus()`を何度呼んでも回復せず、実際のマウスクリックでしか復帰できない。目視確認が主目的で直後にキー入力を想定しない操作（show-tab等）では許容できるが、直後の入力を前提とする操作では呼ばないこと。詳細: docs/known-issues/windows-popup-activatewindow-focus-loss.md
+- **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。`tab send-keys`・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
+- **`mainWindow.activate()`は呼ぶだけでwebviewのOSキーボードフォーカスを壊すことがある**（Windows実機）。呼んだ後はJS側から`imeEl.focus()`を何度呼んでも回復せず、実際のマウスクリックでしか復帰できない。目視確認が主目的で直後にキー入力を想定しない操作（`tab show`等）では許容できるが、直後の入力を前提とする操作では呼ばないこと。詳細: docs/known-issues/windows-popup-activatewindow-focus-loss.md
 
 ## bun:ffiのハマりどころ
 

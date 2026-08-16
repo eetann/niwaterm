@@ -1,6 +1,6 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, sendKeys } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { resolveIpcEndpoint, sendKeys } from "../../ipc-client";
 
 export default define({
   name: "send-keys",
@@ -23,12 +23,12 @@ export default define({
     const keys = ctx.values.keys ?? [];
     if (keys.length === 0) {
       failAndExit(
-        "送信するキーを1つ以上指定してください（例: niwaterm send-keys --tab tab-3 'ls -la' Enter）",
+        "送信するキーを1つ以上指定してください（例: niwaterm tab send-keys --tab tab-3 'ls -la' Enter）",
       );
     }
     const result = await sendKeys(resolveIpcEndpoint(), ctx.values.tab, keys);
     if (!result.ok) {
-      failAndExit(`send-keysに失敗しました: ${result.error}`);
+      failAndExit(`tab send-keysに失敗しました: ${result.error}`);
     }
   },
 });

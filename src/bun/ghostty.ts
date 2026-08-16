@@ -301,7 +301,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   /** 現在の画面をHTML文字列として取り出す。スクロール中はその位置の内容を返す */
   const dumpHtml = createFormatterDumper(FORMAT_HTML, true);
 
-  /** 現在の画面をプレーンテキストとして取り出す（CLIの`capture-tab`相当）。常に最新のアクティブエリア */
+  /** 現在の画面をプレーンテキストとして取り出す（CLIの`tab capture`相当）。常に最新のアクティブエリア */
   const dumpText = createFormatterDumper(FORMAT_PLAIN, false);
 
   /** ビューポートがアクティブエリア（最新行）に追従しているか。falseはスクロールバックへ入っている状態 */

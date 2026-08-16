@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { browserGetText, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { browserGetText, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "browser-get-text",
+  name: "get-text",
   description: "指定したブラウザタブの表示内容をプレーンテキストで取得する",
   args: {
     tab: {
@@ -16,7 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await browserGetText(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`browser-get-textに失敗しました: ${result.error}`);
+      failAndExit(`browser get-textに失敗しました: ${result.error}`);
     }
     console.log(result.text);
   },

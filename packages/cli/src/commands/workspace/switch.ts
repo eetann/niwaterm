@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, switchWorkspace } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { resolveIpcEndpoint, switchWorkspace } from "../../ipc-client";
 
 export default define({
-  name: "switch-workspace",
+  name: "switch",
   description: "指定したワークスペースへ切り替える",
   args: {
     workspace: {
@@ -16,7 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await switchWorkspace(resolveIpcEndpoint(), ctx.values.workspace);
     if (!result.ok) {
-      failAndExit(`switch-workspaceに失敗しました: ${result.error}`);
+      failAndExit(`workspace switchに失敗しました: ${result.error}`);
     }
   },
 });

@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { browserGetHtml, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { browserGetHtml, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "browser-get-html",
+  name: "get-html",
   description: "指定したブラウザタブのHTMLを取得する",
   args: {
     tab: {
@@ -16,7 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await browserGetHtml(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`browser-get-htmlに失敗しました: ${result.error}`);
+      failAndExit(`browser get-htmlに失敗しました: ${result.error}`);
     }
     console.log(result.html);
   },

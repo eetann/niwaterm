@@ -1,10 +1,10 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, setTabVar } from "../ipc-client";
-import { resolveTabId } from "../resolve-tab";
+import { failAndExit } from "../../../cli-error";
+import { resolveIpcEndpoint, setTabVar } from "../../../ipc-client";
+import { resolveTabId } from "../../../resolve-tab";
 
 export default define({
-  name: "set-var",
+  name: "set",
   description: "指定したタブにkey-value変数を設定する（tmuxのペイン変数相当）",
   args: {
     tab: {
@@ -25,7 +25,7 @@ export default define({
     const tabId = resolveTabId(ctx.values.tab);
     const result = await setTabVar(resolveIpcEndpoint(), tabId, ctx.values.key, ctx.values.value);
     if (!result.ok) {
-      failAndExit(`set-varに失敗しました: ${result.error}`);
+      failAndExit(`tab var setに失敗しました: ${result.error}`);
     }
   },
 });

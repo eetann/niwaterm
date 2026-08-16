@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { renameWorkspace, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { renameWorkspace, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "rename-workspace",
+  name: "rename",
   description: "指定したワークスペースの名前を変更する",
   args: {
     workspace: {
@@ -24,7 +24,7 @@ export default define({
       ctx.values.name,
     );
     if (!result.ok) {
-      failAndExit(`rename-workspaceに失敗しました: ${result.error}`);
+      failAndExit(`workspace renameに失敗しました: ${result.error}`);
     }
   },
 });

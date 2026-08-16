@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { closeTab, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { closeTab, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "close-tab",
+  name: "close",
   description: "指定したタブを閉じる（tmux kill-window相当）",
   args: {
     tile: {
@@ -21,7 +21,7 @@ export default define({
   run: async (ctx) => {
     const result = await closeTab(resolveIpcEndpoint(), ctx.values.tile, ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`close-tabに失敗しました: ${result.error}`);
+      failAndExit(`tab closeに失敗しました: ${result.error}`);
     }
   },
 });

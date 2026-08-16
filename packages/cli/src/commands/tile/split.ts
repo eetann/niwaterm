@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, splitTile } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { resolveIpcEndpoint, splitTile } from "../../ipc-client";
 
 export default define({
-  name: "split-tile",
+  name: "split",
   description: "指定したタイルを分割する",
   args: {
     tile: {
@@ -32,7 +32,7 @@ export default define({
       ctx.values.cwd,
     );
     if (!result.ok) {
-      failAndExit(`split-tileに失敗しました: ${result.error}`);
+      failAndExit(`tile splitに失敗しました: ${result.error}`);
     }
     console.log(`tile: ${result.tileId}, tab: ${result.tabId}`);
   },

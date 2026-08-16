@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, switchTab } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { resolveIpcEndpoint, switchTab } from "../../ipc-client";
 
 export default define({
-  name: "switch-tab",
+  name: "switch",
   description: "指定したタイル内でアクティブタブを切り替える",
   args: {
     tile: {
@@ -21,7 +21,7 @@ export default define({
   run: async (ctx) => {
     const result = await switchTab(resolveIpcEndpoint(), ctx.values.tile, ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`switch-tabに失敗しました: ${result.error}`);
+      failAndExit(`tab switchに失敗しました: ${result.error}`);
     }
   },
 });

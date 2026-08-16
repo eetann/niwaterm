@@ -1,36 +1,17 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
 import { failAndExit } from "./cli-error";
-import browserGetHtmlCommand from "./commands/browser-get-html";
-import browserGetTextCommand from "./commands/browser-get-text";
-import browserNavigateCommand from "./commands/browser-navigate";
-import browserScreenshotCommand from "./commands/browser-screenshot";
-import captureTabCommand from "./commands/capture-tab";
-import closeTabCommand from "./commands/close-tab";
-import closeWorkspaceCommand from "./commands/close-workspace";
+import browserCommand from "./commands/browser";
 import docsCommand from "./commands/docs";
-import focusDirectionCommand from "./commands/focus-direction";
-import focusTileCommand from "./commands/focus-tile";
 import fontSizeCommand from "./commands/font-size";
-import getVarCommand from "./commands/get-var";
 import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
-import listVarsCommand from "./commands/list-vars";
-import newTabCommand from "./commands/new-tab";
-import newWorkspaceCommand from "./commands/new-workspace";
 import pingCommand from "./commands/ping";
 import popupCommand from "./commands/popup";
-import popupCloseCommand from "./commands/popup-close";
-import popupPromoteCommand from "./commands/popup-promote";
-import popupToggleCommand from "./commands/popup-toggle";
-import renameWorkspaceCommand from "./commands/rename-workspace";
-import sendKeysCommand from "./commands/send-keys";
-import setVarCommand from "./commands/set-var";
 import shellProfilesCommand from "./commands/shell-profiles";
-import showTabCommand from "./commands/show-tab";
-import splitTileCommand from "./commands/split-tile";
-import switchTabCommand from "./commands/switch-tab";
-import switchWorkspaceCommand from "./commands/switch-workspace";
+import tabCommand from "./commands/tab";
+import tileCommand from "./commands/tile";
+import workspaceCommand from "./commands/workspace";
 
 const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
 
@@ -53,30 +34,11 @@ try {
     subCommands: {
       ping: pingCommand,
       list: listCommand,
-      "send-keys": sendKeysCommand,
-      "browser-navigate": browserNavigateCommand,
-      "browser-get-text": browserGetTextCommand,
-      "browser-get-html": browserGetHtmlCommand,
-      "browser-screenshot": browserScreenshotCommand,
-      "split-tile": splitTileCommand,
-      "new-tab": newTabCommand,
-      "switch-tab": switchTabCommand,
-      "close-tab": closeTabCommand,
-      "focus-tile": focusTileCommand,
-      "focus-direction": focusDirectionCommand,
-      "new-workspace": newWorkspaceCommand,
-      "switch-workspace": switchWorkspaceCommand,
-      "close-workspace": closeWorkspaceCommand,
-      "rename-workspace": renameWorkspaceCommand,
-      "show-tab": showTabCommand,
-      "capture-tab": captureTabCommand,
+      tab: tabCommand,
+      workspace: workspaceCommand,
+      tile: tileCommand,
       popup: popupCommand,
-      "popup-close": popupCloseCommand,
-      "popup-promote": popupPromoteCommand,
-      "popup-toggle": popupToggleCommand,
-      "set-var": setVarCommand,
-      "get-var": getVarCommand,
-      "list-vars": listVarsCommand,
+      browser: browserCommand,
       "shell-profiles": shellProfilesCommand,
       layout: layoutCommand,
       "font-size": fontSizeCommand,

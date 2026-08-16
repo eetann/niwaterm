@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、特定タブへのキー送信（`niwaterm send-keys`）、タイル分割・タブ作成・タブ切替・タブを閉じる・タイルへのフォーカス移動（`niwaterm split-tile`/`new-tab`/`switch-tab`/`close-tab`/`focus-tile`/`focus-direction`）、タイル・タブに所属しない一時的なポップアップ画面を開く・閉じる・表示/非表示を切り替える・フォーカス中タイルへタブとして昇格する（`niwaterm popup`/`popup-close`/`popup-toggle`/`popup-promote`）、ワークスペースの作成・切替・削除・名前変更（`niwaterm new-workspace`/`switch-workspace`/`close-workspace`/`rename-workspace`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、特定タブの画面内容取得（`niwaterm capture-tab`）、タブ変数の設定・取得・一覧（`niwaterm set-var`/`get-var`/`list-vars`）、ブラウザタブのURL遷移・画面内容取得・スクリーンショット取得（`niwaterm browser-navigate`/`browser-get-text`/`browser-get-html`/`browser-screenshot`）、任意タブの目視確認用アクティブ化（`niwaterm show-tab`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -31,80 +31,79 @@ niwatermアプリが起動していれば`pong (pid <アプリのpid>)`が返る
 niwaterm list
 ```
 
-ワークスペース→タイル→タブの階層構造を表示する。アクティブなワークスペース/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(focused)`のサフィックスが付く。`send-keys`で指定するtabIdはここで確認する。
+ワークスペース→タイル→タブの階層構造を表示する。アクティブなワークスペース/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(focused)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
 
 ```sh
-niwaterm send-keys --tab <tabId> <keys...>
+niwaterm tab send-keys --tab <tabId> <keys...>
 ```
 
 指定したタブへキーを送信する（tmuxの`send-keys`相当）。`<keys...>`にはリテラル文字列と特殊キー名を複数個並べて混在指定できる。
 
 ```sh
-niwaterm send-keys --tab tab-3 'ls -la' Enter
-niwaterm send-keys -t tab-3 C-c
+niwaterm tab send-keys --tab tab-3 'ls -la' Enter
+niwaterm tab send-keys -t tab-3 C-c
 ```
 
 対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm split-tile --tile <tileId> [--orientation horizontal|vertical] [--cwd <dir>]
-niwaterm new-tab --tile <tileId> [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
-niwaterm switch-tab --tile <tileId> --tab <tabId>
-niwaterm close-tab --tile <tileId> --tab <tabId>
-niwaterm focus-tile --tile <tileId>
-niwaterm focus-direction --direction up|down|left|right
+niwaterm tile split --tile <tileId> [--orientation horizontal|vertical] [--cwd <dir>]
+niwaterm tab new --tile <tileId> [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
+niwaterm tab switch --tile <tileId> --tab <tabId>
+niwaterm tab close --tile <tileId> --tab <tabId>
+niwaterm tile focus --tile <tileId>
+niwaterm tile focus --direction up|down|left|right
 ```
 
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
 
-- `split-tile` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `new-tab` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`split-tile`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
-- `switch-tab` — 指定タイル内でアクティブタブを切り替える
-- `close-tab` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
-- `focus-tile` — 指定タイルへフォーカスを移す
-- `focus-direction` — 現在フォーカス中のタイルから見て指定方向にある最も近いタイルへフォーカスを移す。該当タイルが無ければ何もしない（エラーにはならない）。常にアクティブなワークスペース基準で動く（`--tile`のような対象指定は取らない）
+- `tile split` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
+- `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
+- `tab switch` — 指定タイル内でアクティブタブを切り替える
+- `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
+- `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm popup [--cwd <dir>] [--width <1-100>] [--height <1-100>] [command...]
+niwaterm popup open [--cwd <dir>] [--width <1-100>] [--height <1-100>] [command...]
 ```
 
-タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxの`popup`/`floating`相当。設計判断の詳細: `docs/adr/0005-adopt-workspace-scoped-single-popup.md`）。アクティブなワークスペースにつき最大1つだけ開ける。`--cwd`省略時はフォーカス中タイルのアクティブタブが実際にいるディレクトリを使う。`--width`/`--height`は表示サイズ（1〜100のパーセント、省略時は既定値）。`command...`を指定すると、デフォルトシェル（WSLプロファイル等も含む）の`-c`/`-Command`相当でそのコマンドを実行し（例: `niwaterm popup lazygit`）、コマンドが終了すると自動的にポップアップも閉じる（ワンショット実行。lazygit・nvim等のフルスクリーンTUIでも機能する）。省略時は通常のシェルが起動したままになる。成功時、新規`tabId`を表示する。
+タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxの`popup`/`floating`相当。設計判断の詳細: `docs/adr/0005-adopt-workspace-scoped-single-popup.md`）。アクティブなワークスペースにつき最大1つだけ開ける。`--cwd`省略時はフォーカス中タイルのアクティブタブが実際にいるディレクトリを使う。`--width`/`--height`は表示サイズ（1〜100のパーセント、省略時は既定値）。`command...`を指定すると、デフォルトシェル（WSLプロファイル等も含む）の`-c`/`-Command`相当でそのコマンドを実行し（例: `niwaterm popup open lazygit`）、コマンドが終了すると自動的にポップアップも閉じる（ワンショット実行。lazygit・nvim等のフルスクリーンTUIでも機能する）。省略時は通常のシェルが起動したままになる。成功時、新規`tabId`を表示する。
 
 表示/非表示の切り替えはキーバインド（既定: prefix `ctrl+b` → `` ` ``、macOS/Windows共通）でも行える。GUIでは`popup-box`右上のツールバーからも操作できる。ポップアップが既に開いている場合、このコマンドはエラーメッセージと共に終了コード1を返す。
 
 **既知の制約**: WSLプロファイルでは`command...`をスペース区切りで単純分割して渡す（クォート・エスケープ非対応、`shell`オプションと同様）。クォートを含む複雑なコマンドは正しく解釈されないことがある。
 
 ```sh
-niwaterm popup-close
-niwaterm popup-toggle
-niwaterm popup-promote
+niwaterm popup close
+niwaterm popup toggle
+niwaterm popup promote
 ```
 
 開いているポップアップに対する操作コマンド。
 
-- `popup-close` — ポップアップを閉じる（中のPTYも終了する）
-- `popup-toggle` — ポップアップの表示/非表示を切り替える。非表示化してもPTYは生きたままで、裏で動いているプロセスは継続する（成功時 `popup: visible`/`popup: hidden` を表示）
-- `popup-promote` — ポップアップの中身を、フォーカス中タイル（`niwaterm list`の`(focused)`で確認できる）へ通常タブとして編入する（タブへ昇格）。PTYセッションは作り直されない（成功時、編入先の`tileId`と`tabId`を表示）
+- `popup close` — ポップアップを閉じる（中のPTYも終了する）
+- `popup toggle` — ポップアップの表示/非表示を切り替える。非表示化してもPTYは生きたままで、裏で動いているプロセスは継続する（成功時 `popup: visible`/`popup: hidden` を表示）
+- `popup promote` — ポップアップの中身を、フォーカス中タイル（`niwaterm list`の`(focused)`で確認できる）へ通常タブとして編入する（タブへ昇格）。PTYセッションは作り直されない（成功時、編入先の`tileId`と`tabId`を表示）
 
 いずれも開いているポップアップが無い場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm new-workspace
-niwaterm switch-workspace --workspace <workspaceId>
-niwaterm close-workspace --workspace <workspaceId>
-niwaterm rename-workspace --workspace <workspaceId> <name>
+niwaterm workspace new
+niwaterm workspace switch --workspace <workspaceId>
+niwaterm workspace close --workspace <workspaceId>
+niwaterm workspace rename --workspace <workspaceId> <name>
 ```
 
 ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。
 
-- `new-workspace` — 新規ワークスペースを作成し、アクティブにする。成功時、新規`workspaceId`を表示する
-- `switch-workspace` — 指定したワークスペースへ切り替える
-- `close-workspace` — 指定したワークスペースを閉じる。最後の1つのワークスペースは誤操作防止のため閉じられない
-- `rename-workspace` — 指定したワークスペースの名前を変更する（サイドバーの見出しラベルに反映される）。`<name>`に空文字列を指定するとデフォルトの連番ラベル（`Workspace N`）へ戻る。タブ名・タイル名同様、アプリ再起動をまたいでも復元される
+- `workspace new` — 新規ワークスペースを作成し、アクティブにする。成功時、新規`workspaceId`を表示する
+- `workspace switch` — 指定したワークスペースへ切り替える
+- `workspace close` — 指定したワークスペースを閉じる。最後の1つのワークスペースは誤操作防止のため閉じられない
+- `workspace rename` — 指定したワークスペースの名前を変更する（サイドバーの見出しラベルに反映される）。`<name>`に空文字列を指定するとデフォルトの連番ラベル（`Workspace N`）へ戻る。タブ名・タイル名同様、アプリ再起動をまたいでも復元される
 
-いずれも対象の`workspaceId`が存在しない場合、`close-workspace`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
+いずれも対象の`workspaceId`が存在しない場合、`workspace close`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm layout list
@@ -128,29 +127,29 @@ niwaterm font-size increase|decrease|reset
 niwaterm shell-profiles
 ```
 
-利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`new-tab --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
+利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`tab new --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
 
 ```sh
-niwaterm capture-tab --tab <tabId>
+niwaterm tab capture --tab <tabId>
 ```
 
 指定したタブの現在の画面内容をプレーンテキストで標準出力へ表示する（tmuxの`capture-pane -p`相当）。エスケープシーケンス・色情報は含まれず、現在画面（viewport）の内容のみが対象でスクロールバックは含まれない。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm set-var --tab <tabId> <key> <value>
-niwaterm get-var --tab <tabId> <key>
-niwaterm list-vars --tab <tabId>
+niwaterm tab var set --tab <tabId> <key> <value>
+niwaterm tab var get --tab <tabId> <key>
+niwaterm tab var list --tab <tabId>
 ```
 
-タブごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される（**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**）。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`set-var`で書き、別タブがその値を`get-var`で参照しつつ`send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`get-var`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
+タブごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される（**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**）。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`tab var set`で書き、別タブがその値を`tab var get`で参照しつつ`tab send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`tab var get`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
-`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`set-var`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
 ## シェル統合
 
-`contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm set-var branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
+`contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm tab var set branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
 
-同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm set-var`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている（ホスト名検証はしない。ghostty本家はSSH越しの偽装対策として行うが、niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている）。`niwaterm split-tile`/`niwaterm new-tab`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる（Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される。`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**（OSC 7自体はlibghostty-vt側に制約は無いが、niwaterm.ps1へのOSC 7送信追加は今後の対応）。
+同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm tab var set`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている（ホスト名検証はしない。ghostty本家はSSH越しの偽装対策として行うが、niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている）。`niwaterm tile split`/`niwaterm tab new`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる（Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される。`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**（OSC 7自体はlibghostty-vt側に制約は無いが、niwaterm.ps1へのOSC 7送信追加は今後の対応）。
 
 ```sh
 # ~/.zshrc
@@ -176,7 +175,7 @@ if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwa
 
 ## エージェント統合
 
-`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する（`niwaterm set-var agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
+`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する（`niwaterm tab var set agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
 
 ```sh
 # ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
@@ -188,31 +187,31 @@ jq -s '.[0] * {hooks: (.[0].hooks * .[1].hooks)}' \
 mv /tmp/merged-settings.json ~/.claude/settings.json
 ```
 
-`branch`と同様、`agent`/`agent_status`もタブ変数の予約キーである（値は`niwaterm set-var`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TAB_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
+`branch`と同様、`agent`/`agent_status`もタブ変数の予約キーである（値は`niwaterm tab var set`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TAB_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
 
 ```sh
-niwaterm browser-navigate --tab <tabId> --url <url>
-niwaterm browser-get-text --tab <tabId>
-niwaterm browser-get-html --tab <tabId>
-niwaterm browser-screenshot --tab <tabId> --out <path>
-niwaterm show-tab --tab <tabId>
+niwaterm browser navigate --tab <tabId> --url <url>
+niwaterm browser get-text --tab <tabId>
+niwaterm browser get-html --tab <tabId>
+niwaterm browser screenshot --tab <tabId> --out <path>
+niwaterm tab show --tab <tabId>
 ```
 
 ブラウザタブをCLIから操作するコマンド（PlaywrightのAPIのような感覚での操作を想定。読み取り中心のMVPで、click/fill等の操作系は未対応）。
 
-- `browser-navigate` — 指定したブラウザタブのURLを遷移する（Playwrightの`page.goto()`相当）。次のページ読み込み完了まで待って結果を返す
-- `browser-get-text` — 指定したブラウザタブの表示内容をプレーンテキストで取得する（`document.body.innerText`相当）
-- `browser-get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
-- `browser-screenshot` — 指定したブラウザタブの現在URLをheadlessブラウザ（Bun本体がv1.3.12以降ネイティブに提供する`Bun.WebView`、macOSはniwatermのElectrobun側と同じWKWebViewベース）で別途開き直し、スクリーンショットをPNGファイルに保存する。**表示中タブそのものではなく、別インスタンスで同じURLを新規に開いた場合の見た目**になる点に注意（ログイン状態やスクロール位置、フォーム入力中の値などは反映されない）
+- `browser navigate` — 指定したブラウザタブのURLを遷移する（Playwrightの`page.goto()`相当）。次のページ読み込み完了まで待って結果を返す
+- `browser get-text` — 指定したブラウザタブの表示内容をプレーンテキストで取得する（`document.body.innerText`相当）
+- `browser get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
+- `browser screenshot` — 指定したブラウザタブの現在URLをheadlessブラウザ（Bun本体がv1.3.12以降ネイティブに提供する`Bun.WebView`、macOSはniwatermのElectrobun側と同じWKWebViewベース）で別途開き直し、スクリーンショットをPNGファイルに保存する。**表示中タブそのものではなく、別インスタンスで同じURLを新規に開いた場合の見た目**になる点に注意（ログイン状態やスクロール位置、フォーム入力中の値などは反映されない）
 
-いずれも対象`tabId`がterminalタブの場合、または存在しない場合はエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`show-tab`で対象ワークスペースをアクティブ化してから呼び直す。
+いずれも対象`tabId`がterminalタブの場合、または存在しない場合はエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab show`で対象ワークスペースをアクティブ化してから呼び直す。
 
-- `show-tab` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`switch-tab`/`focus-tile`と役割が重なって見えるが、粒度が異なる合成コマンドである:
-  - `switch-tab --tile --tab` — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
-  - `focus-tile --tile` — フォーカス（キー入力の宛先）を移すのみ
-  - `show-tab --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
+- `tab show` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`tab switch`/`tile focus`と役割が重なって見えるが、粒度が異なる合成コマンドである:
+  - `tab switch --tile --tab` — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
+  - `tile focus --tile` — フォーカス（キー入力の宛先）を移すのみ
+  - `tab show --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
 
-「表示中タブそのものの見た目を確認したい」場合は`show-tab`で実ウィンドウを前面化して直接目視するか、`browser-screenshot`で同じURLのheadlessスクショを撮る（後者はDOM状態が再現されない代わりに人間が画面の前にいなくても確認できる）。使い分けの目安として、両者は互いを置き換えるものではない。
+「表示中タブそのものの見た目を確認したい」場合は`tab show`で実ウィンドウを前面化して直接目視するか、`browser screenshot`で同じURLのheadlessスクショを撮る（後者はDOM状態が再現されない代わりに人間が画面の前にいなくても確認できる）。使い分けの目安として、両者は互いを置き換えるものではない。
 
 ```sh
 niwaterm --help
@@ -225,6 +224,10 @@ niwaterm docs show cli
 ```
 
 `niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show cli`はこのドキュメント（`docs/guide/cli.md`）の内容そのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでこのドキュメント全体を取得できる。
+
+## コマンド命名規則
+
+コマンドを追加する際の命名ルールは`.claude/rules/cli-command-naming.md`を参照。
 
 ## AIエージェント向けの導線
 

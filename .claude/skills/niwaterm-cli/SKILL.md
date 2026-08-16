@@ -18,17 +18,17 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## できること（概要）
 
+コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`layout`/`font-size`/`shell-profiles`/`docs`はリソース単体に属さないためトップレベル）。
+
 - `list` — ワークスペース・タイル・タブの一覧（操作対象のIDを確認する起点）
-- `send-keys` — 指定タブへのキー送信（tmuxのsend-keys相当）
-- `split-tile` / `new-tab` / `switch-tab` / `close-tab` / `focus-tile` / `focus-direction` — レイアウト操作
-- `popup` — タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxのpopup/floating相当。`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
-- `new-workspace` / `switch-workspace` / `close-workspace` / `rename-workspace` — ワークスペースの作成・切替・削除・名前変更
-- `layout list` / `layout apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用（vde-layoutライク）
+- `tab new` / `switch` / `close` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・目視確認用アクティブ化・画面内容取得・キー送信）
+- `tab var get` / `set` / `list` — タブごとのkey-value変数（タブ間の連携に使える）
+- `workspace new` / `switch` / `close` / `rename` — ワークスペースの作成・切替・削除・名前変更
+- `tile split` / `focus` — タイルの分割・フォーカス移動（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方）
+- `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
+- `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
+- `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
-- `capture-tab` — タブの画面内容（プレーンテキスト）取得
-- `set-var` / `get-var` / `list-vars` — タブごとのkey-value変数（タブ間の連携に使える）
-- `browser-navigate` / `browser-get-text` / `browser-get-html` / `browser-screenshot` — ブラウザタブ操作
-- `show-tab` — 人間が目視確認できるようウィンドウを前面化する
 
 ## 詳しい使い方
 

@@ -212,7 +212,7 @@ function parseTileTabBody(body: unknown): TileTabRequestBody | null {
   return { ...tileIdBody, tabId: b.tabId };
 }
 
-/** 英数字・_・-・. のみ、1〜128文字。CLI出力（list-varsのkey=value整形）を壊す空白・改行等を排除する */
+/** 英数字・_・-・. のみ、1〜128文字。CLI出力（tab var listのkey=value整形）を壊す空白・改行等を排除する */
 const TAB_VAR_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
 
 interface SetVarRequestBody extends TabIdRequestBody {

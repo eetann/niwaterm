@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { openPopup, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { openPopup, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "popup",
+  name: "open",
   description: "タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxのpopup/floating相当）",
   args: {
     cwd: {
@@ -23,7 +23,7 @@ export default define({
       type: "positional",
       multiple: true,
       description:
-        "デフォルトシェル（WSLプロファイル等も含む）でこのコマンドを実行する（省略時はシェルを起動したままにする）。コマンドが終了すると自動的にポップアップが閉じる（ワンショット実行。lazygit等のフルスクリーンTUIでも機能する。例: niwaterm popup lazygit）",
+        "デフォルトシェル（WSLプロファイル等も含む）でこのコマンドを実行する（省略時はシェルを起動したままにする）。コマンドが終了すると自動的にポップアップが閉じる（ワンショット実行。lazygit等のフルスクリーンTUIでも機能する。例: niwaterm popup open lazygit）",
     },
   },
   run: async (ctx) => {
@@ -37,7 +37,7 @@ export default define({
       ctx.values.height,
     );
     if (!result.ok) {
-      failAndExit(`popupに失敗しました: ${result.error}`);
+      failAndExit(`popup openに失敗しました: ${result.error}`);
     }
     console.log(`tab: ${result.tabId}`);
   },

@@ -25,7 +25,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 | `document.activeElement`と`document.hasFocus()`をpopup表示前後で確認 | `activeElement`は`ime-input`になるが`hasFocus()`は常に`false`（起動直後・通常操作時も含め常にfalseだったため、この指標自体は無意味と判明） |
 | `imeEl`に`focus`/`blur`イベントリスナー、`document`に`focusin`/`focusout`リスナーを追加 | popup表示時、`focus()`を呼んでも`focus`/`focusin`イベントが一切発火しない（＝プログラム的なactiveElement更新はされるが実効的なフォーカス移動が起きていない） |
 | `document`の`keydown`ハンドラに`currentTabId`等をログ出力 | popup表示後にSendKeysで送ったキーで`keydown`自体が発火しない。クリック後は正しく発火する |
-| CLIから`new-tab`（`activateWindow()`を呼ばない操作）を同条件で実行 | 正常にkeydownが発火し入力が届く。popup固有の問題と確定 |
+| CLIから`tab new`（`activateWindow()`を呼ばない操作）を同条件で実行 | 正常にkeydownが発火し入力が届く。popup固有の問題と確定 |
 | popup-toolbarのReact描画を無効化 | 症状変化なし。ボタン要素がフォーカスを奪っているわけではないと判明 |
 | `#ime-input`に`z-index`を追加（`#popup`のz-index:10配下に隠れている可能性を検証） | 症状変化なし |
 | `imeEl`をDOM階層としてpopup要素の内側へ一時移動 | 症状変化なし |
@@ -40,7 +40,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 
 `src/bun/ipc-server.ts`の`POST /popup`から`activateWindow()`の呼び出しを削除した。popupは「今操作しているniwatermに対して素早く一時的な操作をする」用途が主で、既にウィンドウがフォアグラウンドの状態で開かれるケースがほとんどのため、ウィンドウ前面化を諦めても実用上の支障は小さいと判断した。バックグラウンドから`niwaterm popup`を実行した場合はウィンドウが自動的に前面化されなくなるが、その場合は手動でアプリをクリックすれば通常通り操作できる。
 
-`show-tab`等、他の`activateWindow()`呼び出し箇所（目視確認が主目的で、その後すぐにキー入力を行うことを前提としていない操作）は今回のスコープ外として維持した。今後同種の症状が別のエンドポイントで報告された場合は、同様に`activateWindow()`の要否を見直すこと。
+`tab show`等、他の`activateWindow()`呼び出し箇所（目視確認が主目的で、その後すぐにキー入力を行うことを前提としていない操作）は今回のスコープ外として維持した。今後同種の症状が別のエンドポイントで報告された場合は、同様に`activateWindow()`の要否を見直すこと。
 
 ## 関連
 

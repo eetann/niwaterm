@@ -88,16 +88,16 @@ powershell.exe -NoProfile -Command "$PS_PREFIX Stop-Process -Id <上で確認し
 疎通確認・一覧・レイアウト操作は`.claude/skills/niwaterm-cli/SKILL.md`と
 `niwaterm docs show cli`が正。ここではハマりやすい引数の形だけメモする。
 
-- `send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
-  `niwaterm send-keys --tab tab-3 'echo foo' Enter`
-- `switch-tab`は`--tile`必須: `niwaterm switch-tab --tile tile-4 --tab tab-6`
+- `tab send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
+  `niwaterm tab send-keys --tab tab-3 'echo foo' Enter`
+- `tab switch`は`--tile`必須: `niwaterm tab switch --tile tile-4 --tab tab-6`
 - WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profiles`で確認してから
-  `niwaterm new-tab -t <tileId> -s <shellProfileId>`で作成する
+  `niwaterm tab new -t <tileId> -s <shellProfileId>`で作成する
 
 ## 目視確認・スクリーンショット
 
 PowerShell標準の.NET（`System.Drawing`）だけでWindowsデスクトップのスクリーンショットが撮れる。
-追加ツールのインストールは不要。まず`niwaterm show-tab --tab <tabId>`で対象タブを前面化してから撮る:
+追加ツールのインストールは不要。まず`niwaterm tab show --tab <tabId>`で対象タブを前面化してから撮る:
 
 ```bash
 powershell.exe -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$bmp); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$bmp.Save(\"\$env:TEMP\niwaterm-shot.png\",[System.Drawing.Imaging.ImageFormat]::Png)"
@@ -114,7 +114,7 @@ RDPセッション）だと、GDI経由のキャプチャが黒画面になる�
 
 ## キーボードショートカット・マウス操作のシミュレーション
 
-`niwaterm send-keys`はPTYへの文字列送信（tmuxのsend-keys相当）であり、
+`niwaterm tab send-keys`はPTYへの文字列送信（tmuxのsend-keys相当）であり、
 Ctrl+Shift+CやCtrl+Shift+VのようなGUIレベルのキーボードショートカット（webviewの
 keydownイベント経由でRPCが飛ぶもの）は発火できない。これらを検証するにはOSレベルの
 キー・マウスイベント注入が必要で、`System.Windows.Forms.SendKeys`と`user32.dll`の

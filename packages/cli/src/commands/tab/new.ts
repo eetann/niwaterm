@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, newTab } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { resolveIpcEndpoint, newTab } from "../../ipc-client";
 
 export default define({
-  name: "new-tab",
+  name: "new",
   description: "指定したタイルに新規タブを作成する",
   args: {
     tile: {
@@ -43,13 +43,13 @@ export default define({
       ctx.values.shell !== undefined,
     ].filter(Boolean).length;
     if (exclusiveFlags > 1) {
-      failAndExit("new-tabに失敗しました: --url・--custom-view・--shellは同時に指定できません");
+      failAndExit("tab newに失敗しました: --url・--custom-view・--shellは同時に指定できません");
     }
     if (
       ctx.values.cwd !== undefined &&
       (ctx.values.url !== undefined || ctx.values["custom-view"])
     ) {
-      failAndExit("new-tabに失敗しました: --cwdは--url・--custom-viewと同時に指定できません");
+      failAndExit("tab newに失敗しました: --cwdは--url・--custom-viewと同時に指定できません");
     }
     const result = await newTab(
       resolveIpcEndpoint(),
@@ -60,7 +60,7 @@ export default define({
       ctx.values.cwd,
     );
     if (!result.ok) {
-      failAndExit(`new-tabに失敗しました: ${result.error}`);
+      failAndExit(`tab newに失敗しました: ${result.error}`);
     }
     console.log(`tab: ${result.tabId}`);
   },

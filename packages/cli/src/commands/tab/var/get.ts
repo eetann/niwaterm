@@ -1,10 +1,10 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { getTabVar, resolveIpcEndpoint } from "../ipc-client";
-import { resolveTabId } from "../resolve-tab";
+import { failAndExit } from "../../../cli-error";
+import { getTabVar, resolveIpcEndpoint } from "../../../ipc-client";
+import { resolveTabId } from "../../../resolve-tab";
 
 export default define({
-  name: "get-var",
+  name: "get",
   description: "指定したタブの変数を取得する",
   args: {
     tab: {
@@ -21,7 +21,7 @@ export default define({
     const tabId = resolveTabId(ctx.values.tab);
     const result = await getTabVar(resolveIpcEndpoint(), tabId, ctx.values.key);
     if (!result.ok) {
-      failAndExit(`get-varに失敗しました: ${result.error}`);
+      failAndExit(`tab var getに失敗しました: ${result.error}`);
     }
     console.log(result.value);
   },

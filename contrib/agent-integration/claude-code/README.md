@@ -51,5 +51,5 @@ Claude Code公式ドキュメント（[Hooks Reference](https://code.claude.com/
 この機能は開発時にmacOS/Windows実機でのGUI確認ができない環境（Linux/WSL）で実装されたため、以下は導入後に実地で確認すること。
 
 - `$NIWATERM_TAB_ID`がClaude Codeのhookサブプロセスまで環境変数として継承されるか（PTY→シェル→`claude`→hookサブプロセスという経路で、通常のUnixプロセス環境変数継承であれば伝播するはずだが未確認）
-- `niwaterm set-var agent ""`のように値に空文字列を渡した場合、CLI（gunshi製）がpositional引数として正しく空文字列を受け取れるか
+- `niwaterm tab var set agent ""`のように値に空文字列を渡した場合、CLI（gunshi製）がpositional引数として正しく空文字列を受け取れるか
 - `agent_status_text`はbashのパラメータ展開（`${status_text:0:60}`）で60文字に切り詰めている。マルチバイト文字（日本語等）を文字数単位で正しく切り詰められるかはbashのロケール設定に依存するため、実地でのロケール依存挙動は未確認

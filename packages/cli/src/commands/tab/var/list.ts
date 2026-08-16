@@ -1,10 +1,10 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, listTabVars } from "../ipc-client";
-import { resolveTabId } from "../resolve-tab";
+import { failAndExit } from "../../../cli-error";
+import { resolveIpcEndpoint, listTabVars } from "../../../ipc-client";
+import { resolveTabId } from "../../../resolve-tab";
 
 export default define({
-  name: "list-vars",
+  name: "list",
   description: "指定したタブの変数を一覧表示する",
   args: {
     tab: {
@@ -17,7 +17,7 @@ export default define({
     const tabId = resolveTabId(ctx.values.tab);
     const result = await listTabVars(resolveIpcEndpoint(), tabId);
     if (!result.ok) {
-      failAndExit(`list-varsに失敗しました: ${result.error}`);
+      failAndExit(`tab var listに失敗しました: ${result.error}`);
     }
     const entries = Object.entries(result.vars).sort(([a], [b]) => a.localeCompare(b));
     if (entries.length === 0) {

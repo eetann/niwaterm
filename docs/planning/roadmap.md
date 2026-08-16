@@ -78,9 +78,9 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 - [x] アプリがIPCサーバ（unix socketなど）を持ち、外部から接続できる
 - [x] `niwaterm` CLIコマンドでアプリを操作できる
 - [x] タイル・タブ・ワークスペースの一覧を取得できる（`niwaterm list`）
-- [x] 特定タブを指定してキー送信ができる（`niwaterm send-keys`、tmux send-keys相当）
+- [x] 特定タブを指定してキー送信ができる（`niwaterm tab send-keys`、tmux send-keys相当）
 - [x] CLIからタイル分割・タブ作成などのレイアウト操作ができる
-- [x] 特定タブの画面内容（テキスト）を取得できる（`niwaterm capture-tab`）
+- [x] 特定タブの画面内容（テキスト）を取得できる（`niwaterm tab capture`）
 
 ## サイドバーとワークスペース
 
@@ -97,9 +97,9 @@ description: niwatermの実装ロードマップ。h2セクション1つ=1セッ
 
 サイドバーのタブ行に、gitブランチ名とAIエージェントの種別・状態（idle/working/blocked）を表示する機能。
 
-- [x] PTY起動時の`NIWATERM_TAB_ID`環境変数、タブ変数（`set-var`/`get-var`/`list-vars`）基盤を用意する
-- [x] zsh/bash/fish/PowerShell向けのシェル統合スニペット（precmdフックでブランチを`set-var`）を用意する
-- [x] Claude Codeのhooks経由でエージェント種別・状態を`set-var`する仕組みを用意する
+- [x] PTY起動時の`NIWATERM_TAB_ID`環境変数、タブ変数（`tab var set`/`tab var get`/`tab var list`）基盤を用意する
+- [x] zsh/bash/fish/PowerShell向けのシェル統合スニペット（precmdフックでブランチを`tab var set`）を用意する
+- [x] Claude Codeのhooks経由でエージェント種別・状態を`tab var set`する仕組みを用意する
 - [x] サイドバーのタブ行にブランチ名・エージェント状態（色分けドット）を表示する
 - [x] 変数の付与単位をタイル単位からタブ単位へ全面移行する
 - [x] ブランチ表示が実際には機能していない不具合を修正する
@@ -145,8 +145,8 @@ Windows TerminalやWeztermのように、新規タブ作成時に起動するシ
 
 ## タブ変数
 
-- [x] タブごとにkey-valueの変数を設定できる（`niwaterm set-var`相当。tmuxのペイン変数に相当）
-- [x] タブの変数を取得・一覧できる（`niwaterm get-var`/`list-vars`相当）
+- [x] タブごとにkey-valueの変数を設定できる（`niwaterm tab var set`相当。tmuxのペイン変数に相当）
+- [x] タブの変数を取得・一覧できる（`niwaterm tab var get`/`tab var list`相当）
 - [x] 別タブの変数をCLI経由で読み書きし、タブ間でデータをやり取りする自動化ができることを確認する
 
 ## GUI統合（内蔵ブラウザ・HTML UI）
@@ -163,14 +163,14 @@ CLIから内蔵ブラウザタブを操作できるようにする（Playwright�
 「GUI統合」節末尾の「HTML UIからアプリのAPIを呼び出せる」（HTML UI→niwatermアプリ側という逆方向の連携）とは別方向の機能であり競合しない。
 
 - [x] bunメインプロセスがブラウザタブ（OOPIF）内でJSを実行し結果を受け取れる、非同期request/response基盤ができている
-- [x] `niwaterm browser-navigate --tab <tabId> --url <url>` でブラウザタブのURLを遷移できる（Playwrightの`page.goto()`相当）
-- [x] `niwaterm browser-get-text --tab <tabId>` でブラウザタブの表示内容をプレーンテキストで取得できる
-- [x] `niwaterm browser-get-html --tab <tabId>` でブラウザタブのHTMLを取得できる
-- [x] `niwaterm show-tab --tab <tabId>` で対象タブのワークスペース・タイルへ切り替え、タブをアクティブ化し、ウィンドウを前面化できる
+- [x] `niwaterm browser navigate --tab <tabId> --url <url>` でブラウザタブのURLを遷移できる（Playwrightの`page.goto()`相当）
+- [x] `niwaterm browser get-text --tab <tabId>` でブラウザタブの表示内容をプレーンテキストで取得できる
+- [x] `niwaterm browser get-html --tab <tabId>` でブラウザタブのHTMLを取得できる
+- [x] `niwaterm tab show --tab <tabId>` で対象タブのワークスペース・タイルへ切り替え、タブをアクティブ化し、ウィンドウを前面化できる
 - [x] 上記4コマンドが各種エラーケース（タブ不存在・対象タブがterminalタブ等）で適切なエラーを返すことを確認できている
-- [x] `niwaterm browser-screenshot --tab <tabId> --out <path>` でスクリーンショットを取得できる
+- [x] `niwaterm browser screenshot --tab <tabId> --out <path>` でスクリーンショットを取得できる
       既知の制約: 「表示中タブそのもの」ではなく「同じURLを新規に開いた場合の見た目」になる（DOM状態・ログイン状態・スクロール位置等は再現されない）。ElectrobunのWebviewTagElementにスクショAPIが無いため、Bun本体（v1.3.12+）の`Bun.WebView`で対象URLを裏で開き直して撮る設計のため
-- [ ] スナップショット（操作可能な要素だけを抽出した簡易構造）を取得できるコマンド（`niwaterm browser-snapshot`相当）を追加する。cmuxの「Snapshot + Refs」戦略を参考に、DOM全体ではなくクリック・入力可能な要素の参照リスト（ref）のみを返すことで`browser-get-html`よりAIのトークン消費を抑える。click/fill実装の前提となる
+- [ ] スナップショット（操作可能な要素だけを抽出した簡易構造）を取得できるコマンド（`niwaterm browser snapshot`相当）を追加する。cmuxの「Snapshot + Refs」戦略を参考に、DOM全体ではなくクリック・入力可能な要素の参照リスト（ref）のみを返すことで`browser get-html`よりAIのトークン消費を抑える。click/fill実装の前提となる
 - [ ] click・fill等のDOM操作系コマンドをCLIから叩けるようにする。要素指定はCSSセレクタと上記スナップショットのrefの両方に対応する（セレクタ指定は単純な操作で使いやすい、ref指定はスナップショット取得後の連続操作でトークン効率が良い。用途に応じて使い分けられるよう両方サポートする）
 - [ ] 複数タブへの並行操作（同時に走る複数のexecBrowserJs呼び出し）が正しく相関IDで区別されることを確認できている
 - [ ] ブラウザタブのURLがbun側の状態に同期されず、非アクティブワークスペース再アクティブ化時に初期URLへ巻き戻る既知の制約への対応（`did-navigate`受信時のURL書き戻し）
@@ -237,3 +237,4 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] キーバインドをtmuxみたいにprefix式にする(prefixに割り当てるキーは設定可能)
 - [ ] ステータスバーにprefixモード（2打目キー待ち）中であることを表示する（「ステータスバー用意」タスクの一部として実装する）
 - [x] コマンドパレット追加
+- [ ] プラグインの仕組み

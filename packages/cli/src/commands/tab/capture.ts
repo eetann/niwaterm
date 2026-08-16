@@ -1,9 +1,9 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { captureTab, resolveIpcEndpoint } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { captureTab, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "capture-tab",
+  name: "capture",
   description: "指定したタブの画面内容をテキストで取得する（tmux capture-pane相当）",
   args: {
     tab: {
@@ -16,7 +16,7 @@ export default define({
   run: async (ctx) => {
     const result = await captureTab(resolveIpcEndpoint(), ctx.values.tab);
     if (!result.ok) {
-      failAndExit(`capture-tabに失敗しました: ${result.error}`);
+      failAndExit(`tab captureに失敗しました: ${result.error}`);
     }
     console.log(result.text);
   },
