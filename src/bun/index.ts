@@ -13,6 +13,7 @@ import { readClipboardText, writeClipboardText } from "./clipboard";
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
+import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
@@ -84,6 +85,7 @@ export type NiwaRPC = {
       closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
       focusDirection: { direction: "up" | "down" | "left" | "right" };
+      resizeTileInDirection: { direction: "up" | "down" | "left" | "right" };
       resizeSplit: { splitId: TileId; ratio: number };
       newWorkspace: {};
       switchWorkspace: { workspaceId: WorkspaceId };
@@ -442,6 +444,10 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
         workspaceManager.focusDirection(direction);
+      },
+      resizeTileInDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
+        const tileId = workspaceManager.getFocusedTileId();
+        workspaceManager.resizeTileInDirection(tileId, direction, DEFAULT_RESIZE_AMOUNT);
       },
       resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {
         workspaceManager.resizeSplit(splitId, ratio);

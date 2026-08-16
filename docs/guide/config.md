@@ -81,7 +81,7 @@ cd ~/.config/niwaterm && bun install
 
 ## キーバインド
 
-niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。
+niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。`repeat: true`を付けたバインドは、発火後`repeatTimeoutMs`（既定500ms）以内ならprefix無しで連打できる（tmuxの`bind-key -r`相当。詳細は下記「repeatによる連打」参照）。
 
 `keybindings`の指定方法は2つある。単純な文字列アクションの割り当てのみで済むならオブジェクト形式で十分だが、複数アクションの束ね・条件分岐・シェル実行を伴う複雑なバインド（`.tmux.conf`にあるような`bind-key`）を書きたい場合は関数ベースAPIを使う。
 
@@ -111,7 +111,8 @@ export default defineConfig({
 | API | 意味 |
 |---|---|
 | `niwa.prefix(binding)` | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")` |
-| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl必須のKeyBindingString表記） |
+| `niwa.repeatTimeout(ms)` | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms |
+| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl必須のKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない） |
 | `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
 | `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
 | `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
@@ -140,6 +141,22 @@ niwa.keybind("c", async () => {
 });
 ```
 
+#### repeatによる連打
+
+`opts.repeat: true`を付けたバインドは、発火後`repeatTimeoutMs`（既定500ms、`niwa.repeatTimeout(ms)`で変更可）以内ならprefix無しで同じ2打目キーテーブルのrepeatableなキーを連打できる（tmuxの`bind-key -r`相当）。`.tmux.conf`の`bind-key -r H/J/K/L resize-pane -L/-D/-U/-R`に相当する例:
+
+```ts
+keybindings: (niwa) => {
+  niwa.repeatTimeout(300); // 省略時は500ms
+  niwa.keybind("h", "resize-left", { repeat: true });
+  niwa.keybind("j", "resize-down", { repeat: true });
+  niwa.keybind("k", "resize-up", { repeat: true });
+  niwa.keybind("l", "resize-right", { repeat: true });
+},
+```
+
+`resize-up`/`resize-down`/`resize-left`/`resize-right`はフォーカス中タイルを既定の1ステップ分（`niwa.tile.resize`と同じ量）だけ拡大する組み込みアクションで、既定キーは割り当てられていない（上記のように自分で割り当てる）。`repeat`は`bindings`（prefix経由の2打目キー）側でのみ効果を持ち、`noPrefix: true`のdirectショートカットには効果がない（directは元々prefix無しの即時発火で、キーを押し続ければOSのキーリピートがそのまま連続入力を生むため）。
+
 #### 複数ファイルへの分割
 
 キーバインドを関心事ごとに複数ファイルへ分けたい場合、各ファイルは`niwa`を受け取る関数をexportし、エントリファイル（`niwaterm.config.ts`）側でimportして呼び出す。
@@ -167,13 +184,14 @@ export default defineConfig({
 
 ### オブジェクト形式（従来）
 
-`keybindings`に次の3フィールドを持つオブジェクトを直接渡すこともできる。未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
+`keybindings`に次の4フィールドを持つオブジェクトを直接渡すこともできる。未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `prefix` | `KeyBindingString` | prefixキー本体。既定は`"ctrl+b"`（tmux標準を踏襲。macOS/Windowsで共通） |
-| `bindings` | `Record<string, KeybindAction>` | prefix入力後に押す2打目キー→アクションのマップ |
-| `direct` | `Record<KeyBindingString, KeybindAction>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空） |
+| `bindings` | `Record<string, KeybindAction \| { target: KeybindAction, repeat: boolean }>` | prefix入力後に押す2打目キー→アクションのマップ。`{ target, repeat: true }`の形で指定するとrepeat連打が有効になる（上記「repeatによる連打」参照） |
+| `direct` | `Record<KeyBindingString, KeybindAction \| { target: KeybindAction, repeat: boolean }>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空）。`repeat`はここでは効果を持たない |
+| `repeatTimeoutMs` | `number` | `repeat: true`なバインドが連打とみなす間隔(ms)。既定500 |
 
 ```ts
 keybindings: {
@@ -182,6 +200,7 @@ keybindings: {
     ...defaultKeybindings.bindings,
     d: "split-horizontal",
     "shift+d": "split-vertical",
+    h: { target: "resize-left", repeat: true },
   },
 },
 ```
@@ -218,13 +237,14 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（26種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（31種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
 | `split-vertical` / `split-horizontal` | タイルを垂直/水平分割 |
 | `close-tile` | フォーカス中のタブ/タイルを閉じる |
 | `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
+| `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照） |
 | `new-tab` | 新規タブ作成 |
 | `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
 | `new-custom-view-tab` | `customView`設定を開くタブを作成（`customView`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある） |

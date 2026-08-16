@@ -31,6 +31,10 @@ export const KEYBIND_ACTIONS = [
   "focus-down",
   "focus-left",
   "focus-right",
+  "resize-up",
+  "resize-down",
+  "resize-left",
+  "resize-right",
   "new-tab",
   "new-browser-tab",
   "new-custom-view-tab",
@@ -59,9 +63,14 @@ export interface KeybindingsConfig {
   /** prefixキー本体。例: "ctrl+b" */
   prefix?: KeyBindingString;
   /** prefix入力後に押す2打目キー→アクションのマップ。値は既存アクション名の文字列、またはniwa.keybindに渡した関数ハンドラへの参照 */
-  bindings?: Partial<Record<SecondKeyString, BindingTarget>>;
+  bindings?: Partial<Record<SecondKeyString, BindingEntry>>;
   /** prefixを介さず即座に発火する直接ショートカット（コピー・ペースト等の頻用操作向け） */
-  direct?: Partial<Record<KeyBindingString, BindingTarget>>;
+  direct?: Partial<Record<KeyBindingString, BindingEntry>>;
+  /**
+   * repeat:trueを付けたバインドが連打とみなす間隔(ms)。tmuxのrepeat-time相当（bind-key -rのリピート判定に使う）。
+   * 未指定・不正値はDEFAULT_REPEAT_TIMEOUT_MS
+   */
+  repeatTimeoutMs?: number;
 }
 
 // prefix・2打目キーともOS共通（prefixキー自体でOS差異を吸収できるため）。
@@ -97,9 +106,13 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
 // 既定のprefixキー。tmux標準のCtrl+bをそのまま踏襲する（prefixキーは全操作の唯一の入り口であり、
 // 個別ショートカットに課している「ctrl単独禁止」（Ctrl+C等ターミナル制御文字との衝突回避）は
 // 性質上当てはまらないため、OS問わずCtrl+bで統一する）。
+/** repeatTimeoutMs未指定・不正値の場合のフォールバック値(ms)。tmuxのrepeat-time既定と同じ500ms */
+export const DEFAULT_REPEAT_TIMEOUT_MS = 500;
+
 export const defaultKeybindings: KeybindingsConfig = {
   prefix: "ctrl+b",
   bindings: commonBindings,
+  repeatTimeoutMs: DEFAULT_REPEAT_TIMEOUT_MS,
 };
 
 export const defaultWindowsKeybindings: KeybindingsConfig = {
@@ -109,6 +122,7 @@ export const defaultWindowsKeybindings: KeybindingsConfig = {
     "ctrl+shift+c": "copy-selection",
     "ctrl+shift+v": "paste-clipboard",
   },
+  repeatTimeoutMs: DEFAULT_REPEAT_TIMEOUT_MS,
 };
 
 /** 実行プラットフォームに対応するデフォルトキーバインド（値はprocess.platformと同じ表記） */
@@ -206,34 +220,75 @@ export function isBindingTarget(value: unknown): value is BindingTarget {
   return isKeybindAction(value) || isCustomBindingRef(value);
 }
 
+/**
+ * repeat:trueを明示的に付けたバインドの表現（tmuxのbind-key -r相当）。プレーンなBindingTargetとの
+ * ユニオンで bindings/direct の値に持たせる。repeatはboolean（true固定にしない）で受け、
+ * {target, repeat:false}のような一見冗長な入力もプレーンなBindingTargetと同様に扱えるようにする
+ */
+export interface RepeatableBinding {
+  target: BindingTarget;
+  repeat: boolean;
+}
+
+export function isRepeatableBinding(value: unknown): value is RepeatableBinding {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v["repeat"] === "boolean" && isBindingTarget(v["target"]);
+}
+
+/** bindings/directの値として許容する形。プレーンなBindingTarget、またはrepeatフラグ付きのラップ形 */
+export type BindingEntry = BindingTarget | RepeatableBinding;
+
+/** compileKeybindings後のMap値。target/repeatの2フィールドに正規化済み */
+export interface CompiledBindingEntry {
+  target: BindingTarget;
+  repeat: boolean;
+}
+
+/** 生のBindingEntryをCompiledBindingEntryへ正規化する。不正な形はnull */
+export function resolveBindingEntry(value: unknown): CompiledBindingEntry | null {
+  if (isBindingTarget(value)) return { target: value, repeat: false };
+  if (isRepeatableBinding(value)) return { target: value.target, repeat: value.repeat };
+  return null;
+}
+
 export interface CompiledKeybindings {
   /** 未設定・パース不可はnull（prefix機能自体が無効になる） */
   prefix: ParsedKeyBinding | null;
   /** canonicalizeSecondKeyで正規化したキーを持つ、prefix入力後の2打目キー→アクションのマップ */
-  bindings: ReadonlyMap<string, BindingTarget>;
+  bindings: ReadonlyMap<string, CompiledBindingEntry>;
   /** canonicalizeParsedで正規化したキーを持つ、即時発火の直接ショートカットのマップ */
-  direct: ReadonlyMap<string, BindingTarget>;
+  direct: ReadonlyMap<string, CompiledBindingEntry>;
+  /** repeat:trueなバインドが連打とみなす間隔(ms) */
+  repeatTimeoutMs: number;
 }
 
 /** 不正なバインド文字列・未知のアクション名のエントリは黙ってスキップする */
 export function compileKeybindings(config: KeybindingsConfig): CompiledKeybindings {
   const prefix = config.prefix !== undefined ? parseKeyBindingString(config.prefix) : null;
 
-  const bindings = new Map<string, BindingTarget>();
-  for (const [binding, action] of Object.entries(config.bindings ?? {})) {
-    if (action === undefined) continue;
+  const bindings = new Map<string, CompiledBindingEntry>();
+  for (const [binding, entry] of Object.entries(config.bindings ?? {})) {
+    if (entry === undefined) continue;
     const parsed = parseSecondKeyString(binding);
-    if (!parsed || !isBindingTarget(action)) continue;
-    bindings.set(canonicalizeSecondKey(parsed), action);
+    const resolved = resolveBindingEntry(entry);
+    if (!parsed || !resolved) continue;
+    bindings.set(canonicalizeSecondKey(parsed), resolved);
   }
 
-  const direct = new Map<string, BindingTarget>();
-  for (const [binding, action] of Object.entries(config.direct ?? {})) {
-    if (action === undefined) continue;
+  const direct = new Map<string, CompiledBindingEntry>();
+  for (const [binding, entry] of Object.entries(config.direct ?? {})) {
+    if (entry === undefined) continue;
     const parsed = parseKeyBindingString(binding);
-    if (!parsed || !isBindingTarget(action)) continue;
-    direct.set(canonicalizeParsed(parsed), action);
+    const resolved = resolveBindingEntry(entry);
+    if (!parsed || !resolved) continue;
+    direct.set(canonicalizeParsed(parsed), resolved);
   }
 
-  return { prefix, bindings, direct };
+  const repeatTimeoutMs =
+    typeof config.repeatTimeoutMs === "number" && config.repeatTimeoutMs > 0
+      ? config.repeatTimeoutMs
+      : DEFAULT_REPEAT_TIMEOUT_MS;
+
+  return { prefix, bindings, direct, repeatTimeoutMs };
 }

@@ -8,7 +8,7 @@ import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
-import type { TileLeaf } from "./tile-layout";
+import type { TileLeaf, TileSplit } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
 
 function createFakeBrowserBridge(overrides: Partial<BrowserBridge> = {}): BrowserBridge {
@@ -892,6 +892,112 @@ describe("POST /focus-direction", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /resize-tile", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("指定方向へタイルを拡大する（既定量）", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.splitTile(firstTileId, "vertical");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "right" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const split = mgr.snapshot().workspace.layout as TileSplit;
+    expect(split.ratio).toBeCloseTo(0.55, 5);
+  });
+
+  test("amountを指定するとその分だけratioが変わる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.splitTile(firstTileId, "vertical");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "left", amount: 0.2 }),
+    });
+
+    expect(res.status).toBe(200);
+    const split = mgr.snapshot().workspace.layout as TileSplit;
+    expect(split.ratio).toBeCloseTo(0.3, 5);
+  });
+
+  test("該当軸のsplit祖先が無い場合は404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "right" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("不正なdirectionは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "diagonal" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("amountが範囲外(0以下・1超)は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const zero = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "right", amount: 0 }),
+    });
+    expect(zero.status).toBe(400);
+
+    const tooLarge = await fetch("http://localhost/resize-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: firstTileId, direction: "right", amount: 1.5 }),
+    });
+    expect(tooLarge.status).toBe(400);
   });
 });
 

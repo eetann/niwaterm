@@ -16,10 +16,15 @@ import {
   type KeybindAction,
 } from "@niwaterm/config";
 
+// keydown駆動でrepeat窓のタイムアウトを判定する（setTimeoutは使わない）ためのテスト用時刻注入。
+// 省略時はDate.now
+export type NowFn = () => number;
+
 export type TileCommand =
   | { type: "split"; orientation: "horizontal" | "vertical" }
   | { type: "close" }
   | { type: "focus"; direction: "up" | "down" | "left" | "right" }
+  | { type: "resize"; direction: "up" | "down" | "left" | "right" }
   // niwa.keybindに関数ハンドラを渡したエントリ。実際の処理はbun側のniwa-api.tsで行う
   | { type: "custom"; handlerId: string }
   | { type: "newTab" }
@@ -58,7 +63,9 @@ export interface KeybindResolver {
   handleKeydown(e: KeyboardEventLike): KeydownResult;
   /** prefix入力後、2打目キー待ちの状態かどうか（UIインジケータ表示用） */
   isAwaitingSecondKey(): boolean;
-  /** 2打目キー待ち状態を強制的に解除する（ウィンドウのフォーカス喪失時などに使う） */
+  /** repeat:trueなバインドの発火直後、prefix無しで連打できる窓が開いているかどうか（UIインジケータ表示用） */
+  isRepeating(): boolean;
+  /** 2打目キー待ち・リピート窓を強制的に解除する（ウィンドウのフォーカス喪失時などに使う） */
   reset(): void;
 }
 
@@ -122,6 +129,14 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "focus", direction: "left" };
     case "focus-right":
       return { type: "focus", direction: "right" };
+    case "resize-up":
+      return { type: "resize", direction: "up" };
+    case "resize-down":
+      return { type: "resize", direction: "down" };
+    case "resize-left":
+      return { type: "resize", direction: "left" };
+    case "resize-right":
+      return { type: "resize", direction: "right" };
     case "new-tab":
       return { type: "newTab" };
     case "new-browser-tab":
@@ -175,8 +190,24 @@ export function bindingTargetToTileCommand(target: BindingTarget): TileCommand {
   return actionToTileCommand(target);
 }
 
-export function createKeybindResolver(compiled: CompiledKeybindings): KeybindResolver {
+export interface CreateKeybindResolverOptions {
+  /** テスト用の時刻注入。省略時はDate.now */
+  now?: NowFn;
+}
+
+/**
+ * tmuxのbind-key -r相当のリピート機構。repeat:trueなバインドが発火すると、以後repeatTimeoutMs以内は
+ * 同じ2打目キーテーブル（compiled.bindings）をprefix無しで引ける（別のrepeatableキーへの切替も可）。
+ * setTimeoutは使わず、次に来たkeydown時点でnow()と締切を比較するkeydown駆動の方式にする
+ * （handleKeydownを純粋な同期関数のまま保つため）。
+ */
+export function createKeybindResolver(
+  compiled: CompiledKeybindings,
+  opts: CreateKeybindResolverOptions = {},
+): KeybindResolver {
+  const now = opts.now ?? Date.now;
   let awaitingSecondKey = false;
+  let repeatDeadline: number | null = null;
 
   function matchesPrefix(e: KeyboardEventLike): boolean {
     return (
@@ -185,26 +216,57 @@ export function createKeybindResolver(compiled: CompiledKeybindings): KeybindRes
     );
   }
 
+  // 2打目キー待ちでない時、リピート窓が有効ならprefix無しで同じテーブルを引く。
+  // 窓の外・未割当・repeat無しのエントリはrepeatDeadlineをクリアして通常フローへフォールスルーする
+  function tryRepeat(e: KeyboardEventLike): KeydownResult | null {
+    if (repeatDeadline === null) return null;
+    if (MODIFIER_KEY_NAMES.has(e.key)) return null;
+    if (now() > repeatDeadline) {
+      repeatDeadline = null;
+      return null;
+    }
+    const entry = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
+    if (!entry || !entry.repeat) {
+      repeatDeadline = null;
+      return null;
+    }
+    repeatDeadline = now() + compiled.repeatTimeoutMs;
+    return { kind: "command", command: bindingTargetToTileCommand(entry.target) };
+  }
+
   function handleKeydown(e: KeyboardEventLike): KeydownResult {
     if (awaitingSecondKey) {
       if (MODIFIER_KEY_NAMES.has(e.key)) return { kind: "consumed" };
       awaitingSecondKey = false;
-      if (e.key === "Escape") return { kind: "consumed" };
-      const action = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
-      return action
-        ? { kind: "command", command: bindingTargetToTileCommand(action) }
-        : { kind: "consumed" };
+      if (e.key === "Escape") {
+        repeatDeadline = null;
+        return { kind: "consumed" };
+      }
+      const entry = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
+      if (!entry) {
+        repeatDeadline = null;
+        return { kind: "consumed" };
+      }
+      repeatDeadline = entry.repeat ? now() + compiled.repeatTimeoutMs : null;
+      return { kind: "command", command: bindingTargetToTileCommand(entry.target) };
     }
 
+    // prefixキー自体はリピート窓より優先する。2打目キーはshift/altしか見ないため、
+    // prefix（例: ctrl+b）のkeydownをそのままcompiled.bindingsに引くとctrl修飾を無視して
+    // 誤マッチしうる（例: bの2打目キーにrepeat:trueが設定されている場合）
     if (!MODIFIER_KEY_NAMES.has(e.key) && matchesPrefix(e)) {
       awaitingSecondKey = true;
+      repeatDeadline = null;
       return { kind: "consumed" };
     }
 
+    const repeated = tryRepeat(e);
+    if (repeated) return repeated;
+
     // cmdもctrlも伴わないキーはターミナルへの通常入力に予約されている
     if (e.metaKey || e.ctrlKey) {
-      const action = compiled.direct.get(keyboardEventToCanonical(e));
-      if (action) return { kind: "command", command: bindingTargetToTileCommand(action) };
+      const entry = compiled.direct.get(keyboardEventToCanonical(e));
+      if (entry) return { kind: "command", command: bindingTargetToTileCommand(entry.target) };
     }
 
     return { kind: "passthrough" };
@@ -213,8 +275,10 @@ export function createKeybindResolver(compiled: CompiledKeybindings): KeybindRes
   return {
     handleKeydown,
     isAwaitingSecondKey: () => awaitingSecondKey,
+    isRepeating: () => repeatDeadline !== null && now() <= repeatDeadline,
     reset: () => {
       awaitingSecondKey = false;
+      repeatDeadline = null;
     },
   };
 }

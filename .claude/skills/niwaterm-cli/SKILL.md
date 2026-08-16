@@ -24,7 +24,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `tab new` / `switch` / `close` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・目視確認用アクティブ化・画面内容取得・キー送信）
 - `tab var get` / `set` / `list` — タブごとのkey-value変数（タブ間の連携に使える）
 - `workspace new` / `switch` / `close` / `rename` — ワークスペースの作成・切替・削除・名前変更
-- `tile split` / `focus` — タイルの分割・フォーカス移動（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方）
+- `tile split` / `focus` / `resize` — タイルの分割・フォーカス移動・リサイズ（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当）
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
 - `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)

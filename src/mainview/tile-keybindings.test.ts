@@ -355,3 +355,161 @@ describe("createKeybindResolver（niwa.keybindの関数ハンドラ = custom Bin
     });
   });
 });
+
+describe("createKeybindResolver（repeat機構: tmuxのbind-key -r相当）", () => {
+  function createClock(start = 0) {
+    let t = start;
+    return { now: () => t, advance: (ms: number) => (t += ms) };
+  }
+
+  test("prefix -> h（repeat:true）発火後、窓内ならprefix無しで連打できる", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("h"))).toEqual({
+      kind: "command",
+      command: { type: "resize", direction: "left" },
+    });
+    expect(resolver.isRepeating()).toBe(true);
+
+    // prefix無しでhを連打できる
+    clock.advance(100);
+    expect(resolver.handleKeydown(key("h"))).toEqual({
+      kind: "command",
+      command: { type: "resize", direction: "left" },
+    });
+  });
+
+  test("repeatTimeoutMsを超えるとprefix無しの入力はpassthroughに戻る", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+
+    clock.advance(501);
+    expect(resolver.handleKeydown(key("h"))).toEqual({ kind: "passthrough" });
+    expect(resolver.isRepeating()).toBe(false);
+  });
+
+  test("repeat:trueでないバインドは1回発火したらリピート窓に入らない", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings(defaultKeybindings);
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("d")); // split-vertical（repeat未指定）
+    expect(resolver.isRepeating()).toBe(false);
+
+    // prefix無しでdを押しても通常のターミナル入力として扱われる
+    expect(resolver.handleKeydown(key("d"))).toEqual({ kind: "passthrough" });
+  });
+
+  test("リピート窓中に別のrepeatableキーへ切り替えても発火し続ける（tmuxのH/J/K/L相当）", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: {
+        h: { target: "resize-left", repeat: true },
+        l: { target: "resize-right", repeat: true },
+      },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+    clock.advance(100);
+    expect(resolver.handleKeydown(key("l"))).toEqual({
+      kind: "command",
+      command: { type: "resize", direction: "right" },
+    });
+  });
+
+  test("リピート窓中に未割当キーを押すと窓がキャンセルされる", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+    expect(resolver.handleKeydown(key("z"))).toEqual({ kind: "passthrough" });
+    expect(resolver.isRepeating()).toBe(false);
+
+    // 窓が閉じた後はhもprefixが再度必要
+    expect(resolver.handleKeydown(key("h"))).toEqual({ kind: "passthrough" });
+  });
+
+  test("リピート窓中に新規prefix入力があれば、リピートではなく2打目キー待ちとして扱われる", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+    expect(resolver.isRepeating()).toBe(true);
+
+    expect(resolver.handleKeydown(prefix())).toEqual({ kind: "consumed" });
+    expect(resolver.isAwaitingSecondKey()).toBe(true);
+    expect(resolver.isRepeating()).toBe(false);
+  });
+
+  test("修飾キー単体（Shift等）はリピート窓を破棄しない", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+    resolver.handleKeydown(key("Shift", { shiftKey: true }));
+    expect(resolver.isRepeating()).toBe(true);
+  });
+
+  test("reset()でリピート窓も強制解除される", () => {
+    const clock = createClock();
+    const compiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { h: { target: "resize-left", repeat: true } },
+      repeatTimeoutMs: 500,
+    });
+    const resolver = createKeybindResolver(compiled, { now: clock.now });
+
+    resolver.handleKeydown(prefix());
+    resolver.handleKeydown(key("h"));
+    expect(resolver.isRepeating()).toBe(true);
+
+    resolver.reset();
+    expect(resolver.isRepeating()).toBe(false);
+    expect(resolver.handleKeydown(key("h"))).toEqual({ kind: "passthrough" });
+  });
+
+  test("isRepeatingはリピート窓が開いていない間は常にfalse", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    expect(resolver.isRepeating()).toBe(false);
+    resolver.handleKeydown(prefix());
+    expect(resolver.isRepeating()).toBe(false);
+  });
+});

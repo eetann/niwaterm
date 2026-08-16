@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -53,6 +53,7 @@ niwaterm tab switch --tile <tileId> --tab <tabId>
 niwaterm tab close --tile <tileId> --tab <tabId>
 niwaterm tile focus --tile <tileId>
 niwaterm tile focus --direction up|down|left|right
+niwaterm tile resize --tile <tileId> --direction up|down|left|right [--amount <0より大きく1以下>]
 ```
 
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
@@ -62,6 +63,7 @@ niwaterm tile focus --direction up|down|left|right
 - `tab switch` — 指定タイル内でアクティブタブを切り替える
 - `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
 - `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる
+- `tile resize` — 指定タイルを指定方向へ拡大する（tmuxの`resize-pane`相当）。`--amount`省略時は既定の1ステップ分。`--direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は失敗する
 
 いずれも対象の`tileId`/`tabId`が存在しない場合はエラーメッセージと共に終了コード1を返す。
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { KeybindingsConfig } from "@niwaterm/config";
+import { isCustomBindingRef, type KeybindingsConfig } from "@niwaterm/config";
 import type { TileLeaf, TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
@@ -8,7 +8,7 @@ import { createWorkspaceManager, type WorkspaceManagerOptions } from "./workspac
 /** テスト内でniwa.keybindに渡した関数ハンドラのidを取り出す */
 function customHandlerId(config: KeybindingsConfig, key: string): string {
   const target = config.bindings?.[key];
-  if (typeof target !== "object" || target === null || target.kind !== "custom") {
+  if (!isCustomBindingRef(target)) {
     throw new Error(`expected a custom BindingTarget for key "${key}", got: ${String(target)}`);
   }
   return target.id;
@@ -94,6 +94,32 @@ describe("niwa.keybind / niwa.prefix / niwa.unbind（登録フェーズ）", () 
     const { niwa, extractKeybindingsConfig } = createTestSetup();
     niwa.prefix("cmd+j");
     expect(extractKeybindingsConfig().prefix).toBe("cmd+j");
+  });
+
+  test("repeat:trueを付けたバインドは{target, repeat:true}として登録される", () => {
+    const { niwa, extractKeybindingsConfig } = createTestSetup();
+    niwa.keybind("h", "resize-left", { repeat: true });
+    expect(extractKeybindingsConfig().bindings?.["h"]).toEqual({
+      target: "resize-left",
+      repeat: true,
+    });
+  });
+
+  test("repeat未指定はプレーンなBindingTargetのまま登録される", () => {
+    const { niwa, extractKeybindingsConfig } = createTestSetup();
+    niwa.keybind("d", "split-horizontal");
+    expect(extractKeybindingsConfig().bindings?.["d"]).toBe("split-horizontal");
+  });
+
+  test("niwa.repeatTimeoutで指定した値が反映される", () => {
+    const { niwa, extractKeybindingsConfig } = createTestSetup();
+    niwa.repeatTimeout(300);
+    expect(extractKeybindingsConfig().repeatTimeoutMs).toBe(300);
+  });
+
+  test("niwa.repeatTimeout未呼び出しはundefinedのまま（呼び出し側でデフォルト解決する）", () => {
+    const { extractKeybindingsConfig } = createTestSetup();
+    expect(extractKeybindingsConfig().repeatTimeoutMs).toBeUndefined();
   });
 });
 

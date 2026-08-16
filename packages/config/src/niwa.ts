@@ -117,6 +117,12 @@ export interface NiwaClipboardApi {
 export interface KeybindOptions {
   /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrlのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
+  /**
+   * trueなら、このバインドの発火後repeatTimeoutMs以内はprefix無しで同じ2打目キーテーブルの
+   * repeatableなキーを連打できる（tmuxのbind-key -r相当）。noPrefix:trueのdirect側にも型上は指定できるが、
+   * directは元々prefix無しの即時発火でOSのキーリピートがそのまま連続入力を生むため実効果を持たない
+   */
+  repeat?: boolean;
 }
 
 /**
@@ -128,6 +134,8 @@ export type KeybindHandler = (niwa: Niwa) => void | Promise<void>;
 export interface Niwa {
   /** prefixキー本体を設定する。例: niwa.prefix("ctrl+b") */
   prefix(binding: KeyBindingString): void;
+  /** repeat:trueなバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms */
+  repeatTimeout(ms: number): void;
   /**
    * キーにアクションを割り当てる。actionは既存アクション名の文字列、または任意の処理を書ける関数ハンドラ。
    * 同じkeyへ複数回呼ぶと後勝ちで上書きされる（デフォルト設定の上にユーザー設定を重ねる用途）。

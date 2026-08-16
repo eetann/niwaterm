@@ -326,6 +326,65 @@ describe("resolveKeybindings", () => {
     );
     expect(resolved.bindings?.["w"]).toBeUndefined();
   });
+
+  test("nullを渡すとrepeatTimeoutMsはデフォルト(500)になる", () => {
+    const resolved = resolveKeybindings(null, createTestNiwaApi());
+    expect(resolved.repeatTimeoutMs).toBe(500);
+  });
+
+  test("ユーザー設定でrepeatTimeoutMsを上書きできる", () => {
+    const resolved = resolveKeybindings(
+      { keybindings: { repeatTimeoutMs: 300 } },
+      createTestNiwaApi(),
+    );
+    expect(resolved.repeatTimeoutMs).toBe(300);
+  });
+
+  test("不正なrepeatTimeoutMsは警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveKeybindings(
+        { keybindings: { repeatTimeoutMs: -1 } },
+        createTestNiwaApi(),
+      );
+      expect(resolved.repeatTimeoutMs).toBe(500);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("ユーザー設定でbindingsのエントリにrepeat:trueを指定できる（tmuxのbind-key -r相当）", () => {
+    const resolved = resolveKeybindings(
+      { keybindings: { bindings: { h: { target: "resize-left", repeat: true } } } },
+      createTestNiwaApi(),
+    );
+    expect(resolved.bindings?.["h"]).toEqual({ target: "resize-left", repeat: true });
+  });
+
+  test("keybindingsが関数の場合、niwa.keybindのrepeat:trueオプションが反映される", () => {
+    const resolved = resolveKeybindings(
+      {
+        keybindings: (niwa) => {
+          niwa.keybind("h", "resize-left", { repeat: true });
+        },
+      },
+      createTestNiwaApi(),
+    );
+    expect(resolved.bindings?.["h"]).toEqual({ target: "resize-left", repeat: true });
+  });
+
+  test("keybindingsが関数の場合、niwa.repeatTimeoutでrepeatTimeoutMsを上書きできる", () => {
+    const resolved = resolveKeybindings(
+      {
+        keybindings: (niwa) => {
+          niwa.repeatTimeout(200);
+        },
+      },
+      createTestNiwaApi(),
+    );
+    expect(resolved.repeatTimeoutMs).toBe(200);
+  });
 });
 
 describe("resolveAppearance", () => {

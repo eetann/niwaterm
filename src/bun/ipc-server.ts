@@ -12,6 +12,7 @@ import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
+import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
@@ -198,6 +199,31 @@ function parseDirectionBody(body: unknown): DirectionRequestBody | null {
     return null;
   }
   return { direction: b.direction };
+}
+
+interface ResizeTileRequestBody extends TileIdRequestBody {
+  direction: "up" | "down" | "left" | "right";
+  amount?: number;
+}
+
+function parseResizeTileBody(body: unknown): ResizeTileRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { direction?: unknown; amount?: unknown };
+  if (
+    b.direction !== "up" &&
+    b.direction !== "down" &&
+    b.direction !== "left" &&
+    b.direction !== "right"
+  ) {
+    return null;
+  }
+  const result: ResizeTileRequestBody = { ...tileIdBody, direction: b.direction };
+  if (b.amount !== undefined) {
+    if (typeof b.amount !== "number" || !(b.amount > 0 && b.amount <= 1)) return null;
+    result.amount = b.amount;
+  }
+  return result;
 }
 
 interface TileTabRequestBody extends TileIdRequestBody {
@@ -542,6 +568,37 @@ function buildApp(
       );
     }
     workspaceManager.focusDirection(parsed.direction);
+    return c.json({ ok: true });
+  });
+
+  app.post("/resize-tile", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseResizeTileBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            'expected { tileId: string, direction: "up"|"down"|"left"|"right", amount?: number(0<x<=1) }',
+        },
+        400,
+      );
+    }
+    const ok = workspaceManager.resizeTileInDirection(
+      parsed.tileId,
+      parsed.direction,
+      parsed.amount ?? DEFAULT_RESIZE_AMOUNT,
+    );
+    if (!ok) {
+      return c.json(
+        {
+          ok: false,
+          error: `cannot resize tile "${parsed.tileId}" toward "${parsed.direction}" (tile not found, or no matching split ancestor on that axis)`,
+        },
+        404,
+      );
+    }
     return c.json({ ok: true });
   });
 

@@ -18,6 +18,7 @@ import {
   parseKeyBindingString,
   parseSecondKeyString,
   platformDefaultKeybindings,
+  resolveBindingEntry,
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
@@ -174,7 +175,7 @@ export function resolveKeybindings(
   return niwaApi.extractKeybindingsConfig();
 }
 
-/** KeybindingsConfig（prefix/bindings/direct）の内容をniwa.keybind呼び出し列に変換して登録する */
+/** KeybindingsConfig（prefix/bindings/direct/repeatTimeoutMs）の内容をniwa.keybind呼び出し列に変換して登録する */
 function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: string): void {
   if (config.prefix !== undefined) {
     if (parseKeyBindingString(config.prefix)) {
@@ -183,21 +184,36 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
       console.log(`[bun] ignoring invalid ${source}.prefix: "${String(config.prefix)}"`);
     }
   }
-  for (const [key, action] of Object.entries(config.bindings ?? {})) {
-    if (action === undefined) continue;
-    if (!parseSecondKeyString(key) || !isKeybindAction(action)) {
-      console.log(`[bun] ignoring invalid ${source}.bindings entry: "${key}" -> ${String(action)}`);
-      continue;
+  if (config.repeatTimeoutMs !== undefined) {
+    if (typeof config.repeatTimeoutMs === "number" && config.repeatTimeoutMs > 0) {
+      niwa.repeatTimeout(config.repeatTimeoutMs);
+    } else {
+      console.log(
+        `[bun] ignoring invalid ${source}.repeatTimeoutMs: "${String(config.repeatTimeoutMs)}"`,
+      );
     }
-    niwa.keybind(key, action);
   }
-  for (const [key, action] of Object.entries(config.direct ?? {})) {
-    if (action === undefined) continue;
-    if (!parseKeyBindingString(key) || !isKeybindAction(action)) {
-      console.log(`[bun] ignoring invalid ${source}.direct entry: "${key}" -> ${String(action)}`);
+  for (const [key, rawEntry] of Object.entries(config.bindings ?? {})) {
+    if (rawEntry === undefined) continue;
+    const resolved = resolveBindingEntry(rawEntry);
+    if (!parseSecondKeyString(key) || !resolved || !isKeybindAction(resolved.target)) {
+      console.log(
+        `[bun] ignoring invalid ${source}.bindings entry: "${key}" -> ${JSON.stringify(rawEntry)}`,
+      );
       continue;
     }
-    niwa.keybind(key, action, { noPrefix: true });
+    niwa.keybind(key, resolved.target, { repeat: resolved.repeat });
+  }
+  for (const [key, rawEntry] of Object.entries(config.direct ?? {})) {
+    if (rawEntry === undefined) continue;
+    const resolved = resolveBindingEntry(rawEntry);
+    if (!parseKeyBindingString(key) || !resolved || !isKeybindAction(resolved.target)) {
+      console.log(
+        `[bun] ignoring invalid ${source}.direct entry: "${key}" -> ${JSON.stringify(rawEntry)}`,
+      );
+      continue;
+    }
+    niwa.keybind(key, resolved.target, { noPrefix: true, repeat: resolved.repeat });
   }
 }
 

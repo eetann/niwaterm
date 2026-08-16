@@ -5,6 +5,7 @@
 // （キーバインドの関数ハンドラが実際に押された時に呼ばれるため、登録時とは別タイミング）。
 
 import type {
+  BindingEntry,
   BindingTarget,
   KeyBindingString,
   KeybindHandler,
@@ -25,7 +26,7 @@ export interface CreateNiwaApiDeps {
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
-const DEFAULT_RESIZE_AMOUNT = 0.05;
+export const DEFAULT_RESIZE_AMOUNT = 0.05;
 
 export interface NiwaApiHandle {
   niwa: Niwa;
@@ -39,8 +40,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   const { workspaceManager } = deps;
 
   let prefixBinding: KeyBindingString | undefined;
-  const bindings = new Map<SecondKeyString, BindingTarget>();
-  const direct = new Map<KeyBindingString, BindingTarget>();
+  let repeatTimeoutMs: number | undefined;
+  const bindings = new Map<SecondKeyString, BindingEntry>();
+  const direct = new Map<KeyBindingString, BindingEntry>();
   const handlerRegistry = new Map<string, KeybindHandler>();
   let handlerIdCounter = 0;
 
@@ -62,12 +64,16 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     prefix(binding) {
       prefixBinding = binding;
     },
+    repeatTimeout(ms) {
+      repeatTimeoutMs = ms;
+    },
     keybind(key, action, opts) {
       const target = toBindingTarget(action);
+      const entry: BindingEntry = opts?.repeat ? { target, repeat: true } : target;
       if (opts?.noPrefix) {
-        direct.set(key as KeyBindingString, target);
+        direct.set(key as KeyBindingString, entry);
       } else {
-        bindings.set(key, target);
+        bindings.set(key, entry);
       }
     },
     unbind(key, opts) {
@@ -170,6 +176,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       prefix: prefixBinding,
       bindings: Object.fromEntries(bindings),
       direct: Object.fromEntries(direct),
+      repeatTimeoutMs,
     };
   }
 

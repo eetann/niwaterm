@@ -478,6 +478,23 @@ export function focusDirection(
   return postJson(endpoint, "/focus-direction", { direction });
 }
 
+export type ResizeTileResult = { ok: true } | { ok: false; error: string };
+
+/** 指定タイルを指定方向へ拡大する（tmuxのresize-pane相当）。amount省略時は既定の1ステップ分 */
+export function resizeTile(
+  endpoint: IpcEndpoint,
+  tileId: TileId,
+  direction: FocusDirection,
+  amount?: number,
+): Promise<ResizeTileResult> {
+  const body: { tileId: TileId; direction: FocusDirection; amount?: number } = {
+    tileId,
+    direction,
+  };
+  if (amount !== undefined) body.amount = amount;
+  return postJson(endpoint, "/resize-tile", body);
+}
+
 export type CaptureTabResult = { ok: true; text: string } | { ok: false; error: string };
 
 export async function captureTab(endpoint: IpcEndpoint, tabId: TabId): Promise<CaptureTabResult> {

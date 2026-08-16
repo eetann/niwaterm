@@ -1272,6 +1272,9 @@ function handleTileCommand(cmd: TileCommand): void {
     case "focus":
       sendMessage("focusDirection", { direction: cmd.direction });
       break;
+    case "resize":
+      sendMessage("resizeTileInDirection", { direction: cmd.direction });
+      break;
     case "newTab":
       sendMessage("newTab", { tileId: focusedTileId });
       break;

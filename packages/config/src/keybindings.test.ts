@@ -3,15 +3,18 @@ import {
   canonicalizeParsed,
   canonicalizeSecondKey,
   compileKeybindings,
+  DEFAULT_REPEAT_TIMEOUT_MS,
   defaultKeybindings,
   defaultWindowsKeybindings,
   isBindingTarget,
   isCustomBindingRef,
   isKeybindAction,
+  isRepeatableBinding,
   KEYBIND_ACTIONS,
   parseKeyBindingString,
   parseSecondKeyString,
   platformDefaultKeybindings,
+  resolveBindingEntry,
 } from "./keybindings";
 
 describe("parseKeyBindingString", () => {
@@ -174,7 +177,16 @@ describe("isKeybindAction", () => {
 });
 
 // bindingsに既定キーを持たないアクション。理由はケースごとに異なる（下記テスト参照）
-const UNASSIGNED_BINDING_ACTIONS = ["new-custom-view-tab", "copy-selection", "paste-clipboard"];
+const UNASSIGNED_BINDING_ACTIONS = [
+  "new-custom-view-tab",
+  "copy-selection",
+  "paste-clipboard",
+  // resize-up/down/left/rightは既定キーを持たない（ユーザーがconfigで任意に、必要ならrepeat:true付きで割り当てる想定）
+  "resize-up",
+  "resize-down",
+  "resize-left",
+  "resize-right",
+];
 
 describe("defaultKeybindings", () => {
   test("prefixはCtrl+B（tmux標準）", () => {
@@ -249,10 +261,24 @@ describe("compileKeybindings", () => {
     expect(compiled.prefix).toBeNull();
   });
 
-  test("bindingsの正常なエントリはcanonicalizeSecondKeyされたキーでMapに入る", () => {
+  test("bindingsの正常なエントリはcanonicalizeSecondKeyされたキーでMapに入る（repeatは既定false）", () => {
     const compiled = compileKeybindings({ bindings: { d: "split-vertical" } });
-    expect(compiled.bindings.get("00:d")).toBe("split-vertical");
+    expect(compiled.bindings.get("00:d")).toEqual({ target: "split-vertical", repeat: false });
     expect(compiled.bindings.size).toBe(1);
+  });
+
+  test("bindingsのrepeat:true付きエントリはrepeat:trueのままMapに入る", () => {
+    const compiled = compileKeybindings({
+      bindings: { h: { target: "resize-left", repeat: true } },
+    });
+    expect(compiled.bindings.get("00:h")).toEqual({ target: "resize-left", repeat: true });
+  });
+
+  test("repeat:trueラップ内の不正なアクション名は黙ってスキップされる", () => {
+    const compiled = compileKeybindings({
+      bindings: { h: { target: "not-a-real-action", repeat: true } as never },
+    });
+    expect(compiled.bindings.size).toBe(0);
   });
 
   test("bindingsの不正なバインド文字列は黙ってスキップされる", () => {
@@ -265,9 +291,9 @@ describe("compileKeybindings", () => {
     expect(compiled.bindings.size).toBe(0);
   });
 
-  test("directの正常なエントリはcanonicalizeParsedされたキーでMapに入る", () => {
+  test("directの正常なエントリはcanonicalizeParsedされたキーでMapに入る（repeatは既定false）", () => {
     const compiled = compileKeybindings({ direct: { "ctrl+shift+c": "copy-selection" } });
-    expect(compiled.direct.get("0110:c")).toBe("copy-selection");
+    expect(compiled.direct.get("0110:c")).toEqual({ target: "copy-selection", repeat: false });
     expect(compiled.direct.size).toBe(1);
   });
 
@@ -290,13 +316,92 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(2);
   });
 
-  test("bindings/directのcustom BindingTarget（関数ハンドラ）はそのままMapに入る", () => {
+  test("bindings/directのcustom BindingTarget（関数ハンドラ）はそのままtargetとしてMapに入る", () => {
     const compiled = compileKeybindings({
       bindings: { m: { kind: "custom", id: "handler-0" } },
       direct: { "cmd+shift+g": { kind: "custom", id: "handler-1" } },
     });
-    expect(compiled.bindings.get("00:m")).toEqual({ kind: "custom", id: "handler-0" });
-    expect(compiled.direct.get("1010:g")).toEqual({ kind: "custom", id: "handler-1" });
+    expect(compiled.bindings.get("00:m")).toEqual({
+      target: { kind: "custom", id: "handler-0" },
+      repeat: false,
+    });
+    expect(compiled.direct.get("1010:g")).toEqual({
+      target: { kind: "custom", id: "handler-1" },
+      repeat: false,
+    });
+  });
+
+  test("repeatTimeoutMs未指定はDEFAULT_REPEAT_TIMEOUT_MS(500)にフォールバックする", () => {
+    const compiled = compileKeybindings({});
+    expect(compiled.repeatTimeoutMs).toBe(DEFAULT_REPEAT_TIMEOUT_MS);
+    expect(DEFAULT_REPEAT_TIMEOUT_MS).toBe(500);
+  });
+
+  test("repeatTimeoutMsに正の数値を指定するとそのまま使われる", () => {
+    const compiled = compileKeybindings({ repeatTimeoutMs: 300 });
+    expect(compiled.repeatTimeoutMs).toBe(300);
+  });
+
+  test("repeatTimeoutMsが0以下・非数値の場合はフォールバックする", () => {
+    expect(compileKeybindings({ repeatTimeoutMs: 0 }).repeatTimeoutMs).toBe(
+      DEFAULT_REPEAT_TIMEOUT_MS,
+    );
+    expect(compileKeybindings({ repeatTimeoutMs: -1 }).repeatTimeoutMs).toBe(
+      DEFAULT_REPEAT_TIMEOUT_MS,
+    );
+    expect(compileKeybindings({ repeatTimeoutMs: "300" as never }).repeatTimeoutMs).toBe(
+      DEFAULT_REPEAT_TIMEOUT_MS,
+    );
+  });
+
+  test("defaultKeybindings/defaultWindowsKeybindingsはrepeatTimeoutMs=500でコンパイルできる", () => {
+    expect(compileKeybindings(defaultKeybindings).repeatTimeoutMs).toBe(500);
+    expect(compileKeybindings(defaultWindowsKeybindings).repeatTimeoutMs).toBe(500);
+  });
+});
+
+describe("isRepeatableBinding", () => {
+  test("{target, repeat:true}・{target, repeat:false}はどちらもtrue", () => {
+    expect(isRepeatableBinding({ target: "split-vertical", repeat: true })).toBe(true);
+    expect(isRepeatableBinding({ target: "split-vertical", repeat: false })).toBe(true);
+    expect(isRepeatableBinding({ target: { kind: "custom", id: "h" }, repeat: true })).toBe(true);
+  });
+
+  test("targetが不正・repeatが真偽値でない・null等はfalse", () => {
+    expect(isRepeatableBinding({ target: "not-a-real-action", repeat: true })).toBe(false);
+    expect(isRepeatableBinding({ target: "split-vertical", repeat: "true" })).toBe(false);
+    expect(isRepeatableBinding({ target: "split-vertical" })).toBe(false);
+    expect(isRepeatableBinding("split-vertical")).toBe(false);
+    expect(isRepeatableBinding(null)).toBe(false);
+  });
+});
+
+describe("resolveBindingEntry", () => {
+  test("プレーンなBindingTarget（文字列アクション）はrepeat:falseへ正規化される", () => {
+    expect(resolveBindingEntry("split-vertical")).toEqual({
+      target: "split-vertical",
+      repeat: false,
+    });
+  });
+
+  test("プレーンなCustomBindingRefもrepeat:falseへ正規化される", () => {
+    expect(resolveBindingEntry({ kind: "custom", id: "handler-0" })).toEqual({
+      target: { kind: "custom", id: "handler-0" },
+      repeat: false,
+    });
+  });
+
+  test("RepeatableBindingはtarget/repeatをそのまま透過する", () => {
+    expect(resolveBindingEntry({ target: "resize-left", repeat: true })).toEqual({
+      target: "resize-left",
+      repeat: true,
+    });
+  });
+
+  test("不正な値はnull", () => {
+    expect(resolveBindingEntry("not-a-real-action")).toBeNull();
+    expect(resolveBindingEntry({ target: "not-a-real-action", repeat: true })).toBeNull();
+    expect(resolveBindingEntry(null)).toBeNull();
   });
 });
 
