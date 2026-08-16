@@ -57,15 +57,18 @@ export function CommandPalette({
               return (
                 <CommandItem
                   key={def.action}
-                  value={def.label}
-                  keywords={def.keywords}
+                  value={def.labelEn}
+                  keywords={def.keywords ? [def.label, ...def.keywords] : [def.label]}
                   onSelect={() => {
                     onOpenChange(false);
                     onSelectAction(def.action);
                   }}
                 >
                   <Icon />
-                  <span>{def.label}</span>
+                  <div className="flex flex-col">
+                    <span>{def.labelEn}</span>
+                    <span className="text-xs text-muted-foreground">{def.label}</span>
+                  </div>
                   {shortcut && <CommandShortcut>{shortcut}</CommandShortcut>}
                 </CommandItem>
               );

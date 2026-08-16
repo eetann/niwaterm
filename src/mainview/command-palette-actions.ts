@@ -1,6 +1,9 @@
 // コマンドパレットに表示するアクション一覧。KEYBIND_ACTIONS（command-palette自体は除く）を
 // ラベル・アイコン・カテゴリと対応付ける。実行はtile-keybindings.tsのactionToTileCommand→
 // index.tsのhandleTileCommandへ委譲するため、ここでは表示情報のみを持つ。
+//
+// 検索対象（CommandItemのvalue）は英語ラベル(labelEn)にしている。IME切り替えなしで
+// 検索できるようにするための意図的な選択で、日本語ラベル(label)は補助として小さく表示するのみ。
 import {
   AppWindow,
   ArrowDown,
@@ -37,173 +40,178 @@ export type CommandPaletteCategory =
 
 export interface CommandPaletteActionDef {
   action: Exclude<KeybindAction, "command-palette">;
+  /** 検索対象・メイン表示に使う英語ラベル */
+  labelEn: string;
+  /** 補助として小さく表示する日本語ラベル */
   label: string;
   category: CommandPaletteCategory;
   icon: LucideIcon;
-  /** fuzzy検索でヒットさせたい英語エイリアス等 */
+  /** fuzzy検索でヒットさせたい追加の別名等 */
   keywords?: string[];
 }
 
 export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
   {
     action: "split-vertical",
+    labelEn: "Split Tile Vertically",
     label: "タイルを垂直分割",
     category: "タイル",
     icon: Columns2,
-    keywords: ["split", "vertical"],
   },
   {
     action: "split-horizontal",
+    labelEn: "Split Tile Horizontally",
     label: "タイルを水平分割",
     category: "タイル",
     icon: Rows2,
-    keywords: ["split", "horizontal"],
   },
   {
     action: "close-tile",
+    labelEn: "Close Tile/Tab",
     label: "タイル/タブを閉じる",
     category: "タイル",
     icon: X,
-    keywords: ["close"],
   },
   {
     action: "focus-up",
+    labelEn: "Focus Tile Above",
     label: "上のタイルへフォーカス移動",
     category: "タイル",
     icon: ArrowUp,
-    keywords: ["focus", "up"],
   },
   {
     action: "focus-down",
+    labelEn: "Focus Tile Below",
     label: "下のタイルへフォーカス移動",
     category: "タイル",
     icon: ArrowDown,
-    keywords: ["focus", "down"],
   },
   {
     action: "focus-left",
+    labelEn: "Focus Tile to the Left",
     label: "左のタイルへフォーカス移動",
     category: "タイル",
     icon: ArrowLeft,
-    keywords: ["focus", "left"],
   },
   {
     action: "focus-right",
+    labelEn: "Focus Tile to the Right",
     label: "右のタイルへフォーカス移動",
     category: "タイル",
     icon: ArrowRight,
-    keywords: ["focus", "right"],
   },
   {
     action: "new-tab",
+    labelEn: "New Tab",
     label: "新しいタブを開く",
     category: "タブ",
     icon: Plus,
-    keywords: ["new tab"],
   },
   {
     action: "new-browser-tab",
+    labelEn: "New Browser Tab",
     label: "新しいブラウザタブを開く",
     category: "タブ",
     icon: Globe,
-    keywords: ["new browser tab"],
   },
   {
     action: "new-custom-view-tab",
+    labelEn: "New Custom View Tab",
     label: "新しいカスタムビュータブを開く",
     category: "タブ",
     icon: AppWindow,
-    keywords: ["new custom view tab"],
   },
   {
     action: "next-tab",
+    labelEn: "Next Tab",
     label: "次のタブへ切り替え",
     category: "タブ",
     icon: ChevronRight,
-    keywords: ["next tab"],
   },
   {
     action: "prev-tab",
+    labelEn: "Previous Tab",
     label: "前のタブへ切り替え",
     category: "タブ",
     icon: ChevronLeft,
-    keywords: ["prev tab", "previous tab"],
   },
   {
     action: "new-workspace",
+    labelEn: "New Workspace",
     label: "新しいワークスペースを作成",
     category: "ワークスペース",
     icon: FolderPlus,
-    keywords: ["new workspace"],
   },
   {
     action: "next-workspace",
+    labelEn: "Next Workspace",
     label: "次のワークスペースへ切り替え",
     category: "ワークスペース",
     icon: ChevronsRight,
-    keywords: ["next workspace"],
   },
   {
     action: "prev-workspace",
+    labelEn: "Previous Workspace",
     label: "前のワークスペースへ切り替え",
     category: "ワークスペース",
     icon: ChevronsLeft,
-    keywords: ["prev workspace", "previous workspace"],
   },
   {
     action: "toggle-sidebar",
+    labelEn: "Toggle Sidebar",
     label: "サイドバーの表示切り替え",
     category: "表示",
     icon: PanelLeft,
-    keywords: ["sidebar"],
   },
   {
     action: "toggle-popup",
+    labelEn: "Toggle Popup",
     label: "ポップアップの表示切り替え",
     category: "表示",
     icon: PictureInPicture2,
-    keywords: ["popup"],
   },
   {
     action: "copy-selection",
+    labelEn: "Copy Selection",
     label: "選択範囲をコピー",
     category: "編集",
     icon: Copy,
-    keywords: ["copy"],
   },
   {
     action: "paste-clipboard",
+    labelEn: "Paste from Clipboard",
     label: "クリップボードから貼り付け",
     category: "編集",
     icon: ClipboardPaste,
-    keywords: ["paste"],
   },
   {
     action: "scroll-page-up",
+    labelEn: "Scroll Page Up",
     label: "1ページ分上へスクロール",
     category: "スクロール",
     icon: ArrowUpToLine,
-    keywords: ["scroll up"],
   },
   {
     action: "scroll-page-down",
+    labelEn: "Scroll Page Down",
     label: "1ページ分下へスクロール",
     category: "スクロール",
     icon: ArrowDownToLine,
-    keywords: ["scroll down"],
   },
   {
     action: "scroll-to-top",
+    labelEn: "Scroll to Top",
     label: "スクロールバック先頭へ移動",
     category: "スクロール",
     icon: ArrowUpToLine,
-    keywords: ["scroll top"],
+    keywords: ["scrollback"],
   },
   {
     action: "scroll-to-bottom",
+    labelEn: "Scroll to Bottom",
     label: "最新行へ移動",
     category: "スクロール",
     icon: ArrowDownToLine,
-    keywords: ["scroll bottom"],
+    keywords: ["latest line"],
   },
 ];
