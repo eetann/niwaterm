@@ -3,17 +3,30 @@ import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
 import type { LayoutsConfig } from "./layout";
+import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
 import type { WorkspaceConfig } from "./workspace";
 
+/**
+ * キーバインドを登録する関数。niwa.keybind/niwa.prefix/niwa.unbindで登録するほか、
+ * niwa.tile/tab/popup/workspace/clipboard APIを使った関数ハンドラも割り当てられる。
+ * デフォルトキーバインドは先に登録済みの状態で呼ばれるため、上書き・追加したい分だけ書けばよい。
+ */
+export type KeybindingsFn = (niwa: Niwa) => void;
+
 export interface NiwatermConfig {
   /**
-   * キーバインド設定（tmux風のprefix方式）。prefix・bindings（prefix後の2打目キー）・
-   * direct（prefix不要の即時ショートカット）の3フィールドを持つ。未指定のフィールドは
-   * defaultKeybindingsの値のまま有効。
+   * キーバインド設定（tmux風のprefix方式）。
+   * 関数（推奨、KeybindingsFn）: niwa.keybindで1エントリずつ登録する。複数アクションの束ね・
+   * 条件分岐・シェル実行を伴う複雑なバインドや、関心事ごとの複数ファイル分割に対応できる。
+   * 例: (niwa) => { niwa.keybind("d", "split-horizontal"); }
+   *
+   * オブジェクト（従来形式、KeybindingsConfig）: prefix・bindings・directの3フィールドを持つ
+   * 宣言的な形。未指定のフィールドはdefaultKeybindingsの値のまま有効。単純な文字列アクションの
+   * 割り当てのみで済む場合はこちらでもよい。
    * 例: { ...defaultKeybindings, bindings: { ...defaultKeybindings.bindings, d: "split-horizontal" } }
    */
-  keybindings?: KeybindingsConfig;
+  keybindings?: KeybindingsConfig | KeybindingsFn;
   /**
    * フォント・カラーテーマ設定。未指定のフィールドはdefaultAppearanceの値のまま有効。
    * 例: { ...defaultAppearance, fontSize: 16 }

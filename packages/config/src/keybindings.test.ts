@@ -5,6 +5,8 @@ import {
   compileKeybindings,
   defaultKeybindings,
   defaultWindowsKeybindings,
+  isBindingTarget,
+  isCustomBindingRef,
   isKeybindAction,
   KEYBIND_ACTIONS,
   parseKeyBindingString,
@@ -286,5 +288,38 @@ describe("compileKeybindings", () => {
     expect(compiled.prefix).not.toBeNull();
     expect(compiled.bindings.size).toBe(24);
     expect(compiled.direct.size).toBe(2);
+  });
+
+  test("bindings/directのcustom BindingTarget（関数ハンドラ）はそのままMapに入る", () => {
+    const compiled = compileKeybindings({
+      bindings: { m: { kind: "custom", id: "handler-0" } },
+      direct: { "cmd+shift+g": { kind: "custom", id: "handler-1" } },
+    });
+    expect(compiled.bindings.get("00:m")).toEqual({ kind: "custom", id: "handler-0" });
+    expect(compiled.direct.get("1010:g")).toEqual({ kind: "custom", id: "handler-1" });
+  });
+});
+
+describe("isCustomBindingRef", () => {
+  test("kind:customのオブジェクトはtrue", () => {
+    expect(isCustomBindingRef({ kind: "custom", id: "handler-0" })).toBe(true);
+  });
+
+  test("KeybindAction文字列・null・idが数値のオブジェクトはfalse", () => {
+    expect(isCustomBindingRef("split-vertical")).toBe(false);
+    expect(isCustomBindingRef(null)).toBe(false);
+    expect(isCustomBindingRef({ kind: "custom", id: 1 })).toBe(false);
+  });
+});
+
+describe("isBindingTarget", () => {
+  test("KeybindAction文字列・CustomBindingRefはどちらもtrue", () => {
+    expect(isBindingTarget("split-vertical")).toBe(true);
+    expect(isBindingTarget({ kind: "custom", id: "handler-0" })).toBe(true);
+  });
+
+  test("未知の文字列・不正な形はfalse", () => {
+    expect(isBindingTarget("not-a-real-action")).toBe(false);
+    expect(isBindingTarget({ kind: "custom" })).toBe(false);
   });
 });

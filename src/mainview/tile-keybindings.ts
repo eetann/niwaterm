@@ -8,9 +8,11 @@
 // createKeybindResolverファクトリとして実装する（純粋関数のままでは表現できない）。
 
 import {
+  type BindingTarget,
   canonicalizeParsed,
   canonicalizeSecondKey,
   type CompiledKeybindings,
+  isCustomBindingRef,
   type KeybindAction,
 } from "@niwaterm/config";
 
@@ -18,6 +20,8 @@ export type TileCommand =
   | { type: "split"; orientation: "horizontal" | "vertical" }
   | { type: "close" }
   | { type: "focus"; direction: "up" | "down" | "left" | "right" }
+  // niwa.keybindに関数ハンドラを渡したエントリ。実際の処理はbun側のniwa-api.tsで行う
+  | { type: "custom"; handlerId: string }
   | { type: "newTab" }
   | { type: "newBrowserTab" }
   | { type: "newCustomViewTab" }
@@ -165,6 +169,12 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
   }
 }
 
+/** BindingTargetがcustom（niwa.keybindに渡した関数ハンドラ）ならcustom TileCommandへ、それ以外はactionToTileCommandへ委譲する */
+export function bindingTargetToTileCommand(target: BindingTarget): TileCommand {
+  if (isCustomBindingRef(target)) return { type: "custom", handlerId: target.id };
+  return actionToTileCommand(target);
+}
+
 export function createKeybindResolver(compiled: CompiledKeybindings): KeybindResolver {
   let awaitingSecondKey = false;
 
@@ -182,7 +192,7 @@ export function createKeybindResolver(compiled: CompiledKeybindings): KeybindRes
       if (e.key === "Escape") return { kind: "consumed" };
       const action = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
       return action
-        ? { kind: "command", command: actionToTileCommand(action) }
+        ? { kind: "command", command: bindingTargetToTileCommand(action) }
         : { kind: "consumed" };
     }
 
@@ -194,7 +204,7 @@ export function createKeybindResolver(compiled: CompiledKeybindings): KeybindRes
     // cmdもctrlも伴わないキーはターミナルへの通常入力に予約されている
     if (e.metaKey || e.ctrlKey) {
       const action = compiled.direct.get(keyboardEventToCanonical(e));
-      if (action) return { kind: "command", command: actionToTileCommand(action) };
+      if (action) return { kind: "command", command: bindingTargetToTileCommand(action) };
     }
 
     return { kind: "passthrough" };

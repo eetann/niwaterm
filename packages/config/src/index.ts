@@ -5,7 +5,7 @@ export {
 } from "./appearance";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export { type CustomViewConfig, type ResolvedCustomViewConfig } from "./custom-view";
-export { defineConfig, type NiwatermConfig } from "./define-config";
+export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export type {
   LayoutNodeConfig,
   LayoutPreset,
@@ -20,9 +20,13 @@ export {
   canonicalizeParsed,
   canonicalizeSecondKey,
   compileKeybindings,
+  type BindingTarget,
   type CompiledKeybindings,
+  type CustomBindingRef,
   defaultKeybindings,
   defaultWindowsKeybindings,
+  isBindingTarget,
+  isCustomBindingRef,
   isKeybindAction,
   KEYBIND_ACTIONS,
   type KeyBindingString,
@@ -35,3 +39,20 @@ export {
   platformDefaultKeybindings,
   type SecondKeyString,
 } from "./keybindings";
+export {
+  type FocusDirection,
+  type KeybindHandler,
+  type KeybindOptions,
+  type Niwa,
+  type NiwaClipboardApi,
+  type NiwaNewTabOptions,
+  type NiwaPopupApi,
+  type NiwaPopupOpenOptions,
+  type NiwaSplitOptions,
+  type NiwaTabApi,
+  type NiwaTabVarApi,
+  type NiwaTileApi,
+  type NiwaTileInfo,
+  type NiwaWorkspaceApi,
+  type SplitOrientationValue,
+} from "./niwa";

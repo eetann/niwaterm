@@ -8,10 +8,10 @@ import {
   defaultAppearance,
   defaultBrowserConfig,
   isKeybindAction,
-  type KeybindAction,
   type KeybindingsConfig,
   type LayoutPreset,
   type LayoutsConfig,
+  type Niwa,
   type NiwatermConfig,
   parseKeyBindingString,
   parseSecondKeyString,
@@ -21,6 +21,8 @@ import {
   type ResolvedCustomViewConfig,
   type ShellProfile,
 } from "@niwaterm/config";
+import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
+import type { WorkspaceManager } from "./workspace-manager";
 
 export function configDirPath(): string {
   return join(homedir(), ".config", "niwaterm");
@@ -35,7 +37,7 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   const v = value as Record<string, unknown>;
   if ("keybindings" in v) {
     const kb = v["keybindings"];
-    if (typeof kb !== "object" || kb === null) return false;
+    if (typeof kb !== "function" && (typeof kb !== "object" || kb === null)) return false;
   }
   if ("appearance" in v) {
     const ap = v["appearance"];
@@ -89,57 +91,54 @@ export async function loadUserConfig(path: string): Promise<NiwatermConfig | nul
 }
 
 /**
- * プラットフォームのデフォルトキーバインド（prefix/bindings/direct）にユーザー設定をマージし、
- * 不正エントリを警告付きで除外した最終値を返す。
- * 1箇所のtypoで全キーバインドがデフォルトに落ちるのを防ぐため、フィールド・エントリ単位で検証する。
+ * プラットフォームのデフォルトキーバインドをniwa.keybind経由で登録した後、ユーザー設定を重ねて
+ * 最終値を返す。ユーザー設定が関数（KeybindingsFn、推奨）ならniwaを渡してそのまま実行し、
+ * niwa.keybind/unbind呼び出しで自由にデフォルトを上書き・追加できる。オブジェクト形式（従来のKeybindingsConfig）
+ * の場合は各エントリをniwa.keybind呼び出しへ変換する（フィールド・エントリ単位で検証し、
+ * 1箇所のtypoで全キーバインドがデフォルトに落ちるのを防ぐのは従来と同じ方針）。
  */
-export function resolveKeybindings(userConfig: NiwatermConfig | null): KeybindingsConfig {
+export function resolveKeybindings(
+  userConfig: NiwatermConfig | null,
+  niwaApi: NiwaApiHandle,
+): KeybindingsConfig {
   const platformDefault = platformDefaultKeybindings(process.platform);
-  const user = userConfig?.keybindings;
+  applyKeybindingsObject(niwaApi.niwa, platformDefault, "defaultKeybindings");
 
-  let prefix = platformDefault.prefix;
-  if (user?.prefix !== undefined) {
-    if (parseKeyBindingString(user.prefix)) {
-      prefix = user.prefix;
-    } else {
-      console.log(`[bun] ignoring invalid keybindings.prefix: "${String(user.prefix)}"`);
-    }
+  const user = userConfig?.keybindings;
+  if (typeof user === "function") {
+    user(niwaApi.niwa);
+  } else if (user) {
+    applyKeybindingsObject(niwaApi.niwa, user, "keybindings");
   }
 
-  const bindings = mergeKeybindEntries(
-    "bindings",
-    platformDefault.bindings,
-    user?.bindings,
-    (binding) => parseSecondKeyString(binding) !== null,
-  );
-  const direct = mergeKeybindEntries(
-    "direct",
-    platformDefault.direct,
-    user?.direct,
-    (binding) => parseKeyBindingString(binding) !== null,
-  );
-
-  return { prefix, bindings, direct };
+  return niwaApi.extractKeybindingsConfig();
 }
 
-function mergeKeybindEntries(
-  fieldName: "bindings" | "direct",
-  defaults: Partial<Record<string, KeybindAction>> | undefined,
-  user: Partial<Record<string, KeybindAction>> | undefined,
-  isValidBinding: (binding: string) => boolean,
-): Record<string, KeybindAction> {
-  const merged: Record<string, unknown> = { ...defaults, ...user };
-  const result: Record<string, KeybindAction> = {};
-  for (const [binding, action] of Object.entries(merged)) {
-    if (!isValidBinding(binding) || !isKeybindAction(action)) {
-      console.log(
-        `[bun] ignoring invalid keybindings.${fieldName} entry: "${binding}" -> ${String(action)}`,
-      );
+/** KeybindingsConfig（prefix/bindings/direct）の内容をniwa.keybind呼び出し列に変換して登録する */
+function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: string): void {
+  if (config.prefix !== undefined) {
+    if (parseKeyBindingString(config.prefix)) {
+      niwa.prefix(config.prefix);
+    } else {
+      console.log(`[bun] ignoring invalid ${source}.prefix: "${String(config.prefix)}"`);
+    }
+  }
+  for (const [key, action] of Object.entries(config.bindings ?? {})) {
+    if (action === undefined) continue;
+    if (!parseSecondKeyString(key) || !isKeybindAction(action)) {
+      console.log(`[bun] ignoring invalid ${source}.bindings entry: "${key}" -> ${String(action)}`);
       continue;
     }
-    result[binding] = action;
+    niwa.keybind(key, action);
   }
-  return result;
+  for (const [key, action] of Object.entries(config.direct ?? {})) {
+    if (action === undefined) continue;
+    if (!parseKeyBindingString(key) || !isKeybindAction(action)) {
+      console.log(`[bun] ignoring invalid ${source}.direct entry: "${key}" -> ${String(action)}`);
+      continue;
+    }
+    niwa.keybind(key, action, { noPrefix: true });
+  }
 }
 
 function resolveField<T>(
@@ -371,6 +370,7 @@ export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig
  */
 export async function loadAndResolveConfig(
   path: string,
+  workspaceManager: WorkspaceManager,
   detectedShellProfiles: ShellProfile[] = [],
 ): Promise<{
   keybindings: KeybindingsConfig;
@@ -381,16 +381,22 @@ export async function loadAndResolveConfig(
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
   workspaceDefaultCwd: string | undefined;
+  /** キーバインドの関数ハンドラ（BindingTargetのkind:"custom"）を実行する。RPCのrunKeybindHandlerから呼ぶ */
+  runKeybindHandler: (id: string) => Promise<void>;
 }> {
   const userConfig = await loadUserConfig(path);
+  const shellProfiles = resolveShellProfiles(userConfig, detectedShellProfiles);
+  // niwa.tab.createのshellProfile解決に使うため、resolveKeybindingsより先にshellProfilesを確定させる
+  const niwaApi = createNiwaApi({ workspaceManager, getShellProfiles: () => shellProfiles });
   return {
-    keybindings: resolveKeybindings(userConfig),
+    keybindings: resolveKeybindings(userConfig, niwaApi),
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     customView: resolveCustomView(userConfig),
     defaultShell: resolveShell(userConfig),
-    shellProfiles: resolveShellProfiles(userConfig, detectedShellProfiles),
+    shellProfiles,
     layouts: resolveLayouts(userConfig),
     workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
+    runKeybindHandler: niwaApi.runHandler,
   };
 }

@@ -329,3 +329,29 @@ describe("createKeybindResolver（カスタムprefix・カスタムbindings）",
     expect(resolver.handleKeydown(key("w"))).toEqual({ kind: "consumed" });
   });
 });
+
+describe("createKeybindResolver（niwa.keybindの関数ハンドラ = custom BindingTarget）", () => {
+  test("bindingsのcustom BindingTargetはcustom TileCommandになる", () => {
+    const custom = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { m: { kind: "custom", id: "handler-0" } },
+    });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("m"))).toEqual({
+      kind: "command",
+      command: { type: "custom", handlerId: "handler-0" },
+    });
+  });
+
+  test("directのcustom BindingTargetもcustom TileCommandになる", () => {
+    const custom = compileKeybindings({
+      direct: { "cmd+shift+g": { kind: "custom", id: "handler-1" } },
+    });
+    const resolver = createKeybindResolver(custom);
+    expect(resolver.handleKeydown(key("g", { metaKey: true, shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "custom", handlerId: "handler-1" },
+    });
+  });
+});

@@ -1,14 +1,16 @@
-import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/config";
+import { defaultAppearance, defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
-  keybindings: {
-    // defaultKeybindingsを丸ごと引き継ぎつつ、prefix入力後の2打目キーの一部だけ上書きする例
-    ...defaultKeybindings,
-    bindings: {
-      ...defaultKeybindings.bindings,
-      d: "split-horizontal",
-      "shift+d": "split-vertical",
-    },
+  keybindings: (niwa) => {
+    // デフォルトキーバインドは先に登録済みの状態でこの関数が呼ばれるため、
+    // 上書き・追加したい分だけniwa.keybindで書けばよい
+    niwa.keybind("d", "split-horizontal");
+    niwa.keybind("shift+d", "split-vertical");
+
+    // 任意のTSコードを書ける（tmuxのif-shell/run-shell相当は素のif文・Bun.spawnで表現する）
+    niwa.keybind("g", () => {
+      niwa.popup.open({ width: 90, height: 90, command: "lazygit" });
+    });
   },
   appearance: {
     // defaultAppearanceを丸ごと引き継ぎつつ、一部だけ上書きする例

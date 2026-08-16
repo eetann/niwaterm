@@ -21,6 +21,40 @@ import {
   resolveShellProfiles,
   resolveWorkspaceDefaultCwd,
 } from "./config";
+import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
+import type { TerminalSession } from "./terminal-session";
+import { createWorkspaceManager } from "./workspace-manager";
+
+// resolveKeybindingsはniwa.tile/tab等がworkspaceManagerを操作できる必要があるため、
+// 検証用の最小限のworkspaceManager（PTYを実際には起動しないfakeセッション）で作る
+function createTestNiwaApi(): NiwaApiHandle {
+  const fakeSession: TerminalSession = {
+    write: () => {},
+    paste: () => {},
+    resize: () => false,
+    scroll: () => {},
+    scrollToTop: () => {},
+    scrollToBottom: () => {},
+    renderState: () => ({
+      kind: "terminal",
+      html: "",
+      cursorX: 0,
+      cursorY: 0,
+      cursorVisible: true,
+      viewportPinned: true,
+    }),
+    dumpText: () => "",
+    dispose: () => {},
+  };
+  const workspaceManager = createWorkspaceManager({
+    initialCols: 80,
+    initialRows: 24,
+    onDirty: () => {},
+    onAllWorkspacesClosed: () => {},
+    createSession: () => fakeSession,
+  });
+  return createNiwaApi({ workspaceManager, getShellProfiles: () => [] });
+}
 
 describe("configFilePath", () => {
   test(".config/niwaterm/niwaterm.config.ts を指す", () => {
@@ -75,6 +109,16 @@ describe("loadUserConfig", () => {
     expect(await loadUserConfig(path)).toBeNull();
   });
 
+  test("keybindingsが関数（KeybindingsFn）の場合も読み込める", async () => {
+    const path = join(dir, "fn-keybindings.config.ts");
+    await writeFile(
+      path,
+      `export default { keybindings: (niwa) => { niwa.keybind("d", "close-tile"); } };\n`,
+    );
+    const loaded = await loadUserConfig(path);
+    expect(typeof loaded?.keybindings).toBe("function");
+  });
+
   test("appearance以外の形（配列やnull）の場合はnullを返す", async () => {
     const path = join(dir, "invalid-appearance-shape.config.ts");
     await writeFile(path, "export default { appearance: null };\n");
@@ -107,14 +151,14 @@ describe("resolveKeybindings", () => {
   const platformDefaults = platformDefaultKeybindings(process.platform);
 
   test("nullを渡すとプラットフォームのデフォルトがそのまま返る", () => {
-    const resolved = resolveKeybindings(null);
+    const resolved = resolveKeybindings(null, createTestNiwaApi());
     expect(resolved.prefix).toBe(platformDefaults.prefix);
     expect(resolved.bindings).toEqual(platformDefaults.bindings ?? {});
     expect(resolved.direct).toEqual(platformDefaults.direct ?? {});
   });
 
   test("ユーザー設定でprefixを上書きできる", () => {
-    const resolved = resolveKeybindings({ keybindings: { prefix: "cmd+j" } });
+    const resolved = resolveKeybindings({ keybindings: { prefix: "cmd+j" } }, createTestNiwaApi());
     expect(resolved.prefix).toBe("cmd+j");
     // bindingsはデフォルトのまま
     expect(resolved.bindings).toEqual(platformDefaults.bindings ?? {});
@@ -123,7 +167,10 @@ describe("resolveKeybindings", () => {
   test("不正なprefixは警告付きでデフォルトにフォールバックする", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
-      const resolved = resolveKeybindings({ keybindings: { prefix: "hyper+b" as never } });
+      const resolved = resolveKeybindings(
+        { keybindings: { prefix: "hyper+b" as never } },
+        createTestNiwaApi(),
+      );
       expect(resolved.prefix).toBe(platformDefaults.prefix);
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -133,9 +180,10 @@ describe("resolveKeybindings", () => {
 
   test("ユーザー設定でbindingsの一部のキーを上書きできる", () => {
     expect(platformDefaults.bindings?.["d"]).toBe("split-vertical");
-    const resolved = resolveKeybindings({
-      keybindings: { bindings: { d: "close-tile" } },
-    });
+    const resolved = resolveKeybindings(
+      { keybindings: { bindings: { d: "close-tile" } } },
+      createTestNiwaApi(),
+    );
     expect(resolved.bindings?.["d"]).toBe("close-tile");
     // 上書きしていないキーはデフォルトのまま
     expect(resolved.bindings?.["w"]).toBe(platformDefaults.bindings?.["w"]);
@@ -144,14 +192,17 @@ describe("resolveKeybindings", () => {
   test("bindingsの不正なバインド文字列・未知のアクション名のエントリだけ除外し、残りは有効にする", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
-      const resolved = resolveKeybindings({
-        keybindings: {
-          bindings: {
-            "cmd+d": "close-tile", // 2打目キーにcmd/ctrlは使えない（不正）
-            z: "not-a-real-action",
-          } as never,
+      const resolved = resolveKeybindings(
+        {
+          keybindings: {
+            bindings: {
+              "cmd+d": "close-tile", // 2打目キーにcmd/ctrlは使えない（不正）
+              z: "not-a-real-action",
+            } as never,
+          },
         },
-      });
+        createTestNiwaApi(),
+      );
       expect(resolved.bindings?.["cmd+d"]).toBeUndefined();
       expect(resolved.bindings?.["z"]).toBeUndefined();
       // デフォルトのエントリは影響を受けず残っている
@@ -164,26 +215,70 @@ describe("resolveKeybindings", () => {
   });
 
   test("ユーザー設定でdirectを追加できる", () => {
-    const resolved = resolveKeybindings({
-      keybindings: { direct: { "cmd+shift+c": "copy-selection" } },
-    });
+    const resolved = resolveKeybindings(
+      { keybindings: { direct: { "cmd+shift+c": "copy-selection" } } },
+      createTestNiwaApi(),
+    );
     expect(resolved.direct?.["cmd+shift+c"]).toBe("copy-selection");
   });
 
   test("directの不正なバインド文字列・未知のアクション名は警告付きで除外される", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
-      const resolved = resolveKeybindings({
-        keybindings: {
-          direct: { d: "copy-selection", "cmd+z": "not-a-real-action" } as never,
+      const resolved = resolveKeybindings(
+        {
+          keybindings: {
+            direct: { d: "copy-selection", "cmd+z": "not-a-real-action" } as never,
+          },
         },
-      });
+        createTestNiwaApi(),
+      );
       expect(resolved.direct?.["d" as never]).toBeUndefined();
       expect(resolved.direct?.["cmd+z" as never]).toBeUndefined();
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
     }
+  });
+
+  test("keybindingsが関数（KeybindingsFn）の場合、デフォルトの上にniwa.keybindで重ねられる", () => {
+    const resolved = resolveKeybindings(
+      {
+        keybindings: (niwa) => {
+          niwa.keybind("d", "close-tile");
+        },
+      },
+      createTestNiwaApi(),
+    );
+    expect(resolved.bindings?.["d"]).toBe("close-tile");
+    // 上書きしていないキーはデフォルトのまま
+    expect(resolved.bindings?.["w"]).toBe(platformDefaults.bindings?.["w"]);
+    expect(resolved.prefix).toBe(platformDefaults.prefix);
+  });
+
+  test("keybindingsが関数の場合、niwa.keybindに渡した関数ハンドラはcustom BindingTargetになる", () => {
+    const resolved = resolveKeybindings(
+      {
+        keybindings: (niwa) => {
+          niwa.keybind("m", () => {});
+        },
+      },
+      createTestNiwaApi(),
+    );
+    expect(resolved.bindings?.["m"]).toMatchObject({ kind: "custom" });
+  });
+
+  test("keybindingsが関数の場合、niwa.unbindでデフォルトのバインドを消せる", () => {
+    expect(platformDefaults.bindings?.["w"]).toBe("close-tile");
+    const resolved = resolveKeybindings(
+      {
+        keybindings: (niwa) => {
+          niwa.unbind("w");
+        },
+      },
+      createTestNiwaApi(),
+    );
+    expect(resolved.bindings?.["w"]).toBeUndefined();
   });
 });
 

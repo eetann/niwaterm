@@ -58,10 +58,10 @@ export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 export interface KeybindingsConfig {
   /** prefixキー本体。例: "ctrl+b" */
   prefix?: KeyBindingString;
-  /** prefix入力後に押す2打目キー→アクションのマップ */
-  bindings?: Partial<Record<SecondKeyString, KeybindAction>>;
+  /** prefix入力後に押す2打目キー→アクションのマップ。値は既存アクション名の文字列、またはniwa.keybindに渡した関数ハンドラへの参照 */
+  bindings?: Partial<Record<SecondKeyString, BindingTarget>>;
   /** prefixを介さず即座に発火する直接ショートカット（コピー・ペースト等の頻用操作向け） */
-  direct?: Partial<Record<KeyBindingString, KeybindAction>>;
+  direct?: Partial<Record<KeyBindingString, BindingTarget>>;
 }
 
 // prefix・2打目キーともOS共通（prefixキー自体でOS差異を吸収できるため）。
@@ -184,32 +184,54 @@ export function isKeybindAction(value: unknown): value is KeybindAction {
   return typeof value === "string" && (KEYBIND_ACTIONS as readonly string[]).includes(value);
 }
 
+/**
+ * 関数ハンドラ（niwa.keybindに関数を渡したエントリ）への参照。関数自体はRPCでシリアライズできないため、
+ * bun側のハンドラレジストリが発行した一意idだけをwebview側へ送る（実行時はid経由でRPCを介してbun側に依頼する）。
+ */
+export interface CustomBindingRef {
+  kind: "custom";
+  id: string;
+}
+
+export function isCustomBindingRef(value: unknown): value is CustomBindingRef {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return v["kind"] === "custom" && typeof v["id"] === "string";
+}
+
+/** キーバインドの実行対象。既存アクション名の文字列、または関数ハンドラへの参照 */
+export type BindingTarget = KeybindAction | CustomBindingRef;
+
+export function isBindingTarget(value: unknown): value is BindingTarget {
+  return isKeybindAction(value) || isCustomBindingRef(value);
+}
+
 export interface CompiledKeybindings {
   /** 未設定・パース不可はnull（prefix機能自体が無効になる） */
   prefix: ParsedKeyBinding | null;
   /** canonicalizeSecondKeyで正規化したキーを持つ、prefix入力後の2打目キー→アクションのマップ */
-  bindings: ReadonlyMap<string, KeybindAction>;
+  bindings: ReadonlyMap<string, BindingTarget>;
   /** canonicalizeParsedで正規化したキーを持つ、即時発火の直接ショートカットのマップ */
-  direct: ReadonlyMap<string, KeybindAction>;
+  direct: ReadonlyMap<string, BindingTarget>;
 }
 
 /** 不正なバインド文字列・未知のアクション名のエントリは黙ってスキップする */
 export function compileKeybindings(config: KeybindingsConfig): CompiledKeybindings {
   const prefix = config.prefix !== undefined ? parseKeyBindingString(config.prefix) : null;
 
-  const bindings = new Map<string, KeybindAction>();
+  const bindings = new Map<string, BindingTarget>();
   for (const [binding, action] of Object.entries(config.bindings ?? {})) {
     if (action === undefined) continue;
     const parsed = parseSecondKeyString(binding);
-    if (!parsed || !isKeybindAction(action)) continue;
+    if (!parsed || !isBindingTarget(action)) continue;
     bindings.set(canonicalizeSecondKey(parsed), action);
   }
 
-  const direct = new Map<string, KeybindAction>();
+  const direct = new Map<string, BindingTarget>();
   for (const [binding, action] of Object.entries(config.direct ?? {})) {
     if (action === undefined) continue;
     const parsed = parseKeyBindingString(binding);
-    if (!parsed || !isKeybindAction(action)) continue;
+    if (!parsed || !isBindingTarget(action)) continue;
     direct.set(canonicalizeParsed(parsed), action);
   }
 

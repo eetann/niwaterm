@@ -292,6 +292,19 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     workspaces.get(activeId)?.focusDirection(direction);
   }
 
+  // niwa APIのniwa.tile.current()向け。focusDirectionと同じくアクティブworkspace固定の例外的操作
+  function getFocusedTileId(): TileId {
+    return (workspaces.get(activeId) as Workspace).getFocusedTileId();
+  }
+
+  function getActiveTabId(tileId: TileId): TabId | null {
+    const ws = findOwnerByTileId(tileId);
+    if (!ws) return null;
+    const leaf = findNode(ws.getLayout(), tileId);
+    if (!leaf || leaf.kind !== "leaf") return null;
+    return leaf.activeTabId;
+  }
+
   function resizeSplit(splitId: TileId, ratio: number): void {
     findOwnerByTileId(splitId)?.resizeSplit(splitId, ratio);
   }
@@ -443,6 +456,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     closeTab,
     focusTile,
     focusDirection,
+    getFocusedTileId,
+    getActiveTabId,
     resizeSplit,
     handleInput,
     handlePaste,

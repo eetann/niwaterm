@@ -238,3 +238,19 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [ ] ステータスバーにprefixモード（2打目キー待ち）中であることを表示する（「ステータスバー用意」タスクの一部として実装する）
 - [x] コマンドパレット追加
 - [ ] プラグインの仕組み
+- [ ] タイルサイズ調整をするキーバインド・CLI
+- [ ] タスクランナーなど改修
+
+## 設定ファイルの関数ベースAPI化（キーバインド・複数ファイル対応）
+
+今の`keybindings.bindings`はキー→単一アクション名の宣言的マッピングで、複数アクションの束ね・条件分岐・オプション付きコマンドの組み合わせ（`~/dotfiles/.tmux.conf`にある複雑な`bind-key`の多く）を表現できない。configはbunプロセス内にそのままimportされるTSモジュールという性質を活かし、キーバインドの値に関数ハンドラ（`niwa.tile.*`/`niwa.tab.*`/`niwa.popup.*`/`niwa.shell.*`等のAPI呼び出し）も取れるようにする。tmuxの`if-shell`/`run-shell`/`{}`束ねのような専用DSLは増やさず、素のTSの`if`・`Bun.spawn`・関数呼び出しの並びに任せる。関心事ごとの複数ファイル分割にも対応し、最終的に`~/dotfiles/.tmux.conf`の機能を全部移行できることを目標にする。
+
+- [x] 設計: `.tmux.conf`から逆引きして`niwa.tile`/`niwa.tab`/`niwa.popup`/`niwa.shell`に必要なメソッド・状態アクセサ一覧を洗い出す
+- [x] 設計: 非同期処理の扱いを決める（内部API（`workspaceManager`等）は同期のまま維持し、`niwa.sleep(ms)`のような明示waitのみ提供する。PTY起動〜シェル入力受付までの待ちを暗黙にやらない）
+- [x] `@niwaterm/config`にビルダーAPI（`niwa.keybind`等）の型・実行基盤を実装する。キーバインドの値は文字列ショートハンド（既存`KeybindAction`）または関数ハンドラのUnionにする
+- [x] `src/bun/config.ts`のresolve処理をビルダー関数の実行結果を収集する形に書き換える
+- [x] mainview側のキーバインドディスパッチを、アクション名文字列固定から関数実行にも対応させる
+- [ ] 複数ファイル分割時のホットリロード（現状はエントリファイルのみキャッシュバスト。importツリー全体の再帰的な無効化に対応する）
+- [x] ドキュメント（`docs/guide/config.md`、`packages/config/examples/`）を更新する
+- [x] テストを更新・追加する
+- [ ] `niwa.tile`のリサイズ・`niwa.tab`の再起動（respawn）・`niwa.workspace`の入れ替え（swap）API（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を追加する

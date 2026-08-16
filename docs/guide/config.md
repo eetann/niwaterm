@@ -57,16 +57,12 @@ mkdir -p ~/.config/niwaterm
 **`~/.config/niwaterm/niwaterm.config.ts`**
 
 ```ts
-import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/config";
+import { defaultAppearance, defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
-  keybindings: {
-    ...defaultKeybindings,
-    bindings: {
-      ...defaultKeybindings.bindings,
-      d: "split-horizontal",
-      "shift+d": "split-vertical",
-    },
+  keybindings: (niwa) => {
+    niwa.keybind("d", "split-horizontal");
+    niwa.keybind("shift+d", "split-vertical");
   },
   appearance: {
     ...defaultAppearance,
@@ -83,17 +79,111 @@ cd ~/.config/niwaterm && bun install
 
 `node_modules/`はDotfilesで管理する場合、Git管理対象外にする想定。
 
-## キーバインドDSL
+## キーバインド
 
 niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。
 
-`keybindings`は次の3フィールドを持つオブジェクト。いずれも未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
+`keybindings`の指定方法は2つある。単純な文字列アクションの割り当てのみで済むならオブジェクト形式で十分だが、複数アクションの束ね・条件分岐・シェル実行を伴う複雑なバインド（`.tmux.conf`にあるような`bind-key`）を書きたい場合は関数ベースAPIを使う。
+
+### 関数ベースAPI（推奨）
+
+`niwa`（`niwa.keybind`等）を使って1エントリずつ登録する形。**デフォルトキーバインドは先に登録済みの状態で関数が呼ばれる**ため、上書き・追加したい分だけ書けばよい（`niwa.unbind`で個別に解除もできる）。
+
+```ts
+import { defineConfig } from "@niwaterm/config";
+
+export default defineConfig({
+  keybindings: (niwa) => {
+    niwa.keybind("d", "split-horizontal"); // 既存アクション名の文字列で上書き
+    niwa.keybind("m", () => {
+      // 任意のTSコードを書ける。tmuxのif-shell/run-shell/{}束ねに相当することは
+      // 素のif文・Bun.spawn・複数行の関数呼び出しで表現する（専用DSLは増やさない）
+      niwa.popup.open({ width: 80, height: 80, command: "lazygit" });
+    });
+  },
+});
+```
+
+`niwa.keybind`のhandlerは**実際にそのキーが押された時**に呼ばれる（configファイル実行時ではない）。`niwa.tile.current()`等はその時点の実際の状態を返す。
+
+#### niwa API
+
+| API | 意味 |
+|---|---|
+| `niwa.prefix(binding)` | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")` |
+| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl必須のKeyBindingString表記） |
+| `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
+| `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
+| `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
+| `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
+| `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |
+| `niwa.tile.close()` | フォーカス中タイルのアクティブタブを閉じる |
+| `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
+| `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
+| `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当） |
+| `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
+| `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
+| `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
+| `niwa.clipboard.write(text)` / `niwa.clipboard.read()` | クリップボードの読み書き |
+
+**非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
+
+```ts
+niwa.keybind("c", async () => {
+  const created = niwa.tab.create();
+  if (!created) return;
+  await niwa.sleep(300);
+  niwa.tab.sendKeys(created.tabId, "cd ~/ghq", "Enter");
+});
+```
+
+#### 複数ファイルへの分割
+
+キーバインドを関心事ごとに複数ファイルへ分けたい場合、各ファイルは`niwa`を受け取る関数をexportし、エントリファイル（`niwaterm.config.ts`）側でimportして呼び出す。
+
+```ts
+// keymaps.ts
+import type { Niwa } from "@niwaterm/config";
+
+export function applyTileKeymaps(niwa: Niwa): void {
+  niwa.keybind("d", "split-horizontal");
+}
+
+// niwaterm.config.ts
+import { defineConfig } from "@niwaterm/config";
+import { applyTileKeymaps } from "./keymaps";
+
+export default defineConfig({
+  keybindings: (niwa) => {
+    applyTileKeymaps(niwa);
+  },
+});
+```
+
+エントリファイル以外（上記の`keymaps.ts`）の変更はホットリロードで拾えない点に注意（「ホットリロード」節参照）。
+
+### オブジェクト形式（従来）
+
+`keybindings`に次の3フィールドを持つオブジェクトを直接渡すこともできる。未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `prefix` | `KeyBindingString` | prefixキー本体。既定は`"ctrl+b"`（tmux標準を踏襲。macOS/Windowsで共通） |
 | `bindings` | `Record<string, KeybindAction>` | prefix入力後に押す2打目キー→アクションのマップ |
 | `direct` | `Record<KeyBindingString, KeybindAction>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空） |
+
+```ts
+keybindings: {
+  ...defaultKeybindings,
+  bindings: {
+    ...defaultKeybindings.bindings,
+    d: "split-horizontal",
+    "shift+d": "split-vertical",
+  },
+},
+```
+
+以下、両形式に共通するバインド文字列の書式・既定値・アクション一覧。
 
 **`prefix` / `direct` の書式**: `修飾子+...+キー本体`（`+`区切り）
 
@@ -120,10 +210,12 @@ niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー�
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
 | `` ` `` | toggle-popup |
+| `:` | command-palette |
+| `=` / `-` / `0` | increase-font-size / decrease-font-size / reset-font-size |
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（23種類）:
+**KeybindAction の一覧**（26種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -142,6 +234,8 @@ niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー�
 | `paste-clipboard` | クリップボードの内容をペースト（既定は`direct`にWindowsのみ`ctrl+shift+v`が割り当て済み。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
 | `scroll-page-up` / `scroll-page-down` | スクロールバックを1ページ分スクロール |
 | `scroll-to-top` / `scroll-to-bottom` | スクロールバックの先頭/最新行へジャンプ |
+| `command-palette` | コマンドパレットを開く |
+| `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
 
 不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`と`ctrl`をどちらも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 
@@ -210,12 +304,8 @@ customView: {
 
 - キーバインド: `new-custom-view-tab`アクションを自分で割り当てる（既定キーは無い）
   ```ts
-  keybindings: {
-    ...defaultKeybindings,
-    bindings: {
-      ...defaultKeybindings.bindings,
-      "shift+u": "new-custom-view-tab",
-    },
+  keybindings: (niwa) => {
+    niwa.keybind("shift+u", "new-custom-view-tab");
   },
   ```
 - CLI: `niwaterm tab new --tile <tileId> --custom-view`（`--url`と同時指定は不可）
@@ -343,6 +433,7 @@ niwaterm layout apply dev --replace
 - **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
 - **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある
 - **ホットリロードのキャッシュバスティングはエントリファイルのみ**。`niwaterm.config.ts`自体の変更は毎回最新の内容を読み込むが、そのファイルが（将来）importする他のヘルパーファイルまで再帰的にキャッシュを無効化するわけではない。設定を複数ファイルに分割している場合、エントリファイル以外の変更はホットリロードで拾えず、アプリの再起動が必要
+- **niwa APIは現時点でタイルリサイズ・タブ再起動・ワークスペース入れ替え（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を持たない**。今後拡張予定（roadmap参照）
 
 ## スコープ外（roadmap参照）
 

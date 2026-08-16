@@ -91,6 +91,8 @@ export type NiwaRPC = {
       renameTab: { tabId: TabId; name: string };
       renameTile: { tileId: TileId; name: string };
       renameWorkspace: { workspaceId: WorkspaceId; name: string };
+      /** keybindingsのBindingTargetがkind:"custom"の場合に発火する。handlerIdはniwa-api.tsのhandlerRegistryのキー */
+      runKeybindHandler: { handlerId: string };
     };
   }>;
   webview: RPCSchema<{
@@ -220,10 +222,31 @@ let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
 let workspaceDefaultCwd: string | undefined;
+let runKeybindHandler: (id: string) => Promise<void>;
 
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
 const detectedShellProfiles = await detectShellProfiles();
+
+const restoreFrom = await loadPersistedState(persistedFilePath());
+
+// niwa.tile/tab/popup等のAPI（設定ファイルの関数ハンドラから呼ばれる）がworkspaceManagerを
+// 操作するため、config読み込み（refreshConfig）より先にworkspaceManagerを作る必要がある。
+// getDefaultShell/getDefaultCwdは遅延評価のクロージャなので、生成時点でdefaultShell等が
+// 未確定（refreshConfig未実行）でも問題ない
+const workspaceManager = createWorkspaceManager({
+  initialCols: 80,
+  initialRows: 24,
+  onDirty,
+  restoreFrom,
+  getDefaultShell: () => defaultShell,
+  getDefaultCwd: () => workspaceDefaultCwd,
+  onAllWorkspacesClosed: () => {
+    console.log("all workspaces closed, exiting");
+    cleanup();
+    process.exit(0);
+  },
+});
 
 async function refreshConfig(): Promise<void> {
   ({
@@ -235,7 +258,8 @@ async function refreshConfig(): Promise<void> {
     shellProfiles,
     layouts,
     workspaceDefaultCwd,
-  } = await loadAndResolveConfig(configFilePath(), detectedShellProfiles));
+    runKeybindHandler,
+  } = await loadAndResolveConfig(configFilePath(), workspaceManager, detectedShellProfiles));
 }
 
 await refreshConfig();
@@ -264,22 +288,6 @@ async function handleConfigFileChanged(): Promise<void> {
     }
   }
 }
-
-const restoreFrom = await loadPersistedState(persistedFilePath());
-
-const workspaceManager = createWorkspaceManager({
-  initialCols: 80,
-  initialRows: 24,
-  onDirty,
-  restoreFrom,
-  getDefaultShell: () => defaultShell,
-  getDefaultCwd: () => workspaceDefaultCwd,
-  onAllWorkspacesClosed: () => {
-    console.log("all workspaces closed, exiting");
-    cleanup();
-    process.exit(0);
-  },
-});
 
 try {
   ipcServer = await createIpcServer(
@@ -454,6 +462,11 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       renameWorkspace: ({ workspaceId, name }: { workspaceId: WorkspaceId; name: string }) => {
         workspaceManager.setWorkspaceName(workspaceId, name);
+      },
+      runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
+        runKeybindHandler(handlerId).catch((err: unknown) => {
+          console.log(`[bun] keybind handler error: ${String(err)}`);
+        });
       },
     },
   },
