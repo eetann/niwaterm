@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -143,6 +143,52 @@ describe("loadUserConfig", () => {
     expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "close-tile" } } });
     await writeFile(path, `export default { keybindings: { bindings: { d: "new-tab" } } };\n`);
     expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "new-tab" } } });
+  });
+
+  test("複数ファイル分割: エントリがimportする非エントリファイルの更新も2回目の読み込みで反映される", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    const fontPath = join(dir, "font.ts");
+    await writeFile(fontPath, "export const fontSize = 14;\n");
+    await writeFile(
+      entryPath,
+      `import { fontSize } from "./font";\nexport default { appearance: { fontSize } };\n`,
+    );
+    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 14 } });
+
+    await writeFile(fontPath, "export const fontSize = 20;\n");
+    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 20 } });
+  });
+
+  test("複数ファイル分割: サブディレクトリ配置の非エントリファイルも解決できる", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    await mkdir(join(dir, "keys"), { recursive: true });
+    const keysPath = join(dir, "keys", "vim.ts");
+    await writeFile(
+      keysPath,
+      `export function applyVimKeys(niwa) { niwa.keybind("d", "close-tile"); }\n`,
+    );
+    await writeFile(
+      entryPath,
+      `import { applyVimKeys } from "./keys/vim";\nexport default { keybindings: applyVimKeys };\n`,
+    );
+    const loaded = await loadUserConfig(entryPath);
+    expect(typeof loaded?.keybindings).toBe("function");
+  });
+
+  test("node_modules配下のパッケージimportはシンボリックリンク越しに解決できる（@niwaterm/config相当）", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    const pkgDir = join(dir, "node_modules", "fake-pkg");
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "fake-pkg", main: "index.ts" }),
+    );
+    await writeFile(join(pkgDir, "index.ts"), "export const fontSize = 18;\n");
+    await writeFile(
+      entryPath,
+      `import { fontSize } from "fake-pkg";\nexport default { appearance: { fontSize } };\n`,
+    );
+    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 18 } });
   });
 });
 

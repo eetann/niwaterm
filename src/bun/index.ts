@@ -10,7 +10,7 @@ import type {
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, writeClipboardText } from "./clipboard";
-import { configFilePath, loadAndResolveConfig } from "./config";
+import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { isAllowedLinkUrl } from "./open-link";
@@ -212,6 +212,7 @@ function cleanup() {
   configWatcher.close();
   workspaceManager.dispose();
   ipcServer?.close();
+  cleanupConfigImportDir();
 }
 
 let keybindings: KeybindingsConfig;

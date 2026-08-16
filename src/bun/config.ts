@@ -1,8 +1,10 @@
 // ユーザー設定ファイル（~/.config/niwaterm/niwaterm.config.ts）の読み込み。
 // ファイル不在・importエラー・スキーマ不一致いずれでも例外を投げずnullを返す（persistence.tsのloadPersistedStateと同じ設計）。
 
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { rmSync } from "node:fs";
+import { copyFile, mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
@@ -66,18 +68,76 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   return true;
 }
 
-// import()のモジュールキャッシュを毎回確実にずらすための単調増加カウンタ。
-// Date.now()だとミリ秒未満の間隔で連続読み込みした場合にクエリが衝突しうるため使わない。
-let importCacheBustCounter = 0;
+// 前回importFreshConfigで使った一時ディレクトリ。次回読み込み成功時に削除する
+// （importが失敗する可能性があるファイルを即座には消さず、常に「最後にimportへ成功した」ものを1世代分だけ残す）
+let previousImportDir: string | null = null;
+
+/**
+ * configDirPath()配下のソースファイル（.ts/.js等）を毎回新しい一時ディレクトリへ実体コピーしてから
+ * importする。Bunのimport()はURL単位でキャッシュされるため、エントリファイルにクエリ文字列を
+ * 付けるだけではエントリファイルは再読み込みされても、そのファイルが相対importする非エントリの
+ * ファイル（クエリなしの同じURL）は古い内容のままキャッシュされ続けてしまう。ディレクトリごと
+ * 差し替えることでimportツリー全体を新しいURLの下に置き、再読み込みさせる。
+ * node_modulesは巨大になりうるためコピーせずシンボリックリンクで繋ぐ（@niwaterm/config等の
+ * パッケージimportの解決に必要）。
+ */
+async function importFreshConfig(path: string): Promise<unknown> {
+  const dir = dirname(path);
+  const entryName = basename(path);
+  const importDir = await mkdtemp(join(tmpdir(), "niwaterm-config-"));
+  try {
+    await copyConfigSources(dir, importDir);
+    const mod: unknown = await import(pathToFileURL(join(importDir, entryName)).href);
+    const staleDir = previousImportDir;
+    previousImportDir = importDir;
+    if (staleDir) {
+      await rm(staleDir, { recursive: true, force: true }).catch(() => {});
+    }
+    return mod;
+  } catch (err) {
+    await rm(importDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
+}
+
+/** node_modulesはシンボリックリンク、それ以外のファイル・ディレクトリは再帰的に実体コピーする */
+async function copyConfigSources(srcDir: string, destDir: string): Promise<void> {
+  const entries = await readdir(srcDir, { withFileTypes: true });
+  await Promise.all(
+    entries.map(async (entry) => {
+      const srcPath = join(srcDir, entry.name);
+      const destPath = join(destDir, entry.name);
+      if (entry.name === "node_modules") {
+        await symlink(srcPath, destPath, "dir");
+        return;
+      }
+      if (entry.isDirectory()) {
+        await mkdir(destPath, { recursive: true });
+        await copyConfigSources(srcPath, destPath);
+        return;
+      }
+      if (entry.isFile()) {
+        await copyFile(srcPath, destPath);
+      }
+    }),
+  );
+}
+
+/** アプリ終了時に一時importディレクトリを片付ける（index.tsのcleanup()から呼ぶ） */
+export function cleanupConfigImportDir(): void {
+  if (!previousImportDir) return;
+  rmSync(previousImportDir, { recursive: true, force: true });
+  previousImportDir = null;
+}
 
 /**
  * ファイル不在・importエラー・exportがNiwatermConfigの形をしていない、いずれでも例外を投げずnullを返す。
- * クエリ文字列でキャッシュキーをずらし、毎回ファイルの最新内容を読み込む（ホットリロード対応）。
+ * 一時ディレクトリへソースをコピーしてからimportし、毎回ファイルツリーの最新内容を読み込む（ホットリロード対応）。
  */
 export async function loadUserConfig(path: string): Promise<NiwatermConfig | null> {
   try {
     if (!(await Bun.file(path).exists())) return null;
-    const mod: unknown = await import(`${path}?t=${importCacheBustCounter++}`);
+    const mod = await importFreshConfig(path);
     const candidate = (mod as { default?: unknown }).default ?? mod;
     if (!isNiwatermConfig(candidate)) {
       console.log(`[bun] config file did not export a valid NiwatermConfig: ${path}`);

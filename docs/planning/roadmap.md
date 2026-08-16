@@ -250,7 +250,7 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] `@niwaterm/config`にビルダーAPI（`niwa.keybind`等）の型・実行基盤を実装する。キーバインドの値は文字列ショートハンド（既存`KeybindAction`）または関数ハンドラのUnionにする
 - [x] `src/bun/config.ts`のresolve処理をビルダー関数の実行結果を収集する形に書き換える
 - [x] mainview側のキーバインドディスパッチを、アクション名文字列固定から関数実行にも対応させる
-- [ ] 複数ファイル分割時のホットリロード（現状はエントリファイルのみキャッシュバスト。importツリー全体の再帰的な無効化に対応する）
+- [x] 複数ファイル分割時のホットリロード（`~/.config/niwaterm/`配下のソースを毎回一時ディレクトリへコピーしてimportし直す方式で、importツリー全体を再読み込みする。`node_modules`はシンボリックリンクで参照）
 - [x] ドキュメント（`docs/guide/config.md`、`packages/config/examples/`）を更新する
 - [x] テストを更新・追加する
 - [ ] `niwa.tile`のリサイズ・`niwa.tab`の再起動（respawn）・`niwa.workspace`の入れ替え（swap）API（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を追加する

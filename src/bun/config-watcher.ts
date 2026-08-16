@@ -10,17 +10,28 @@ export interface ConfigWatcher {
   close(): void;
 }
 
+/** 複数ファイル分割で設定を書く際に監視対象とするソースファイルの拡張子 */
+const CONFIG_SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"];
+
 /**
  * filenameが取得できないケース（macOSのFSEvents実装等）ではfail-openで発火する。
+ * targetそのもの（エントリファイル）に加え、複数ファイル分割で参照されうる非エントリの
+ * ソースファイルにも反応する（node_modules配下はパッケージ更新等で無関係に変化しうるため除外）。
  * fs.watchの実イベントに依存せず単体テストできるよう独立した純粋関数として切り出している。
  */
 export function shouldTriggerReload(filename: string | null, target: string): boolean {
-  return filename === null || filename === target;
+  if (filename === null) return true;
+  if (filename === target) return true;
+  const segments = filename.split(/[/\\]/);
+  if (segments.includes("node_modules")) return false;
+  return CONFIG_SOURCE_EXTENSIONS.some((ext) => filename.endsWith(ext));
 }
 
 /**
  * `~/.config/niwaterm/`が存在しない場合（設定ファイル未セットアップのユーザー）はfs.watchが
  * 同期的にENOENTを投げるため、try/catchしてno-opハンドルを返す（起動を落とさないためのフェイルセーフ）。
+ * recursive: trueでサブディレクトリに分割した設定ファイルの変更も拾う（macOS/Windowsのみサポート、
+ * niwatermの対応OSと一致するため問題ない）。
  */
 export function watchConfigFile(
   path: string,
@@ -41,7 +52,7 @@ export function watchConfigFile(
 
   let watcher: ReturnType<typeof watch>;
   try {
-    watcher = watch(dir, (_event, filename) => {
+    watcher = watch(dir, { recursive: true }, (_event, filename) => {
       if (!shouldTriggerReload(filename, target)) return;
       scheduleOnChange();
     });

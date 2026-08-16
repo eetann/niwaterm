@@ -25,6 +25,23 @@ describe("shouldTriggerReload", () => {
   test("filenameがnull（取得不能）ならfail-openでtrue", () => {
     expect(shouldTriggerReload(null, "niwaterm.config.ts")).toBe(true);
   });
+
+  test("エントリファイルと異なる名前でも.ts/.js等のソース拡張子ならtrue（複数ファイル分割対応）", () => {
+    expect(shouldTriggerReload("font.ts", "niwaterm.config.ts")).toBe(true);
+    expect(shouldTriggerReload("tile/split.ts", "niwaterm.config.ts")).toBe(true);
+    expect(shouldTriggerReload("helper.js", "niwaterm.config.ts")).toBe(true);
+  });
+
+  test("ソース拡張子でないファイルはfalse", () => {
+    expect(shouldTriggerReload("README.md", "niwaterm.config.ts")).toBe(false);
+    expect(shouldTriggerReload(".DS_Store", "niwaterm.config.ts")).toBe(false);
+  });
+
+  test("node_modules配下の変更はソース拡張子でもfalse", () => {
+    expect(
+      shouldTriggerReload("node_modules/@niwaterm/config/index.ts", "niwaterm.config.ts"),
+    ).toBe(false);
+  });
 });
 
 describe("watchConfigFile", () => {
@@ -53,6 +70,27 @@ describe("watchConfigFile", () => {
     try {
       await sleep(300);
       await writeFile(configPath, "export default { keybindings: {} };\n");
+      await sleep(300);
+      expect(callCount).toBeGreaterThanOrEqual(1);
+    } finally {
+      watcher.close();
+    }
+  });
+
+  test("複数ファイル分割時、同ディレクトリの非エントリファイルの変更も検知する", async () => {
+    const fontPath = join(dir, "font.ts");
+    await writeFile(fontPath, "export const fontSize = 14;\n");
+    let callCount = 0;
+    const watcher = watchConfigFile(
+      configPath,
+      () => {
+        callCount++;
+      },
+      30,
+    );
+    try {
+      await sleep(300);
+      await writeFile(fontPath, "export const fontSize = 16;\n");
       await sleep(300);
       expect(callCount).toBeGreaterThanOrEqual(1);
     } finally {
