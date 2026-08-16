@@ -8,9 +8,10 @@ import type { WorkspaceConfig } from "./workspace";
 
 export interface NiwatermConfig {
   /**
-   * キーバインド設定。キーはKeyBindingString、値はKeybindAction。
-   * 未指定のキーはdefaultKeybindingsの割り当てのまま有効。
-   * 例: { ...defaultKeybindings, "cmd+d": "split-horizontal" }
+   * キーバインド設定（tmux風のprefix方式）。prefix・bindings（prefix後の2打目キー）・
+   * direct（prefix不要の即時ショートカット）の3フィールドを持つ。未指定のフィールドは
+   * defaultKeybindingsの値のまま有効。
+   * 例: { ...defaultKeybindings, bindings: { ...defaultKeybindings.bindings, d: "split-horizontal" } }
    */
   keybindings?: KeybindingsConfig;
   /**

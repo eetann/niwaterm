@@ -18,7 +18,9 @@ export { type ShellConfig, type ShellProfile } from "./shell";
 export { type WorkspaceConfig } from "./workspace";
 export {
   canonicalizeParsed,
+  canonicalizeSecondKey,
   compileKeybindings,
+  type CompiledKeybindings,
   defaultKeybindings,
   defaultWindowsKeybindings,
   isKeybindAction,
@@ -27,6 +29,9 @@ export {
   type KeybindAction,
   type KeybindingsConfig,
   type ParsedKeyBinding,
+  type ParsedSecondKey,
   parseKeyBindingString,
+  parseSecondKeyString,
   platformDefaultKeybindings,
+  type SecondKeyString,
 } from "./keybindings";

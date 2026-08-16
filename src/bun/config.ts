@@ -8,12 +8,13 @@ import {
   defaultAppearance,
   defaultBrowserConfig,
   isKeybindAction,
-  type KeyBindingString,
+  type KeybindAction,
   type KeybindingsConfig,
   type LayoutPreset,
   type LayoutsConfig,
   type NiwatermConfig,
   parseKeyBindingString,
+  parseSecondKeyString,
   platformDefaultKeybindings,
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
@@ -88,22 +89,55 @@ export async function loadUserConfig(path: string): Promise<NiwatermConfig | nul
 }
 
 /**
- * プラットフォームのデフォルトキーバインドにユーザー設定をマージし、
- * 不正エントリを警告付きで除外した最終テーブルを返す。
- * 1箇所のtypoで全キーバインドがデフォルトに落ちるのを防ぐため、エントリ単位で検証する。
+ * プラットフォームのデフォルトキーバインド（prefix/bindings/direct）にユーザー設定をマージし、
+ * 不正エントリを警告付きで除外した最終値を返す。
+ * 1箇所のtypoで全キーバインドがデフォルトに落ちるのを防ぐため、フィールド・エントリ単位で検証する。
  */
 export function resolveKeybindings(userConfig: NiwatermConfig | null): KeybindingsConfig {
-  const merged: Record<string, unknown> = {
-    ...platformDefaultKeybindings(process.platform),
-    ...userConfig?.keybindings,
-  };
-  const result: KeybindingsConfig = {};
+  const platformDefault = platformDefaultKeybindings(process.platform);
+  const user = userConfig?.keybindings;
+
+  let prefix = platformDefault.prefix;
+  if (user?.prefix !== undefined) {
+    if (parseKeyBindingString(user.prefix)) {
+      prefix = user.prefix;
+    } else {
+      console.log(`[bun] ignoring invalid keybindings.prefix: "${String(user.prefix)}"`);
+    }
+  }
+
+  const bindings = mergeKeybindEntries(
+    "bindings",
+    platformDefault.bindings,
+    user?.bindings,
+    (binding) => parseSecondKeyString(binding) !== null,
+  );
+  const direct = mergeKeybindEntries(
+    "direct",
+    platformDefault.direct,
+    user?.direct,
+    (binding) => parseKeyBindingString(binding) !== null,
+  );
+
+  return { prefix, bindings, direct };
+}
+
+function mergeKeybindEntries(
+  fieldName: "bindings" | "direct",
+  defaults: Partial<Record<string, KeybindAction>> | undefined,
+  user: Partial<Record<string, KeybindAction>> | undefined,
+  isValidBinding: (binding: string) => boolean,
+): Record<string, KeybindAction> {
+  const merged: Record<string, unknown> = { ...defaults, ...user };
+  const result: Record<string, KeybindAction> = {};
   for (const [binding, action] of Object.entries(merged)) {
-    if (!parseKeyBindingString(binding) || !isKeybindAction(action)) {
-      console.log(`[bun] ignoring invalid keybinding: "${binding}" -> ${String(action)}`);
+    if (!isValidBinding(binding) || !isKeybindAction(action)) {
+      console.log(
+        `[bun] ignoring invalid keybindings.${fieldName} entry: "${binding}" -> ${String(action)}`,
+      );
       continue;
     }
-    result[binding as KeyBindingString] = action;
+    result[binding] = action;
   }
   return result;
 }

@@ -24,7 +24,7 @@ import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
-import { resolveTileCommand, type TileCommand } from "./tile-keybindings";
+import { createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import { isWideChar } from "./wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -114,9 +114,9 @@ let draggingSplitId: TileId | null = null;
 // flexスタイルが巻き戻されてResizeObserverが誤ったcolsを送ってしまうのを防ぐ）
 let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
 // bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする。
-// プラットフォーム別デフォルト（Windowsはctrl+shift系）の解決はbun側が行うため、
-// ここではmacOS向けの値になる。configメッセージ到達時に正しいテーブルへ差し替わる
-let compiledKeybindings = compileKeybindings(defaultKeybindings);
+// プラットフォーム別デフォルト（direct: Windowsのみコピー・ペーストを直接ショートカット化）の
+// 解決はbun側が行うため、ここではmacOS向けの値になる。configメッセージ到達時に正しいテーブルへ差し替わる
+let keybindResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
 // 直近のrender()で受け取った全ワークスペースの一覧。サイドバーを開いた瞬間に再描画するため保持する
 let lastWorkspaces: WorkspaceListEntry[] = [];
 // bun側で解決されたシェルプロファイル一覧（configメッセージで受信）。+ボタン横のドロップダウンに表示する
@@ -280,7 +280,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
       }) => {
-        compiledKeybindings = compileKeybindings(keybindings);
+        keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
         applyAppearance(appearance);
         applyCustomView(customView);
         shellProfiles = profiles;
@@ -1144,10 +1144,16 @@ document.addEventListener("keydown", (e) => {
   // （PTYへのバイト送信やタイル操作キーバインドに奪われないようにする）
   if (e.target instanceof HTMLInputElement) return;
 
-  const tileCommand = resolveTileCommand(e, compiledKeybindings);
-  if (tileCommand) {
+  const result = keybindResolver.handleKeydown(e);
+  if (result.kind === "command") {
     e.preventDefault();
-    handleTileCommand(tileCommand);
+    handleTileCommand(result.command);
+    return;
+  }
+  if (result.kind === "consumed") {
+    // prefix入力後の2打目キー待ち・Escapeキャンセル・未割当キーの破棄など。
+    // PTYには何も送らない（result.kind === "passthrough"の場合のみ下へ進む）
+    e.preventDefault();
     return;
   }
 
@@ -1406,6 +1412,11 @@ window.addEventListener("focus", () => {
   // imeElへフォーカスを奪われ編集が中断してしまうため、その場合はスキップする
   if (document.activeElement instanceof HTMLInputElement) return;
   imeEl.focus({ preventScroll: true });
+});
+// prefix入力後の2打目キー待ち中にウィンドウのフォーカスが外れると、復帰後の最初のキー入力が
+// 意図せず2打目キーとして解釈されてしまうため、フォーカス喪失時に待ち状態を解除する
+window.addEventListener("blur", () => {
+  keybindResolver.reset();
 });
 imeEl.focus({ preventScroll: true });
 

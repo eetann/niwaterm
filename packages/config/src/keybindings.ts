@@ -1,8 +1,8 @@
-// キーバインドDSL: "cmd+d", "cmd+shift+d", "ctrl+shift+d" のように
-// 修飾子(cmd/ctrl/shift/alt)+...+キー本体 を "+" 区切りで表現する。
-// niwatermの全キー操作はcmdまたはctrlが必須（修飾なしのキーはターミナルへの通常入力に予約されているため）。
-// macOSはcmd、Windowsはctrl+shiftを基本とする（Windowsのcmd=Windowsキーは実用にならず、
-// またctrl単独はCtrl+C/Ctrl+D等のターミナル制御文字と衝突するため）。
+// キーバインドDSL: tmux風のprefix方式。
+// prefixキー（例: "ctrl+b"）を押してから、修飾なし〜shift/altのみの単一キー（例: "d", "shift+d", "up"）を
+// 押すとアクションが発火する。prefixキー自体はcmd/ctrl/shift/altの組み合わせで表現する（"cmd+d"等と同じDSL）。
+// prefix・2打目キーの表記に加え、頻用操作（コピー・ペースト）向けに即時発火する`direct`ショートカット
+// （cmd/ctrl必須、修飾なしのキーはターミナルへの通常入力に予約されているため）も別枠で持てる。
 
 type ModifierToken = "cmd" | "ctrl" | "shift" | "alt";
 
@@ -13,11 +13,15 @@ const MODIFIER_TOKENS: ReadonlySet<string> = new Set<ModifierToken>([
   "alt",
 ]);
 
+// prefix・directで使うDSL（cmd/ctrl必須）
 export type KeyBindingString =
   | `${ModifierToken}+${string}`
   | `${ModifierToken}+${ModifierToken}+${string}`
   | `${ModifierToken}+${ModifierToken}+${ModifierToken}+${string}`
   | `${ModifierToken}+${ModifierToken}+${ModifierToken}+${ModifierToken}+${string}`;
+
+// prefix入力後の2打目キー表記（修飾子はshift/altのみ、省略可）。例: "d", "shift+d", "up"
+export type SecondKeyString = string;
 
 export const KEYBIND_ACTIONS = [
   "split-vertical",
@@ -47,63 +51,56 @@ export const KEYBIND_ACTIONS = [
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 
-export type KeybindingsConfig = Partial<Record<KeyBindingString, KeybindAction>>;
+export interface KeybindingsConfig {
+  /** prefixキー本体。例: "ctrl+b" */
+  prefix?: KeyBindingString;
+  /** prefix入力後に押す2打目キー→アクションのマップ */
+  bindings?: Partial<Record<SecondKeyString, KeybindAction>>;
+  /** prefixを介さず即座に発火する直接ショートカット（コピー・ペースト等の頻用操作向け） */
+  direct?: Partial<Record<KeyBindingString, KeybindAction>>;
+}
 
-// 既存のtile-keybindings.tsのハードコード実装と1:1対応するデフォルト値（macOS）
-export const defaultKeybindings: KeybindingsConfig = {
-  "cmd+d": "split-vertical",
-  "cmd+shift+d": "split-horizontal",
-  "cmd+w": "close-tile",
-  "cmd+alt+up": "focus-up",
-  "cmd+alt+down": "focus-down",
-  "cmd+alt+left": "focus-left",
-  "cmd+alt+right": "focus-right",
-  "cmd+t": "new-tab",
-  "cmd+shift+t": "new-browser-tab",
-  "cmd+shift+]": "next-tab",
-  "cmd+shift+[": "prev-tab",
-  "cmd+n": "new-workspace",
-  "cmd+alt+]": "next-workspace",
-  "cmd+alt+[": "prev-workspace",
-  "cmd+b": "toggle-sidebar",
-  "cmd+`": "toggle-popup",
-  "cmd+up": "scroll-page-up",
-  "cmd+down": "scroll-page-down",
-  "cmd+shift+up": "scroll-to-top",
-  "cmd+shift+down": "scroll-to-bottom",
+// prefix・2打目キーともOS共通（prefixキー自体でOS差異を吸収できるため）。
+// directのみOS別（macOSはCmd+C/VがApplicationMenu経由で既に機能するため空、
+// WindowsはCtrl+C/Vがターミナルの制御文字と衝突するためCtrl+Shift+C/Vを直接ショートカットとして持つ）。
+const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
+  d: "split-vertical",
+  "shift+d": "split-horizontal",
+  w: "close-tile",
+  up: "focus-up",
+  down: "focus-down",
+  left: "focus-left",
+  right: "focus-right",
+  c: "new-tab",
+  "shift+t": "new-browser-tab",
+  n: "next-tab",
+  p: "prev-tab",
+  "shift+n": "new-workspace",
+  "]": "next-workspace",
+  "[": "prev-workspace",
+  b: "toggle-sidebar",
+  "`": "toggle-popup",
+  pageup: "scroll-page-up",
+  pagedown: "scroll-page-down",
+  home: "scroll-to-top",
+  end: "scroll-to-bottom",
 };
 
-// Windowsのデフォルト。ctrl+shiftを基本とし、Ctrl+C/Ctrl+D/Ctrl+B等はターミナルへ素通りさせる。
-// macOSでshiftによって対にしている操作（分割方向・タブ種別）は、
-// ctrl+shiftが埋まっているぶんghosttyのWindows/Linux慣習に寄せたキーへ割り当てる。
+// 既定のprefixキー。tmux標準のCtrl+bをそのまま踏襲する（prefixキーは全操作の唯一の入り口であり、
+// 個別ショートカットに課している「ctrl単独禁止」（Ctrl+C等ターミナル制御文字との衝突回避）は
+// 性質上当てはまらないため、OS問わずCtrl+bで統一する）。
+export const defaultKeybindings: KeybindingsConfig = {
+  prefix: "ctrl+b",
+  bindings: commonBindings,
+};
+
 export const defaultWindowsKeybindings: KeybindingsConfig = {
-  "ctrl+shift+d": "split-vertical",
-  "ctrl+shift+e": "split-horizontal",
-  "ctrl+shift+w": "close-tile",
-  "ctrl+alt+up": "focus-up",
-  "ctrl+alt+down": "focus-down",
-  "ctrl+alt+left": "focus-left",
-  "ctrl+alt+right": "focus-right",
-  "ctrl+shift+t": "new-tab",
-  "ctrl+shift+alt+t": "new-browser-tab",
-  "ctrl+shift+]": "next-tab",
-  "ctrl+shift+[": "prev-tab",
-  "ctrl+shift+n": "new-workspace",
-  "ctrl+alt+]": "next-workspace",
-  "ctrl+alt+[": "prev-workspace",
-  "ctrl+shift+b": "toggle-sidebar",
-  "ctrl+shift+`": "toggle-popup",
-  // Ctrl+C/Ctrl+VはSIGINT/制御文字としてターミナルへ素通りさせるため、
-  // Windows Terminal等の慣習に倣いctrl+shiftをコピー・ペーストに割り当てる
-  "ctrl+shift+c": "copy-selection",
-  "ctrl+shift+v": "paste-clipboard",
-  "ctrl+shift+up": "scroll-page-up",
-  "ctrl+shift+down": "scroll-page-down",
-  // ctrl+shift+up/downはページ単位スクロールとして既に埋まっているため、
-  // ctrl+shift+alt+t（new-browser-tab）と同様にaltを足した組でtop/bottomへの
-  // ジャンプを表す
-  "ctrl+shift+alt+up": "scroll-to-top",
-  "ctrl+shift+alt+down": "scroll-to-bottom",
+  prefix: "ctrl+b",
+  bindings: commonBindings,
+  direct: {
+    "ctrl+shift+c": "copy-selection",
+    "ctrl+shift+v": "paste-clipboard",
+  },
 };
 
 /** 実行プラットフォームに対応するデフォルトキーバインド（値はprocess.platformと同じ表記） */
@@ -120,7 +117,7 @@ export interface ParsedKeyBinding {
 }
 
 /**
- * "Cmd+Shift+D" のような表記も許容する寛容パーサ。
+ * "Cmd+Shift+D" のような表記も許容する寛容パーサ（prefix・direct用）。
  * cmdもctrlも含まない・キー本体が空・未知の修飾子はnull
  */
 export function parseKeyBindingString(binding: string): ParsedKeyBinding | null {
@@ -147,18 +144,66 @@ export function canonicalizeParsed(p: ParsedKeyBinding): string {
   return `${p.cmd ? 1 : 0}${p.ctrl ? 1 : 0}${p.shift ? 1 : 0}${p.alt ? 1 : 0}:${p.key}`;
 }
 
+export interface ParsedSecondKey {
+  shift: boolean;
+  alt: boolean;
+  key: string;
+}
+
+/**
+ * prefix入力後の2打目キー表記のパーサ。修飾子はshift/altのみ許容する
+ * （prefix自体で既に主要修飾子を使っているため、2打目はシンプルな単一キー操作に絞る）。
+ * 未知の修飾子（cmd/ctrl含む）・キー本体が空はnull
+ */
+export function parseSecondKeyString(binding: string): ParsedSecondKey | null {
+  const tokens = binding.split("+").map((t) => t.trim().toLowerCase());
+  const key = tokens.at(-1);
+  if (!key) return null;
+  const modifierTokens = tokens.slice(0, -1);
+  const modifiers = new Set(modifierTokens);
+  for (const m of modifiers) {
+    if (m !== "shift" && m !== "alt") return null;
+  }
+  return { shift: modifiers.has("shift"), alt: modifiers.has("alt"), key };
+}
+
+/** compileKeybindingsのbindings Mapキーに使う正規化文字列を生成する（shift/altの順） */
+export function canonicalizeSecondKey(p: ParsedSecondKey): string {
+  return `${p.shift ? 1 : 0}${p.alt ? 1 : 0}:${p.key}`;
+}
+
 export function isKeybindAction(value: unknown): value is KeybindAction {
   return typeof value === "string" && (KEYBIND_ACTIONS as readonly string[]).includes(value);
 }
 
+export interface CompiledKeybindings {
+  /** 未設定・パース不可はnull（prefix機能自体が無効になる） */
+  prefix: ParsedKeyBinding | null;
+  /** canonicalizeSecondKeyで正規化したキーを持つ、prefix入力後の2打目キー→アクションのマップ */
+  bindings: ReadonlyMap<string, KeybindAction>;
+  /** canonicalizeParsedで正規化したキーを持つ、即時発火の直接ショートカットのマップ */
+  direct: ReadonlyMap<string, KeybindAction>;
+}
+
 /** 不正なバインド文字列・未知のアクション名のエントリは黙ってスキップする */
-export function compileKeybindings(config: KeybindingsConfig): Map<string, KeybindAction> {
-  const compiled = new Map<string, KeybindAction>();
-  for (const [binding, action] of Object.entries(config)) {
+export function compileKeybindings(config: KeybindingsConfig): CompiledKeybindings {
+  const prefix = config.prefix !== undefined ? parseKeyBindingString(config.prefix) : null;
+
+  const bindings = new Map<string, KeybindAction>();
+  for (const [binding, action] of Object.entries(config.bindings ?? {})) {
+    if (action === undefined) continue;
+    const parsed = parseSecondKeyString(binding);
+    if (!parsed || !isKeybindAction(action)) continue;
+    bindings.set(canonicalizeSecondKey(parsed), action);
+  }
+
+  const direct = new Map<string, KeybindAction>();
+  for (const [binding, action] of Object.entries(config.direct ?? {})) {
     if (action === undefined) continue;
     const parsed = parseKeyBindingString(binding);
     if (!parsed || !isKeybindAction(action)) continue;
-    compiled.set(canonicalizeParsed(parsed), action);
+    direct.set(canonicalizeParsed(parsed), action);
   }
-  return compiled;
+
+  return { prefix, bindings, direct };
 }

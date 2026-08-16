@@ -317,22 +317,30 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 
 ### キーバインドの既定値
 
-macOSはcmd系、Windowsは**ctrl+shift系**を既定にしている。
-ctrl単独は `Ctrl+C` / `Ctrl+D` / `Ctrl+B`（tmuxのprefix）などターミナルの制御文字と衝突するため、
-必ずshiftかaltを伴わせる。`niwaterm.config.ts` で上書きできる。
+tmux風のprefix方式。prefixキー（既定`ctrl+b`）を押してから2打目のキーを押すとアクションが発火する。
+prefix・2打目キーの割り当てはmacOS/Windows共通（詳細: [設定ファイル](/guide/config.md)の「キーバインドDSL」節）。
+OS差分はコピー・ペースト用の`direct`（prefix不要の即時ショートカット）のみで、
+macOSはApplicationMenu経由でCmd+C/Vが既に機能するため既定は空、WindowsはCtrl単独が
+`Ctrl+C`等ターミナルの制御文字と衝突するため`ctrl+shift+c`/`ctrl+shift+v`を割り当てている。
+いずれも`niwaterm.config.ts`で上書きできる。
 
-| 操作                  | macOS               | Windows              |
-| --------------------- | ------------------- | -------------------- |
-| 垂直分割              | `cmd+d`             | `ctrl+shift+d`       |
-| 水平分割              | `cmd+shift+d`       | `ctrl+shift+e`       |
-| タイルを閉じる        | `cmd+w`             | `ctrl+shift+w`       |
-| フォーカス移動        | `cmd+alt+↑↓←→`      | `ctrl+alt+↑↓←→`      |
-| 新規タブ              | `cmd+t`             | `ctrl+shift+t`       |
-| 新規ブラウザタブ      | `cmd+shift+t`       | `ctrl+shift+alt+t`   |
-| 次/前のタブ           | `cmd+shift+]` / `[` | `ctrl+shift+]` / `[` |
-| 新規ワークスペース    | `cmd+n`             | `ctrl+shift+n`       |
-| 次/前のワークスペース | `cmd+alt+]` / `[`   | `ctrl+alt+]` / `[`   |
-| サイドバー開閉        | `cmd+b`             | `ctrl+shift+b`       |
+| 操作                  | prefix (`ctrl+b`) の後に押すキー |
+| --------------------- | --------------------------------- |
+| 垂直分割              | `d`                                |
+| 水平分割              | `shift+d`                          |
+| タイルを閉じる        | `w`                                |
+| フォーカス移動        | `↑↓←→`                             |
+| 新規タブ              | `c`                                |
+| 新規ブラウザタブ      | `shift+t`                          |
+| 次/前のタブ           | `n` / `p`                          |
+| 新規ワークスペース    | `shift+n`                          |
+| 次/前のワークスペース | `]` / `[`                          |
+| サイドバー開閉        | `b`                                |
+
+| 操作（direct、prefix不要） | macOS  | Windows         |
+| --------------------------- | ------ | --------------- |
+| コピー                       | Cmd+C（ApplicationMenu経由） | `ctrl+shift+c` |
+| ペースト                     | Cmd+V（ApplicationMenu経由） | `ctrl+shift+v` |
 
 ## 参考資料
 

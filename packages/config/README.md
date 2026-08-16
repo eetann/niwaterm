@@ -8,7 +8,10 @@ import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/c
 export default defineConfig({
   keybindings: {
     ...defaultKeybindings,
-    "cmd+d": "split-horizontal",
+    bindings: {
+      ...defaultKeybindings.bindings,
+      d: "split-horizontal",
+    },
   },
   appearance: {
     ...defaultAppearance,

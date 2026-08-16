@@ -4,9 +4,7 @@ import {
   defaultKeybindings,
   defaultWindowsKeybindings,
 } from "@niwaterm/config";
-import { resolveTileCommand } from "./tile-keybindings";
-
-const compiled = compileKeybindings(defaultKeybindings);
+import { createKeybindResolver, type KeydownResult } from "./tile-keybindings";
 
 function key(
   k: string,
@@ -17,7 +15,7 @@ function key(
     shiftKey?: boolean;
     code?: string;
   } = {},
-): Parameters<typeof resolveTileCommand>[0] {
+): Parameters<ReturnType<typeof createKeybindResolver>["handleKeydown"]>[0] {
   return {
     key: k,
     code: "",
@@ -29,27 +27,45 @@ function key(
   };
 }
 
-describe("resolveTileCommand（デフォルトキーバインド）", () => {
-  test("Cmd+D -> 垂直分割", () => {
-    expect(resolveTileCommand(key("d", { metaKey: true }), compiled)).toEqual({
-      type: "split",
-      orientation: "vertical",
+const prefix = () => key("b", { ctrlKey: true });
+
+describe("createKeybindResolver（デフォルトキーバインド・prefix方式）", () => {
+  test("prefix(Ctrl+B)はconsumedを返し、2打目キー待ち状態に入る", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    expect(resolver.isAwaitingSecondKey()).toBe(false);
+    const result = resolver.handleKeydown(prefix());
+    expect(result).toEqual<KeydownResult>({ kind: "consumed" });
+    expect(resolver.isAwaitingSecondKey()).toBe(true);
+  });
+
+  test("prefix -> d で垂直分割、待ち状態は解除される", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    const result = resolver.handleKeydown(key("d"));
+    expect(result).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "vertical" },
+    });
+    expect(resolver.isAwaitingSecondKey()).toBe(false);
+  });
+
+  test("prefix -> Shift+D で水平分割", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    const result = resolver.handleKeydown(key("D", { shiftKey: true }));
+    expect(result).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "horizontal" },
     });
   });
 
-  test("Cmd+Shift+D -> 水平分割", () => {
-    expect(resolveTileCommand(key("D", { metaKey: true, shiftKey: true }), compiled)).toEqual({
-      type: "split",
-      orientation: "horizontal",
+  test("prefix -> w でタイルを閉じる", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("w"))).toEqual({
+      kind: "command",
+      command: { type: "close" },
     });
-  });
-
-  test("Cmd+W -> タイルを閉じる", () => {
-    expect(resolveTileCommand(key("w", { metaKey: true }), compiled)).toEqual({ type: "close" });
-  });
-
-  test("Cmd+Shift+W はデフォルトでは何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("w", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
   });
 
   test.each([
@@ -57,222 +73,236 @@ describe("resolveTileCommand（デフォルトキーバインド）", () => {
     ["ArrowDown", "down"],
     ["ArrowLeft", "left"],
     ["ArrowRight", "right"],
-  ] as const)("Cmd+Option+%s -> フォーカス移動(%s)", (arrow, direction) => {
-    expect(resolveTileCommand(key(arrow, { metaKey: true, altKey: true }), compiled)).toEqual({
-      type: "focus",
-      direction,
+  ] as const)("prefix -> %s でフォーカス移動(%s)", (arrow, direction) => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key(arrow))).toEqual({
+      kind: "command",
+      command: { type: "focus", direction },
     });
   });
 
-  test("Cmdなし矢印キーはnull（ターミナル入力に委ねる）", () => {
-    expect(resolveTileCommand(key("ArrowUp"), compiled)).toBeNull();
-  });
-
-  test("Cmdのみで通常文字キーはnull", () => {
-    expect(resolveTileCommand(key("a", { metaKey: true }), compiled)).toBeNull();
-  });
-
-  test("Option+矢印だがCmdなしはnull", () => {
-    expect(resolveTileCommand(key("ArrowUp", { altKey: true }), compiled)).toBeNull();
-  });
-
-  test("Cmd+Optionでも矢印以外はデフォルトでは何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("d", { metaKey: true, altKey: true }), compiled)).toBeNull();
-  });
-
-  test("Cmd+T -> タブ新規作成", () => {
-    expect(resolveTileCommand(key("t", { metaKey: true }), compiled)).toEqual({ type: "newTab" });
-  });
-
-  test("Cmd+Shift+T -> ブラウザタブ新規作成", () => {
-    expect(resolveTileCommand(key("t", { metaKey: true, shiftKey: true }), compiled)).toEqual({
-      type: "newBrowserTab",
+  test("prefix -> c で新規タブ作成", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("c"))).toEqual({
+      kind: "command",
+      command: { type: "newTab" },
     });
+  });
+
+  test("prefix -> Shift+T でブラウザタブ新規作成", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("T", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "newBrowserTab" },
+    });
+  });
+
+  test("prefix -> n / p でタブ切替", () => {
+    const nextResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    nextResolver.handleKeydown(prefix());
+    expect(nextResolver.handleKeydown(key("n"))).toEqual({
+      kind: "command",
+      command: { type: "cycleTab", delta: 1 },
+    });
+
+    const prevResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    prevResolver.handleKeydown(prefix());
+    expect(prevResolver.handleKeydown(key("p"))).toEqual({
+      kind: "command",
+      command: { type: "cycleTab", delta: -1 },
+    });
+  });
+
+  test("prefix -> Shift+N でワークスペース新規作成", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("N", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "newWorkspace" },
+    });
+  });
+
+  test("prefix -> ] / [ でワークスペース切替", () => {
+    const nextResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    nextResolver.handleKeydown(prefix());
+    expect(nextResolver.handleKeydown(key("]", { code: "BracketRight" }))).toEqual({
+      kind: "command",
+      command: { type: "switchWorkspace", delta: 1 },
+    });
+
+    const prevResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    prevResolver.handleKeydown(prefix());
+    expect(prevResolver.handleKeydown(key("[", { code: "BracketLeft" }))).toEqual({
+      kind: "command",
+      command: { type: "switchWorkspace", delta: -1 },
+    });
+  });
+
+  test("prefix -> b でサイドバートグル", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("b"))).toEqual({
+      kind: "command",
+      command: { type: "toggleSidebar" },
+    });
+  });
+
+  test("prefix -> ` でポップアップトグル", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("`", { code: "Backquote" }))).toEqual({
+      kind: "command",
+      command: { type: "togglePopup" },
+    });
+  });
+
+  test("prefix -> PageUp/PageDown でページ単位スクロール", () => {
+    const upResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    upResolver.handleKeydown(prefix());
+    expect(upResolver.handleKeydown(key("PageUp"))).toEqual({
+      kind: "command",
+      command: { type: "scrollPage", direction: "up" },
+    });
+
+    const downResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    downResolver.handleKeydown(prefix());
+    expect(downResolver.handleKeydown(key("PageDown"))).toEqual({
+      kind: "command",
+      command: { type: "scrollPage", direction: "down" },
+    });
+  });
+
+  test("prefix -> Home/End でスクロールバック先頭/最新行へ", () => {
+    const homeResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    homeResolver.handleKeydown(prefix());
+    expect(homeResolver.handleKeydown(key("Home"))).toEqual({
+      kind: "command",
+      command: { type: "scrollToEdge", edge: "top" },
+    });
+
+    const endResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    endResolver.handleKeydown(prefix());
+    expect(endResolver.handleKeydown(key("End"))).toEqual({
+      kind: "command",
+      command: { type: "scrollToEdge", edge: "bottom" },
+    });
+  });
+
+  test("prefix -> 未割り当てキーはconsumedでキャンセルされる（PTYには送らない）", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("z"))).toEqual({ kind: "consumed" });
+    expect(resolver.isAwaitingSecondKey()).toBe(false);
+  });
+
+  test("prefix -> Escape でキャンセルされる", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("Escape"))).toEqual({ kind: "consumed" });
+    expect(resolver.isAwaitingSecondKey()).toBe(false);
+  });
+
+  test("prefix待ち中の修飾キー単体（Shift等）は無視され、待ち状態が維持される", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("Shift", { shiftKey: true }))).toEqual({ kind: "consumed" });
+    expect(resolver.isAwaitingSecondKey()).toBe(true);
+    // Shift単体の後にDが来て初めてShift+Dのシーケンスとして解決される
+    expect(resolver.handleKeydown(key("D", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "horizontal" },
+    });
+  });
+
+  test("prefixキーを押していない通常のキーはpassthrough（ターミナル入力に委ねる）", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    expect(resolver.handleKeydown(key("d"))).toEqual({ kind: "passthrough" });
+    expect(resolver.handleKeydown(key("d", { metaKey: true }))).toEqual({ kind: "passthrough" });
+    expect(resolver.handleKeydown(key("ArrowUp"))).toEqual({ kind: "passthrough" });
+  });
+
+  test("reset()で2打目キー待ち状態を強制解除できる", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.isAwaitingSecondKey()).toBe(true);
+    resolver.reset();
+    expect(resolver.isAwaitingSecondKey()).toBe(false);
+    // リセット後のdは2打目キーとしてではなく通常入力として扱われる
+    expect(resolver.handleKeydown(key("d"))).toEqual({ kind: "passthrough" });
   });
 
   test("new-custom-view-tabはデフォルトでは何もキーに割り当てられていない（customView未設定時は無意味なため）", () => {
-    const customCompiled = compileKeybindings({ "cmd+shift+u": "new-custom-view-tab" });
-    expect(resolveTileCommand(key("u", { metaKey: true, shiftKey: true }), customCompiled)).toEqual(
-      { type: "newCustomViewTab" },
-    );
-  });
-
-  test("Cmd+Shift+] -> 次のタブへ切替", () => {
-    expect(
-      resolveTileCommand(
-        key("}", { metaKey: true, shiftKey: true, code: "BracketRight" }),
-        compiled,
-      ),
-    ).toEqual({ type: "cycleTab", delta: 1 });
-  });
-
-  test("Cmd+Shift+[ -> 前のタブへ切替", () => {
-    expect(
-      resolveTileCommand(
-        key("{", { metaKey: true, shiftKey: true, code: "BracketLeft" }),
-        compiled,
-      ),
-    ).toEqual({ type: "cycleTab", delta: -1 });
-  });
-
-  test("Shiftなしの Cmd+] / Cmd+[ はデフォルトでは何も割り当てられていない", () => {
-    expect(
-      resolveTileCommand(key("]", { metaKey: true, code: "BracketRight" }), compiled),
-    ).toBeNull();
-    expect(
-      resolveTileCommand(key("[", { metaKey: true, code: "BracketLeft" }), compiled),
-    ).toBeNull();
-  });
-
-  test("Cmd+N -> ワークスペース新規作成", () => {
-    expect(resolveTileCommand(key("n", { metaKey: true }), compiled)).toEqual({
-      type: "newWorkspace",
+    const customCompiled = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { "shift+u": "new-custom-view-tab" },
     });
-  });
-
-  test("Cmd+Shift+N はデフォルトでは何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("n", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
-  });
-
-  test("Cmd+Option+] -> 次のワークスペースへ切替", () => {
-    expect(
-      resolveTileCommand(key("]", { metaKey: true, altKey: true, code: "BracketRight" }), compiled),
-    ).toEqual({ type: "switchWorkspace", delta: 1 });
-  });
-
-  test("Cmd+Option+[ -> 前のワークスペースへ切替", () => {
-    expect(
-      resolveTileCommand(key("[", { metaKey: true, altKey: true, code: "BracketLeft" }), compiled),
-    ).toEqual({ type: "switchWorkspace", delta: -1 });
-  });
-
-  test("Optionなしの Cmd+Shift+]/[ はワークスペース操作にしない（タブ切替のまま）", () => {
-    expect(
-      resolveTileCommand(
-        key("}", { metaKey: true, shiftKey: true, code: "BracketRight" }),
-        compiled,
-      ),
-    ).toEqual({ type: "cycleTab", delta: 1 });
-  });
-
-  test("Cmd+B -> サイドバートグル", () => {
-    expect(resolveTileCommand(key("b", { metaKey: true }), compiled)).toEqual({
-      type: "toggleSidebar",
+    const resolver = createKeybindResolver(customCompiled);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("U", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "newCustomViewTab" },
     });
-  });
-
-  test("Cmd+Shift+B はデフォルトでは何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("b", { metaKey: true, shiftKey: true }), compiled)).toBeNull();
-  });
-
-  test.each([
-    ["ArrowUp", "up"],
-    ["ArrowDown", "down"],
-  ] as const)("Cmd+%s -> ページ単位スクロール(%s)", (arrow, direction) => {
-    expect(resolveTileCommand(key(arrow, { metaKey: true }), compiled)).toEqual({
-      type: "scrollPage",
-      direction,
-    });
-  });
-
-  test("Cmd+Shift+Up -> スクロールバック先頭へ", () => {
-    expect(resolveTileCommand(key("ArrowUp", { metaKey: true, shiftKey: true }), compiled)).toEqual(
-      { type: "scrollToEdge", edge: "top" },
-    );
-  });
-
-  test("Cmd+Shift+Down -> 最新行へ", () => {
-    expect(
-      resolveTileCommand(key("ArrowDown", { metaKey: true, shiftKey: true }), compiled),
-    ).toEqual({ type: "scrollToEdge", edge: "bottom" });
   });
 });
 
-describe("resolveTileCommand（Windowsのデフォルトキーバインド）", () => {
-  const winCompiled = compileKeybindings(defaultWindowsKeybindings);
-
-  test("Ctrl+Shift+D -> 垂直分割", () => {
-    expect(resolveTileCommand(key("D", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
-      type: "split",
-      orientation: "vertical",
+describe("createKeybindResolver（direct: 即時発火ショートカット）", () => {
+  test("Windows既定: Ctrl+Shift+C -> 選択テキストをコピー（prefix不要で即時発火）", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultWindowsKeybindings));
+    expect(resolver.handleKeydown(key("C", { ctrlKey: true, shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "copySelection" },
     });
   });
 
-  test("Ctrl+Shift+E -> 水平分割", () => {
-    expect(resolveTileCommand(key("E", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
-      type: "split",
-      orientation: "horizontal",
+  test("Windows既定: Ctrl+Shift+V -> クリップボードから貼り付け", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultWindowsKeybindings));
+    expect(resolver.handleKeydown(key("V", { ctrlKey: true, shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "pasteClipboard" },
     });
   });
 
-  test("Ctrl+Shift+Alt+T -> ブラウザタブ新規作成", () => {
-    expect(
-      resolveTileCommand(key("T", { ctrlKey: true, shiftKey: true, altKey: true }), winCompiled),
-    ).toEqual({ type: "newBrowserTab" });
-  });
-
-  test("Ctrl+C はターミナルの制御文字なので何も割り当てられていない", () => {
-    expect(resolveTileCommand(key("c", { ctrlKey: true }), winCompiled)).toBeNull();
-  });
-
-  test("Ctrl+Shift+C -> 選択テキストをコピー", () => {
-    expect(resolveTileCommand(key("C", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
-      type: "copySelection",
+  test("macOS既定にはdirectショートカットが無い（ApplicationMenu経由でCmd+C/Vが機能するため）", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    expect(resolver.handleKeydown(key("c", { ctrlKey: true, shiftKey: true }))).toEqual({
+      kind: "passthrough",
     });
   });
 
-  test("Ctrl+Shift+V -> クリップボードから貼り付け", () => {
-    expect(resolveTileCommand(key("V", { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
-      type: "pasteClipboard",
-    });
-  });
-
-  test.each([
-    ["ArrowUp", "up"],
-    ["ArrowDown", "down"],
-  ] as const)("Ctrl+Shift+%s -> ページ単位スクロール(%s)", (arrow, direction) => {
-    expect(resolveTileCommand(key(arrow, { ctrlKey: true, shiftKey: true }), winCompiled)).toEqual({
-      type: "scrollPage",
-      direction,
-    });
-  });
-
-  test("Ctrl+Shift+Alt+Up -> スクロールバック先頭へ", () => {
-    expect(
-      resolveTileCommand(
-        key("ArrowUp", { ctrlKey: true, shiftKey: true, altKey: true }),
-        winCompiled,
-      ),
-    ).toEqual({ type: "scrollToEdge", edge: "top" });
-  });
-
-  test("Ctrl+Shift+Alt+Down -> 最新行へ", () => {
-    expect(
-      resolveTileCommand(
-        key("ArrowDown", { ctrlKey: true, shiftKey: true, altKey: true }),
-        winCompiled,
-      ),
-    ).toEqual({ type: "scrollToEdge", edge: "bottom" });
-  });
-
-  test("Ctrl+D / Ctrl+B もターミナルへ素通りする", () => {
-    expect(resolveTileCommand(key("d", { ctrlKey: true }), winCompiled)).toBeNull();
-    expect(resolveTileCommand(key("b", { ctrlKey: true }), winCompiled)).toBeNull();
-  });
-
-  test("macOS用のCmd+Dはこのテーブルでは反応しない", () => {
-    expect(resolveTileCommand(key("d", { metaKey: true }), winCompiled)).toBeNull();
+  test("Ctrl+C単体はターミナルの制御文字なのでpassthrough", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultWindowsKeybindings));
+    expect(resolver.handleKeydown(key("c", { ctrlKey: true }))).toEqual({ kind: "passthrough" });
   });
 });
 
-describe("resolveTileCommand（カスタムキーバインド）", () => {
-  test("設定で上書きしたキーは新しいアクションに切り替わる", () => {
-    const custom = compileKeybindings({ "cmd+d": "close-tile" });
-    expect(resolveTileCommand(key("d", { metaKey: true }), custom)).toEqual({ type: "close" });
+describe("createKeybindResolver（カスタムprefix・カスタムbindings）", () => {
+  test("prefixキーを変更できる", () => {
+    const custom = compileKeybindings({ prefix: "cmd+j", bindings: { d: "close-tile" } });
+    const resolver = createKeybindResolver(custom);
+    expect(resolver.handleKeydown(key("j", { metaKey: true }))).toEqual({ kind: "consumed" });
+    expect(resolver.handleKeydown(key("d"))).toEqual({
+      kind: "command",
+      command: { type: "close" },
+    });
   });
 
-  test("マージされていない単独テーブルでは他のキーはnullになる", () => {
-    const custom = compileKeybindings({ "cmd+d": "close-tile" });
-    expect(resolveTileCommand(key("w", { metaKey: true }), custom)).toBeNull();
+  test("設定で上書きした2打目キーは新しいアクションに切り替わる", () => {
+    const custom = compileKeybindings({ prefix: "ctrl+b", bindings: { d: "close-tile" } });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("d"))).toEqual({
+      kind: "command",
+      command: { type: "close" },
+    });
+  });
+
+  test("マージされていない単独テーブルでは他のキーはconsumed（未割当）になる", () => {
+    const custom = compileKeybindings({ prefix: "ctrl+b", bindings: { d: "close-tile" } });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("w"))).toEqual({ kind: "consumed" });
   });
 });

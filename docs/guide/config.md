@@ -62,8 +62,11 @@ import { defaultAppearance, defaultKeybindings, defineConfig } from "@niwaterm/c
 export default defineConfig({
   keybindings: {
     ...defaultKeybindings,
-    "cmd+d": "split-horizontal",
-    "cmd+shift+d": "split-vertical",
+    bindings: {
+      ...defaultKeybindings.bindings,
+      d: "split-horizontal",
+      "shift+d": "split-vertical",
+    },
   },
   appearance: {
     ...defaultAppearance,
@@ -82,15 +85,45 @@ cd ~/.config/niwaterm && bun install
 
 ## キーバインドDSL
 
-`keybindings`は `KeyBindingString → KeybindAction` のマップ。指定しなかったキーは`defaultKeybindings`の割り当てのまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
+niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。
 
-**KeyBindingString の書式**: `修飾子+...+キー本体`（`+`区切り）
+`keybindings`は次の3フィールドを持つオブジェクト。いずれも未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
 
-- 修飾子は `cmd` / `shift` / `alt` の3つ。**すべてのキーバインドは`cmd`を含む必要がある**（`cmd`を含まないキーは通常のターミナル入力に予約されているため、割り当てても無視される）
-- キー本体はアルファベット（`d`, `w`, `t`, `n`等）、矢印（`up`/`down`/`left`/`right`）、角括弧（`[`/`]`）のいずれか
-- 例: `"cmd+d"`, `"cmd+shift+d"`, `"cmd+alt+up"`, `"cmd+alt+]"`
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `prefix` | `KeyBindingString` | prefixキー本体。既定は`"ctrl+b"`（tmux標準を踏襲。macOS/Windowsで共通） |
+| `bindings` | `Record<string, KeybindAction>` | prefix入力後に押す2打目キー→アクションのマップ |
+| `direct` | `Record<KeyBindingString, KeybindAction>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空） |
 
-**KeybindAction の一覧**（22種類）:
+**`prefix` / `direct` の書式**: `修飾子+...+キー本体`（`+`区切り）
+
+- 修飾子は `cmd` / `ctrl` / `shift` / `alt`。**`cmd`または`ctrl`のいずれかを含む必要がある**（含まないキーは通常のターミナル入力に予約されているため、割り当てても無視される）
+- 例: `"ctrl+b"`, `"cmd+shift+c"`
+
+**`bindings`（2打目キー）の書式**: 修飾子なしの単一キー本体、または`修飾子+キー本体`
+
+- 修飾子は `shift` / `alt` のみ許容（prefix自体で既に主要な修飾子を使っているため、2打目はシンプルな単一キー操作に絞っている。`cmd`/`ctrl`を含むエントリは無視される）
+- キー本体はアルファベット（`d`, `w`, `c`等）、矢印（`up`/`down`/`left`/`right`）、`pageup`/`pagedown`/`home`/`end`、角括弧（`[`/`]`）、バッククォート（`` ` ``）のいずれか
+- 例: `"d"`, `"shift+d"`, `"up"`, `"pageup"`
+
+**既定の2打目キー一覧**（prefix `ctrl+b` の後に押す）:
+
+| キー | アクション |
+|---|---|
+| `d` / `shift+d` | split-vertical / split-horizontal |
+| `w` | close-tile |
+| `up` / `down` / `left` / `right` | focus-up / focus-down / focus-left / focus-right |
+| `c` | new-tab |
+| `shift+t` | new-browser-tab |
+| `n` / `p` | next-tab / prev-tab |
+| `shift+n` | new-workspace |
+| `]` / `[` | next-workspace / prev-workspace |
+| `b` | toggle-sidebar |
+| `` ` `` | toggle-popup |
+| `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
+| `home` / `end` | scroll-to-top / scroll-to-bottom |
+
+**KeybindAction の一覧**（23種類）:
 
 | アクション | 意味 |
 |---|---|
@@ -104,12 +137,13 @@ cd ~/.config/niwaterm && bun install
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
-| `copy-selection` | 選択範囲をクリップボードへコピー（既定キーは無い。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
-| `paste-clipboard` | クリップボードの内容をペースト（既定キーは無い。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
+| `toggle-popup` | ポップアップの表示/非表示切替 |
+| `copy-selection` | 選択範囲をクリップボードへコピー（既定は`direct`にWindowsのみ`ctrl+shift+c`が割り当て済み。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
+| `paste-clipboard` | クリップボードの内容をペースト（既定は`direct`にWindowsのみ`ctrl+shift+v`が割り当て済み。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
 | `scroll-page-up` / `scroll-page-down` | スクロールバックを1ページ分スクロール |
 | `scroll-to-top` / `scroll-to-bottom` | スクロールバックの先頭/最新行へジャンプ |
 
-不正なバインド文字列（未知の修飾子、`cmd`を含まない等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
+不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`と`ctrl`をどちらも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 
 ## 外観設定
 
@@ -178,7 +212,10 @@ customView: {
   ```ts
   keybindings: {
     ...defaultKeybindings,
-    "cmd+shift+u": "new-custom-view-tab",
+    bindings: {
+      ...defaultKeybindings.bindings,
+      "shift+u": "new-custom-view-tab",
+    },
   },
   ```
 - CLI: `niwaterm new-tab --tile <tileId> --custom-view`（`--url`と同時指定は不可）

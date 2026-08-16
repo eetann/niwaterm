@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
   defaultBrowserConfig,
-  type KeybindAction,
   platformDefaultKeybindings,
 } from "@niwaterm/config";
 import {
@@ -49,8 +48,13 @@ describe("loadUserConfig", () => {
 
   test("export defaultされたオブジェクトを読み込める", async () => {
     const path = join(dir, "valid.config.ts");
-    await writeFile(path, `export default { keybindings: { "cmd+d": "close-tile" } };\n`);
-    expect(await loadUserConfig(path)).toEqual({ keybindings: { "cmd+d": "close-tile" } });
+    await writeFile(
+      path,
+      `export default { keybindings: { prefix: "ctrl+b", bindings: { d: "close-tile" } } };\n`,
+    );
+    expect(await loadUserConfig(path)).toEqual({
+      keybindings: { prefix: "ctrl+b", bindings: { d: "close-tile" } },
+    });
   });
 
   test("構文エラーの場合はnullを返し、理由をログ出力する", async () => {
@@ -91,52 +95,92 @@ describe("loadUserConfig", () => {
 
   test("同一パスへの2回目の読み込みでも、ファイルが更新されていれば最新の内容を返す（キャッシュバスティング）", async () => {
     const path = join(dir, "hot-reload.config.ts");
-    await writeFile(path, `export default { keybindings: { "cmd+d": "close-tile" } };\n`);
-    expect(await loadUserConfig(path)).toEqual({ keybindings: { "cmd+d": "close-tile" } });
-    await writeFile(path, `export default { keybindings: { "cmd+d": "new-tab" } };\n`);
-    expect(await loadUserConfig(path)).toEqual({ keybindings: { "cmd+d": "new-tab" } });
+    await writeFile(path, `export default { keybindings: { bindings: { d: "close-tile" } } };\n`);
+    expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "close-tile" } } });
+    await writeFile(path, `export default { keybindings: { bindings: { d: "new-tab" } } };\n`);
+    expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "new-tab" } } });
   });
 });
 
 describe("resolveKeybindings", () => {
-  // 既定キーはプラットフォームで異なる（macOSはcmd系、Windowsはctrl+shift系）ため、
-  // テストではキー文字列を直接書かずアクションから逆引きする
+  // prefix・bindingsはOS共通（既定Ctrl+B）、directのみOS別（Windowsのみコピー・ペースト）
   const platformDefaults = platformDefaultKeybindings(process.platform);
-  function defaultKeyFor(action: KeybindAction): string {
-    const entry = Object.entries(platformDefaults).find(([, a]) => a === action);
-    if (!entry) throw new Error(`no default keybinding for ${action}`);
-    return entry[0];
-  }
 
   test("nullを渡すとプラットフォームのデフォルトがそのまま返る", () => {
     const resolved = resolveKeybindings(null);
-    expect(Object.keys(resolved).length).toBe(Object.keys(platformDefaults).length);
+    expect(resolved.prefix).toBe(platformDefaults.prefix);
+    expect(resolved.bindings).toEqual(platformDefaults.bindings ?? {});
+    expect(resolved.direct).toEqual(platformDefaults.direct ?? {});
   });
 
-  test("ユーザー設定で一部のキーを上書きできる", () => {
-    const splitKey = defaultKeyFor("split-vertical");
-    const closeKey = defaultKeyFor("close-tile");
+  test("ユーザー設定でprefixを上書きできる", () => {
+    const resolved = resolveKeybindings({ keybindings: { prefix: "cmd+j" } });
+    expect(resolved.prefix).toBe("cmd+j");
+    // bindingsはデフォルトのまま
+    expect(resolved.bindings).toEqual(platformDefaults.bindings ?? {});
+  });
+
+  test("不正なprefixは警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveKeybindings({ keybindings: { prefix: "hyper+b" as never } });
+      expect(resolved.prefix).toBe(platformDefaults.prefix);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("ユーザー設定でbindingsの一部のキーを上書きできる", () => {
+    expect(platformDefaults.bindings?.["d"]).toBe("split-vertical");
     const resolved = resolveKeybindings({
-      keybindings: { [splitKey]: "close-tile" } as never,
+      keybindings: { bindings: { d: "close-tile" } },
     });
-    expect(resolved[splitKey as never]).toBe("close-tile");
+    expect(resolved.bindings?.["d"]).toBe("close-tile");
     // 上書きしていないキーはデフォルトのまま
-    expect(resolved[closeKey as never]).toBe("close-tile");
+    expect(resolved.bindings?.["w"]).toBe(platformDefaults.bindings?.["w"]);
   });
 
-  test("不正なバインド文字列・未知のアクション名のエントリだけ除外し、残りは有効にする", () => {
+  test("bindingsの不正なバインド文字列・未知のアクション名のエントリだけ除外し、残りは有効にする", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
       const resolved = resolveKeybindings({
         keybindings: {
-          "hyper+d": "close-tile",
-          "cmd+z": "not-a-real-action",
-        } as never,
+          bindings: {
+            "cmd+d": "close-tile", // 2打目キーにcmd/ctrlは使えない（不正）
+            z: "not-a-real-action",
+          } as never,
+        },
       });
-      expect(resolved["hyper+d" as never]).toBeUndefined();
-      expect(resolved["cmd+z" as never]).toBeUndefined();
+      expect(resolved.bindings?.["cmd+d"]).toBeUndefined();
+      expect(resolved.bindings?.["z"]).toBeUndefined();
       // デフォルトのエントリは影響を受けず残っている
-      expect(Object.keys(resolved).length).toBe(Object.keys(platformDefaults).length);
+      expect(Object.keys(resolved.bindings ?? {}).length).toBe(
+        Object.keys(platformDefaults.bindings ?? {}).length,
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("ユーザー設定でdirectを追加できる", () => {
+    const resolved = resolveKeybindings({
+      keybindings: { direct: { "cmd+shift+c": "copy-selection" } },
+    });
+    expect(resolved.direct?.["cmd+shift+c"]).toBe("copy-selection");
+  });
+
+  test("directの不正なバインド文字列・未知のアクション名は警告付きで除外される", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveKeybindings({
+        keybindings: {
+          direct: { d: "copy-selection", "cmd+z": "not-a-real-action" } as never,
+        },
+      });
+      expect(resolved.direct?.["d" as never]).toBeUndefined();
+      expect(resolved.direct?.["cmd+z" as never]).toBeUndefined();
+      expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
     }
