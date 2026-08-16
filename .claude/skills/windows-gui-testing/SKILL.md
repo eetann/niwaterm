@@ -6,7 +6,7 @@ description: |
 ---
 
 niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux環境で作業していて
-`bun run start`が直接実行できない場合**（Windows実機側から直接作業している場合はこのスキルは
+アプリ本体をローカルで直接実行できない場合**（Windows実機側から直接作業している場合はこのスキルは
 不要）、Windows実機の動作確認・NixOS(WSL)タブの動作確認は、`powershell.exe`（WSL interop）
 経由でWindows側を操作する。リモートデスクトップやユーザーへの操作依頼を都度挟まなくても、
 起動・操作・停止・スクリーンショット撮影まで基本的にWSL側から完結する。
@@ -68,7 +68,7 @@ devモードはGUIアプリなのでバックグラウンド起動し、ログ�
 `NIWATERM_DEBUG_PTY=1`は一時的な診断用（コミット対象外のデバッグコードを仕込んだ時のみ使う）。
 
 ```bash
-powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun run start" > /path/to/scratchpad/niwaterm-dev.log 2>&1 &
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > /path/to/scratchpad/niwaterm-dev.log 2>&1 &
 disown
 ```
 

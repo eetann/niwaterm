@@ -14,7 +14,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 ## 前提確認
 
 - `niwaterm --version` でコマンドが使えるか確認する。使えない場合は`packages/cli/README.md`の手順（`cd packages/cli && bun link`）でセットアップする。
-- niwatermアプリ本体が起動している必要がある。`niwaterm ping` で疎通確認し、pongが返らなければ`bun run start`でアプリを起動する（バックグラウンド起動を推奨）。
+- niwatermアプリ本体が起動している必要がある。`niwaterm ping` で疎通確認し、pongが返らなければ`mise run start`でアプリを起動する（バックグラウンド起動を推奨）。
 
 ## できること（概要）
 

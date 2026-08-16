@@ -9,7 +9,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 ## セットアップ・コマンド
 
-- `bun run start` — devモードでアプリ起動（GUIアプリなのでbackgroundで実行する）
+- `mise run start` — devモードでアプリ起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）

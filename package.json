@@ -4,7 +4,6 @@
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
 	"workspaces": ["packages/*"],
 	"scripts": {
-		"start": "electrobun dev",
 		"dev": "electrobun dev --watch",
 		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib",
 		"build:vendor:win": "cd vendor/libghostty && mise exec zig@0.16.0 -- zig build -Demit-lib-vt -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast --prefix \"$PWD\"",

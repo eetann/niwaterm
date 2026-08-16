@@ -8,6 +8,21 @@
 #   [env]
 #   NIWATERM_WIN_REPO = "/mnt/c/Users/<ユーザー名>/niwaterm"
 
+# devモードの起動口はこのタスクに一本化する（`npm run start`は廃止）。
+# WSLとMac(Linux実機含む)で実行環境が異なるため、ここで判別して分岐する。
+# 停止方法もOSで異なる（Mac等はフォアグラウンド実行なのでCtrl+Cで止まるが、
+# WSL→Windows実機はバックグラウンド起動のため`mise run win:stop`が別途必要）。
+[tasks.start]
+description = "devモードでniwatermを起動する（WSLならWindows実機へ同期して起動、それ以外はローカルでelectrobun devを起動）"
+run = '''
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  mise run win:sync
+  mise run win:start
+else
+  bun x electrobun dev
+fi
+'''
+
 [tasks."win:sync"]
 description = "WSL側のソースコードをWindows側のリポジトリへrsyncで同期する（docs/windows-build.md ステップ2相当）"
 run = '''
@@ -26,7 +41,7 @@ echo "synced to $NIWATERM_WIN_REPO"
 description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み）"
 run = '''
 LOG_FILE=/tmp/niwaterm-win-dev.log
-nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun run start" > "$LOG_FILE" 2>&1 &
+nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
 echo "起動しました（バックグラウンド）。ログ: $LOG_FILE"
 echo "停止するには: mise run win:stop"

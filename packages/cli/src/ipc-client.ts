@@ -121,7 +121,7 @@ function ipcFetchInit(
 function describeError(endpoint: IpcEndpoint, err: unknown): string {
   if (endpoint.kind === "unix") {
     if (err instanceof Error && (err as { code?: string }).code === "FailedToOpenSocket") {
-      return "アプリが起動していない可能性があります。`bun run start`で起動してから再実行してください";
+      return "アプリが起動していない可能性があります。`mise run start`で起動してから再実行してください";
     }
     return String(err);
   }
