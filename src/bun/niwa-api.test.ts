@@ -264,6 +264,25 @@ describe("niwa.workspace", () => {
     const onlyId = workspaceManager.snapshot().activeWorkspaceId;
     expect(niwa.workspace.swap(onlyId, "no-such-workspace")).toBe(false);
   });
+
+  test("listは表示順で全ワークスペースのid/name/activeを返す", () => {
+    const { niwa } = createTestSetup();
+    const firstId = niwa.workspace.current();
+    const secondId = niwa.workspace.create();
+    expect(niwa.workspace.list()).toEqual([
+      { id: firstId, name: null, active: false },
+      { id: secondId, name: null, active: true },
+    ]);
+  });
+
+  test("currentはアクティブなworkspaceIdを返し、switch後は切り替わる", () => {
+    const { niwa } = createTestSetup();
+    const firstId = niwa.workspace.current();
+    const secondId = niwa.workspace.create();
+    expect(niwa.workspace.current()).toBe(secondId);
+    niwa.workspace.switch(firstId);
+    expect(niwa.workspace.current()).toBe(firstId);
+  });
 });
 
 describe("niwa.sleep", () => {

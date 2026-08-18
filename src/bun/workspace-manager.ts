@@ -193,6 +193,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaceId === activeId;
   }
 
+  // niwa.workspace.current向け（tmuxのswitch-clientで参照するcurrent-window相当）
+  function getActiveWorkspaceId(): WorkspaceId {
+    return activeId;
+  }
+
   function newWorkspace(cwd?: string): WorkspaceId {
     activeId = createAndRegisterWorkspace(undefined, cwd);
     opts.onDirty();
@@ -505,6 +510,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     locateTab,
     locateBrowserTab,
     isWorkspaceActive,
+    getActiveWorkspaceId,
     getTabText,
     setTabVar,
     getTabVar,

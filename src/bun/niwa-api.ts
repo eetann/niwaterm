@@ -165,6 +165,14 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       swap(workspaceIdA, workspaceIdB) {
         return workspaceManager.swapWorkspaces(workspaceIdA, workspaceIdB);
       },
+      list() {
+        return workspaceManager
+          .listWorkspaces()
+          .map((entry) => ({ id: entry.workspaceId, name: entry.name, active: entry.active }));
+      },
+      current() {
+        return workspaceManager.getActiveWorkspaceId();
+      },
     },
     clipboard: {
       write(text) {

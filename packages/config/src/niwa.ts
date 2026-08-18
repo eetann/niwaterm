@@ -99,6 +99,13 @@ export interface NiwaPopupApi {
   open(opts?: NiwaPopupOpenOptions): { tabId: string } | null;
 }
 
+export interface NiwaWorkspaceInfo {
+  id: string;
+  /** ユーザーがサイドバーから設定した名前。未設定はnull（表示側で連番にフォールバック） */
+  name: string | null;
+  active: boolean;
+}
+
 export interface NiwaWorkspaceApi {
   create(cwd?: string): string;
   switch(workspaceId: string): boolean;
@@ -108,6 +115,10 @@ export interface NiwaWorkspaceApi {
    * どちらかのidが存在しない、または同一idの場合はfalse
    */
   swap(workspaceIdA: string, workspaceIdB: string): boolean;
+  /** 全ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号順）で返す */
+  list(): NiwaWorkspaceInfo[];
+  /** 現在アクティブなワークスペースのidを返す（tmuxのswitch-clientが参照するcurrent-window相当） */
+  current(): string;
 }
 
 export interface NiwaClipboardApi {
