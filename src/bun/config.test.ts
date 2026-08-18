@@ -243,14 +243,14 @@ describe("resolveKeybindings", () => {
           keybindings: {
             bindings: {
               "cmd+d": "close-tile", // 2打目キーにcmd/ctrlは使えない（不正）
-              z: "not-a-real-action",
+              q: "not-a-real-action", // デフォルトで未割り当てのキー（存在しないアクション名の検証用）
             } as never,
           },
         },
         createTestNiwaApi(),
       );
       expect(resolved.bindings?.["cmd+d"]).toBeUndefined();
-      expect(resolved.bindings?.["z"]).toBeUndefined();
+      expect(resolved.bindings?.["q"]).toBeUndefined();
       // デフォルトのエントリは影響を受けず残っている
       expect(Object.keys(resolved.bindings ?? {}).length).toBe(
         Object.keys(platformDefaults.bindings ?? {}).length,

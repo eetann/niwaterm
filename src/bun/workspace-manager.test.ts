@@ -273,6 +273,24 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     });
   });
 
+  test("非アクティブなワークスペースのタイルへもtoggleZoomTileが届く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
+
+    expect(mgr.toggleZoomTile(firstTileId)).toBe(true);
+    mgr.switchWorkspace(firstId);
+    expect(mgr.snapshot().workspace.zoomedTileId).toBe(firstTileId);
+  });
+
+  test("存在しないtileIdへのtoggleZoomTileはnullを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.toggleZoomTile("not-found")).toBeNull();
+  });
+
   test("focusDirectionは常にアクティブなワークスペースへルーティングされる", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));

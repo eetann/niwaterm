@@ -89,6 +89,7 @@ export default defineConfig({
 | `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
 | `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |
 | `niwa.tile.resize(opts)` | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false` |
+| `niwa.tile.zoom()` | フォーカス中タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠し画面全体に表示し、再度呼ぶと解除する。戻り値はトグル後の状態（`true`=ズーム中） |
 | `niwa.tile.close()` | フォーカス中タイルのアクティブタブを閉じる |
 | `niwa.tab.current()` | フォーカス中タイルのアクティブタブの情報（`{ tabId }`）を返す。アクティブタブが無い場合は`null` |
 | `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
@@ -209,6 +210,7 @@ keybindings: {
 | `d` / `shift+d` | split-vertical / split-horizontal |
 | `w` | close-tile |
 | `up` / `down` / `left` / `right` | focus-up / focus-down / focus-left / focus-right |
+| `z` | toggle-zoom |
 | `c` | new-tab |
 | `shift+t` | new-browser-tab |
 | `n` / `p` | next-tab / prev-tab |
@@ -221,7 +223,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（31種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（32種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -229,6 +231,7 @@ keybindings: {
 | `close-tile` | フォーカス中のタブ/タイルを閉じる |
 | `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
 | `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照） |
+| `toggle-zoom` | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除） |
 | `new-tab` | 新規タブ作成 |
 | `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
 | `new-custom-view-tab` | `customView`設定を開くタブを作成（`customView`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある） |

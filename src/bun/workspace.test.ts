@@ -836,6 +836,81 @@ describe("focusTile", () => {
   });
 });
 
+describe("toggleZoomTile", () => {
+  test("1回目でズームON、2回目でOFFに戻る。トグル後の状態を返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+
+    expect(ws.toggleZoomTile(tileId)).toBe(true);
+    expect(ws.snapshot().zoomedTileId).toBe(tileId);
+
+    expect(ws.toggleZoomTile(tileId)).toBe(false);
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("存在しないtileIdはnullを返し、zoomedTileIdは変わらない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const result = ws.toggleZoomTile("not-found");
+    expect(result).toBeNull();
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("ズーム中のtileを分割すると自動でズーム解除される（新規tileが隠れたままにならないよう）", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.toggleZoomTile(tileId);
+    expect(ws.snapshot().zoomedTileId).toBe(tileId);
+
+    ws.splitTile(tileId, "vertical");
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("ズーム中のtileを閉じると自動でズーム解除される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    const split = ws.splitTile(firstTileId, "vertical");
+    const secondTileId = split?.tileId as string;
+    const secondTabId = split?.tabId as string;
+    ws.toggleZoomTile(secondTileId);
+    expect(ws.snapshot().zoomedTileId).toBe(secondTileId);
+
+    ws.closeTab(secondTileId, secondTabId);
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("別tileへfocusTileすると自動でズーム解除される。同じtileへの再フォーカスは維持される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    const split = ws.splitTile(firstTileId, "vertical");
+    const secondTileId = split?.tileId as string;
+    ws.toggleZoomTile(firstTileId);
+
+    ws.focusTile(firstTileId);
+    expect(ws.snapshot().zoomedTileId).toBe(firstTileId);
+
+    ws.focusTile(secondTileId);
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("別tileへfocusDirectionすると自動でズーム解除される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical"); // vertical=row split（左右に並ぶ）
+    ws.focusTile(firstTileId);
+    ws.toggleZoomTile(firstTileId);
+
+    ws.focusDirection("right");
+    expect(ws.snapshot().focusedTileId).not.toBe(firstTileId);
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+});
+
 describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   test("set→getで同じ値が返る。上書きもできる", () => {
     const { factory } = createFakeSessionFactory();

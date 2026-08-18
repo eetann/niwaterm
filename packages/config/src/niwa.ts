@@ -41,6 +41,11 @@ export interface NiwaTileApi {
    * direction方向の軸に一致するsplitが祖先に無い場合（例: 単一タイルのワークスペース）はfalse
    */
   resize(opts: NiwaTileResizeOptions): boolean;
+  /**
+   * フォーカス中タイルの一時的なズーム表示を切り替える（tmuxのresize-pane -Z相当）。
+   * ズーム中は他のtileが隠れ、フォーカス中タイルだけが画面全体に表示される。戻り値はトグル後の状態（true=ズーム中）
+   */
+  zoom(): boolean;
   /** フォーカス中タイルのアクティブタブを閉じる */
   close(): void;
 }

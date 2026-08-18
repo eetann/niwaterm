@@ -21,6 +21,7 @@ import {
   Copy,
   FolderPlus,
   Globe,
+  Maximize2,
   MoveDown,
   MoveLeft,
   MoveRight,
@@ -134,6 +135,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "タイルを右方向へ拡大",
     category: "タイル",
     icon: MoveRight,
+  },
+  {
+    action: "toggle-zoom",
+    labelEn: "Toggle Tile Zoom",
+    label: "タイルの一時的なズーム表示を切り替え",
+    category: "タイル",
+    icon: Maximize2,
+    keywords: ["resize-pane -Z", "maximize"],
   },
   {
     action: "new-tab",

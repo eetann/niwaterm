@@ -85,6 +85,7 @@ export type NiwaRPC = {
       closeTab: { tileId: TileId; tabId: TabId };
       focusTile: { tileId: TileId };
       focusDirection: { direction: "up" | "down" | "left" | "right" };
+      toggleZoomTile: { tileId: TileId };
       resizeTileInDirection: { direction: "up" | "down" | "left" | "right" };
       resizeSplit: { splitId: TileId; ratio: number };
       newWorkspace: {};
@@ -444,6 +445,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
         workspaceManager.focusDirection(direction);
+      },
+      toggleZoomTile: ({ tileId }: { tileId: TileId }) => {
+        workspaceManager.toggleZoomTile(tileId);
       },
       resizeTileInDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
         const tileId = workspaceManager.getFocusedTileId();

@@ -478,6 +478,13 @@ export function focusDirection(
   return postJson(endpoint, "/focus-direction", { direction });
 }
 
+export type ZoomTileResult = { ok: true; zoomed: boolean } | { ok: false; error: string };
+
+/** 指定タイルの一時的なズーム表示を切り替える（tmuxのresize-pane -Z相当） */
+export function zoomTile(endpoint: IpcEndpoint, tileId: TileId): Promise<ZoomTileResult> {
+  return postJson(endpoint, "/zoom-tile", { tileId });
+}
+
 export type ResizeTileResult = { ok: true } | { ok: false; error: string };
 
 /** 指定タイルを指定方向へ拡大する（tmuxのresize-pane相当）。amount省略時は既定の1ステップ分 */

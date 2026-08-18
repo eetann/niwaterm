@@ -195,6 +195,15 @@ describe("niwa.tile", () => {
     workspaceManager.focusTile(tileId);
     expect(niwa.tile.resize({ direction: "up" })).toBe(false);
   });
+
+  test("zoom()はフォーカス中タイルのズームを切り替え、トグル後の状態を返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    expect(niwa.tile.zoom()).toBe(true);
+    expect(workspaceManager.snapshot().workspace.zoomedTileId).toBe(tileId);
+    expect(niwa.tile.zoom()).toBe(false);
+    expect(workspaceManager.snapshot().workspace.zoomedTileId).toBeNull();
+  });
 });
 
 describe("niwa.tab", () => {

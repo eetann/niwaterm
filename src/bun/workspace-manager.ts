@@ -292,6 +292,12 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.focusTile(tileId) ?? false;
   }
 
+  // niwa.tile.zoom / CLIのtile zoom向け（tmuxのresize-pane -Z相当）。tileId不存在はnull、
+  // それ以外はトグル後のズーム状態（true=ズーム中）を返す
+  function toggleZoomTile(tileId: TileId): boolean | null {
+    return findOwnerByTileId(tileId)?.toggleZoomTile(tileId) ?? null;
+  }
+
   // 「現在フォーカス」基準の操作のため例外的にidを取らず、アクティブなworkspaceへルーティングする
   function focusDirection(direction: "up" | "down" | "left" | "right"): void {
     workspaces.get(activeId)?.focusDirection(direction);
@@ -520,6 +526,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     closeTab,
     focusTile,
     focusDirection,
+    toggleZoomTile,
     getFocusedTileId,
     getActiveTabId,
     resizeSplit,

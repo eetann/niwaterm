@@ -25,6 +25,7 @@ export type TileCommand =
   | { type: "close" }
   | { type: "focus"; direction: "up" | "down" | "left" | "right" }
   | { type: "resize"; direction: "up" | "down" | "left" | "right" }
+  | { type: "toggleZoom" }
   // niwa.keybindに関数ハンドラを渡したエントリ。実際の処理はbun側のniwa-api.tsで行う
   | { type: "custom"; handlerId: string }
   | { type: "newTab" }
@@ -137,6 +138,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "resize", direction: "left" };
     case "resize-right":
       return { type: "resize", direction: "right" };
+    case "toggle-zoom":
+      return { type: "toggleZoom" };
     case "new-tab":
       return { type: "newTab" };
     case "new-browser-tab":

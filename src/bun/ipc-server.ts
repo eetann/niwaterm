@@ -571,6 +571,17 @@ function buildApp(
     return c.json({ ok: true });
   });
 
+  app.post("/zoom-tile", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseTileIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { tileId: string }" }, 400);
+    const zoomed = workspaceManager.toggleZoomTile(parsed.tileId);
+    if (zoomed === null)
+      return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
+    return c.json({ ok: true, zoomed });
+  });
+
   app.post("/resize-tile", async (c) => {
     const body = await readJsonBody(c);
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);

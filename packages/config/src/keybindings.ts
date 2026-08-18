@@ -37,6 +37,7 @@ export const KEYBIND_ACTIONS = [
   "resize-down",
   "resize-left",
   "resize-right",
+  "toggle-zoom",
   "new-tab",
   "new-browser-tab",
   "new-custom-view-tab",
@@ -86,6 +87,8 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   down: "focus-down",
   left: "focus-left",
   right: "focus-right",
+  // tmux標準のbind-key z resize-pane -Zを踏襲する
+  z: "toggle-zoom",
   c: "new-tab",
   "shift+t": "new-browser-tab",
   n: "next-tab",

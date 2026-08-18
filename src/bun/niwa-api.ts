@@ -106,6 +106,10 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
           opts.amount ?? DEFAULT_RESIZE_AMOUNT,
         );
       },
+      zoom() {
+        const tileId = workspaceManager.getFocusedTileId();
+        return workspaceManager.toggleZoomTile(tileId) ?? false;
+      },
       close() {
         const tileId = workspaceManager.getFocusedTileId();
         const activeTabId = workspaceManager.getActiveTabId(tileId);

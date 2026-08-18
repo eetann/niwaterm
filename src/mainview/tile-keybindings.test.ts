@@ -68,6 +68,15 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("prefix -> z でタイルのズーム表示を切り替える（tmuxのbind-key z resize-pane -Zを踏襲）", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("z"))).toEqual({
+      kind: "command",
+      command: { type: "toggleZoom" },
+    });
+  });
+
   test.each([
     ["ArrowUp", "up"],
     ["ArrowDown", "down"],
@@ -217,7 +226,7 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
   test("prefix -> 未割り当てキーはconsumedでキャンセルされる（PTYには送らない）", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());
-    expect(resolver.handleKeydown(key("z"))).toEqual({ kind: "consumed" });
+    expect(resolver.handleKeydown(key("q"))).toEqual({ kind: "consumed" });
     expect(resolver.isAwaitingSecondKey()).toBe(false);
   });
 

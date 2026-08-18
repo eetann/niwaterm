@@ -47,6 +47,8 @@ export interface WorkspaceRenderState {
    * width/heightは表示サイズの指定（1〜100のパーセント）。未指定はCSS側の既定値（80%）に従う
    */
   popup: { tabId: TabId; visible: boolean; width?: number; height?: number } | null;
+  /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。永続化はしない（起動のたびnullに戻る） */
+  zoomedTileId: TileId | null;
 }
 
 export interface OpenPopupOptions {
@@ -115,6 +117,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   let popupVisible = false;
   let popupWidth: number | undefined;
   let popupHeight: number | undefined;
+  // 一時的にズーム表示中のtileId。tree構造自体は変更しない（表示上どのleafを全画面表示するかという
+  // 描画側の関心事のため）。closeTile/splitTile/focus変更で対象が意味を失う場合はクリアする
+  let zoomedTileId: TileId | null = null;
 
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
@@ -223,6 +228,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (!findNode(tree, focusedTileId)) {
       focusedTileId = listLeaves(tree)[0]?.id ?? focusedTileId;
     }
+    if (zoomedTileId && !findNode(tree, zoomedTileId)) zoomedTileId = null;
     opts.onDirty();
   }
 
@@ -289,6 +295,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     };
     spawnSession(newTabId, size.cols, size.rows, undefined, cwd ?? actualCwdOf(target.activeTabId));
     focusedTileId = newTileId;
+    // ズーム中のtileを分割した場合、新しいtileが隠れたままになってしまうため自動でズーム解除する
+    // （tmuxのresize-pane -Zも同様に、ペイン数が変わる操作でズームを解除する）
+    if (zoomedTileId === tileId) zoomedTileId = null;
     opts.onDirty();
     return { tileId: newTileId, tabId: newTabId };
   }
@@ -423,7 +432,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const result = moveTabToTile(tree, fromTileId, tabId, toTileId);
     if (!result) return false;
     tree = result.tree;
-    if (result.removedTileId) tileNames.delete(result.removedTileId);
+    if (result.removedTileId) {
+      tileNames.delete(result.removedTileId);
+      if (zoomedTileId === result.removedTileId) zoomedTileId = null;
+    }
     focusedTileId = toTileId;
     opts.onDirty();
     return true;
@@ -441,6 +453,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   function focusTileById(tileId: TileId): boolean {
     if (!findNode(tree, tileId)) return false;
     focusedTileId = tileId;
+    // ズーム中に別tileへフォーカスを移した場合、ズーム中の画面には移動先が見えず操作できないため
+    // 自動でズーム解除する（tmuxのresize-pane -Zも、ズーム中にペインを切り替えると自動解除される）
+    if (zoomedTileId && zoomedTileId !== tileId) zoomedTileId = null;
     opts.onDirty();
     return true;
   }
@@ -449,8 +464,17 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const next = focusNeighbor(tree, focusedTileId, direction);
     if (next) {
       focusedTileId = next;
+      if (zoomedTileId && zoomedTileId !== next) zoomedTileId = null;
       opts.onDirty();
     }
+  }
+
+  /** ズーム表示の切り替え（tmuxのresize-pane -Z相当）。tileIdが存在しなければnull、それ以外はトグル後の状態を返す */
+  function toggleZoomTile(tileId: TileId): boolean | null {
+    if (!findNode(tree, tileId)) return null;
+    zoomedTileId = zoomedTileId === tileId ? null : tileId;
+    opts.onDirty();
+    return zoomedTileId === tileId;
   }
 
   function resizeSplitById(splitId: TileId, ratio: number): void {
@@ -551,6 +575,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       popup: popupTabId
         ? { tabId: popupTabId, visible: popupVisible, width: popupWidth, height: popupHeight }
         : null,
+      zoomedTileId,
     };
   }
 
@@ -702,6 +727,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     closeTab,
     focusTile: focusTileById,
     focusDirection: focusDirectionFrom,
+    toggleZoomTile,
     resizeSplit: resizeSplitById,
     resizeTileInDirection,
     respawnTab,

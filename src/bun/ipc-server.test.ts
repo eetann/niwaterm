@@ -895,6 +895,63 @@ describe("POST /focus-direction", () => {
   });
 });
 
+describe("POST /zoom-tile", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("1回目でズームON、2回目でOFFに戻る。トグル後の状態を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const on = await fetch("http://localhost/zoom-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId }),
+    });
+    expect(on.status).toBe(200);
+    expect(await on.json()).toEqual({ ok: true, zoomed: true });
+    expect(mgr.snapshot().workspace.zoomedTileId).toBe(tileId);
+
+    const off = await fetch("http://localhost/zoom-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId }),
+    });
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ ok: true, zoomed: false });
+    expect(mgr.snapshot().workspace.zoomedTileId).toBeNull();
+  });
+
+  test("存在しないtileIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/zoom-tile", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("POST /resize-tile", () => {
   let dir: string;
   let socketPath: string;

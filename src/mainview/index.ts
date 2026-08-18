@@ -153,6 +153,8 @@ let sidebarShowingCustom = false;
 let focusedTileId: TileId | null = null;
 // フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
 let currentTabId: TabId | null = null;
+// 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。bun側が真実の情報源で、render()経由でのみ更新する
+let zoomedTileId: TileId | null = null;
 // 直近のrender()で受け取ったlayout。cycleTab等、キー操作時にDOM待ちせず参照するために保持する
 let lastLayout: TileNode | null = null;
 // 直近のrender()で受け取ったアクティブワークスペースのタブ名。タブバーのラベル表示に使う
@@ -298,6 +300,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = p.workspace.focusedTileId;
+        zoomedTileId = p.workspace.zoomedTileId;
         applyPopupState(p.workspace.popup);
         // ポップアップ表示中はキー入力・ペーストの送信先をポップアップへ向ける
         currentTabId =
@@ -1010,6 +1013,7 @@ function toggleSidebar(): void {
 function updateFocusHighlight(): void {
   for (const tileEl of tileTreeEl.querySelectorAll<HTMLElement>(".tile")) {
     tileEl.classList.toggle("focused", tileEl.dataset["tileId"] === focusedTileId);
+    tileEl.classList.toggle("zoomed", tileEl.dataset["tileId"] === zoomedTileId);
   }
 }
 
@@ -1274,6 +1278,9 @@ function handleTileCommand(cmd: TileCommand): void {
       break;
     case "resize":
       sendMessage("resizeTileInDirection", { direction: cmd.direction });
+      break;
+    case "toggleZoom":
+      sendMessage("toggleZoomTile", { tileId: focusedTileId });
       break;
     case "newTab":
       sendMessage("newTab", { tileId: focusedTileId });
