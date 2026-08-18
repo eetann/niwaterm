@@ -299,6 +299,15 @@ describe("createKeybindResolver（direct: 即時発火ショートカット）",
     const resolver = createKeybindResolver(compileKeybindings(defaultWindowsKeybindings));
     expect(resolver.handleKeydown(key("c", { ctrlKey: true }))).toEqual({ kind: "passthrough" });
   });
+
+  test("altキー単独のdirectも即時発火する（tmuxのbind-key -n M-key相当）", () => {
+    const custom = compileKeybindings({ direct: { "alt+h": "focus-left" } });
+    const resolver = createKeybindResolver(custom);
+    expect(resolver.handleKeydown(key("h", { altKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "focus", direction: "left" },
+    });
+  });
 });
 
 describe("createKeybindResolver（カスタムprefix・カスタムbindings）", () => {

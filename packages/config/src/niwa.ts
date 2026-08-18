@@ -139,7 +139,7 @@ export interface NiwaClipboardApi {
 }
 
 export interface KeybindOptions {
-  /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrlのいずれかを含むKeyBindingStringのみ有効） */
+  /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrl/altのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
   /**
    * trueなら、このバインドの発火後repeatTimeoutMs以内はprefix無しで同じ2打目キーテーブルの
@@ -164,7 +164,7 @@ export interface Niwa {
    * キーにアクションを割り当てる。actionは既存アクション名の文字列、または任意の処理を書ける関数ハンドラ。
    * 同じkeyへ複数回呼ぶと後勝ちで上書きされる（デフォルト設定の上にユーザー設定を重ねる用途）。
    * keyはnoPrefix未指定ならprefix入力後の2打目キー表記（SecondKeyString）、
-   * noPrefix:trueならKeyBindingString表記（cmd/ctrl必須）
+   * noPrefix:trueならKeyBindingString表記（cmd/ctrl/altのいずれか必須）
    */
   keybind(
     key: SecondKeyString | KeyBindingString,

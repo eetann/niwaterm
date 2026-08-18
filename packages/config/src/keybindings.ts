@@ -2,7 +2,9 @@
 // prefixキー（例: "ctrl+b"）を押してから、修飾なし〜shift/altのみの単一キー（例: "d", "shift+d", "up"）を
 // 押すとアクションが発火する。prefixキー自体はcmd/ctrl/shift/altの組み合わせで表現する（"cmd+d"等と同じDSL）。
 // prefix・2打目キーの表記に加え、頻用操作（コピー・ペースト）向けに即時発火する`direct`ショートカット
-// （cmd/ctrl必須、修飾なしのキーはターミナルへの通常入力に予約されているため）も別枠で持てる。
+// （cmd/ctrl/altのいずれか必須、修飾なし・shift単独のキーはターミナルへの通常入力に予約されているため）
+// も別枠で持てる。altを含むdirectはtmuxの`bind-key -n M-key`相当で、押した瞬間ターミナル側の
+// Metaキー入力（bashのreadlineショートカット等）より優先してniwaterm側が横取りする点に注意
 
 type ModifierToken = "cmd" | "ctrl" | "shift" | "alt";
 
@@ -13,7 +15,7 @@ const MODIFIER_TOKENS: ReadonlySet<string> = new Set<ModifierToken>([
   "alt",
 ]);
 
-// prefix・directで使うDSL（cmd/ctrl必須）
+// prefix・directで使うDSL（cmd/ctrl/altのいずれか必須）
 export type KeyBindingString =
   | `${ModifierToken}+${string}`
   | `${ModifierToken}+${ModifierToken}+${string}`
@@ -140,7 +142,7 @@ export interface ParsedKeyBinding {
 
 /**
  * "Cmd+Shift+D" のような表記も許容する寛容パーサ（prefix・direct用）。
- * cmdもctrlも含まない・キー本体が空・未知の修飾子はnull
+ * cmd/ctrl/altのいずれも含まない（shift単独含む）・キー本体が空・未知の修飾子はnull
  */
 export function parseKeyBindingString(binding: string): ParsedKeyBinding | null {
   const tokens = binding.split("+").map((t) => t.trim().toLowerCase());
@@ -151,7 +153,7 @@ export function parseKeyBindingString(binding: string): ParsedKeyBinding | null 
   for (const m of modifiers) {
     if (!MODIFIER_TOKENS.has(m)) return null;
   }
-  if (!modifiers.has("cmd") && !modifiers.has("ctrl")) return null;
+  if (!modifiers.has("cmd") && !modifiers.has("ctrl") && !modifiers.has("alt")) return null;
   return {
     cmd: modifiers.has("cmd"),
     ctrl: modifiers.has("ctrl"),

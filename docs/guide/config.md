@@ -74,13 +74,15 @@ export default defineConfig({
 
 `niwa.keybind`のhandlerは**実際にそのキーが押された時**に呼ばれる（configファイル実行時ではない）。`niwa.tile.current()`等はその時点の実際の状態を返す。
 
+`noPrefix: true`で`alt+`を含むキーを割り当てると、tmuxの`bind-key -n M-key`相当の即時発火バインドになる。ただしAlt(Option)キー単独の組み合わせはシェルのreadlineショートカット（`Alt+b`で単語移動等）やmacOSの特殊文字入力に使われることがあるため、割り当てるとそのキーはniwaterm側に横取りされ、シェル側へは届かなくなる点に注意する。
+
 #### niwa API
 
 | API | 意味 |
 |---|---|
 | `niwa.prefix(binding)` | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")` |
 | `niwa.repeatTimeout(ms)` | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms |
-| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl必須のKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない） |
+| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない） |
 | `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
 | `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
 | `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
@@ -191,8 +193,8 @@ keybindings: {
 
 **`prefix` / `direct` の書式**: `修飾子+...+キー本体`（`+`区切り）
 
-- 修飾子は `cmd` / `ctrl` / `shift` / `alt`。**`cmd`または`ctrl`のいずれかを含む必要がある**（含まないキーは通常のターミナル入力に予約されているため、割り当てても無視される）
-- 例: `"ctrl+b"`, `"cmd+shift+c"`
+- 修飾子は `cmd` / `ctrl` / `shift` / `alt`。**`cmd`/`ctrl`/`alt`のいずれかを含む必要がある**（`shift`単独を含め、これらを含まないキーは通常のターミナル入力に予約されているため、割り当てても無視される）
+- 例: `"ctrl+b"`, `"cmd+shift+c"`, `"alt+h"`（tmuxの`bind-key -n M-h`相当。Alt単独の組み合わせはシェルのreadlineショートカットや特殊文字入力と衝突しうるので注意）
 
 **`bindings`（2打目キー）の書式**: 修飾子なしの単一キー本体、または`修飾子+キー本体`
 
@@ -242,7 +244,7 @@ keybindings: {
 | `command-palette` | コマンドパレットを開く |
 | `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
 
-不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`と`ctrl`をどちらも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
+不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`/`ctrl`/`alt`のいずれも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 
 ## 外観設定
 
@@ -438,4 +440,4 @@ niwaterm layout apply dev --replace
 ## 既知の制約
 
 - **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
-- **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある
+- **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある。`alt+h`のような`noPrefix`/`direct`のalt単独バインドも同じ理由でずれうる（US配列など、レイアウトによって記号化されないキーを選ぶと安定する）

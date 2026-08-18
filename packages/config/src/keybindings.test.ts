@@ -78,9 +78,18 @@ describe("parseKeyBindingString", () => {
     });
   });
 
-  test("cmdもctrlも含まない場合はnull", () => {
+  test("alt+key を解析できる（noPrefix用、tmuxの-n M-key相当）", () => {
+    expect(parseKeyBindingString("alt+d")).toEqual({
+      cmd: false,
+      ctrl: false,
+      shift: false,
+      alt: true,
+      key: "d",
+    });
+  });
+
+  test("cmd/ctrl/altのいずれも含まない場合はnull", () => {
     expect(parseKeyBindingString("shift+d")).toBeNull();
-    expect(parseKeyBindingString("alt+d")).toBeNull();
   });
 
   test("未知の修飾子を含む場合はnull", () => {
@@ -91,7 +100,7 @@ describe("parseKeyBindingString", () => {
     expect(parseKeyBindingString("cmd+")).toBeNull();
   });
 
-  test("修飾子が無い単独キーはnull（cmdまたはctrl必須のため）", () => {
+  test("修飾子が無い単独キーはnull（cmd/ctrl/altのいずれか必須のため）", () => {
     expect(parseKeyBindingString("d")).toBeNull();
   });
 });

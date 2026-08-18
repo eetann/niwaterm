@@ -263,8 +263,8 @@ export function createKeybindResolver(
     const repeated = tryRepeat(e);
     if (repeated) return repeated;
 
-    // cmdもctrlも伴わないキーはターミナルへの通常入力に予約されている
-    if (e.metaKey || e.ctrlKey) {
+    // cmd/ctrl/altのいずれも伴わないキーはターミナルへの通常入力に予約されている
+    if (e.metaKey || e.ctrlKey || e.altKey) {
       const entry = compiled.direct.get(keyboardEventToCanonical(e));
       if (entry) return { kind: "command", command: bindingTargetToTileCommand(entry.target) };
     }
