@@ -198,6 +198,12 @@ describe("niwa.tile", () => {
 });
 
 describe("niwa.tab", () => {
+  test("current()はフォーカス中タイルのアクティブタブのtabIdを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    expect(niwa.tab.current()?.tabId).toBe(tabId);
+  });
+
   test("createはフォーカス中タイルへ新規タブを作る", () => {
     const { niwa, workspaceManager } = createTestSetup();
     const result = niwa.tab.create();

@@ -68,6 +68,8 @@ export interface NiwaTabRespawnOptions {
 }
 
 export interface NiwaTabApi {
+  /** フォーカス中タイルのアクティブタブの情報を返す。アクティブタブが無い場合はnull */
+  current(): { tabId: string } | null;
   create(opts?: NiwaNewTabOptions): { tabId: string } | null;
   /**
    * 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxのrespawn-pane -k相当）。

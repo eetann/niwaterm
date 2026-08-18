@@ -113,6 +113,11 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
     },
     tab: {
+      current() {
+        const tileId = workspaceManager.getFocusedTileId();
+        const tabId = workspaceManager.getActiveTabId(tileId);
+        return tabId ? { tabId } : null;
+      },
       create(opts) {
         const tileId = opts?.tileId ?? workspaceManager.getFocusedTileId();
         const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);

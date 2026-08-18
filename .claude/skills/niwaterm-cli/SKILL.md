@@ -18,8 +18,9 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## できること（概要）
 
-コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`layout`/`font-size`/`shell-profiles`/`docs`はリソース単体に属さないためトップレベル）。
+コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`layout`/`font-size`/`shell-profiles`/`docs`はリソース単体に属さないためトップレベル）。
 
+- `init` — 設定ディレクトリ(`~/.config/niwaterm/`)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・タイル・タブの一覧（操作対象のIDを確認する起点）
 - `tab new` / `switch` / `close` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・目視確認用アクティブ化・画面内容取得・キー送信）
 - `tab var get` / `set` / `list` — タブごとのkey-value変数（タブ間の連携に使える）

@@ -8,53 +8,19 @@ description: niwatermのTypeScript設定ファイル（キーバインド・外�
 
 niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`@niwaterm/config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
 
-キーバインドに加えて、フォント・カラーテーマなどの外観も設定できる。設定ファイルの変更は再起動なしで反映される（ホットリロード）。`niwaterm init`によるセットアップ自動化は未実装（roadmap参照）。
+キーバインドに加えて、フォント・カラーテーマなどの外観も設定できる。設定ファイルの変更は再起動なしで反映される（ホットリロード）。
 
-## セットアップ（手動、`niwaterm init`実装までの暫定手順）
+## セットアップ
+
+CLI（`docs/guide/cli.md`参照）から`niwaterm init`を実行する。
 
 ```sh
-mkdir -p ~/.config/niwaterm
+niwaterm init
 ```
 
-`~/.config/niwaterm/`に以下の3ファイルを配置する（`packages/config/examples/`のコピーがベース）。
+`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる（実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定、例: `^0.1.0`に差し替わる想定）。既存ファイルは上書きしないため、再実行しても安全。依存インストールを飛ばしたい場合は`--skip-install`を付ける。
 
-**`~/.config/niwaterm/package.json`**
-
-```json
-{
-  "name": "niwaterm-user-config",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@niwaterm/config": "file:/path/to/niwaterm/packages/config"
-  }
-}
-```
-
-`file:`のパスは、このリポジトリをcloneした先の絶対パス（例: `/Users/you/ghq/github.com/eetann/niwaterm/packages/config`）に書き換える。実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定（例: `^0.1.0`）に差し替わる想定。
-
-`file:`の代わりに`bun link`を使う方法もある。`packages/config`で`bun link`を実行後、`~/.config/niwaterm/`で`bun link @niwaterm/config`を実行するとリンクできる。
-
-**`~/.config/niwaterm/tsconfig.json`**
-
-```json
-{
-  "compilerOptions": {
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleDetection": "force",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  },
-  "include": ["*.ts"]
-}
-```
-
-**`~/.config/niwaterm/niwaterm.config.ts`**
+生成される`niwaterm.config.ts`は次の内容がベース。
 
 ```ts
 import { defaultAppearance, defineConfig } from "@niwaterm/config";
@@ -63,21 +29,23 @@ export default defineConfig({
   keybindings: (niwa) => {
     niwa.keybind("d", "split-horizontal");
     niwa.keybind("shift+d", "split-vertical");
+
+    niwa.keybind("g", () => {
+      niwa.popup.open({ width: 90, height: 90, command: "lazygit" });
+    });
   },
   appearance: {
     ...defaultAppearance,
     fontSize: 14,
+    foreground: "#e0e0e0",
+    background: "#101010",
   },
 });
 ```
 
-最後に依存をインストールする。
-
-```sh
-cd ~/.config/niwaterm && bun install
-```
-
 `node_modules/`はDotfilesで管理する場合、Git管理対象外にする想定。
+
+`file:`の代わりに`bun link`を使う方法もある（`niwaterm init`実行後、`packages/config`で`bun link`を実行し、`~/.config/niwaterm/`で`bun link @niwaterm/config`すると差し替えられる）。
 
 ## キーバインド
 
@@ -120,6 +88,7 @@ export default defineConfig({
 | `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |
 | `niwa.tile.resize(opts)` | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false` |
 | `niwa.tile.close()` | フォーカス中タイルのアクティブタブを閉じる |
+| `niwa.tab.current()` | フォーカス中タイルのアクティブタブの情報（`{ tabId }`）を返す。アクティブタブが無い場合は`null` |
 | `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
 | `niwa.tab.respawn(tabId, opts?)` | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false` |
 | `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
@@ -457,7 +426,3 @@ niwaterm layout apply dev --replace
 
 - **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
 - **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある
-
-## スコープ外（roadmap参照）
-
-- `niwaterm init`コマンドによるセットアップ自動化

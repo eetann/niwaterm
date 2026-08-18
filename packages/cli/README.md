@@ -11,10 +11,13 @@ bun link
 
 `bin`フィールド経由で`niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。npm registryへの公開は現状スコープ外。
 
+続けて`niwaterm init`を実行すると、設定ファイル（キーバインド・外観等）のディレクトリ`~/.config/niwaterm/`を生成できる。詳細は[docs/guide/config.md](../../docs/guide/config.md)参照。
+
 ## 使い方
 
 ```sh
 niwaterm ping           # niwatermアプリとの疎通確認
+niwaterm init            # 設定ディレクトリ(~/.config/niwaterm/)のセットアップ
 niwaterm list            # ワークスペース・タイル・タブの一覧
 niwaterm docs list       # 利用可能なドキュメントトピックの一覧
 niwaterm docs show cli   # 全コマンドの使い方・IPCサーバー仕様を表示

@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -18,6 +18,14 @@ bun link
 `bin`フィールド経由で`niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。
 
 このリポジトリの絶対パスに依存するシンボリックリンクになるため、リポジトリを移動・削除すると`niwaterm`コマンドは壊れる。
+
+続けて設定ファイル（キーバインド・外観等）のディレクトリをセットアップする。
+
+```sh
+niwaterm init
+```
+
+`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる。既存ファイルは上書きしない（実行済みディレクトリへ再実行しても安全）。依存インストールを飛ばしたい場合は`--skip-install`を付ける。設定ファイルの書き方の詳細は`docs/guide/config.md`参照。
 
 ## 使い方
 

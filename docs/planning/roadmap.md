@@ -241,6 +241,8 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [ ] タイルサイズ調整をするキーバインド・CLI
 - [x] タスクランナーなど改修
 - [ ] `win:start`のとき、ウィンドウ自体はniwatermのウィンドウっぽいんだけどあくまでもウィンドウだけでタブにはフォーカスしてないので、それを自動でフォーカスさせたい
+- [ ] ワークスペース一覧に独自ステータス表示切り替え
+- [ ] tmuxでいう「ウィンドウ」に当たる概念がほしいかも
 
 ## 設定ファイルの関数ベースAPI化（キーバインド・複数ファイル対応）
 
@@ -255,3 +257,12 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] ドキュメント（`docs/guide/config.md`、`packages/config/examples/`）を更新する
 - [x] テストを更新・追加する
 - [x] `niwa.tile`のリサイズ・`niwa.tab`の再起動（respawn）・`niwa.workspace`の入れ替え（swap）API（tmuxの`resize-pane`/`respawn-pane`/`swap-window`相当）を追加する
+- [ ] `~/dotfiles/.tmux.conf`の実移行で判明した不足を埋める
+  - [ ] フォーカス中タブのtabIdを取得するniwa API（`niwa.tile.current()`はid/cwdのみで、`respawn-pane`相当のキーバインドが組めない）
+  - [ ] ワークスペース一覧・現在のワークスペースIDを取得するniwa API（`switch-client`/相対位置への`swap-window`相当が組めない）
+  - [ ] タブ変数で全タイル・タブを横断検索するniwa API（role変数を頼りにしたペインフォーカス移動が組めない）
+  - [ ] `noPrefix`ショートカットのcmd/ctrl必須制約の是非を検討（altキー単独の`-n M-key`系tmuxバインドが再現できない）
+  - [ ] スクロールバック行数（tmuxの`history-limit`相当）を設定可能にする
+  - [ ] タイルの一時的なズーム表示（`resize-pane -Z`相当）
+  - [ ] vi風コピーモード（キーボードでのテキスト選択・プロンプトジャンプ）。現状マウス選択のみ対応
+  - [ ] ペイン境界色・メッセージ表示スタイルなどUIの詳細配色（「磨き込みと配布」節のステータスバー用意と合わせて検討）

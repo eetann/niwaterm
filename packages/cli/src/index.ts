@@ -4,6 +4,7 @@ import { failAndExit } from "./cli-error";
 import browserCommand from "./commands/browser";
 import docsCommand from "./commands/docs";
 import fontSizeCommand from "./commands/font-size";
+import initCommand from "./commands/init";
 import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
 import pingCommand from "./commands/ping";
@@ -33,6 +34,7 @@ try {
     renderHeader: null,
     subCommands: {
       ping: pingCommand,
+      init: initCommand,
       list: listCommand,
       tab: tabCommand,
       workspace: workspaceCommand,
