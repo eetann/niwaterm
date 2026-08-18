@@ -260,7 +260,7 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [ ] `~/dotfiles/.tmux.conf`の実移行で判明した不足を埋める
   - [x] フォーカス中タブのtabIdを取得するniwa API（`niwa.tile.current()`はid/cwdのみで、`respawn-pane`相当のキーバインドが組めない）
   - [x] ワークスペース一覧・現在のワークスペースIDを取得するniwa API（`switch-client`/相対位置への`swap-window`相当が組めない）
-  - [ ] タブ変数で全タイル・タブを横断検索するniwa API（role変数を頼りにしたペインフォーカス移動が組めない）
+  - [x] タブ変数で全タイル・タブを横断検索するniwa API（role変数を頼りにしたペインフォーカス移動が組めない）
   - [ ] `noPrefix`ショートカットのcmd/ctrl必須制約の是非を検討（altキー単独の`-n M-key`系tmuxバインドが再現できない）
   - [ ] スクロールバック行数（tmuxの`history-limit`相当）を設定可能にする
   - [ ] タイルの一時的なズーム表示（`resize-pane -Z`相当）

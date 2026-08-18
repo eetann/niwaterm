@@ -139,6 +139,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       sendKeys(tabId, ...keys) {
         workspaceManager.handleInput(tabId, tmuxKeysToBytes(keys));
       },
+      show(tabId) {
+        return workspaceManager.showTab(tabId);
+      },
       var: {
         get(tabId, key) {
           const result = workspaceManager.getTabVar(tabId, key);
@@ -146,6 +149,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         },
         set(tabId, key, value) {
           workspaceManager.setTabVar(tabId, key, value);
+        },
+        find(key, value) {
+          return workspaceManager.findTabsByVar(key, value);
         },
       },
     },

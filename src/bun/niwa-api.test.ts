@@ -219,6 +219,38 @@ describe("niwa.tab", () => {
     expect(niwa.tab.var.get(tabId, "role")).toBe("editor");
   });
 
+  test("var.findは全ワークスペース・タイルを横断して一致するtabIdを返す", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const tabA = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabB = niwa.tab.create()?.tabId as string;
+    niwa.workspace.create();
+    const tabC = niwa.tab.current()?.tabId as string;
+
+    niwa.tab.var.set(tabA, "role", "editor");
+    niwa.tab.var.set(tabB, "role", "shell");
+    niwa.tab.var.set(tabC, "role", "editor");
+
+    expect(niwa.tab.var.find("role", "editor").sort()).toEqual([tabA, tabC].sort());
+    expect(niwa.tab.var.find("role", "no-such-value")).toEqual([]);
+  });
+
+  test("showは所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化をまとめて行う", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const firstWorkspaceId = niwa.workspace.current();
+    const firstTileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const targetTabId = niwa.tab.create()?.tabId as string;
+    niwa.workspace.create(); // 以後、firstWorkspaceIdは非アクティブ
+
+    expect(niwa.tab.show(targetTabId)).toBe(true);
+    expect(niwa.workspace.current()).toBe(firstWorkspaceId);
+    expect(workspaceManager.getActiveTabId(firstTileId)).toBe(targetTabId);
+  });
+
+  test("showは存在しないtabIdならfalse", () => {
+    const { niwa } = createTestSetup();
+    expect(niwa.tab.show("no-such-tab")).toBe(false);
+  });
+
   test("respawnは既存タブを再起動し、trueを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
     const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;

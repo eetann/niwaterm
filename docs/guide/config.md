@@ -92,7 +92,9 @@ export default defineConfig({
 | `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
 | `niwa.tab.respawn(tabId, opts?)` | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false` |
 | `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
+| `niwa.tab.show(tabId)` | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab show`相当）。対象タブが存在しない場合は`false` |
 | `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当） |
+| `niwa.tab.var.find(key, value)` | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当） |
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
 | `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
 | `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
@@ -109,6 +111,15 @@ niwa.keybind("c", async () => {
   if (!created) return;
   await niwa.sleep(300);
   niwa.tab.sendKeys(created.tabId, "cd ~/ghq", "Enter");
+});
+```
+
+`niwa.tab.var.find` + `niwa.tab.show`を組み合わせると、`role`タブ変数を目印にした「特定の役割のタブへジャンプする」キーバインドが組める（tmuxの`select-pane`をペイン変数で引く運用の相当）。
+
+```ts
+niwa.keybind("e", () => {
+  const [tabId] = niwa.tab.var.find("role", "editor");
+  if (tabId) niwa.tab.show(tabId);
 });
 ```
 

@@ -421,6 +421,34 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId)?.listTabVars(tabId) ?? null;
   }
 
+  // niwa.tab.var.find向け。全ワークスペース・タイル・タブを横断して、指定キーの値がvalueと一致する
+  // タブを探す（tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当。role変数を使ったペイン
+  // フォーカス移動などに使う）
+  function findTabsByVar(key: string, value: string): TabId[] {
+    const result: TabId[] = [];
+    for (const ws of workspaces.values()) {
+      for (const leaf of listLeaves(ws.getLayout())) {
+        for (const tabId of leaf.tabIds) {
+          const found = ws.getTabVar(tabId, key);
+          if (found.found && found.value === value) result.push(tabId);
+        }
+      }
+    }
+    return result;
+  }
+
+  // niwa.tab.show向け（tmuxのselect-pane、CLIの`tab show`相当）。所属ワークスペースへの切替・
+  // タイルフォーカス・タブのアクティブ化をまとめて行う。ウィンドウ前面化はCLI版(ipc-server.tsの
+  // /show-tab)のみの責務（niwa APIはniwatermウィンドウ内から呼ばれるため不要）
+  function showTab(tabId: TabId): boolean {
+    const location = locateTab(tabId);
+    if (!location) return false;
+    switchWorkspace(location.workspaceId);
+    focusTile(location.tileId);
+    switchTab(location.tileId, tabId);
+    return true;
+  }
+
   function setTabName(tabId: TabId, name: string): boolean {
     return findOwnerByTabId(tabId)?.setTabName(tabId, name) ?? false;
   }
@@ -515,6 +543,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setTabVar,
     getTabVar,
     listTabVars,
+    findTabsByVar,
+    showTab,
     setTabName,
     setTileName,
     setWorkspaceName,

@@ -56,6 +56,12 @@ export interface NiwaNewTabOptions {
 export interface NiwaTabVarApi {
   get(tabId: string, key: string): string | undefined;
   set(tabId: string, key: string, value: string): void;
+  /**
+   * 全ワークスペース・タイル・タブを横断して、keyの値がvalueと一致するタブのtabIdを返す
+   * （tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当）。
+   * role変数等を頼りにした`niwa.tab.show`とのペインフォーカス移動の組み立てに使う
+   */
+  find(key: string, value: string): string[];
 }
 
 export interface NiwaTabRespawnOptions {
@@ -82,6 +88,11 @@ export interface NiwaTabApi {
    * 例: niwa.tab.sendKeys(tabId, "cd ~/ghq", "Enter")
    */
   sendKeys(tabId: string, ...keys: string[]): void;
+  /**
+   * 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化を
+   * まとめて行う（tmuxのselect-pane、CLIの`niwaterm tab show`相当）。対象タブが存在しない場合はfalse
+   */
+  show(tabId: string): boolean;
   var: NiwaTabVarApi;
 }
 

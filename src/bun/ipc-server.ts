@@ -808,9 +808,7 @@ function buildApp(
     if (!parsed) return c.json({ ok: false, error: "expected { tabId: string }" }, 400);
     const location = workspaceManager.locateTab(parsed.tabId);
     if (!location) return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
-    workspaceManager.switchWorkspace(location.workspaceId);
-    workspaceManager.focusTile(location.tileId);
-    workspaceManager.switchTab(location.tileId, parsed.tabId);
+    workspaceManager.showTab(parsed.tabId);
     activateWindow();
     return c.json({ ok: true, workspaceId: location.workspaceId, tileId: location.tileId });
   });

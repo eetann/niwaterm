@@ -355,6 +355,33 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   });
 });
 
+describe("findTabsByVar", () => {
+  test("別ワークスペース・別タイルにまたがっても値が一致するタブを全て見つける", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tabB = splitResult?.tabId as string;
+    mgr.newWorkspace();
+    const tabC = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+
+    mgr.setTabVar(tabA, "role", "editor");
+    mgr.setTabVar(tabB, "role", "shell");
+    mgr.setTabVar(tabC, "role", "editor");
+
+    expect(mgr.findTabsByVar("role", "editor").sort()).toEqual([tabA, tabC].sort());
+    expect(mgr.findTabsByVar("role", "shell")).toEqual([tabB]);
+    expect(mgr.findTabsByVar("role", "no-such-value")).toEqual([]);
+  });
+
+  test("誰も設定していないkeyはvalueに関わらず空配列", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.findTabsByVar("role", "editor")).toEqual([]);
+  });
+});
+
 describe("タブ名・タイル名(setTabName/setTileName)", () => {
   test("setTabNameで設定した名前がlistWorkspaces()のtabNamesに反映される", () => {
     const { factory } = createFakeSessionFactory();
@@ -794,6 +821,33 @@ describe("locateTab / locateBrowserTab / isWorkspaceActive", () => {
 
     expect(mgr.isWorkspaceActive(firstId)).toBe(false);
     expect(mgr.isWorkspaceActive(secondId)).toBe(true);
+  });
+});
+
+describe("showTab", () => {
+  test("非アクティブなワークスペースのタブへ切替・フォーカス・アクティブ化をまとめて行い、trueを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const targetTabId = mgr.newTab(firstTileId) as string;
+    mgr.newWorkspace(); // 以後、firstIdは非アクティブ
+
+    expect(mgr.isWorkspaceActive(firstId)).toBe(false);
+    expect(mgr.showTab(targetTabId)).toBe(true);
+
+    expect(mgr.isWorkspaceActive(firstId)).toBe(true);
+    expect(mgr.getFocusedTileId()).toBe(firstTileId);
+    expect(mgr.getActiveTabId(firstTileId)).toBe(targetTabId);
+  });
+
+  test("存在しないtabIdはfalseを返し、状態を変えない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+
+    expect(mgr.showTab("not-found")).toBe(false);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
   });
 });
 
