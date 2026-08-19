@@ -514,9 +514,19 @@ function reconcile(
   // ドラッグ中・ドラッグ確定直後（bunのratio確定待ち）はローカルのratioを保持し、
   // bunからの（まだ古い場合がある）ratioで上書きしない
   if (node.id !== draggingSplitId) {
-    const ratio = pendingSplitRatio?.splitId === node.id ? pendingSplitRatio.ratio : node.ratio;
-    firstEl.style.flex = `${ratio} 0 0%`;
-    secondEl.style.flex = `${1 - ratio} 0 0%`;
+    if (zoomedTileId !== null) {
+      // ズーム中は非表示側のratioに関わらず、表示側を「1 0 0%」で100%まで広げる。
+      // 実機診断で確認した挙動: 非表示側があってもtree由来のratio（例: 0.45）を
+      // そのままflex-growに使うと、なぜか「コンテナの45%」で頭打ちになり広がらない
+      // （非表示側はflex計算から除外されるはずだが、実際にはそうならない）。
+      // ズーム中はratioで分け合う相手がいないため、常に1を使えば正しく広がる
+      firstEl.style.flex = firstVisible ? "1 0 0%" : "";
+      secondEl.style.flex = secondVisible ? "1 0 0%" : "";
+    } else {
+      const ratio = pendingSplitRatio?.splitId === node.id ? pendingSplitRatio.ratio : node.ratio;
+      firstEl.style.flex = `${ratio} 0 0%`;
+      secondEl.style.flex = `${1 - ratio} 0 0%`;
+    }
   }
 
   for (const child of [firstEl, dividerEl, secondEl]) {
