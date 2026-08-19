@@ -1177,6 +1177,198 @@ describe("POST /new-workspace, POST /switch-workspace, POST /close-workspace", (
   });
 });
 
+describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-board", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("new-board: workspaceId省略時はアクティブなワークスペースに作成しboardIdを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.ok).toBe(true);
+    expect(body.boardId).not.toBe(firstBoardId);
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.activeBoardId).toBe(body.boardId);
+  });
+
+  test("new-board: 存在しないworkspaceIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("switch-board: 指定したBoardへ切り替える", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    mgr.newBoard(workspaceId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: firstBoardId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.activeBoardId).toBe(firstBoardId);
+  });
+
+  test("switch-board: 存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/switch-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("close-board: 非アクティブなBoardを閉じる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    mgr.newBoard(workspaceId);
+    mgr.switchBoard(firstBoardId);
+    const secondBoardId = mgr
+      .listWorkspaces()
+      .find((e) => e.workspaceId === workspaceId)
+      ?.boards.find((b) => b.boardId !== firstBoardId)?.boardId as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: secondBoardId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.map((b) => b.boardId)).toEqual([firstBoardId]);
+  });
+
+  test("close-board: 存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("close-board: ワークスペース内最後の1つのBoardは409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/close-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: onlyBoardId }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  test("rename-board: 名前を設定できる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/rename-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId, name: "repo-a" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === boardId)?.name).toBe("repo-a");
+  });
+
+  test("rename-board: 空文字列を渡すとデフォルトラベルへリセットされる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    mgr.setBoardName(boardId, "repo-a");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/rename-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId, name: "" }),
+    });
+
+    expect(res.status).toBe(200);
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === boardId)?.name).toBeNull();
+  });
+
+  test("rename-board: 存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/rename-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId: "not-found", name: "x" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html", () => {
   let dir: string;
   let socketPath: string;

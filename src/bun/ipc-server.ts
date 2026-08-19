@@ -258,6 +258,48 @@ function parseRenameWorkspaceBody(body: unknown): RenameWorkspaceRequestBody | n
   return { ...workspaceIdBody, name: b.name };
 }
 
+interface BoardIdRequestBody {
+  boardId: string;
+}
+
+function parseBoardIdBody(body: unknown): BoardIdRequestBody | null {
+  const b = body as { boardId?: unknown };
+  if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+  return { boardId: b.boardId };
+}
+
+interface NewBoardRequestBody {
+  workspaceId?: string;
+  cwd?: string;
+}
+
+/** workspaceId省略時はgetActiveWorkspaceId()で解決する（エンドポイント側の責務） */
+function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
+  const b = body as { workspaceId?: unknown; cwd?: unknown };
+  const result: NewBoardRequestBody = {};
+  if (b.workspaceId !== undefined) {
+    if (typeof b.workspaceId !== "string" || b.workspaceId.length === 0) return null;
+    result.workspaceId = b.workspaceId;
+  }
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  return result;
+}
+
+interface RenameBoardRequestBody extends BoardIdRequestBody {
+  name: string;
+}
+
+function parseRenameBoardBody(body: unknown): RenameBoardRequestBody | null {
+  const boardIdBody = parseBoardIdBody(body);
+  if (!boardIdBody) return null;
+  const b = body as { name?: unknown };
+  if (typeof b.name !== "string") return null;
+  return { ...boardIdBody, name: b.name };
+}
+
 function parseSetVarBody(body: unknown): SetVarRequestBody | null {
   const tabIdBody = parseTabIdBody(body);
   if (!tabIdBody) return null;
@@ -394,6 +436,58 @@ function buildApp(
     }
     const ok = workspaceManager.setWorkspaceName(parsed.workspaceId, parsed.name);
     if (!ok) return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post("/new-board", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseNewBoardBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { workspaceId?: string, cwd?: string }" }, 400);
+    }
+    const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+    const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd);
+    if (boardId === null) {
+      return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);
+    }
+    return c.json({ ok: true, boardId });
+  });
+
+  app.post("/switch-board", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { boardId: string }" }, 400);
+    const ok = workspaceManager.switchBoard(parsed.boardId);
+    if (!ok) return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  app.post("/close-board", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardIdBody(body);
+    if (!parsed) return c.json({ ok: false, error: "expected { boardId: string }" }, 400);
+    const result = workspaceManager.closeBoard(parsed.boardId);
+    if (!result.ok) {
+      if (result.reason === "not-found") {
+        return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
+      }
+      return c.json({ ok: false, error: "cannot close the last board in a workspace" }, 409);
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/rename-board", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseRenameBoardBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { boardId: string, name: string }" }, 400);
+    }
+    const ok = workspaceManager.setBoardName(parsed.boardId, parsed.name);
+    if (!ok) return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
     return c.json({ ok: true });
   });
 

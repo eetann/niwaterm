@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`/`zoom`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、Board操作（`niwaterm board new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`/`zoom`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -116,6 +116,22 @@ niwaterm workspace rename --workspace <workspaceId> <name>
 - `workspace rename` — 指定したワークスペースの名前を変更する（サイドバーの見出しラベルに反映される）。`<name>`に空文字列を指定するとデフォルトの連番ラベル（`Workspace N`）へ戻る。タブ名・タイル名同様、アプリ再起動をまたいでも復元される
 
 いずれも対象の`workspaceId`が存在しない場合、`workspace close`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
+
+```sh
+niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
+niwaterm board switch --board <boardId>
+niwaterm board close --board <boardId>
+niwaterm board rename --board <boardId> <name>
+```
+
+Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。`niwaterm list`は現状Board階層に未対応のため（roadmap参照）、対象の`boardId`は`board new`実行時に表示される値で確認する。
+
+- `board new` — 新規Boardを作成し、アクティブにする。`--workspace`省略時は現在アクティブなワークスペースに作成する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）。成功時、新規`boardId`を表示する
+- `board switch` — 指定したBoardへ切り替える
+- `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない
+- `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る
+
+いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm layout list

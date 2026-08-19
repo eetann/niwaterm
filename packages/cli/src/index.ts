@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
 import { failAndExit } from "./cli-error";
+import boardCommand from "./commands/board";
 import browserCommand from "./commands/browser";
 import docsCommand from "./commands/docs";
 import fontSizeCommand from "./commands/font-size";
@@ -38,6 +39,7 @@ try {
       list: listCommand,
       tab: tabCommand,
       workspace: workspaceCommand,
+      board: boardCommand,
       tile: tileCommand,
       popup: popupCommand,
       browser: browserCommand,

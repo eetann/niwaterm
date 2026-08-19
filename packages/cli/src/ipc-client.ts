@@ -317,6 +317,41 @@ export function renameWorkspace(
   return postJson(endpoint, "/rename-workspace", { workspaceId, name });
 }
 
+export type NewBoardResult = { ok: true; boardId: string } | { ok: false; error: string };
+
+export function newBoard(
+  endpoint: IpcEndpoint,
+  workspaceId?: string,
+  cwd?: string,
+): Promise<NewBoardResult> {
+  const body: { workspaceId?: string; cwd?: string } = {};
+  if (workspaceId !== undefined) body.workspaceId = workspaceId;
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  return postJson(endpoint, "/new-board", body);
+}
+
+export type SwitchBoardResult = { ok: true } | { ok: false; error: string };
+
+export function switchBoard(endpoint: IpcEndpoint, boardId: string): Promise<SwitchBoardResult> {
+  return postJson(endpoint, "/switch-board", { boardId });
+}
+
+export type CloseBoardResult = { ok: true } | { ok: false; error: string };
+
+export function closeBoard(endpoint: IpcEndpoint, boardId: string): Promise<CloseBoardResult> {
+  return postJson(endpoint, "/close-board", { boardId });
+}
+
+export type RenameBoardResult = { ok: true } | { ok: false; error: string };
+
+export function renameBoard(
+  endpoint: IpcEndpoint,
+  boardId: string,
+  name: string,
+): Promise<RenameBoardResult> {
+  return postJson(endpoint, "/rename-board", { boardId, name });
+}
+
 export interface ShellProfileEntry {
   id: string;
   name: string;
