@@ -125,7 +125,7 @@ Window（OS ウィンドウ。当面1つ）
 |------|------------|------------|
 | Tab の中身（terminal / browser / HTML UI）の抽象名 | MVP では Tab = ターミナルのみで十分 | roadmap「GUI統合」セクション |
 | Window の複数対応 | 当面1ウィンドウで進める | 必要になったとき |
-| Workspace をさらに束ねる概念（cmux の Workspace Groups 相当） | サイドバー実装前に決めても空論になる | roadmap「サイドバーとワークスペース」セクション |
+| Workspace をさらに束ねる概念（cmux の Workspace Groups 相当） | サイドバー実装前に決めても空論になる | ADR 0006で決定（Board階層を追加） |
 | 永続化の単位と「Session」の語の再利用 | 復元機能の実装時に具体化する | roadmap「タブとワークスペース」〜「磨き込みと配布」 |
 
 ## Notes
