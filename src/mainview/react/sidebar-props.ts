@@ -74,6 +74,8 @@ export function agentStatusBadgeClass(status: AgentStatus): string {
  * renderSidebar()旧実装のラベル整形・active判定ロジックを、DOM非依存の純粋関数として抽出したもの。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
  * タブラベルはタイル内の連番のみ（"Tile x / "は表示側でタイル見出しとして扱うため含めない）。
+ * ポップアップはWorkspace直下の状態（ADR 0005・ADR 0006）でBoardをまたいでも共有されるため、
+ * entry.popupを直接参照する（アクティブBoardのtabNamesとは無関係、専用のリネームUIも無いためラベルは固定文言）。
  * TODO(ADR 0006): 現状はWorkspaceごとのアクティブBoardのみを表示する暫定実装。
  * Workspace→Board→Tile→Tabの4段表示はroadmap「Board階層」節のサイドバー対応タスクで行う
  */
@@ -87,16 +89,15 @@ export function buildSidebarWorkspaceItems(
     const tileNames = board?.tileNames ?? {};
     const tabVars = board?.tabVars ?? {};
     const tabNames = board?.tabNames ?? {};
-    const popup = board?.popup ?? null;
     return {
       workspaceId: entry.workspaceId,
       label: entry.name || `Workspace ${workspaceIndex + 1}`,
       active: entry.workspaceId === currentActiveWorkspaceId,
-      popup: popup
+      popup: entry.popup
         ? {
-            tabId: popup.tabId,
-            visible: popup.visible,
-            label: tabNames[popup.tabId] || "Popup",
+            tabId: entry.popup.tabId,
+            visible: entry.popup.visible,
+            label: "Popup",
           }
         : null,
       tiles: (layout ? listLeaves(layout) : []).map((leaf, tileIndex) => ({

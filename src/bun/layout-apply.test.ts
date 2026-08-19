@@ -34,6 +34,7 @@ function createTestWorkspaceManager(): {
         viewportPinned: true,
       }),
       dumpText: () => `screen-text-${index}`,
+      setCallbacks: () => {},
       dispose: () => {},
     };
   };

@@ -305,7 +305,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = activeBoard.focusedTileId;
-        applyPopupState(activeBoard.popup);
+        applyPopupState(p.workspace.popup);
         // ポップアップ表示中はキー入力・ペーストの送信先をポップアップへ向ける
         currentTabId =
           popupVisible && currentPopupTabId
@@ -1455,8 +1455,7 @@ function activateSidebarPopup(workspaceId: WorkspaceId): void {
     sendMessage("switchWorkspace", { workspaceId });
   }
   const entry = lastWorkspaces.find((w) => w.workspaceId === workspaceId);
-  // TODO(ADR 0006): ポップアップは現状Board単位の暫定実装のため、アクティブBoardのみ見る
-  const popup = entry?.boards.find((b) => b.boardId === entry.activeBoardId)?.popup;
+  const popup = entry?.popup;
   if (popup && !popup.visible) {
     sendMessage("togglePopupVisibility");
   }

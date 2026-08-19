@@ -44,6 +44,7 @@ function createTestNiwaApi(): NiwaApiHandle {
       viewportPinned: true,
     }),
     dumpText: () => "",
+    setCallbacks: () => {},
     dispose: () => {},
   };
   const workspaceManager = createWorkspaceManager({

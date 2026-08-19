@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { PersistedTab, RestoredTreeMeta } from "./persistence";
-import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
+import type {
+  TerminalSession,
+  TerminalSessionCallbacks,
+  TerminalSessionOptions,
+} from "./terminal-session";
 import type { TileLeaf, TileNode } from "./tile-layout";
 import { createBoard, type BoardOptions } from "./board";
 
@@ -12,12 +16,18 @@ function idGen(prefix: string): () => string {
 interface FakeSessionRecord {
   opts: TerminalSessionOptions;
   disposed: boolean;
+  /** setCallbacksで差し替わった最新のコールバック。テストからtriggerExit/triggerPwdChangedで発火する */
+  callbacks: TerminalSessionCallbacks;
 }
 
 function createFakeSessionFactory() {
   const created: FakeSessionRecord[] = [];
   const factory = (opts: TerminalSessionOptions): TerminalSession => {
-    const record: FakeSessionRecord = { opts, disposed: false };
+    const record: FakeSessionRecord = {
+      opts,
+      disposed: false,
+      callbacks: { onOutput: opts.onOutput, onExit: opts.onExit, onPwdChanged: opts.onPwdChanged },
+    };
     created.push(record);
     return {
       write: () => {},
@@ -35,6 +45,9 @@ function createFakeSessionFactory() {
         viewportPinned: true,
       }),
       dumpText: () => "",
+      setCallbacks: (next) => {
+        record.callbacks = next;
+      },
       dispose: () => {
         record.disposed = true;
       },
@@ -1247,5 +1260,97 @@ describe("getPersistableTabs", () => {
 
     const persisted = ws.getPersistableTabs();
     expect(persisted[tabId]).toEqual({ kind: "browser", url: "https://example.com", name: "docs" });
+  });
+});
+
+describe("adoptTab（popup.tsからの昇格編入。ADR 0006）", () => {
+  test("フォーカス中タイルへタブを編入し、セッションを作り直さずtree/tabVars/shellへ反映する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const adopted = factory({ cols: 40, rows: 10 });
+    const adoptedRecord = created[created.length - 1] as FakeSessionRecord;
+    const countBeforeAdopt = created.length;
+
+    const ok = ws.adoptTab("tab-adopted", adopted, {
+      cols: 40,
+      rows: 10,
+      shell: "/bin/zsh",
+      vars: { cwd: "/tmp/popup" },
+    });
+
+    expect(ok).toBe(true);
+    expect(created.length).toBe(countBeforeAdopt); // 新規セッションは作られない（PTY再生成なし）
+    const leaf = ws.snapshot().layout as TileLeaf;
+    expect(leaf.id).toBe(tileId);
+    expect(leaf.tabIds).toContain("tab-adopted");
+    expect(leaf.activeTabId).toBe("tab-adopted");
+    expect(ws.hasTab("tab-adopted")).toBe(true);
+    expect(ws.getPersistableTabs()["tab-adopted"]).toEqual({
+      kind: "terminal",
+      shell: "/bin/zsh",
+      vars: { cwd: "/tmp/popup" },
+    });
+    expect(adoptedRecord.disposed).toBe(false);
+  });
+
+  test("編入後のPTY終了はBoard側のタブclose処理として扱われ、編入前のコールバック（popup側）は呼ばれない", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    // 最後の1枚だと閉じた時にタイルごと消えてしまうため、編入先とは別にもう1タブ用意しておく
+    ws.newTab(tileId);
+
+    let popupOnExitCalled = false;
+    const adopted = factory({
+      cols: 40,
+      rows: 10,
+      onExit: () => {
+        popupOnExitCalled = true;
+      },
+    });
+    const adoptedRecord = created[created.length - 1] as FakeSessionRecord;
+    ws.adoptTab("tab-adopted", adopted, { cols: 40, rows: 10 });
+
+    // setCallbacksによってBoard側のonExitへ配線し直されているはず
+    adoptedRecord.callbacks.onExit?.(0);
+
+    expect(popupOnExitCalled).toBe(false);
+    expect(ws.hasTab("tab-adopted")).toBe(false);
+    const leaf = ws.snapshot().layout as TileLeaf;
+    expect(leaf.tabIds).not.toContain("tab-adopted");
+  });
+
+  test("編入後のOSC7 cwd通知はBoard側のtabVar 'cwd' へ反映される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const adopted = factory({ cols: 40, rows: 10 });
+    const adoptedRecord = created[created.length - 1] as FakeSessionRecord;
+    ws.adoptTab("tab-adopted", adopted, { cols: 40, rows: 10 });
+
+    adoptedRecord.callbacks.onPwdChanged?.("/repo/after-promote");
+
+    expect(ws.getTabVar("tab-adopted", "cwd")).toEqual({
+      found: true,
+      value: "/repo/after-promote",
+    });
+  });
+});
+
+describe("getFocusedTabSnapshot", () => {
+  test("フォーカス中タイルのアクティブタブのcols/rows/cwdを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory, initialCols: 80, initialRows: 24 }));
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    ws.setTabVar(tabId, "cwd", "/home/eetann/work");
+
+    expect(ws.getFocusedTabSnapshot()).toEqual({ cols: 80, rows: 24, cwd: "/home/eetann/work" });
+  });
+
+  test("cwd未報告の場合はcwd:undefined", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+
+    expect(ws.getFocusedTabSnapshot()?.cwd).toBeUndefined();
   });
 });

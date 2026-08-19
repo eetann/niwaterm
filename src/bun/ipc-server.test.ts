@@ -55,6 +55,7 @@ function createTestWorkspaceManager(): {
         viewportPinned: true,
       }),
       dumpText: () => `screen-text-${index}`,
+      setCallbacks: () => {},
       dispose: () => {},
     };
   };
@@ -2117,7 +2118,7 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    expect(mgr.snapshot().workspace.popup).toBeNull();
   });
 
   test("toggle-popup: 表示/非表示を切り替え、トグル後のvisibleを返す。popup無しは409を返す", async () => {
@@ -2175,7 +2176,7 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, tileId, tabId: popupTabId });
-    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    expect(mgr.snapshot().workspace.popup).toBeNull();
     const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(leaf.tabIds).toContain(popupTabId);
   });

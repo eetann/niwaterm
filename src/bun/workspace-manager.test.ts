@@ -30,6 +30,7 @@ function createFakeSessionFactory() {
         viewportPinned: true,
       }),
       dumpText: () => "",
+      setCallbacks: () => {},
       dispose: () => {
         record.disposed = true;
       },
@@ -1018,7 +1019,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     expect(tabId).not.toBeNull();
     expect(created.length).toBe(before + 1);
-    expect(mgr.snapshot().workspace.board.popup).toEqual({
+    expect(mgr.snapshot().workspace.popup).toEqual({
       tabId: tabId as string,
       visible: true,
       width: undefined,
@@ -1037,7 +1038,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     const ok = mgr.closePopup();
 
     expect(ok).toBe(true);
-    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    expect(mgr.snapshot().workspace.popup).toBeNull();
     expect(created[created.length - 1]?.disposed).toBe(true);
   });
 
@@ -1048,11 +1049,11 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     expect(mgr.togglePopupVisibility()).toBeNull();
 
     mgr.openPopup();
-    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(true);
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
     expect(mgr.togglePopupVisibility()).toBe(false);
-    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(false);
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(false);
     expect(mgr.togglePopupVisibility()).toBe(true);
-    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(true);
+    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
   });
 
   test("promotePopupはpopup無しでnullを返す", () => {
@@ -1073,7 +1074,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     expect(result).toEqual({ tileId, tabId: popupTabId });
     expect(created.length).toBe(createdCountAfterOpen); // セッションが作り直されないこと（ADR 0005）
-    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    expect(mgr.snapshot().workspace.popup).toBeNull();
     const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(leaf.tabIds).toContain(popupTabId);
     expect(leaf.activeTabId).toBe(popupTabId);

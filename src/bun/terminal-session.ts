@@ -6,14 +6,16 @@ import { createGhosttyTerminal } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
-export type TerminalSessionOptions = PtyOptions & {
-  maxScrollback?: number;
+export type TerminalSessionCallbacks = {
   /** PTY出力によりVT状態が変わった時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onOutput?: () => void;
   onExit?: (code: number) => void;
   /** シェル統合が送るOSC 7/9/1337でカレントディレクトリが変化した時に呼ばれる */
   onPwdChanged?: (cwd: string) => void;
 };
+
+export type TerminalSessionOptions = PtyOptions &
+  TerminalSessionCallbacks & { maxScrollback?: number };
 
 export interface TerminalRenderState {
   kind: "terminal";
@@ -40,6 +42,13 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   let currentCols = opts.cols;
   let currentRows = opts.rows;
   let disposed = false;
+  // popupからタブへの昇格（ADR 0006）時に呼び出し側がsetCallbacksで差し替えるため、
+  // optsを直接参照せずmutableな変数へ切り出す
+  let callbacks: TerminalSessionCallbacks = {
+    onOutput: opts.onOutput,
+    onExit: opts.onExit,
+    onPwdChanged: opts.onPwdChanged,
+  };
 
   // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
   term.onWritePty((data) => {
@@ -55,7 +64,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   // libghostty-vtは生ペイロードのまま渡すため、ここでURIデコードを行う（ホスト検証はしない、pwd-report.ts参照）
   term.onPwdChanged((raw) => {
     const cwd = decodePwdReport(raw);
-    if (cwd !== null) opts.onPwdChanged?.(cwd);
+    if (cwd !== null) callbacks.onPwdChanged?.(cwd);
   });
 
   // Windows実機ではPTYプロセスのonExit発火後にもdataコールバックが非同期に遅延発火することがあり、
@@ -64,12 +73,17 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   pty.onData((data) => {
     if (disposed) return;
     term.write(data);
-    opts.onOutput?.();
+    callbacks.onOutput?.();
   });
 
   pty.onExit((code) => {
-    opts.onExit?.(code);
+    callbacks.onExit?.(code);
   });
+
+  /** popupからタブへの昇格時、PTYセッションを作り直さずに呼び出し先だけをBoard側へ差し替える */
+  function setCallbacks(next: TerminalSessionCallbacks): void {
+    callbacks = next;
+  }
 
   // 他の主要ターミナル（xterm系/iTerm2/Ghostty等）と同様、スクロールバック閲覧中に
   // 何か入力すると自動で最新行へ戻る（tmuxのcopy-mode離脱に相当する挙動）
@@ -141,6 +155,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     scrollToBottom,
     renderState,
     dumpText,
+    setCallbacks,
     dispose,
   };
 }

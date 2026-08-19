@@ -1,0 +1,230 @@
+// Tile木構造とは独立した、Workspace直下のポップアップ画面（ADR 0005・ADR 0006）。
+// tmuxのpopup/floating相当。Boardをまたいでも同じポップアップを使えるよう、Board単位ではなく
+// Workspace単位でTerminalSessionを1つだけ管理する。「タブへ昇格」時はPTYセッションを作り直さず、
+// takeForPromotion()でsessionをそのまま呼び出し側（workspace.ts）へ渡し、board.tsのadoptTabへ編入させる。
+import {
+  createTerminalSession,
+  type TerminalRenderState,
+  type TerminalSession,
+} from "./terminal-session";
+import type { TabId } from "./tile-layout";
+
+export interface PopupRenderState {
+  tabId: TabId;
+  visible: boolean;
+  width?: number;
+  height?: number;
+}
+
+export interface OpenPopupOptions {
+  /** 省略時は呼び出し側が渡したフォーカス中タブのcwdを引き継ぐ（split-tile/newTabと同じ方針） */
+  cwd?: string;
+  /** 指定すると、このコマンドをシェルの代わりに実行する（ワンショット実行）。終了すると自動的にポップアップも閉じる */
+  command?: string;
+  /** 表示サイズ（1〜100のパーセント）。省略時はCSS側の既定値に従う */
+  width?: number;
+  height?: number;
+}
+
+/** openPopup呼び出し元（workspace.ts）が継承元として渡すサイズ・cwd */
+export interface InheritedTabSnapshot {
+  cols: number;
+  rows: number;
+  cwd?: string;
+}
+
+/** promotePopup成功時にboard.tsのadoptTabへそのまま渡せる形の戻り値 */
+export interface PromotedPopup {
+  tabId: TabId;
+  session: TerminalSession;
+  cols: number;
+  rows: number;
+  shell?: string;
+  vars?: Record<string, string>;
+}
+
+export type PopupOptions = {
+  genTabId: () => TabId;
+  /** 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う */
+  getDefaultShell?: () => string | undefined;
+  /** 描画すべき変化が生じた時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
+  onDirty: () => void;
+  /** テスト時にfakeへ差し替えるためのDI */
+  createSession?: typeof createTerminalSession;
+};
+
+export function createPopup(opts: PopupOptions) {
+  const createSession = opts.createSession ?? createTerminalSession;
+  let tabId: TabId | null = null;
+  let session: TerminalSession | null = null;
+  let visible = false;
+  let width: number | undefined;
+  let height: number | undefined;
+  let cols = 0;
+  let rows = 0;
+  let shell: string | undefined;
+  const vars = new Map<string, string>();
+
+  function reset(): void {
+    tabId = null;
+    session = null;
+    visible = false;
+    width = undefined;
+    height = undefined;
+    shell = undefined;
+    vars.clear();
+  }
+
+  /**
+   * ポップアップを開く。既に開いていれば何もしない（同時に1つだけ、ADR 0005）。
+   * commandを指定すると、デフォルトシェル（WSLプロファイル等も含む）の-c/-Command相当で
+   * そのコマンドをexecする（ワンショット実行、pty.tsのappendCommandArgs参照）。
+   * execで置き換わるため、コマンド終了=シェルプロセス終了となりPTYのonExitが自然に発火し、
+   * 自動的に閉じる（明示的なexit送信は不要）。
+   */
+  function open(popupOpts: OpenPopupOptions, inherited: InheritedTabSnapshot): TabId | null {
+    if (tabId) return null;
+    const newTabId = opts.genTabId();
+    const resolvedShell = opts.getDefaultShell?.();
+    shell = resolvedShell;
+    cols = inherited.cols;
+    rows = inherited.rows;
+    vars.clear();
+    session = createSession({
+      cols: inherited.cols,
+      rows: inherited.rows,
+      shell: resolvedShell,
+      cwd: popupOpts.cwd ?? inherited.cwd,
+      command: popupOpts.command,
+      env: { NIWATERM_TAB_ID: newTabId },
+      onOutput: () => opts.onDirty(),
+      onExit: () => close(),
+      onPwdChanged: (cwd) => vars.set("cwd", cwd),
+    });
+    tabId = newTabId;
+    visible = true;
+    width = popupOpts.width;
+    height = popupOpts.height;
+    opts.onDirty();
+    return newTabId;
+  }
+
+  function close(): boolean {
+    if (!tabId) return false;
+    session?.dispose();
+    reset();
+    opts.onDirty();
+    return true;
+  }
+
+  /** ポップアップの表示/非表示を切り替える。戻り値はトグル後の可視状態。popupが開いていなければnull */
+  function toggleVisibility(): boolean | null {
+    if (!tabId) return null;
+    visible = !visible;
+    opts.onDirty();
+    return visible;
+  }
+
+  /**
+   * 開いているポップアップの中身を呼び出し側（board.tsのadoptTab）へ渡すために取り出す。
+   * 以後このポップアップは「閉じている」状態になる（PTYセッションはdisposeしない。所有権の移転のみ）
+   */
+  function takeForPromotion(): PromotedPopup | null {
+    if (!tabId || !session) return null;
+    const promoted: PromotedPopup = {
+      tabId,
+      session,
+      cols,
+      rows,
+      shell,
+      vars: vars.size > 0 ? Object.fromEntries(vars) : undefined,
+    };
+    reset();
+    opts.onDirty();
+    return promoted;
+  }
+
+  function hasTab(id: TabId): boolean {
+    return tabId === id;
+  }
+
+  function handleInput(data: string): void {
+    session?.write(data);
+  }
+
+  function handlePaste(data: string): void {
+    session?.paste(data);
+  }
+
+  // スクロールはPTYを経由しないため、呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
+  function handleScroll(deltaLines: number): void {
+    if (!session) return;
+    session.scroll(deltaLines);
+    opts.onDirty();
+  }
+
+  function handleScrollToTop(): void {
+    if (!session) return;
+    session.scrollToTop();
+    opts.onDirty();
+  }
+
+  function handleScrollToBottom(): void {
+    if (!session) return;
+    session.scrollToBottom();
+    opts.onDirty();
+  }
+
+  function handleResize(c: number, r: number, cellWidthPx: number, cellHeightPx: number): void {
+    if (!session) return;
+    if (session.resize(c, r, cellWidthPx, cellHeightPx)) {
+      cols = c;
+      rows = r;
+      opts.onDirty();
+    }
+  }
+
+  function getTabText(): string | null {
+    return session?.dumpText() ?? null;
+  }
+
+  /** 中身のrenderState（HTML等）。既存タブ更新ループへ同居させるため呼び出し側が使う */
+  function renderState(): TerminalRenderState | null {
+    return session?.renderState() ?? null;
+  }
+
+  function snapshot(): PopupRenderState | null {
+    return tabId ? { tabId, visible, width, height } : null;
+  }
+
+  /** サイドバー一覧用の軽量な参照。非アクティブなWorkspaceでもポップアップの有無・表示状態を把握できるようにする */
+  function getInfo(): { tabId: TabId; visible: boolean } | null {
+    return tabId ? { tabId, visible } : null;
+  }
+
+  function dispose(): void {
+    session?.dispose();
+    reset();
+  }
+
+  return {
+    open,
+    close,
+    toggleVisibility,
+    takeForPromotion,
+    hasTab,
+    handleInput,
+    handlePaste,
+    handleScroll,
+    handleScrollToTop,
+    handleScrollToBottom,
+    handleResize,
+    getTabText,
+    renderState,
+    snapshot,
+    getInfo,
+    dispose,
+  };
+}
+
+export type Popup = ReturnType<typeof createPopup>;

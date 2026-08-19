@@ -45,6 +45,8 @@ export interface WorkspaceListEntry {
   boards: BoardListEntry[];
   /** ユーザーがサイドバーから設定したワークスペース名。未設定はnull（表示側で連番にフォールバック） */
   name: string | null;
+  /** このWorkspaceのポップアップ（ADR 0005）。Boardをまたいでも共有される（ADR 0006） */
+  popup: { tabId: TabId; visible: boolean } | null;
 }
 
 export interface TabLocation {
@@ -239,7 +241,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   // ポップアップはワークスペースごとの状態のため「現在アクティブなワークスペース」へルーティングする
   // （focusDirectionと同様、idを取らない例外的な操作。ADR 0005。
-  // workspace.ts内では現状Board単位の暫定実装のまま委譲される。roadmap「Board階層」節参照）
+  // Boardをまたいでも同じポップアップを使えるようworkspace.ts側でBoard横断の単一状態として保持する。ADR 0006）
   function openPopup(popupOpts?: OpenPopupOptions): TabId | null {
     return workspaces.get(activeId)?.openPopup(popupOpts) ?? null;
   }
@@ -382,6 +384,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         activeBoardId: ws.getActiveBoardId(),
         boards: ws.listBoards(),
         name: workspaceNames.get(id) ?? null,
+        popup: ws.getPopupInfo(),
       };
     });
   }

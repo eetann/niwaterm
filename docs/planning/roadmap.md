@@ -272,7 +272,7 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 1つのWorkspace内で複数の独立したTileレイアウトを並行して持てるようにする機能。tmuxのWindowに相当する新階層（ADR 0006）をWorkspaceとTileの間に追加する。詳細な設計判断はADR 0006参照。
 
 - [x] Board型を追加し、WorkspaceがTileツリーを直接持つ構造から、複数のBoard（各々1本のTileツリー）を持つ構造に変更する（`src/bun/board.ts`（旧workspace.ts） / `tile-layout.ts` / 新設する`src/bun/workspace.ts` / `workspace-manager.ts`）
-  - [ ] ポップアップ（ADR 0005）をBoard層からWorkspace層へ移す。「Boardをまたいでも同じポップアップを使える」というADR 0006の決定を満たすため。第一段階ではBoard単位の暫定実装のまま進め、この項目で正式にWorkspace単位へ統合する（`src/bun/board.ts`の`popup`関連コード参照）
+  - [x] ポップアップ（ADR 0005）をBoard層からWorkspace層へ移す。「Boardをまたいでも同じポップアップを使える」というADR 0006の決定を満たすため。第一段階ではBoard単位の暫定実装のまま進め、この項目で正式にWorkspace単位へ統合する（`src/bun/board.ts`の`popup`関連コード参照）
 - [x] 永続化スキーマにBoardを追加し、旧形式（Workspace直下に1本のlayout）を「Boardが1つだけのWorkspace」として読み替えるマイグレーションを実装する（`src/bun/persistence.ts`）
 - [ ] RPC（NiwaRPC）・`AppRenderState`にBoard関連のエンドポイント・データを追加する（`newBoard`/`switchBoard`/`closeBoard`/`renameBoard`等）
 - [ ] CLIに`board`リソースを追加する（`new`/`close`/`switch`/`rename`、`.claude/rules/cli-command-naming.md`に従う）

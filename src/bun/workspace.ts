@@ -1,6 +1,8 @@
 // 複数のBoard（createBoardのインスタンス）を束ね、Boardの切り替え・作成・削除を管理する層（ADR 0006）。
 // workspace-manager.tsが複数Workspaceを束ねるのと同じパターンを、Workspace内で複数Boardへ1段複製したもの。
 // tile/tabのid採番は既存方針どおりworkspace-manager.tsに一元化されたままで、このファイルはBoardId採番のみ担う。
+// ポップアップ（ADR 0005）はBoardをまたいでも同じものを使えるよう、Board単位ではなくこの層で
+// popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
 import type { RestoredTreeMeta } from "./persistence";
 import { toPersistedTileNode, type PersistedTileNode } from "./persistence";
 import {
@@ -10,10 +12,11 @@ import {
   type BoardOptions,
   type BoardRenderState,
   type GetTabVarResult,
-  type OpenPopupOptions,
 } from "./board";
+import { createPopup, type OpenPopupOptions, type Popup, type PopupRenderState } from "./popup";
 
-export type { BoardId, BoardRenderState, OpenPopupOptions, TabRenderState } from "./board";
+export type { BoardId, BoardRenderState, TabRenderState } from "./board";
+export type { OpenPopupOptions, PopupRenderState } from "./popup";
 import {
   findNode,
   listLeaves,
@@ -34,6 +37,13 @@ export interface WorkspaceRenderState {
   board: BoardRenderState;
   /** サイドバー描画用。全Boardのレイアウト骨格（PTY内容は含まない、listBoards()と同一データ） */
   boards: BoardListEntry[];
+  /**
+   * Tile木構造・Boardとは独立したポップアップ画面（ADR 0005）。Boardをまたいでも同じものを使える
+   * （ADR 0006）。中身のPTY描画状態はboard.tabsに同居させている（popupのtabIdをキーに引ける）ため、
+   * ここではメタ情報のみ持つ。width/heightは表示サイズの指定（1〜100のパーセント）。
+   * 未指定はCSS側の既定値（80%）に従う
+   */
+  popup: PopupRenderState | null;
 }
 
 export interface BoardListEntry {
@@ -46,11 +56,6 @@ export interface BoardListEntry {
   tileNames: Record<TileId, string>;
   /** ユーザーがサイドバーから設定したBoard名。未設定はnull（表示側で連番にフォールバック） */
   name: string | null;
-  /**
-   * このBoardのポップアップ（ADR 0005）。
-   * TODO(ADR 0006): 本来はWorkspace単位（Boardをまたいでも共有）だが、現状はBoard単位の暫定実装
-   */
-  popup: { tabId: TabId; visible: boolean } | null;
 }
 
 export interface BoardLocation {
@@ -90,6 +95,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
   let activeBoardId: BoardId;
   // Board名。getPersistableBoards経由で永続化対象になる
   const boardNames = new Map<BoardId, string>();
+  // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
+  const popup: Popup = createPopup({
+    genTabId: opts.genTabId,
+    getDefaultShell: opts.getDefaultShell,
+    onDirty: () => opts.onDirty(),
+    createSession: opts.createSession,
+  });
 
   function createAndRegisterBoard(
     initialTree?: BoardOptions["initialTree"],
@@ -244,22 +256,41 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTileId(tileId)?.newBrowserTab(tileId, url) ?? null;
   }
 
-  // ポップアップは現状Board単位の暫定実装のため「現在アクティブなBoard」へルーティングする
-  // （TODO(ADR 0006): 本来はWorkspace単位。roadmap「Board階層」節参照）
-  function openPopup(popupOpts?: OpenPopupOptions): TabId | null {
-    return boards.get(activeBoardId)?.openPopup(popupOpts) ?? null;
+  // ポップアップはWorkspace直下の状態（ADR 0005・ADR 0006）。cwd・サイズの継承元は
+  // 「現在アクティブなBoard」のフォーカス中タブとする（openPopup実行時点でのアクティブBoard）
+  function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
+    const inherited = boards.get(activeBoardId)?.getFocusedTabSnapshot();
+    return popup.open(popupOpts, inherited ?? { cols: opts.initialCols, rows: opts.initialRows });
   }
 
   function closePopup(): boolean {
-    return boards.get(activeBoardId)?.closePopup() ?? false;
+    return popup.close();
   }
 
   function togglePopupVisibility(): boolean | null {
-    return boards.get(activeBoardId)?.togglePopupVisibility() ?? null;
+    return popup.toggleVisibility();
   }
 
+  /**
+   * 開いているポップアップの中身を、実行時点でアクティブなBoardのフォーカス中タイルへ
+   * 通常タブとして編入する（タブへ昇格。ADR 0005）。PTYセッションは作り直さない
+   */
   function promotePopup(): { tileId: TileId; tabId: TabId } | null {
-    return boards.get(activeBoardId)?.promotePopup() ?? null;
+    const promoted = popup.takeForPromotion();
+    if (!promoted) return null;
+    const board = boards.get(activeBoardId) as Board;
+    const tileId = board.getFocusedTileId();
+    const ok = board.adoptTab(promoted.tabId, promoted.session, {
+      cols: promoted.cols,
+      rows: promoted.rows,
+      shell: promoted.shell,
+      vars: promoted.vars,
+    });
+    if (!ok) {
+      promoted.session.dispose();
+      return null;
+    }
+    return { tileId, tabId: promoted.tabId };
   }
 
   function setBrowserTabUrl(tabId: TabId, url: string): boolean {
@@ -332,22 +363,42 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   function handleInput(tabId: TabId, data: string): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleInput(data);
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handleInput(tabId, data);
   }
 
   function handlePaste(tabId: TabId, data: string): void {
+    if (popup.hasTab(tabId)) {
+      popup.handlePaste(data);
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
 
   function handleScroll(tabId: TabId, deltaLines: number): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleScroll(deltaLines);
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handleScroll(tabId, deltaLines);
   }
 
   function handleScrollToTop(tabId: TabId): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleScrollToTop();
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handleScrollToTop(tabId);
   }
 
   function handleScrollToBottom(tabId: TabId): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleScrollToBottom();
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handleScrollToBottom(tabId);
   }
 
@@ -358,6 +409,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     cellWidthPx: number,
     cellHeightPx: number,
   ): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleResize(cols, rows, cellWidthPx, cellHeightPx);
+      return;
+    }
     findBoardOwnerByTabId(tabId)?.handleResize(tabId, cols, rows, cellWidthPx, cellHeightPx);
   }
 
@@ -380,16 +435,16 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tabNames: board.listTabNames(),
         tileNames: board.listTileNames(),
         name: boardNames.get(id) ?? null,
-        popup: board.getPopupInfo(),
       };
     });
   }
 
   function hasTab(tabId: TabId): boolean {
-    return findBoardOwnerByTabId(tabId) !== undefined;
+    return popup.hasTab(tabId) || findBoardOwnerByTabId(tabId) !== undefined;
   }
 
   function getTabText(tabId: TabId): string | null {
+    if (popup.hasTab(tabId)) return popup.getTabText();
     return findBoardOwnerByTabId(tabId)?.getTabText(tabId) ?? null;
   }
 
@@ -431,11 +486,24 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   function snapshot(): WorkspaceRenderState {
     const active = boards.get(activeBoardId) as Board;
+    const activeBoardState = active.snapshot();
+    const popupState = popup.snapshot();
+    const popupRenderState = popupState ? popup.renderState() : null;
+    // popupの中身（HTML等）はboard.tabsに同居させる。mainview側は既存のterminalタブ更新ループが
+    // termElByTabId登録済みのtabIdをそのまま拾うため、この形にすると呼び出し側の変更が不要になる
+    const board: BoardRenderState =
+      popupState && popupRenderState
+        ? {
+            ...activeBoardState,
+            tabs: { ...activeBoardState.tabs, [popupState.tabId]: popupRenderState },
+          }
+        : activeBoardState;
     return {
       activeBoardId,
       boardIds: [...order],
-      board: active.snapshot(),
+      board,
       boards: listBoards(),
+      popup: popupState,
     };
   }
 
@@ -461,9 +529,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return order.indexOf(activeBoardId);
   }
 
+  /** サイドバー一覧用の軽量な参照。非アクティブなWorkspaceでもポップアップの有無・表示状態を把握できるようにする */
+  function getPopupInfo(): { tabId: TabId; visible: boolean } | null {
+    return popup.getInfo();
+  }
+
   function dispose(): void {
     for (const board of boards.values()) board.dispose();
     boards.clear();
+    popup.dispose();
   }
 
   return {
@@ -505,6 +579,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getActiveBoardId,
     getActiveBoardIndex,
     getTabText,
+    getPopupInfo,
     setTabVar,
     getTabVar,
     listTabVars,

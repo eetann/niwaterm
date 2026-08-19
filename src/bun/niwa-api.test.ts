@@ -31,6 +31,7 @@ function createFakeSessionFactory() {
       viewportPinned: true,
     }),
     dumpText: () => "",
+    setCallbacks: () => {},
     dispose: () => {},
   });
   return factory;

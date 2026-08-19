@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
 import type { WorkspaceListEntry } from "../../bun/workspace-manager";
-import type { BoardListEntry } from "../../bun/workspace";
 import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
@@ -23,7 +22,7 @@ function workspace(
   tabNames: Record<string, string> = {},
   tileNames: Record<string, string> = {},
   name: string | null = null,
-  popup: BoardListEntry["popup"] = null,
+  popup: WorkspaceListEntry["popup"] = null,
 ): WorkspaceListEntry {
   const boardId = `board-${workspaceId}`;
   return {
@@ -40,10 +39,10 @@ function workspace(
         tabNames,
         tileNames,
         name: null,
-        popup,
       },
     ],
     name,
+    popup,
   };
 }
 
@@ -269,7 +268,7 @@ describe("buildSidebarWorkspaceItems", () => {
     expect(items[0]?.tiles[0]?.tabs[0]?.active).toBe(false);
   });
 
-  test('popupがあればtabNamesの名前（無ければ固定ラベル"Popup"）とvisibleを含む', () => {
+  test('popupがあれば固定ラベル"Popup"とvisibleを含む（Workspace直下の状態のためtabNamesは参照しない、ADR 0006）', () => {
     const workspaces = [
       workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {}, {}, {}, null, {
         tabId: "tab-popup",
@@ -280,24 +279,6 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.popup).toEqual({ tabId: "tab-popup", visible: false, label: "Popup" });
-  });
-
-  test("popupのtabIdがtabNamesに設定されていればそちらを優先する", () => {
-    const workspaces = [
-      workspace(
-        "ws-1",
-        leaf("tile-1", ["tab-1"], "tab-1"),
-        {},
-        { "tab-popup": "lazygit" },
-        {},
-        null,
-        { tabId: "tab-popup", visible: true },
-      ),
-    ];
-
-    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
-
-    expect(items[0]?.popup).toEqual({ tabId: "tab-popup", visible: true, label: "lazygit" });
   });
 
   test("同一タイル内の複数タブが別々のagent状態を持てる（タブ単位化の主目的）", () => {

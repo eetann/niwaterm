@@ -44,26 +44,16 @@ export interface BoardRenderState {
   tabNames: Record<TabId, string>;
   /** ユーザーがサイドバーから設定したタイル名。未設定のタイルは含まれない（表示側で連番にフォールバック） */
   tileNames: Record<TileId, string>;
-  /**
-   * Tile木構造とは独立したポップアップ画面（ADR 0005）。
-   * 中身のPTY描画状態はtabsに同居させている（popupのtabIdをキーに引ける）ため、ここではメタ情報のみ持つ。
-   * width/heightは表示サイズの指定（1〜100のパーセント）。未指定はCSS側の既定値（80%）に従う。
-   * TODO(ADR 0006): 本来はWorkspaceごとに最大1つ（Boardをまたいでも同じポップアップを使える）が
-   * 決定だが、現状はBoard導入の第一段階としてBoardごとに最大1つの暫定実装のまま残している
-   */
-  popup: { tabId: TabId; visible: boolean; width?: number; height?: number } | null;
   /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。永続化はしない（起動のたびnullに戻る） */
   zoomedTileId: TileId | null;
 }
 
-export interface OpenPopupOptions {
-  /** 省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ（split-tile/newTabと同じ方針） */
-  cwd?: string;
-  /** 指定すると、このコマンドをシェルの代わりに実行する（ワンショット実行）。終了すると自動的にポップアップも閉じる */
-  command?: string;
-  /** 表示サイズ（1〜100のパーセント）。省略時はCSS側の既定値に従う */
-  width?: number;
-  height?: number;
+/** 外部（popup.ts）からTerminalSessionを編入する際に渡すメタ情報。adoptTab参照 */
+export interface AdoptTabMeta {
+  cols: number;
+  rows: number;
+  shell?: string;
+  vars?: Record<string, string>;
 }
 
 export type GetTabVarResult =
@@ -116,12 +106,6 @@ export function createBoard(opts: BoardOptions) {
   // タブ・タイル名。getPersistableTabs/listTileNames経由で永続化対象になる
   const tabNames = new Map<TabId, string>();
   const tileNames = new Map<TileId, string>();
-  // ポップアップ用のTerminalSessionはsessionsマップに同居させる（input/resize等の既存tabId経路を
-  // そのまま再利用するため）。popupTabIdで「Tile木構造に属さない特別なタブ」として区別する
-  let popupTabId: TabId | null = null;
-  let popupVisible = false;
-  let popupWidth: number | undefined;
-  let popupHeight: number | undefined;
   // 一時的にズーム表示中のtileId。tree構造自体は変更しない（表示上どのleafを全画面表示するかという
   // 描画側の関心事のため）。closeTile/splitTile/focus変更で対象が意味を失う場合はクリアする
   let zoomedTileId: TileId | null = null;
@@ -240,15 +224,6 @@ export function createBoard(opts: BoardOptions) {
   // シェルが1つ終了した時の挙動。そのタブだけ閉じる（同じタイルに他のタブが残っていればタイルは維持）。
   // タイル内最後のタブで、かつBoard最後の1枚だった場合のみ「アプリごと終了」を維持する。
   function handleTabProcessExit(tabId: TabId): void {
-    if (tabId === popupTabId) {
-      disposeSessions([tabId]);
-      popupTabId = null;
-      popupVisible = false;
-      popupWidth = undefined;
-      popupHeight = undefined;
-      opts.onDirty();
-      return;
-    }
     const leaf = listLeaves(tree).find((l) => l.tabIds.includes(tabId));
     if (!leaf) return;
     const result = closeTabInTile(tree, leaf.id, tabId);
@@ -330,77 +305,37 @@ export function createBoard(opts: BoardOptions) {
   }
 
   /**
-   * ポップアップを開く。既に開いていれば何もしない（同時に1つだけ、ADR 0005）。
-   * commandを指定すると、デフォルトシェル（WSLプロファイル等も含む）の-c/-Command相当で
-   * そのコマンドをexecする（ワンショット実行、pty.tsのappendCommandArgs参照）。
-   * execで置き換わるため、コマンド終了=シェルプロセス終了となりPTYのonExitが自然に発火し、
-   * handleTabProcessExitのpopup分岐で自動的に閉じる（明示的なexit送信は不要）。
-   * 以前は「PTY起動→send-keys相当でcommand+exitを流し込む」方式だったが、シェルの初期化が
-   * 完了する前にコマンド文字列が届いてしまう競合や、フルスクリーンTUI（lazygit等）の起動中に
-   * exitが意図しない入力として吸われてしまう問題があったため、この方式に置き換えた。
+   * フォーカス中タイルのアクティブタブのcwd・サイズを返す（popup.ts側でopenPopup時のcwd/サイズ
+   * 継承に使う。split-tile/newTabと同じ方針）。フォーカス中タイルが存在しない場合はundefined
    */
-  function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
-    if (popupTabId) return null;
-    const newTabId = genTabId();
+  function getFocusedTabSnapshot(): { cols: number; rows: number; cwd?: string } | undefined {
     const focusedLeaf = findNode(tree, focusedTileId);
     const activeTabId = focusedLeaf?.kind === "leaf" ? focusedLeaf.activeTabId : undefined;
-    const inheritedCwd = activeTabId !== undefined ? actualCwdOf(activeTabId) : undefined;
-    const size = (activeTabId !== undefined ? sizeByTabId.get(activeTabId) : undefined) ?? {
-      cols: opts.initialCols,
-      rows: opts.initialRows,
-    };
-    spawnSession(
-      newTabId,
-      size.cols,
-      size.rows,
-      undefined,
-      popupOpts.cwd ?? inheritedCwd,
-      popupOpts.command,
-    );
-    popupTabId = newTabId;
-    popupVisible = true;
-    popupWidth = popupOpts.width;
-    popupHeight = popupOpts.height;
-    opts.onDirty();
-    return newTabId;
-  }
-
-  function closePopup(): boolean {
-    if (!popupTabId) return false;
-    disposeSessions([popupTabId]);
-    popupTabId = null;
-    popupVisible = false;
-    popupWidth = undefined;
-    popupHeight = undefined;
-    opts.onDirty();
-    return true;
-  }
-
-  /** ポップアップの表示/非表示を切り替える。戻り値はトグル後の可視状態。popupが開いていなければnull */
-  function togglePopupVisibility(): boolean | null {
-    if (!popupTabId) return null;
-    popupVisible = !popupVisible;
-    opts.onDirty();
-    return popupVisible;
+    if (activeTabId === undefined) return undefined;
+    const size = sizeByTabId.get(activeTabId) ?? { cols: opts.initialCols, rows: opts.initialRows };
+    return { cols: size.cols, rows: size.rows, cwd: actualCwdOf(activeTabId) };
   }
 
   /**
-   * 開いているポップアップの中身を、フォーカス中タイルへ通常タブとして編入する（タブへ昇格。ADR 0005）。
-   * PTYセッションは作り直さない（sessionsマップ上は同じtabIdのまま。popupTabIdによる特別扱いを外すだけ）。
-   * 昇格先は常にフォーカス中タイル（タイル選択UIは作らない方針。openPopup同様の暗黙対象）
+   * popup.ts側から昇格（promote）されたTerminalSessionを、フォーカス中タイルへ通常タブとして
+   * 編入する（ADR 0006）。PTYセッションは作り直さない（callback配線だけこのBoard用へ差し替える）。
+   * 昇格先は常に呼び出し時点のフォーカス中タイル（タイル選択UIは作らない方針、旧promotePopupと同じ）
    */
-  function promotePopup(): { tileId: TileId; tabId: TabId } | null {
-    if (!popupTabId) return null;
-    const result = addTabToTile(tree, focusedTileId, popupTabId);
-    if (!result) return null;
+  function adoptTab(tabId: TabId, session: TerminalSession, meta: AdoptTabMeta): boolean {
+    const result = addTabToTile(tree, focusedTileId, tabId);
+    if (!result) return false;
     tree = result;
-    const promoted = { tileId: focusedTileId, tabId: popupTabId };
-    popupTabId = null;
-    popupVisible = false;
-    popupWidth = undefined;
-    popupHeight = undefined;
+    session.setCallbacks({
+      onOutput: () => opts.onDirty(),
+      onExit: () => handleTabProcessExit(tabId),
+      onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
+    });
+    sessions.set(tabId, session);
+    sizeByTabId.set(tabId, { cols: meta.cols, rows: meta.rows });
+    shellByTabId.set(tabId, meta.shell);
+    if (meta.vars) tabVars.set(tabId, new Map(Object.entries(meta.vars)));
     opts.onDirty();
-    return promoted;
+    return true;
   }
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {
@@ -582,9 +517,6 @@ export function createBoard(opts: BoardOptions) {
       tabs,
       tabNames: Object.fromEntries(tabNames),
       tileNames: Object.fromEntries(tileNames),
-      popup: popupTabId
-        ? { tabId: popupTabId, visible: popupVisible, width: popupWidth, height: popupHeight }
-        : null,
       zoomedTileId,
     };
   }
@@ -599,20 +531,10 @@ export function createBoard(opts: BoardOptions) {
     return Object.fromEntries(tileNames);
   }
 
-  /**
-   * サイドバー一覧用の軽量な参照。非アクティブなBoard・Workspaceでも（あるいは表示中で
-   * ウィンドウ上は隠れていても）ポップアップの有無・表示状態を把握できるようにする
-   */
-  function getPopupInfo(): { tabId: TabId; visible: boolean } | null {
-    return popupTabId ? { tabId: popupTabId, visible: popupVisible } : null;
-  }
-
   /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
-  /** ポップアップは一時的な画面のため永続化対象から除外する */
   function getPersistableTabs(): Record<TabId, PersistedTab> {
     const result: Record<TabId, PersistedTab> = {};
     for (const tabId of sessions.keys()) {
-      if (tabId === popupTabId) continue;
       const tab: PersistedTerminalTab = { kind: "terminal" };
       const shell = shellByTabId.get(tabId);
       if (shell !== undefined) tab.shell = shell;
@@ -728,10 +650,8 @@ export function createBoard(opts: BoardOptions) {
     newTab,
     newBrowserTab,
     setBrowserTabUrl,
-    openPopup,
-    closePopup,
-    togglePopupVisibility,
-    promotePopup,
+    getFocusedTabSnapshot,
+    adoptTab,
     switchTab,
     moveTab,
     closeTab,
@@ -761,7 +681,6 @@ export function createBoard(opts: BoardOptions) {
     setTileName,
     listTabNames,
     listTileNames,
-    getPopupInfo,
     getPersistableTabs,
     dispose,
   };
