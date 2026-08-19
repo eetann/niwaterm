@@ -14,7 +14,12 @@ import { createRoot, type Root } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { TabRenderState } from "../bun/workspace";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
-import type { AppRenderState, WorkspaceId, WorkspaceListEntry } from "../bun/workspace-manager";
+import type {
+  AppRenderState,
+  BoardId,
+  WorkspaceId,
+  WorkspaceListEntry,
+} from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
@@ -942,10 +947,9 @@ function renderSidebar(
     createElement(SidebarWorkspaceList, {
       workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
       onSelectWorkspaceHeader: activateSidebarWorkspace,
-      onSelectTab: activateSidebarTab,
+      onSelectBoard: activateSidebarBoard,
       onSelectPopup: activateSidebarPopup,
-      onRenameTab: renameSidebarTab,
-      onRenameTile: renameSidebarTile,
+      onRenameBoard: renameSidebarBoard,
       onRenameWorkspace: renameSidebarWorkspace,
     }),
   );
@@ -958,15 +962,28 @@ function activateSidebarWorkspace(workspaceId: WorkspaceId): void {
   imeEl.focus({ preventScroll: true });
 }
 
-/** サイドバーからのタブ名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
-function renameSidebarTab(tabId: TabId, name: string): void {
-  sendMessage("renameTab", { tabId, name });
+/**
+ * サイドバーのBoard行クリック。非アクティブワークスペースなら先に切り替える。
+ * タブ切替と異なりローカル即時反映は持たず、switchBoard結果は次のrenderブロードキャストを待つ
+ * （Board切替はタイル木そのものが入れ替わるため、DOM側の先行更新は行わない）
+ */
+function activateSidebarBoard(workspaceId: WorkspaceId, boardId: BoardId): void {
+  if (workspaceId !== activeWorkspaceId) {
+    sendMessage("switchWorkspace", { workspaceId });
+  }
+  sendMessage("switchBoard", { boardId });
   imeEl.focus({ preventScroll: true });
 }
 
-/** サイドバーからのタイル名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
-function renameSidebarTile(tileId: TileId, name: string): void {
-  sendMessage("renameTile", { tileId, name });
+/** サイドバーからのBoard名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+function renameSidebarBoard(boardId: BoardId, name: string): void {
+  sendMessage("renameBoard", { boardId, name });
+  imeEl.focus({ preventScroll: true });
+}
+
+/** タイルのタブバーからのタブ名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+function renameSidebarTab(tabId: TabId, name: string): void {
+  sendMessage("renameTab", { tabId, name });
   imeEl.focus({ preventScroll: true });
 }
 
@@ -1431,19 +1448,6 @@ function switchToTab(tileId: TileId, tabId: TabId): void {
   focusTileLocally(tileId);
   currentTabId = tabId;
   sendMessage("switchTab", { tileId, tabId });
-}
-
-/** サイドバーのタブ行クリック。アクティブワークスペース内ならDOM即時反映、
- * 非アクティブワークスペースならDOMが存在しないためRPC送信のみで次のrenderを待つ */
-function activateSidebarTab(workspaceId: WorkspaceId, tileId: TileId, tabId: TabId): void {
-  if (workspaceId === activeWorkspaceId) {
-    switchToTab(tileId, tabId);
-  } else {
-    sendMessage("switchWorkspace", { workspaceId });
-    sendMessage("focusTile", { tileId });
-    sendMessage("switchTab", { tileId, tabId });
-  }
-  imeEl.focus({ preventScroll: true });
 }
 
 /**

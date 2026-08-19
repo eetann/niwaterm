@@ -1,5 +1,5 @@
-import { Bot, ChevronRight, GitBranch, PictureInPicture2 } from "lucide-react";
-import { Fragment, useState } from "react";
+import { AlertTriangle, ChevronRight, PictureInPicture2 } from "lucide-react";
+import { useState } from "react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -7,33 +7,22 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import type { TabId, TileId } from "../../bun/tile-layout";
+import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
-import {
-  agentStatusBadgeClass,
-  agentStatusBadgeLabel,
-  type SidebarPopupItem,
-  type SidebarTabRowItem,
-  type SidebarWorkspaceItem,
-} from "./sidebar-props";
+import type { SidebarBoardItem, SidebarPopupItem, SidebarWorkspaceItem } from "./sidebar-props";
 
 export interface SidebarWorkspaceListProps {
   workspaces: SidebarWorkspaceItem[];
   onSelectWorkspaceHeader: (workspaceId: WorkspaceId) => void;
-  onSelectTab: (workspaceId: WorkspaceId, tileId: TileId, tabId: TabId) => void;
+  onSelectBoard: (workspaceId: WorkspaceId, boardId: BoardId) => void;
   onSelectPopup: (workspaceId: WorkspaceId) => void;
-  onRenameTab: (tabId: TabId, name: string) => void;
-  onRenameTile: (tileId: TileId, name: string) => void;
+  onRenameBoard: (boardId: BoardId, name: string) => void;
   onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
 }
 
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
-const COLLAPSED_TILES_STORAGE_KEY = "niwaterm:sidebarCollapsedTiles";
 
-type EditingTarget =
-  | { kind: "tab"; id: TabId }
-  | { kind: "tile"; id: TileId }
-  | { kind: "workspace"; id: WorkspaceId };
+type EditingTarget = { kind: "board"; id: BoardId } | { kind: "workspace"; id: WorkspaceId };
 
 function loadCollapsedIds<T extends string>(storageKey: string): Set<T> {
   try {
@@ -55,19 +44,15 @@ function saveCollapsedIds(storageKey: string, collapsed: Set<string>): void {
 export function SidebarWorkspaceList({
   workspaces,
   onSelectWorkspaceHeader,
-  onSelectTab,
+  onSelectBoard,
   onSelectPopup,
-  onRenameTab,
-  onRenameTile,
+  onRenameBoard,
   onRenameWorkspace,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
   );
-  const [collapsedTiles, setCollapsedTiles] = useState<Set<TileId>>(() =>
-    loadCollapsedIds(COLLAPSED_TILES_STORAGE_KEY),
-  );
-  // 名前編集中のタブ/タイル。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
+  // 名前編集中のBoard/Workspace。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   const [editingValue, setEditingValue] = useState("");
 
@@ -84,19 +69,6 @@ export function SidebarWorkspaceList({
     });
   }
 
-  function toggleCollapsedTile(tileId: TileId): void {
-    setCollapsedTiles((prev) => {
-      const next = new Set(prev);
-      if (next.has(tileId)) {
-        next.delete(tileId);
-      } else {
-        next.add(tileId);
-      }
-      saveCollapsedIds(COLLAPSED_TILES_STORAGE_KEY, next);
-      return next;
-    });
-  }
-
   function startEditing(target: EditingTarget, currentLabel: string): void {
     setEditingTarget(target);
     setEditingValue(currentLabel);
@@ -104,10 +76,8 @@ export function SidebarWorkspaceList({
 
   function commitEditing(): void {
     if (!editingTarget) return;
-    if (editingTarget.kind === "tab") {
-      onRenameTab(editingTarget.id, editingValue);
-    } else if (editingTarget.kind === "tile") {
-      onRenameTile(editingTarget.id, editingValue);
+    if (editingTarget.kind === "board") {
+      onRenameBoard(editingTarget.id, editingValue);
     } else {
       onRenameWorkspace(editingTarget.id, editingValue);
     }
@@ -142,68 +112,85 @@ export function SidebarWorkspaceList({
     );
   }
 
-  function renderTabCard(workspaceId: WorkspaceId, tileId: TileId, tab: SidebarTabRowItem) {
-    if (editingTarget?.kind === "tab" && editingTarget.id === tab.tabId) {
+  /**
+   * Board行はTile/Tabを表示しない1行が既定（ADR 0006後の再設計）。ブランチ・エージェント状態が
+   * 何も無ければ展開せず1行のまま終わる。何かあれば縦線ガイド付きでステータスラインを展開する
+   * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
+   * 「❯/⚠ <statusText>」を表示する）
+   */
+  function renderBoardRow(workspaceId: WorkspaceId, board: SidebarBoardItem) {
+    if (editingTarget?.kind === "board" && editingTarget.id === board.boardId) {
       return (
-        <div key={tab.tabId} className="px-1.5 py-1">
+        <div key={board.boardId} className="px-1.5 py-1">
           {renderNameInput()}
         </div>
       );
     }
-    const badgeLabel = tab.agent ? agentStatusBadgeLabel(tab.agent.status) : null;
+    const hasStatusLine = board.branch !== null || board.agent !== null;
+    const dotClass =
+      board.agent?.status === "working"
+        ? "bg-blue-500 shadow-[0_0_4px] shadow-blue-500"
+        : board.agent?.status === "blocked"
+          ? "bg-amber-500 shadow-[0_0_4px] shadow-amber-500"
+          : "bg-muted-foreground/30";
     return (
-      <ContextMenu key={tab.tabId}>
+      <ContextMenu key={board.boardId}>
         <ContextMenuTrigger asChild>
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => onSelectTab(workspaceId, tileId, tab.tabId)}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              startEditing({ kind: "tab", id: tab.tabId }, tab.label);
-            }}
-            title={tab.agent ? `${tab.agent.agent}: ${tab.agent.status}` : undefined}
-            className={cn(
-              "flex w-full flex-col gap-0.5 rounded-md px-1.5 py-1 text-left hover:bg-accent",
-              tab.active && "bg-accent",
-            )}
+          <div
+            className={cn("flex flex-col rounded-md", board.active && "bg-accent")}
+            title={board.agent ? `${board.agent.agent}: ${board.agent.status}` : undefined}
           >
-            <div className="flex items-center gap-1.5">
-              {tab.agent && (
-                <span
-                  aria-hidden="true"
-                  className="flex size-3.5 shrink-0 items-center justify-center rounded bg-muted"
-                >
-                  <Bot className="size-2.5 text-muted-foreground" />
-                </span>
-              )}
-              <span className="min-w-0 flex-1 truncate text-xs font-medium">{tab.label}</span>
-              {tab.agent && badgeLabel && (
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap",
-                    agentStatusBadgeClass(tab.agent.status),
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => onSelectBoard(workspaceId, board.boardId)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                startEditing({ kind: "board", id: board.boardId }, board.label);
+              }}
+              className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-accent"
+            >
+              <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold">{board.label}</span>
+            </button>
+            {hasStatusLine && (
+              <div className="flex gap-1.5 px-1.5 pb-1.5">
+                <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
+                <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
+                  {board.branch && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="text-blue-400/80">on</span>
+                      <span className="min-w-0 truncate">{board.branch}</span>
+                    </div>
                   )}
-                >
-                  {badgeLabel}
-                </span>
-              )}
-            </div>
-            {tab.agent?.statusText && (
-              <div className="line-clamp-2 pl-5 text-[10.5px] leading-tight text-muted-foreground">
-                {tab.agent.statusText}
+                  {board.agent?.statusText && (
+                    <div className="flex gap-1.5">
+                      {board.agent.status === "blocked" ? (
+                        <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-amber-500" />
+                      ) : (
+                        <span className="text-sky-400">❯</span>
+                      )}
+                      <span
+                        className={cn(
+                          "line-clamp-2",
+                          board.agent.status === "blocked"
+                            ? "text-amber-400/90"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {board.agent.statusText}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-            {tab.branch && (
-              <div className="flex items-center gap-1 pl-5 text-[10px] text-muted-foreground/70">
-                <GitBranch className="size-2.5 shrink-0" />
-                <span className="min-w-0 truncate">{tab.branch}</span>
-              </div>
-            )}
-          </button>
+          </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onSelect={() => startEditing({ kind: "tab", id: tab.tabId }, tab.label)}>
+          <ContextMenuItem
+            onSelect={() => startEditing({ kind: "board", id: board.boardId }, board.label)}
+          >
             名前を変更
           </ContextMenuItem>
         </ContextMenuContent>
@@ -212,26 +199,33 @@ export function SidebarWorkspaceList({
   }
 
   /**
-   * ポップアップ（ADR 0005）はTile木構造の外側にあるためrenderTabCardと違いtileIdを持たない。
-   * 最小化（非表示）中でもサイドバーから存在を把握・再表示できるようにする
+   * ポップアップ（ADR 0005）はTile/Board木構造の外側にある一時的な状態。BoardカードとはUI上でも
+   * 明確に区別するため、破線の枠＋影で意図的に「浮いている」見た目にする
    */
   function renderPopupCard(workspaceId: WorkspaceId, popup: SidebarPopupItem) {
     return (
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={() => onSelectPopup(workspaceId)}
-        title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-accent"
-      >
-        <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
-        {!popup.visible && (
-          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-            最小化
+      <div className="mt-2 flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5 px-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="shrink-0 text-[8px] font-bold tracking-wider text-muted-foreground/70">
+            POPUP
           </span>
-        )}
-      </button>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => onSelectPopup(workspaceId)}
+          title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
+          className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md hover:bg-accent"
+        >
+          <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
+          <span className="shrink-0 text-[9px] text-muted-foreground">
+            {popup.visible ? "popup" : "最小化"}
+          </span>
+        </button>
+      </div>
     );
   }
 
@@ -239,9 +233,6 @@ export function SidebarWorkspaceList({
     <>
       {workspaces.map((workspace) => {
         const isWorkspaceCollapsed = collapsedWorkspaces.has(workspace.workspaceId);
-        const totalTabs = workspace.tiles.reduce((sum, tile) => sum + tile.tabs.length, 0);
-        // タイルが1つだけのワークスペースが多数派のため、その場合はタイル見出しを省略しタブを直接並べる
-        const showTileHeaders = workspace.tiles.length > 1;
         const isEditingThisWorkspace =
           editingTarget?.kind === "workspace" && editingTarget.id === workspace.workspaceId;
         return (
@@ -299,80 +290,13 @@ export function SidebarWorkspaceList({
                 </ContextMenu>
               )}
               <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                {totalTabs}
+                {workspace.boards.length}
               </span>
             </div>
             {!isWorkspaceCollapsed && (
-              <div className="flex flex-col gap-1 px-1.5 pb-1.5">
+              <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
+                {workspace.boards.map((board) => renderBoardRow(workspace.workspaceId, board))}
                 {workspace.popup && renderPopupCard(workspace.workspaceId, workspace.popup)}
-                {workspace.tiles.map((tile) => {
-                  if (!showTileHeaders) {
-                    return (
-                      <Fragment key={tile.tileId}>
-                        {tile.tabs.map((tab) =>
-                          renderTabCard(workspace.workspaceId, tile.tileId, tab),
-                        )}
-                      </Fragment>
-                    );
-                  }
-                  const isTileCollapsed = collapsedTiles.has(tile.tileId);
-                  const isEditingThisTile =
-                    editingTarget?.kind === "tile" && editingTarget.id === tile.tileId;
-                  return (
-                    <div key={tile.tileId}>
-                      <div className="flex w-full items-center gap-1 py-1">
-                        <button
-                          type="button"
-                          tabIndex={-1}
-                          onClick={() => toggleCollapsedTile(tile.tileId)}
-                          className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground"
-                        >
-                          <ChevronRight
-                            className={cn(
-                              "size-2.5 transition-transform",
-                              !isTileCollapsed && "rotate-90",
-                            )}
-                          />
-                        </button>
-                        {isEditingThisTile ? (
-                          renderNameInput()
-                        ) : (
-                          <ContextMenu>
-                            <ContextMenuTrigger asChild>
-                              <span
-                                className="min-w-0 flex-1 truncate text-[10px] font-semibold text-muted-foreground"
-                                onDoubleClick={() =>
-                                  startEditing({ kind: "tile", id: tile.tileId }, tile.label)
-                                }
-                              >
-                                {tile.label}
-                              </span>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem
-                                onSelect={() =>
-                                  startEditing({ kind: "tile", id: tile.tileId }, tile.label)
-                                }
-                              >
-                                名前を変更
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        )}
-                        <span className="shrink-0 rounded-full bg-muted px-1 py-0.5 text-[8px] font-medium text-muted-foreground/80">
-                          {tile.tabs.length}
-                        </span>
-                      </div>
-                      {!isTileCollapsed && (
-                        <div className="flex flex-col gap-1 pl-2">
-                          {tile.tabs.map((tab) =>
-                            renderTabCard(workspace.workspaceId, tile.tileId, tab),
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
             )}
           </div>

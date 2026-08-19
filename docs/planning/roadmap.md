@@ -276,6 +276,8 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] 永続化スキーマにBoardを追加し、旧形式（Workspace直下に1本のlayout）を「Boardが1つだけのWorkspace」として読み替えるマイグレーションを実装する（`src/bun/persistence.ts`）
 - [x] RPC（NiwaRPC）・`AppRenderState`にBoard関連のエンドポイント・データを追加する（`newBoard`/`switchBoard`/`closeBoard`/`renameBoard`等）
 - [x] CLIに`board`リソースを追加する（`new`/`close`/`switch`/`rename`、`.claude/rules/cli-command-naming.md`に従う）
-- [ ] サイドバーにBoardの表示・切り替えUIを追加する（Workspace→Board→Tile→Tabの4段折りたたみ。Boardが1つのみの場合は見出しを省略）
+- [x] サイドバーにBoardの表示・切り替えUIを追加する
+  - Tile/Tabはサイドバーに表示しない設計に変更（Workspace→Boardの2段のみ）。Boardの状態表示（ブランチ・エージェント状態）はフォーカス中タイルのアクティブタブの変数を代表値として流用し、Board専用の変数ストアは新設しない
+  - ポップアップの見た目も合わせて再設計（破線＋影で意図的に「浮いた」チップにする）
 - [x] `niwaterm list`・`tab show`等、既存のWorkspace横断コマンドをBoard階層に対応させる
 - [ ] `niwaterm layout apply`とBoardの関係を決めて実装する

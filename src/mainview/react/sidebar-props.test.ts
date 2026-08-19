@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
+import type { BoardListEntry } from "../../bun/workspace";
 import type { WorkspaceListEntry } from "../../bun/workspace-manager";
 import {
   agentStatusBadgeClass,
@@ -15,42 +16,51 @@ function split(id: string, first: TileNode, second: TileNode): TileSplit {
   return { kind: "split", id, direction: "row", ratio: 0.5, first, second };
 }
 
+function board(
+  boardId: string,
+  layout: TileNode,
+  options: {
+    active?: boolean;
+    focusedTileId?: string;
+    tabVars?: Record<string, Record<string, string>>;
+    name?: string | null;
+  } = {},
+): BoardListEntry {
+  return {
+    boardId,
+    active: options.active ?? true,
+    focusedTileId: options.focusedTileId ?? layout.id,
+    layout,
+    tabVars: options.tabVars ?? {},
+    tabNames: {},
+    tileNames: {},
+    name: options.name ?? null,
+  };
+}
+
 function workspace(
   workspaceId: string,
-  layout: TileNode,
-  tabVars: Record<string, Record<string, string>> = {},
-  tabNames: Record<string, string> = {},
-  tileNames: Record<string, string> = {},
-  name: string | null = null,
-  popup: WorkspaceListEntry["popup"] = null,
+  boards: BoardListEntry[],
+  options: {
+    name?: string | null;
+    popup?: WorkspaceListEntry["popup"];
+  } = {},
 ): WorkspaceListEntry {
-  const boardId = `board-${workspaceId}`;
   return {
     workspaceId,
     active: false,
-    activeBoardId: boardId,
-    boards: [
-      {
-        boardId,
-        active: true,
-        focusedTileId: layout.id,
-        layout,
-        tabVars,
-        tabNames,
-        tileNames,
-        name: null,
-      },
-    ],
-    name,
-    popup,
+    activeBoardId: boards.find((b) => b.active)?.boardId ?? boards[0]?.boardId ?? "",
+    boards,
+    name: options.name ?? null,
+    popup: options.popup ?? null,
   };
 }
 
 describe("buildSidebarWorkspaceItems", () => {
-  test("タイル1つのワークスペースはtiles配列に1件、タブラベルは1始まりの番号のみ", () => {
+  test("Boardが1つのワークスペースはboards配列に1件、ラベルは1始まりの番号", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1", "tab-2"], "tab-2")),
-      workspace("ws-2", leaf("tile-2", ["tab-3"], "tab-3")),
+      workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))]),
+      workspace("ws-2", [board("board-2", leaf("tile-2", ["tab-2"], "tab-2"))]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-2");
@@ -61,26 +71,13 @@ describe("buildSidebarWorkspaceItems", () => {
         label: "Workspace 1",
         active: false,
         popup: null,
-        tiles: [
+        boards: [
           {
-            tileId: "tile-1",
-            label: "Tile 1",
-            tabs: [
-              {
-                tabId: "tab-1",
-                label: "Tab 1",
-                active: false,
-                branch: null,
-                agent: null,
-              },
-              {
-                tabId: "tab-2",
-                label: "Tab 2",
-                active: false,
-                branch: null,
-                agent: null,
-              },
-            ],
+            boardId: "board-1",
+            label: "Board 1",
+            active: false,
+            branch: null,
+            agent: null,
           },
         ],
       },
@@ -89,63 +86,53 @@ describe("buildSidebarWorkspaceItems", () => {
         label: "Workspace 2",
         active: true,
         popup: null,
-        tiles: [
+        boards: [
           {
-            tileId: "tile-2",
-            label: "Tile 1",
-            tabs: [
-              {
-                tabId: "tab-3",
-                label: "Tab 1",
-                active: true,
-                branch: null,
-                agent: null,
-              },
-            ],
+            boardId: "board-2",
+            label: "Board 1",
+            active: true,
+            branch: null,
+            agent: null,
           },
         ],
       },
     ]);
   });
 
-  test("タイルが複数ある場合はtilesに複数件、1始まりの番号で並ぶ", () => {
+  test("Boardが複数ある場合はboardsに複数件、1始まりの番号で並ぶ", () => {
     const workspaces = [
-      workspace(
-        "ws-1",
-        split("split-1", leaf("tile-1", ["tab-1"], "tab-1"), leaf("tile-2", ["tab-2"], "tab-2")),
-      ),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1")),
+        board("board-2", leaf("tile-2", ["tab-2"], "tab-2"), { active: false }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles.map((t) => ({ tileId: t.tileId, label: t.label }))).toEqual([
-      { tileId: "tile-1", label: "Tile 1" },
-      { tileId: "tile-2", label: "Tile 2" },
+    expect(items[0]?.boards.map((b) => ({ boardId: b.boardId, label: b.label }))).toEqual([
+      { boardId: "board-1", label: "Board 1" },
+      { boardId: "board-2", label: "Board 2" },
     ]);
   });
 
-  test("tabNames/tileNamesに設定があればデフォルトの連番の代わりにそれを使う", () => {
+  test("Board.nameに設定があればデフォルトの連番の代わりにそれを使う", () => {
     const workspaces = [
-      workspace(
-        "ws-1",
-        leaf("tile-1", ["tab-1", "tab-2"], "tab-1"),
-        {},
-        { "tab-1": "roadmap" },
-        { "tile-1": "作業ペイン" },
-      ),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { name: "roadmap-doc" }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.label).toBe("作業ペイン");
-    expect(items[0]?.tiles[0]?.tabs[0]?.label).toBe("roadmap");
-    expect(items[0]?.tiles[0]?.tabs[1]?.label).toBe("Tab 2");
+    expect(items[0]?.boards[0]?.label).toBe("roadmap-doc");
   });
 
-  test("nameに設定があればデフォルトの連番の代わりにそれを使う", () => {
+  test("Workspace.nameに設定があればデフォルトの連番の代わりにそれを使う", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {}, {}, {}, "作業用"),
-      workspace("ws-2", leaf("tile-2", ["tab-2"], "tab-2")),
+      workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))], {
+        name: "作業用",
+      }),
+      workspace("ws-2", [board("board-2", leaf("tile-2", ["tab-2"], "tab-2"))]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
@@ -154,37 +141,63 @@ describe("buildSidebarWorkspaceItems", () => {
     expect(items[1]?.label).toBe("Workspace 2");
   });
 
-  test("tabVarsのbranchは独立フィールドとして返る（ラベルには含めない）", () => {
+  test("フォーカス中タイルのアクティブタブのbranchがBoardの状態として返る", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { branch: "main" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { branch: "main" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.label).toBe("Tab 1");
-    expect(items[0]?.tiles[0]?.tabs[0]?.branch).toBe("main");
+    expect(items[0]?.boards[0]?.label).toBe("Board 1");
+    expect(items[0]?.boards[0]?.branch).toBe("main");
   });
 
-  test("agent未設定時はagent:null", () => {
-    const workspaces = [workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"))];
+  test("フォーカス中タイルではない他タイルの変数はBoardの状態に反映されない", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board(
+          "board-1",
+          split("split-1", leaf("tile-1", ["tab-1"], "tab-1"), leaf("tile-2", ["tab-2"], "tab-2")),
+          {
+            focusedTileId: "tile-2",
+            tabVars: {
+              "tab-1": { branch: "feature/not-focused" },
+              "tab-2": { branch: "feature/focused" },
+            },
+          },
+        ),
+      ]),
+    ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toBeNull();
+    expect(items[0]?.boards[0]?.branch).toBe("feature/focused");
+  });
+
+  test("agent未設定時はagent:null", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent).toBeNull();
   });
 
   test("agent設定・agent_status未設定時はstatus:idleへフォールバックする", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { agent: "claude-code" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "claude-code" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toEqual({
+    expect(items[0]?.boards[0]?.agent).toEqual({
       agent: "claude-code",
       status: "idle",
       statusText: null,
@@ -193,86 +206,113 @@ describe("buildSidebarWorkspaceItems", () => {
 
   test("agent_statusにworking/blockedを設定した場合はそのまま反映される", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { agent: "claude-code", agent_status: "working" },
-      }),
-      workspace("ws-2", leaf("tile-2", ["tab-2"], "tab-2"), {
-        "tab-2": { agent: "claude-code", agent_status: "blocked" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "claude-code", agent_status: "working" } },
+        }),
+      ]),
+      workspace("ws-2", [
+        board("board-2", leaf("tile-2", ["tab-2"], "tab-2"), {
+          tabVars: { "tab-2": { agent: "claude-code", agent_status: "blocked" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.status).toBe("working");
-    expect(items[1]?.tiles[0]?.tabs[0]?.agent?.status).toBe("blocked");
+    expect(items[0]?.boards[0]?.agent?.status).toBe("working");
+    expect(items[1]?.boards[0]?.agent?.status).toBe("blocked");
   });
 
   test("agent_statusが未知の値の場合はidleへ正規化する", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { agent: "claude-code", agent_status: "foo" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "claude-code", agent_status: "foo" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.status).toBe("idle");
+    expect(items[0]?.boards[0]?.agent?.status).toBe("idle");
   });
 
   test("agent_status_textを設定した場合はstatusTextへ反映される", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": {
-          agent: "claude-code",
-          agent_status: "working",
-          agent_status_text: "Edit: sidebar-workspace-list.tsx",
-        },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: {
+            "tab-1": {
+              agent: "claude-code",
+              agent_status: "working",
+              agent_status_text: "Edit: sidebar-workspace-list.tsx",
+            },
+          },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.statusText).toBe("Edit: sidebar-workspace-list.tsx");
+    expect(items[0]?.boards[0]?.agent?.statusText).toBe("Edit: sidebar-workspace-list.tsx");
   });
 
   test("agent_status_text未設定時はstatusText:null", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { agent: "claude-code" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "claude-code" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent?.statusText).toBeNull();
+    expect(items[0]?.boards[0]?.agent?.statusText).toBeNull();
   });
 
   test("agentが空文字列（SessionEnd後を想定）の場合はagent:null", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {
-        "tab-1": { agent: "", agent_status: "" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "", agent_status: "" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toBeNull();
+    expect(items[0]?.boards[0]?.agent).toBeNull();
   });
 
-  test("非アクティブワークスペースのタブは常にactive:falseになる", () => {
-    const workspaces = [workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"))];
+  test("非アクティブワークスペースのBoardは常にactive:falseになる", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-2");
 
     expect(items[0]?.active).toBe(false);
-    expect(items[0]?.tiles[0]?.tabs[0]?.active).toBe(false);
+    expect(items[0]?.boards[0]?.active).toBe(false);
   });
 
-  test('popupがあれば固定ラベル"Popup"とvisibleを含む（Workspace直下の状態のためtabNamesは参照しない、ADR 0006）', () => {
+  test("アクティブワークスペース内でも非アクティブなBoardはactive:falseになる", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1"], "tab-1"), {}, {}, {}, null, {
-        tabId: "tab-popup",
-        visible: false,
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { active: true }),
+        board("board-2", leaf("tile-2", ["tab-2"], "tab-2"), { active: false }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.active).toBe(true);
+    expect(items[0]?.boards[1]?.active).toBe(false);
+  });
+
+  test('popupがあれば固定ラベル"Popup"とvisibleを含む（Workspace直下の状態のため、ADR 0006）', () => {
+    const workspaces = [
+      workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))], {
+        popup: { tabId: "tab-popup", visible: false },
       }),
     ];
 
@@ -281,22 +321,27 @@ describe("buildSidebarWorkspaceItems", () => {
     expect(items[0]?.popup).toEqual({ tabId: "tab-popup", visible: false, label: "Popup" });
   });
 
-  test("同一タイル内の複数タブが別々のagent状態を持てる（タブ単位化の主目的）", () => {
+  test("同一Workspace内の複数Boardが別々のagent状態を持てる", () => {
     const workspaces = [
-      workspace("ws-1", leaf("tile-1", ["tab-1", "tab-2"], "tab-1"), {
-        "tab-1": { agent: "claude-code", agent_status: "working" },
-        "tab-2": { agent: "codex-cli", agent_status: "idle" },
-      }),
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          tabVars: { "tab-1": { agent: "claude-code", agent_status: "working" } },
+        }),
+        board("board-2", leaf("tile-2", ["tab-2"], "tab-2"), {
+          active: false,
+          tabVars: { "tab-2": { agent: "codex-cli", agent_status: "idle" } },
+        }),
+      ]),
     ];
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.tiles[0]?.tabs[0]?.agent).toEqual({
+    expect(items[0]?.boards[0]?.agent).toEqual({
       agent: "claude-code",
       status: "working",
       statusText: null,
     });
-    expect(items[0]?.tiles[0]?.tabs[1]?.agent).toEqual({
+    expect(items[0]?.boards[1]?.agent).toEqual({
       agent: "codex-cli",
       status: "idle",
       statusText: null,
