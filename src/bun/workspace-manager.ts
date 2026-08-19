@@ -11,6 +11,7 @@ import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import {
   createWorkspace,
   type BoardListEntry,
+  type CloseBoardResult,
   type GetTabVarResult,
   type InitialBoard,
   type OpenPopupOptions,
@@ -19,7 +20,8 @@ import {
   type WorkspaceRenderState,
 } from "./workspace";
 
-export type { GetTabVarResult } from "./workspace";
+export type { CloseBoardResult, GetTabVarResult } from "./workspace";
+export type { BoardId } from "./board";
 
 export type WorkspaceId = string;
 
@@ -166,6 +168,13 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return undefined;
   }
 
+  function findOwnerByBoardId(boardId: BoardId): Workspace | undefined {
+    for (const ws of workspaces.values()) {
+      if (ws.hasBoard(boardId)) return ws;
+    }
+    return undefined;
+  }
+
   /** 種別（terminal/browser）を問わずtabIdの所在を返す。tab show用 */
   function locateTab(tabId: TabId): TabLocation | null {
     for (const [workspaceId, ws] of workspaces) {
@@ -220,6 +229,24 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     }
     opts.onDirty();
     return { ok: true };
+  }
+
+  function newBoard(workspaceId: WorkspaceId, cwd?: string): BoardId | null {
+    return workspaces.get(workspaceId)?.newBoard(cwd) ?? null;
+  }
+
+  function switchBoard(boardId: BoardId): boolean {
+    return findOwnerByBoardId(boardId)?.switchBoard(boardId) ?? false;
+  }
+
+  function closeBoard(boardId: BoardId): CloseBoardResult {
+    const owner = findOwnerByBoardId(boardId);
+    if (!owner) return { ok: false, reason: "not-found" };
+    return owner.closeBoard(boardId);
+  }
+
+  function setBoardName(boardId: BoardId, name: string): boolean {
+    return findOwnerByBoardId(boardId)?.setBoardName(boardId, name) ?? false;
   }
 
   function splitTile(
@@ -494,6 +521,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     newWorkspace,
     switchWorkspace,
     closeWorkspace,
+    newBoard,
+    switchBoard,
+    closeBoard,
+    setBoardName,
     splitTile,
     newTab,
     newBrowserTab,

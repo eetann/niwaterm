@@ -176,6 +176,121 @@ describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
   });
 });
 
+describe("Board操作", () => {
+  test("newBoardで指定workspaceに新規Boardが増え、アクティブになり、新規boardIdを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+
+    const newBoardId = mgr.newBoard(workspaceId);
+
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.map((b) => b.boardId)).toEqual([firstBoardId, newBoardId]);
+    expect(entry?.activeBoardId).toBe(newBoardId);
+  });
+
+  test("存在しないworkspaceIdへのnewBoardはnullを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.newBoard("not-found")).toBeNull();
+  });
+
+  test("switchBoardで対象BoardがactiveBoardIdになり、trueを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const secondBoardId = mgr.newBoard(workspaceId) as string;
+
+    expect(mgr.switchBoard(firstBoardId)).toBe(true);
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId)?.activeBoardId).toBe(
+      firstBoardId,
+    );
+    expect(mgr.switchBoard(secondBoardId)).toBe(true);
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId)?.activeBoardId).toBe(
+      secondBoardId,
+    );
+  });
+
+  test("存在しないboardIdへのswitchBoardは無視されfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.switchBoard("not-found")).toBe(false);
+  });
+
+  test("closeBoardで非アクティブなBoardを削除でき、{ok: true}を返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    mgr.newBoard(workspaceId);
+
+    expect(mgr.closeBoard(firstBoardId)).toEqual({ ok: true });
+
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.map((b) => b.boardId)).not.toContain(firstBoardId);
+  });
+
+  test("closeBoardでアクティブなBoardを閉じると別のBoardへ切り替わる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const secondBoardId = mgr.newBoard(workspaceId) as string;
+
+    mgr.closeBoard(secondBoardId);
+
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId)?.activeBoardId).toBe(
+      firstBoardId,
+    );
+  });
+
+  test("最後の1つのBoardはcloseBoardしても閉じられず、last-board理由を返す（誤操作防止）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const onlyBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    expect(mgr.closeBoard(onlyBoardId)).toEqual({ ok: false, reason: "last-board" });
+  });
+
+  test("存在しないboardIdへのcloseBoardはnot-found理由を返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.closeBoard("not-found")).toEqual({ ok: false, reason: "not-found" });
+  });
+
+  test("setBoardNameで名前を設定するとlistWorkspaces()のboards[].nameへ反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+
+    expect(mgr.setBoardName(boardId, "repoA")).toBe(true);
+
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === boardId)?.name).toBe("repoA");
+  });
+
+  test("setBoardNameに空文字列（trim後）を渡すとnameがnullへリセットされる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    mgr.setBoardName(boardId, "repoA");
+
+    mgr.setBoardName(boardId, "  ");
+
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === boardId)?.name).toBeNull();
+  });
+
+  test("存在しないboardIdへのsetBoardNameはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setBoardName("not-found", "repoA")).toBe(false);
+  });
+});
+
 describe("swapWorkspaces", () => {
   test("2つのworkspaceIdの表示順を入れ替え、trueを返す", () => {
     const { factory } = createFakeSessionFactory();

@@ -194,6 +194,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTileId(tileId) !== undefined;
   }
 
+  /** workspace-managerがboardIdの所属先Workspaceを判定するための軽量な参照 */
+  function hasBoard(boardId: BoardId): boolean {
+    return boards.has(boardId);
+  }
+
   function getActiveBoardId(): BoardId {
     return activeBoardId;
   }
@@ -574,6 +579,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     listBoards,
     hasTab,
     hasTile,
+    hasBoard,
     locateTab,
     locateBrowserTab,
     getActiveBoardId,

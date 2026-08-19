@@ -18,7 +18,12 @@ import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
-import { createWorkspaceManager, type AppRenderState, type WorkspaceId } from "./workspace-manager";
+import {
+  createWorkspaceManager,
+  type AppRenderState,
+  type BoardId,
+  type WorkspaceId,
+} from "./workspace-manager";
 
 // macOSではメニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する。
 // これはmacOS固有の事情（key equivalentがメニュー経由で配送される）への対処なので他OSでは設定しない
@@ -91,9 +96,13 @@ export type NiwaRPC = {
       newWorkspace: {};
       switchWorkspace: { workspaceId: WorkspaceId };
       closeWorkspace: { workspaceId: WorkspaceId };
+      newBoard: { workspaceId: WorkspaceId; cwd?: string };
+      switchBoard: { boardId: BoardId };
+      closeBoard: { boardId: BoardId };
       renameTab: { tabId: TabId; name: string };
       renameTile: { tileId: TileId; name: string };
       renameWorkspace: { workspaceId: WorkspaceId; name: string };
+      renameBoard: { boardId: BoardId; name: string };
       /** keybindingsのBindingTargetがkind:"custom"の場合に発火する。handlerIdはniwa-api.tsのhandlerRegistryのキー */
       runKeybindHandler: { handlerId: string };
     };
@@ -465,6 +474,15 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
         workspaceManager.closeWorkspace(workspaceId);
       },
+      newBoard: ({ workspaceId, cwd }: { workspaceId: WorkspaceId; cwd?: string }) => {
+        workspaceManager.newBoard(workspaceId, cwd);
+      },
+      switchBoard: ({ boardId }: { boardId: BoardId }) => {
+        workspaceManager.switchBoard(boardId);
+      },
+      closeBoard: ({ boardId }: { boardId: BoardId }) => {
+        workspaceManager.closeBoard(boardId);
+      },
       renameTab: ({ tabId, name }: { tabId: TabId; name: string }) => {
         workspaceManager.setTabName(tabId, name);
       },
@@ -473,6 +491,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       renameWorkspace: ({ workspaceId, name }: { workspaceId: WorkspaceId; name: string }) => {
         workspaceManager.setWorkspaceName(workspaceId, name);
+      },
+      renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
+        workspaceManager.setBoardName(boardId, name);
       },
       runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
         runKeybindHandler(handlerId).catch((err: unknown) => {
