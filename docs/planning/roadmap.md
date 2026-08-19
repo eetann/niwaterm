@@ -277,5 +277,5 @@ tmuxのpopup/floating相当。タイルやタブを増やさずに、fzf・lazyg
 - [x] RPC（NiwaRPC）・`AppRenderState`にBoard関連のエンドポイント・データを追加する（`newBoard`/`switchBoard`/`closeBoard`/`renameBoard`等）
 - [x] CLIに`board`リソースを追加する（`new`/`close`/`switch`/`rename`、`.claude/rules/cli-command-naming.md`に従う）
 - [ ] サイドバーにBoardの表示・切り替えUIを追加する（Workspace→Board→Tile→Tabの4段折りたたみ。Boardが1つのみの場合は見出しを省略）
-- [ ] `niwaterm list`・`tab show`等、既存のWorkspace横断コマンドをBoard階層に対応させる
+- [x] `niwaterm list`・`tab show`等、既存のWorkspace横断コマンドをBoard階層に対応させる
 - [ ] `niwaterm layout apply`とBoardの関係を決めて実装する

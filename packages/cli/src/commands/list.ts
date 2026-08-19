@@ -3,6 +3,7 @@ import { failAndExit } from "../cli-error";
 import {
   resolveIpcEndpoint,
   listWorkspaces,
+  type BoardListEntry,
   type TileSummary,
   type WorkspaceListEntry,
 } from "../ipc-client";
@@ -24,16 +25,32 @@ function printTile(tile: TileSummary, focusedTileId: string, depth: number): voi
   printTile(tile.second, focusedTileId, depth + 1);
 }
 
+function printBoard(board: BoardListEntry, depth: number): void {
+  const indent = "  ".repeat(depth);
+  const suffix = board.active ? " (active)" : "";
+  const nameSuffix = board.name ? ` "${board.name}"` : "";
+  console.log(`${indent}${board.boardId}${nameSuffix}${suffix}`);
+  printTile(board.layout, board.focusedTileId, depth + 1);
+}
+
 function printWorkspace(entry: WorkspaceListEntry): void {
   const suffix = entry.active ? " (active)" : "";
   const nameSuffix = entry.name ? ` "${entry.name}"` : "";
   console.log(`${entry.workspaceId}${nameSuffix}${suffix}`);
-  printTile(entry.layout, entry.focusedTileId, 1);
+  // Board 1つのみ（大半のケース）はBoard行を省略し、直接タイル階層を表示する
+  // （サイドバーの表示方針・ADR 0006と揃える）
+  if (entry.boards.length === 1) {
+    printTile(entry.boards[0].layout, entry.boards[0].focusedTileId, 1);
+    return;
+  }
+  for (const board of entry.boards) {
+    printBoard(board, 1);
+  }
 }
 
 export default define({
   name: "list",
-  description: "ワークスペース・タイル・タブの一覧を表示",
+  description: "ワークスペース・Board・タイル・タブの一覧を表示",
   run: async () => {
     const result = await listWorkspaces(resolveIpcEndpoint());
     if (!result.ok) {

@@ -39,7 +39,7 @@ niwatermアプリが起動していれば`pong (pid <アプリのpid>)`が返る
 niwaterm list
 ```
 
-ワークスペース→タイル→タブの階層構造を表示する。アクティブなワークスペース/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(focused)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
+ワークスペース→Board→タイル→タブの階層構造を表示する。Boardが1つのみのワークスペースはBoard行を省略する（ADR 0006、サイドバー表示と同じ方針）。アクティブなワークスペース/Board/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(active)`/`(focused)`/`(active)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
 
 ```sh
 niwaterm tab send-keys --tab <tabId> <keys...>
@@ -124,7 +124,7 @@ niwaterm board close --board <boardId>
 niwaterm board rename --board <boardId> <name>
 ```
 
-Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。`niwaterm list`は現状Board階層に未対応のため（roadmap参照）、対象の`boardId`は`board new`実行時に表示される値で確認する。
+Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。対象の`boardId`は`niwaterm list`（複数Board時のみBoard行が表示される）または`board new`実行時に表示される値で確認する。
 
 - `board new` — 新規Boardを作成し、アクティブにする。`--workspace`省略時は現在アクティブなワークスペースに作成する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）。成功時、新規`boardId`を表示する
 - `board switch` — 指定したBoardへ切り替える

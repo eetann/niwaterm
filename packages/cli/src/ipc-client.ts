@@ -163,11 +163,22 @@ export interface TileSplitSummary {
 
 export type TileSummary = TileLeafSummary | TileSplitSummary;
 
-export interface WorkspaceListEntry {
-  workspaceId: string;
+export type BoardId = string;
+
+export interface BoardListEntry {
+  boardId: BoardId;
   active: boolean;
   focusedTileId: TileId;
   layout: TileSummary;
+  name: string | null;
+}
+
+export interface WorkspaceListEntry {
+  workspaceId: string;
+  active: boolean;
+  activeBoardId: BoardId;
+  /** このWorkspaceが持つ全Board（ADR 0006）。単一Boardの場合が大半 */
+  boards: BoardListEntry[];
   name: string | null;
 }
 
