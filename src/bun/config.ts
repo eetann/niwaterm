@@ -2,7 +2,7 @@
 // ファイル不在・importエラー・スキーマ不一致いずれでも例外を投げずnullを返す（persistence.tsのloadPersistedStateと同じ設計）。
 
 import { rmSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm, stat, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -101,7 +101,12 @@ async function importFreshConfig(path: string): Promise<unknown> {
   }
 }
 
-/** node_modulesはシンボリックリンク、それ以外のファイル・ディレクトリは再帰的に実体コピーする */
+/**
+ * node_modulesはシンボリックリンク、それ以外のファイル・ディレクトリは再帰的に実体コピーする。
+ * エントリ自体がシンボリックリンク（dotfiles管理等でniwaterm.config.ts等をリンクしている場合）だと
+ * Dirent.isFile()/isDirectory()はリンク先をフォローせずどちらもfalseになるため、statでリンク先の
+ * 種別を判定してからコピーする。
+ */
 async function copyConfigSources(srcDir: string, destDir: string): Promise<void> {
   const entries = await readdir(srcDir, { withFileTypes: true });
   await Promise.all(
@@ -112,14 +117,15 @@ async function copyConfigSources(srcDir: string, destDir: string): Promise<void>
         await symlink(srcPath, destPath, "dir");
         return;
       }
-      if (entry.isDirectory()) {
+      const isDir = entry.isSymbolicLink()
+        ? (await stat(srcPath)).isDirectory()
+        : entry.isDirectory();
+      if (isDir) {
         await mkdir(destPath, { recursive: true });
         await copyConfigSources(srcPath, destPath);
         return;
       }
-      if (entry.isFile()) {
-        await copyFile(srcPath, destPath);
-      }
+      await copyFile(srcPath, destPath);
     }),
   );
 }

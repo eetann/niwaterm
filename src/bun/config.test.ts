@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -189,6 +189,14 @@ describe("loadUserConfig", () => {
       `import { fontSize } from "fake-pkg";\nexport default { appearance: { fontSize } };\n`,
     );
     expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 18 } });
+  });
+
+  test("エントリファイル自体がシンボリックリンクでも解決できる（dotfiles管理でniwaterm.config.ts等をリンクしている場合）", async () => {
+    const realPath = join(dir, "real.config.ts");
+    const entryPath = join(dir, "niwaterm.config.ts");
+    await writeFile(realPath, `export default { appearance: { fontSize: 22 } };\n`);
+    await symlink(realPath, entryPath);
+    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 22 } });
   });
 });
 
