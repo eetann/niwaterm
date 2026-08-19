@@ -22,19 +22,26 @@ const listCommand = define({
 
 const applyCommand = define({
   name: "apply",
-  description: "レイアウトプリセットを適用する",
+  description: "レイアウトプリセットを適用する（ADR 0006、Board単位）",
   args: {
     name: {
       type: "positional",
       description: "適用するプリセット名（niwaterm layout listで確認）",
     },
-    "new-workspace": {
-      type: "boolean",
-      description: "新規ワークスペースとして適用する（デフォルト）",
-    },
     replace: {
       type: "boolean",
-      description: "現在のワークスペースを置き換えて適用する（既存タブ・PTYは無条件で閉じる）",
+      description: "既存Boardを置き換えて適用する（既存タブ・PTYは無条件で閉じる）",
+    },
+    workspace: {
+      type: "string",
+      short: "w",
+      description:
+        "新規Boardの作成先workspaceId（--replace未指定時のみ有効。省略時は現在アクティブなワークスペース）",
+    },
+    board: {
+      type: "string",
+      description:
+        "--replace時の対象boardId（省略時は現在アクティブなBoard。--replace未指定時は指定不可）",
     },
     cwd: {
       type: "string",
@@ -43,16 +50,26 @@ const applyCommand = define({
     },
   },
   run: async (ctx) => {
-    if (ctx.values["new-workspace"] && ctx.values.replace) {
-      failAndExit("layout applyに失敗しました: --new-workspaceと--replaceは同時に指定できません");
+    if (ctx.values.replace && ctx.values.workspace) {
+      failAndExit("layout applyに失敗しました: --replaceと--workspaceは同時に指定できません");
     }
-    const target = ctx.values.replace ? "replace" : "new-workspace";
+    if (!ctx.values.replace && ctx.values.board) {
+      failAndExit("layout applyに失敗しました: --boardは--replace指定時のみ使用できます");
+    }
+    const target = ctx.values.replace ? "replace" : "new-board";
     const cwd = ctx.values.cwd ?? process.cwd();
-    const result = await applyLayout(resolveIpcEndpoint(), ctx.values.name, target, cwd);
+    const result = await applyLayout(
+      resolveIpcEndpoint(),
+      ctx.values.name,
+      target,
+      cwd,
+      ctx.values.workspace,
+      ctx.values.board,
+    );
     if (!result.ok) {
       failAndExit(`layout applyに失敗しました: ${result.error}`);
     }
-    console.log(`workspace: ${result.workspaceId}`);
+    console.log(`board: ${result.boardId}`);
   },
 });
 

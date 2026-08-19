@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutPreset, ShellProfile } from "@niwaterm/config";
+import type { BoardId } from "./board";
 import { applyLayoutPreset, validateLayoutPreset } from "./layout-apply";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import type { TileLeaf, TileNode } from "./tile-layout";
@@ -46,6 +47,22 @@ function createTestWorkspaceManager(): {
     createSession,
   });
   return { mgr, writes, sessionOpts };
+}
+
+/** テスト用: アクティブworkspace配下に新規Boardを作り、そのboardIdを返す */
+function newBoardInActiveWorkspace(mgr: WorkspaceManager, cwd?: string): BoardId {
+  const workspaceId = mgr.snapshot().activeWorkspaceId;
+  const boardId = mgr.newBoard(workspaceId, cwd);
+  if (!boardId) throw new Error("unreachable");
+  return boardId;
+}
+
+function findBoardEntry(mgr: WorkspaceManager, boardId: BoardId) {
+  for (const entry of mgr.listWorkspaces()) {
+    const board = entry.boards.find((b) => b.boardId === boardId);
+    if (board) return board;
+  }
+  return undefined;
 }
 
 const PROFILES: ShellProfile[] = [
@@ -98,10 +115,10 @@ describe("validateLayoutPreset", () => {
   });
 });
 
-describe("applyLayoutPreset (target: new-workspace)", () => {
-  test("単一タイル・単一タブのプリセットを新規ワークスペースとして適用する", () => {
+describe("applyLayoutPreset (target: new-board)", () => {
+  test("単一タイル・単一タブのプリセットを新規Boardとして適用する", () => {
     const { mgr, writes, sessionOpts } = createTestWorkspaceManager();
-    const firstId = mgr.snapshot().activeWorkspaceId;
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: {
         kind: "tile",
@@ -109,18 +126,16 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
 
-    expect(result).toMatchObject({ ok: true });
+    expect(result).toMatchObject({ ok: true, boardId });
     if (!result.ok) throw new Error("unreachable");
-    expect(result.workspaceId).not.toBe(firstId);
-    expect(mgr.snapshot().activeWorkspaceId).toBe(result.workspaceId);
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.boards[0]?.layout as TileLeaf;
+    const board = findBoardEntry(mgr, result.boardId);
+    const leaf = board?.layout as TileLeaf;
     expect(leaf.tabIds.length).toBe(1);
     const tabId = leaf.tabIds[0] as string;
-    expect(entry?.boards[0]?.tabNames[tabId]).toBe("editor");
+    expect(board?.tabNames[tabId]).toBe("editor");
 
     // プレースホルダーのセッションはdispose済み、実際のタブのセッションだけが残る想定
     const realSessionIndex = sessionOpts.findIndex((o) => o.cwd === "/tmp/project");
@@ -130,6 +145,7 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
 
   test("split構成のプリセットを指定したorientation・ratioで組み立てる", () => {
     const { mgr } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: {
         kind: "split",
@@ -140,12 +156,12 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const tree = entry?.boards[0]?.layout as TileNode & { kind: "split" };
+    const board = findBoardEntry(mgr, result.boardId);
+    const tree = board?.layout as TileNode & { kind: "split" };
     expect(tree.kind).toBe("split");
     expect(tree.direction).toBe("row"); // vertical(左右並び) = row
     expect(tree.ratio).toBe(0.7);
@@ -155,6 +171,7 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
 
   test("1タイルに複数タブを作り、activeTabで指定したタブがアクティブになる", () => {
     const { mgr } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: {
         kind: "tile",
@@ -163,33 +180,35 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.boards[0]?.layout as TileLeaf;
+    const board = findBoardEntry(mgr, result.boardId);
+    const leaf = board?.layout as TileLeaf;
     expect(leaf.tabIds.length).toBe(3);
-    expect(entry?.boards[0]?.tabNames[leaf.activeTabId]).toBe("a");
+    expect(board?.tabNames[leaf.activeTabId]).toBe("a");
   });
 
   test("activeTab省略時は最後に作られたタブがアクティブになる", () => {
     const { mgr } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: { kind: "tile", tabs: [{ name: "a" }, { name: "b" }] },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.boards[0]?.layout as TileLeaf;
-    expect(entry?.boards[0]?.tabNames[leaf.activeTabId]).toBe("b");
+    const board = findBoardEntry(mgr, result.boardId);
+    const leaf = board?.layout as TileLeaf;
+    expect(board?.tabNames[leaf.activeTabId]).toBe("b");
   });
 
   test("focus:trueのタブが、そのタイルのアクティブタブになり、tile自体のフォーカスも当たる", () => {
     const { mgr } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: {
         kind: "split",
@@ -199,39 +218,41 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const tree = entry?.boards[0]?.layout as TileNode & { kind: "split" };
+    const board = findBoardEntry(mgr, result.boardId);
+    const tree = board?.layout as TileNode & { kind: "split" };
     const secondLeaf = tree.second as TileLeaf;
-    expect(entry?.boards[0]?.focusedTileId).toBe(secondLeaf.id);
-    expect(entry?.boards[0]?.tabNames[secondLeaf.activeTabId]).toBe("focused");
+    expect(board?.focusedTileId).toBe(secondLeaf.id);
+    expect(board?.tabNames[secondLeaf.activeTabId]).toBe("focused");
   });
 
   test("varsを指定するとタブ変数として設定される", () => {
     const { mgr } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: { kind: "tile", tabs: [{ vars: { role: "editor" } }] },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.boards[0]?.layout as TileLeaf;
-    expect(entry?.boards[0]?.tabVars[leaf.tabIds[0] as string]).toEqual({ role: "editor" });
+    const board = findBoardEntry(mgr, result.boardId);
+    const leaf = board?.layout as TileLeaf;
+    expect(board?.tabVars[leaf.tabIds[0] as string]).toEqual({ role: "editor" });
   });
 
   test("shellProfileを指定するとそのプロファイルのcommandでセッションが起動する", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: { kind: "tile", tabs: [{ shellProfile: "wsl-ubuntu" }] },
     };
 
-    const result = applyLayoutPreset(mgr, PROFILES, preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, PROFILES, preset, "new-board", boardId);
     expect(result.ok).toBe(true);
 
     expect(sessionOpts.some((o) => o.shell === "wsl.exe -d Ubuntu")).toBe(true);
@@ -239,9 +260,11 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
 
   test("単一タイルのプリセットではinvocationCwdが最初のタブに使われる", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
+    // 実運用ではipc-server.tsがnewBoardにも同じcwdを渡す（プレースホルダー自体がこのcwdで作られる）
+    const boardId = newBoardInActiveWorkspace(mgr, "/proj");
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ name: "editor" }] } };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace", "/proj");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/proj");
 
     expect(result.ok).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/proj")).toBe(true);
@@ -249,6 +272,7 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
 
   test("invocationCwdはcwd未指定のタブすべてに既定値として使われ、tabConfig.cwdがあれば優先される", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
     const preset: LayoutPreset = {
       layout: {
         kind: "split",
@@ -258,16 +282,17 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace", "/invocation/dir");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/invocation/dir");
 
     expect(result.ok).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/explicit")).toBe(true);
   });
 
-  test("バリデーションに失敗した場合は新規ワークスペースを作らずエラーを返す", () => {
+  test("バリデーションに失敗した場合はBoardに一切触れずエラーを返す", () => {
     const { mgr } = createTestWorkspaceManager();
-    const before = mgr.snapshot().workspaceIds.length;
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const before = findBoardEntry(mgr, boardId)?.layout;
     const preset: LayoutPreset = {
       layout: {
         kind: "split",
@@ -277,54 +302,55 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-workspace");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
 
     expect(result.ok).toBe(false);
-    expect(mgr.snapshot().workspaceIds.length).toBe(before);
+    expect(findBoardEntry(mgr, boardId)?.layout).toEqual(before);
   });
 });
 
 describe("applyLayoutPreset (target: replace)", () => {
-  test("現在のワークスペースを畳んでから新しい構成で組み立て直す。既存セッションはdisposeされる", () => {
+  test("既存Boardを畳んでから新しい構成で組み立て直す。既存セッションはdisposeされる", () => {
     const { mgr, created } = (() => {
       const { mgr, sessionOpts } = createTestWorkspaceManager();
       return { mgr, created: sessionOpts };
     })();
 
-    // 既存のワークスペースを2タイルへ分割しておく
+    // 既存のBoardを2タイルへ分割しておく
     const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const activeId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
     const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
 
     const preset: LayoutPreset = {
       layout: { kind: "tile", tabs: [{ name: "fresh" }] },
     };
-    const result = applyLayoutPreset(mgr, [], preset, "replace");
+    const result = applyLayoutPreset(mgr, [], preset, "replace", boardId);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
-    // replaceは既存のワークスペースをそのまま使う（新規ワークスペースは作らない）
-    expect(result.workspaceId).toBe(activeId);
+    // replaceは既存のBoardをそのまま使う（新規ワークスペース・Boardは作らない）
+    expect(result.boardId).toBe(boardId);
     expect(mgr.snapshot().workspaceIds.length).toBe(workspaceCountBefore);
 
-    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === activeId);
-    const leaf = entry?.boards[0]?.layout as TileLeaf;
+    const board = findBoardEntry(mgr, boardId);
+    const leaf = board?.layout as TileLeaf;
     expect(leaf.kind).toBe("leaf");
     expect(leaf.tabIds.length).toBe(1);
-    expect(entry?.boards[0]?.tabNames[leaf.tabIds[0] as string]).toBe("fresh");
+    expect(board?.tabNames[leaf.tabIds[0] as string]).toBe("fresh");
 
     expect(created.length).toBeGreaterThan(0);
   });
 
-  test("バリデーションに失敗した場合は既存のワークスペースに一切手を触れない", () => {
+  test("バリデーションに失敗した場合は既存のBoardに一切手を触れない", () => {
     const { mgr } = createTestWorkspaceManager();
     const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
+    const boardId = mgr.snapshot().workspace.activeBoardId;
     const before = mgr.snapshot().workspace.board.layout;
 
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [] } };
-    const result = applyLayoutPreset(mgr, [], preset, "replace");
+    const result = applyLayoutPreset(mgr, [], preset, "replace", boardId);
 
     expect(result.ok).toBe(false);
     expect(mgr.snapshot().workspace.board.layout).toEqual(before);

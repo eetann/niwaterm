@@ -428,7 +428,7 @@ niwaterm layout apply dev
 niwaterm layout apply dev --replace
 ```
 
-`niwaterm layout apply <name>`は既定で新規ワークスペースとして適用する（`--new-workspace`を明示してもよい）。`--replace`を指定すると現在のワークスペースを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**、確認プロンプト等は無い）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはワークスペースに一切手を触れずエラーになる。詳細・エラー時の挙動は`docs/guide/cli.md`参照。
+`niwaterm layout apply <name>`は既定で新規Boardとして適用する（適用先はBoard単位、ADR 0006）。`--replace`を指定すると既存Boardを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**、確認プロンプト等は無い）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはBoardに一切手を触れずエラーになる。詳細・エラー時の挙動は`docs/guide/cli.md`参照。
 
 ## ホットリロード
 

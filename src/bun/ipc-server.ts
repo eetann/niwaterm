@@ -313,18 +313,36 @@ interface ApplyLayoutRequestBody {
   name: string;
   target?: ApplyLayoutTarget;
   cwd?: string;
+  /** target: "new-board"時、Boardの作成先workspaceId（省略時はアクティブworkspace） */
+  workspaceId?: string;
+  /** target: "replace"時、対象boardId（省略時はアクティブworkspaceのアクティブboard） */
+  boardId?: string;
 }
 
 function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
-  const b = body as { name?: unknown; target?: unknown; cwd?: unknown };
+  const b = body as {
+    name?: unknown;
+    target?: unknown;
+    cwd?: unknown;
+    workspaceId?: unknown;
+    boardId?: unknown;
+  };
   if (typeof b.name !== "string" || b.name.length === 0) return null;
-  if (b.target !== undefined && b.target !== "new-workspace" && b.target !== "replace") {
+  if (b.target !== undefined && b.target !== "new-board" && b.target !== "replace") {
     return null;
   }
   const result: ApplyLayoutRequestBody = { name: b.name, target: b.target };
   if (b.cwd !== undefined) {
     if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
     result.cwd = b.cwd;
+  }
+  if (b.workspaceId !== undefined) {
+    if (typeof b.workspaceId !== "string" || b.workspaceId.length === 0) return null;
+    result.workspaceId = b.workspaceId;
+  }
+  if (b.boardId !== undefined) {
+    if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+    result.boardId = b.boardId;
   }
   return result;
 }
@@ -509,22 +527,43 @@ function buildApp(
       return c.json(
         {
           ok: false,
-          error: 'expected { name: string, target?: "new-workspace"|"replace", cwd?: string }',
+          error:
+            'expected { name: string, target?: "new-board"|"replace", cwd?: string, workspaceId?: string, boardId?: string }',
         },
         400,
       );
     }
     const preset = getLayouts()[parsed.name];
     if (!preset) return c.json({ ok: false, error: `layout not found: ${parsed.name}` }, 404);
+
+    const target = parsed.target ?? "new-board";
+    let boardId: string;
+    if (target === "new-board") {
+      const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+      const newId = workspaceManager.newBoard(workspaceId, parsed.cwd);
+      if (newId === null) {
+        return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);
+      }
+      boardId = newId;
+    } else {
+      const resolvedBoardId =
+        parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+      if (!resolvedBoardId || !workspaceManager.hasBoard(resolvedBoardId)) {
+        return c.json({ ok: false, error: `board not found: ${resolvedBoardId ?? ""}` }, 404);
+      }
+      boardId = resolvedBoardId;
+    }
+
     const result = applyLayoutPreset(
       workspaceManager,
       getShellProfiles(),
       preset,
-      parsed.target ?? "new-workspace",
+      target,
+      boardId,
       parsed.cwd,
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
-    return c.json({ ok: true, workspaceId: result.workspaceId });
+    return c.json({ ok: true, boardId: result.boardId });
   });
 
   app.get("/capture-tab", (c) => {

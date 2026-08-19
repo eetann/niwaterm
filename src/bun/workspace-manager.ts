@@ -235,6 +235,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaces.get(workspaceId)?.newBoard(cwd) ?? null;
   }
 
+  function hasBoard(boardId: BoardId): boolean {
+    return findOwnerByBoardId(boardId) !== undefined;
+  }
+
   function switchBoard(boardId: BoardId): boolean {
     return findOwnerByBoardId(boardId)?.switchBoard(boardId) ?? false;
   }
@@ -522,6 +526,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     switchWorkspace,
     closeWorkspace,
     newBoard,
+    hasBoard,
     switchBoard,
     closeBoard,
     setBoardName,

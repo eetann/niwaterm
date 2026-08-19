@@ -2176,10 +2176,11 @@ describe("GET /layouts, POST /apply-layout", () => {
     ]);
   });
 
-  test("POST /apply-layout: 新規ワークスペースとして適用し、workspaceIdを返す", async () => {
+  test("POST /apply-layout: 新規Boardとして適用し、boardIdを返す", async () => {
     const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;
-    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.snapshot().workspace.activeBoardId;
+    const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
 
     const res = await fetch("http://localhost/apply-layout", {
       unix: socketPath,
@@ -2189,10 +2190,49 @@ describe("GET /layouts, POST /apply-layout", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; workspaceId: string };
+    const body = (await res.json()) as { ok: boolean; boardId: string };
     expect(body.ok).toBe(true);
-    expect(body.workspaceId).not.toBe(firstId);
-    expect(mgr.snapshot().activeWorkspaceId).toBe(body.workspaceId);
+    expect(body.boardId).not.toBe(firstBoardId);
+    // new-boardはアクティブworkspace配下に作るだけで、新規workspaceは作らない
+    expect(mgr.snapshot().workspaceIds.length).toBe(workspaceCountBefore);
+    expect(mgr.snapshot().workspace.activeBoardId).toBe(body.boardId);
+  });
+
+  test("POST /apply-layout: workspaceIdを指定すると、そのworkspace配下に新規Boardを作る", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const otherWorkspaceId = mgr.newWorkspace();
+    mgr.switchWorkspace(mgr.snapshot().workspaceIds[0] as string);
+    const activeWorkspaceId = mgr.snapshot().activeWorkspaceId;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", workspaceId: otherWorkspaceId }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.ok).toBe(true);
+    // アクティブworkspaceは変わらない（指定先のworkspaceにBoardが追加されるだけ）
+    expect(mgr.snapshot().activeWorkspaceId).toBe(activeWorkspaceId);
+    const entry = mgr.listWorkspaces().find((w) => w.workspaceId === otherWorkspaceId);
+    expect(entry?.boards.some((b) => b.boardId === body.boardId)).toBe(true);
+  });
+
+  test("POST /apply-layout: 存在しないworkspaceIdは404を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", workspaceId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
   });
 
   test("POST /apply-layout: cwdを指定すると、cwd未指定のタブへ既定値として渡る", async () => {
@@ -2210,10 +2250,10 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
   });
 
-  test("POST /apply-layout: target:replaceは現在のワークスペースを置き換える", async () => {
+  test("POST /apply-layout: target:replaceは現在アクティブなBoardを置き換える", async () => {
     const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;
-    const activeId = mgr.snapshot().activeWorkspaceId;
+    const activeBoardId = mgr.snapshot().workspace.activeBoardId;
     const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
 
     const res = await fetch("http://localhost/apply-layout", {
@@ -2224,9 +2264,43 @@ describe("GET /layouts, POST /apply-layout", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; workspaceId: string };
-    expect(body.workspaceId).toBe(activeId);
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.boardId).toBe(activeBoardId);
     expect(mgr.snapshot().workspaceIds.length).toBe(workspaceCountBefore);
+  });
+
+  test("POST /apply-layout: target:replaceでboardIdを指定すると、そのBoardを置き換える", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const otherBoardId = mgr.newBoard(workspaceId) as string;
+    // アクティブBoardをotherBoardId以外へ戻しておく（指定なしなら誤って選ばれるはず）
+    mgr.switchBoard(mgr.snapshot().workspace.boardIds[0] as string);
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", target: "replace", boardId: otherBoardId }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.boardId).toBe(otherBoardId);
+  });
+
+  test("POST /apply-layout: target:replaceで存在しないboardIdは404を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", target: "replace", boardId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
   });
 
   test("POST /apply-layout: 存在しないnameは404を返す", async () => {

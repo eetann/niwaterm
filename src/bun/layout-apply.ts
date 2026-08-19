@@ -15,16 +15,15 @@ import type {
   LayoutTileConfig,
   ShellProfile,
 } from "@niwaterm/config";
+import type { BoardId } from "./board";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { findNode, listLeaves, type TabId, type TileId } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
-import type { WorkspaceId, WorkspaceManager } from "./workspace-manager";
+import type { WorkspaceManager } from "./workspace-manager";
 
-export type ApplyLayoutTarget = "new-workspace" | "replace";
+export type ApplyLayoutTarget = "new-board" | "replace";
 
-export type ApplyLayoutResult =
-  | { ok: true; workspaceId: WorkspaceId }
-  | { ok: false; error: string };
+export type ApplyLayoutResult = { ok: true; boardId: BoardId } | { ok: false; error: string };
 
 // ---- バリデーション ----
 // TypeScript設定ファイルのため大半の形状はコンパイル時に保証される想定だが、
@@ -96,18 +95,24 @@ export function validateLayoutPreset(
 interface BuildContext {
   workspaceManager: WorkspaceManager;
   profiles: ShellProfile[];
-  workspaceId: WorkspaceId;
+  boardId: BoardId;
   focusTarget: { tileId: TileId; tabId: TabId } | null;
   /** `niwaterm layout apply`を実行したCLIのcwd。tabConfig.cwd未指定時のデフォルトに使う */
   invocationCwd?: string;
 }
 
+/** 全Workspaceを横断してboardIdのBoardListEntryを探す（Board 1つはたかだか数十件程度のため線形探索で十分） */
+function findBoardEntry(workspaceManager: WorkspaceManager, boardId: BoardId) {
+  for (const entry of workspaceManager.listWorkspaces()) {
+    const board = entry.boards.find((b) => b.boardId === boardId);
+    if (board) return board;
+  }
+  return undefined;
+}
+
 /** tileIdが現時点で唯一持つタブのtabIdを返す（不変条件により常に1件のはず） */
 function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
-  const entry = ctx.workspaceManager
-    .listWorkspaces()
-    .find((w) => w.workspaceId === ctx.workspaceId);
-  const board = entry?.boards[0];
+  const board = findBoardEntry(ctx.workspaceManager, ctx.boardId);
   const node = board && findNode(board.layout, tileId);
   if (!node || node.kind !== "leaf" || node.tabIds.length !== 1) {
     throw new Error(`internal error: expected tile ${tileId} to have exactly 1 tab`);
@@ -205,11 +210,10 @@ function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): v
   buildNode(ctx, result.tileId, node.second);
 }
 
-/** targetのワークスペースを、単一タイル・単一タブへ畳む（既存のcloseTabの繰り返しのみで実現する） */
-function resetToSingleTile(workspaceManager: WorkspaceManager, workspaceId: WorkspaceId): void {
+/** boardIdのBoardを、単一タイル・単一タブへ畳む（既存のcloseTabの繰り返しのみで実現する） */
+function resetToSingleTile(workspaceManager: WorkspaceManager, boardId: BoardId): void {
   for (;;) {
-    const entry = workspaceManager.listWorkspaces().find((w) => w.workspaceId === workspaceId);
-    const board = entry?.boards[0];
+    const board = findBoardEntry(workspaceManager, boardId);
     if (!board) return;
     const leaves = listLeaves(board.layout);
     const [firstLeaf] = leaves;
@@ -226,19 +230,19 @@ function resetToSingleTile(workspaceManager: WorkspaceManager, workspaceId: Work
   }
 }
 
-function getRootTileId(workspaceManager: WorkspaceManager, workspaceId: WorkspaceId): TileId {
-  const entry = workspaceManager.listWorkspaces().find((w) => w.workspaceId === workspaceId);
-  const board = entry?.boards[0];
-  if (!board) throw new Error(`internal error: workspace not found: ${workspaceId}`);
+function getRootTileId(workspaceManager: WorkspaceManager, boardId: BoardId): TileId {
+  const board = findBoardEntry(workspaceManager, boardId);
+  if (!board) throw new Error(`internal error: board not found: ${boardId}`);
   return board.layout.id;
 }
 
 /**
- * レイアウトプリセットをワークスペースへ適用する。
- * target: "new-workspace"は新規ワークスペースとして適用（デフォルト、既存作業を壊さない安全側）、
- * "replace"は現在のワークスペースを単一タイルへ畳んでから適用する
+ * レイアウトプリセットをBoardへ適用する（ADR 0006、Board単位のapply）。
+ * target: "new-board"は指定Boardへそのまま組み立てる（デフォルト、既存作業を壊さない安全側。
+ * どのWorkspaceへ新規Boardを作るかは呼び出し側でboardIdを解決してから渡す）、
+ * "replace"は指定Boardを単一タイルへ畳んでから適用する
  * （既存タブ・PTYは無条件でcloseする。確認プロンプト等の要否はroadmap「プロセスはどうなるのか」で別途検討）。
- * 検証エラー時はワークスペースに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
+ * 検証エラー時はBoardに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
  * ok:falseで返すが、その時点までに行った操作はロールバックされない。
  * invocationCwdは`niwaterm layout apply`を実行したCLIのcwdで、tabConfig.cwd未指定時のデフォルトになる
  * （"replace"時、それ以上分割されないまま最初に到達するタイルだけは既存タブを使い回すため、
@@ -249,29 +253,25 @@ export function applyLayoutPreset(
   profiles: ShellProfile[],
   preset: LayoutPreset,
   target: ApplyLayoutTarget,
+  boardId: BoardId,
   invocationCwd?: string,
 ): ApplyLayoutResult {
   const validationError = validateLayoutPreset(preset, profiles);
   if (validationError) return { ok: false, error: validationError };
 
-  const workspaceId =
-    target === "new-workspace"
-      ? workspaceManager.newWorkspace(invocationCwd)
-      : workspaceManager.snapshot().activeWorkspaceId;
-
   if (target === "replace") {
-    resetToSingleTile(workspaceManager, workspaceId);
+    resetToSingleTile(workspaceManager, boardId);
   }
 
   const ctx: BuildContext = {
     workspaceManager,
     profiles,
-    workspaceId,
+    boardId,
     focusTarget: null,
     invocationCwd,
   };
   try {
-    buildNode(ctx, getRootTileId(workspaceManager, workspaceId), preset.layout);
+    buildNode(ctx, getRootTileId(workspaceManager, boardId), preset.layout);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -281,5 +281,5 @@ export function applyLayoutPreset(
     workspaceManager.switchTab(ctx.focusTarget.tileId, ctx.focusTarget.tabId);
   }
 
-  return { ok: true, workspaceId };
+  return { ok: true, boardId };
 }

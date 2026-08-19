@@ -416,18 +416,28 @@ export async function listLayouts(endpoint: IpcEndpoint): Promise<ListLayoutsRes
   }
 }
 
-export type ApplyLayoutTarget = "new-workspace" | "replace";
+export type ApplyLayoutTarget = "new-board" | "replace";
 
-export type ApplyLayoutResult = { ok: true; workspaceId: string } | { ok: false; error: string };
+export type ApplyLayoutResult = { ok: true; boardId: string } | { ok: false; error: string };
 
 export function applyLayout(
   endpoint: IpcEndpoint,
   name: string,
   target: ApplyLayoutTarget,
   cwd?: string,
+  workspaceId?: string,
+  boardId?: string,
 ): Promise<ApplyLayoutResult> {
-  const body: { name: string; target: ApplyLayoutTarget; cwd?: string } = { name, target };
+  const body: {
+    name: string;
+    target: ApplyLayoutTarget;
+    cwd?: string;
+    workspaceId?: string;
+    boardId?: string;
+  } = { name, target };
   if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (workspaceId !== undefined) body.workspaceId = workspaceId;
+  if (boardId !== undefined) body.boardId = boardId;
   return postJson(endpoint, "/apply-layout", body);
 }
 
