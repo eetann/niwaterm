@@ -469,9 +469,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     }
   }
 
-  /** ズーム表示の切り替え（tmuxのresize-pane -Z相当）。tileIdが存在しなければnull、それ以外はトグル後の状態を返す */
+  /**
+   * ズーム表示の切り替え（tmuxのresize-pane -Z相当）。tileIdはleafである必要がある
+   * （splitのidを渡すと、reconcile側の「対象を含まない枝を隠す」ロジックが両側とも除外扱いになり
+   * 表示が壊れるため）。leafでない・存在しない場合はnull、それ以外はトグル後の状態を返す
+   */
   function toggleZoomTile(tileId: TileId): boolean | null {
-    if (!findNode(tree, tileId)) return null;
+    const target = findNode(tree, tileId);
+    if (!target || target.kind !== "leaf") return null;
     zoomedTileId = zoomedTileId === tileId ? null : tileId;
     opts.onDirty();
     return zoomedTileId === tileId;

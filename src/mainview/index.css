@@ -198,7 +198,6 @@ body {
 }
 
 #tile-tree {
-  position: relative;
   width: 100%;
   height: 100%;
 }
@@ -230,14 +229,15 @@ body {
   outline-offset: -1px;
 }
 /*
- * 一時的なズーム表示（tmuxのresize-pane -Z相当）。position:absoluteで#tile-tree全体を覆うだけで、
- * flex木構造・他tileのratioは一切変更しない（reconcile()に手を入れず、CSSだけで完結させる）。
- * ズーム解除時は通常のflexレイアウトへ自然に戻る
+ * 一時的なズーム表示（tmuxのresize-pane -Z相当）中の対象タイルを示す見た目だけの装飾。
+ * 実際の拡大・他タイルの非表示はreconcile()側でズーム対象を含まない枝をdisplay:noneにする
+ * ことで行う（flexのレイアウト計算そのものから除外させ、対象を自然に100%へ広げる）。
+ * position/z-indexで他タイルの上に重ねる方式だと、スタッキングコンテキストの都合で
+ * 背後のタイルが透けて見える不具合があったため採用していない
  */
 .tile.zoomed {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
+  outline: 1px solid #f9e2af;
+  outline-offset: -1px;
 }
 /* タブD&Dのドロップ先ハイライト。::afterのoverlayでタイル全体（タブバー・ターミナル領域とも）を示す */
 .tile.drag-over {

@@ -857,6 +857,17 @@ describe("toggleZoomTile", () => {
     expect(ws.snapshot().zoomedTileId).toBeNull();
   });
 
+  test("splitのidを渡すとnullを返す（leafのみズーム可能）", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createWorkspace(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(firstTileId, "vertical");
+    const splitId = ws.snapshot().layout.id;
+    const result = ws.toggleZoomTile(splitId);
+    expect(result).toBeNull();
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
   test("ズーム中のtileを分割すると自動でズーム解除される（新規tileが隠れたままにならないよう）", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createWorkspace(baseOpts({ createSession: factory }));

@@ -293,6 +293,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         workspaceIds = p.workspaceIds;
         lastLayout = p.workspace.layout;
         lastTabNames = p.workspace.tabNames;
+        // reconcile()がzoomedTileIdをモジュールスコープ変数から直接参照するため、
+        // renderLayout()より前に確定させる必要がある（後回しにすると常に1render分古い
+        // ズーム状態でreconcileしてしまい、ズーム切り替えの反映が一拍遅れて見た目が壊れる）
+        zoomedTileId = p.workspace.zoomedTileId;
         // 昇格（promote）時、popupだったtabIdがここで通常タブとしてDOM登録される。
         // 後続のapplyPopupStateのteardownPopupContentはこの登録が既に上書き済みか判定して
         // 動くため、renderLayout→applyPopupStateの順序は変更しないこと
@@ -300,7 +304,6 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         focusedTileId = p.workspace.focusedTileId;
-        zoomedTileId = p.workspace.zoomedTileId;
         applyPopupState(p.workspace.popup);
         // ポップアップ表示中はキー入力・ペーストの送信先をポップアップへ向ける
         currentTabId =
@@ -417,19 +420,29 @@ function renderLayout(layout: TileNode, tabs: Record<TabId, TabRenderState>): vo
   const seenTabIds = new Set<TabId>();
   const seenSplitIds = new Set<TileId>();
   const seenTileIds = new Set<TileId>();
-  const rootEl = reconcile(layout, tabs, seenTabIds, seenSplitIds, seenTileIds);
+  const rootEl = reconcile(layout, tabs, seenTabIds, seenSplitIds, seenTileIds, true);
   if (rootEl.parentElement !== tileTreeEl) {
     tileTreeEl.appendChild(rootEl);
   }
   gcStale(seenTabIds, seenSplitIds, seenTileIds);
 }
 
+/**
+ * ズーム中、対象タイルを含まない枝をdisplay:noneで丸ごと隠す（`visible`を再帰の入口で最初に
+ * 適用してから子を辿る）。display:noneのflex itemはレイアウト計算から除外されるため、
+ * 対象を含む枝が自然に100%へ広がる（position/z-indexでの重ね合わせは行わない。以前
+ * z-indexだけに頼った実装では、背後のタイルが透けて見える・カーソルが二重に見える不具合があった）。
+ * visibleを子より先に確定させる理由: setTabVisible()はhidden→visible遷移時にsendResize()で
+ * 実寸を測り直すが、その時点でまだ祖先がdisplay:noneのままだと0サイズを誤って測ってしまう
+ * （親から先に確定させる木構造の走査なので、これは子を処理する前に済ませる必要がある）
+ */
 function reconcile(
   node: TileNode,
   tabs: Record<TabId, TabRenderState>,
   seenTabIds: Set<TabId>,
   seenSplitIds: Set<TileId>,
   seenTileIds: Set<TileId>,
+  visible: boolean,
 ): HTMLElement {
   if (node.kind === "leaf") {
     seenTileIds.add(node.id);
@@ -451,12 +464,13 @@ function reconcile(
       tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
     }
     tileEl.dataset["tileId"] = node.id;
+    tileEl.style.display = visible ? "" : "none";
 
     node.tabIds.forEach((tabId) => {
       seenTabIds.add(tabId);
       const renderState = tabs[tabId];
       if (renderState) ensureTabContent(tabId, tileContentEl, renderState);
-      setTabVisible(tabId, tabId === node.activeTabId);
+      setTabVisible(tabId, tabId === node.activeTabId && visible);
     });
     renderTileTabBar(node.id);
 
@@ -472,10 +486,23 @@ function reconcile(
   }
   splitEl.dataset["splitId"] = node.id;
   splitEl.dataset["direction"] = node.direction;
+  splitEl.style.display = visible ? "" : "none";
 
-  const firstEl = reconcile(node.first, tabs, seenTabIds, seenSplitIds, seenTileIds);
+  const firstVisible =
+    visible && (zoomedTileId === null || findNode(node.first, zoomedTileId) !== undefined);
+  const secondVisible =
+    visible && (zoomedTileId === null || findNode(node.second, zoomedTileId) !== undefined);
+  const firstEl = reconcile(node.first, tabs, seenTabIds, seenSplitIds, seenTileIds, firstVisible);
   const dividerEl = getOrCreateDivider(node.id);
-  const secondEl = reconcile(node.second, tabs, seenTabIds, seenSplitIds, seenTileIds);
+  const secondEl = reconcile(
+    node.second,
+    tabs,
+    seenTabIds,
+    seenSplitIds,
+    seenTileIds,
+    secondVisible,
+  );
+  dividerEl.style.display = visible && zoomedTileId === null ? "" : "none";
 
   // ドラッグ確定後、bunのtreeが確定ratioに追いついたら以後はtree由来のratioに戻す
   if (
