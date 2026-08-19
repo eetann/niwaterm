@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
 import type { WorkspaceListEntry } from "../../bun/workspace-manager";
+import type { BoardListEntry } from "../../bun/workspace";
 import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
@@ -22,18 +23,27 @@ function workspace(
   tabNames: Record<string, string> = {},
   tileNames: Record<string, string> = {},
   name: string | null = null,
-  popup: WorkspaceListEntry["popup"] = null,
+  popup: BoardListEntry["popup"] = null,
 ): WorkspaceListEntry {
+  const boardId = `board-${workspaceId}`;
   return {
     workspaceId,
     active: false,
-    focusedTileId: layout.id,
-    layout,
-    tabVars,
-    tabNames,
-    tileNames,
+    activeBoardId: boardId,
+    boards: [
+      {
+        boardId,
+        active: true,
+        focusedTileId: layout.id,
+        layout,
+        tabVars,
+        tabNames,
+        tileNames,
+        name: null,
+        popup,
+      },
+    ],
     name,
-    popup,
   };
 }
 

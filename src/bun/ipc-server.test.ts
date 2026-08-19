@@ -133,7 +133,7 @@ describe("GET /list", () => {
 
   test("workspace/tile/tabの構造をそのまま返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     server = await createIpcServer(socketPath, mgr);
 
@@ -144,7 +144,7 @@ describe("GET /list", () => {
     expect(body.workspaces[0]).toMatchObject({
       workspaceId: mgr.snapshot().activeWorkspaceId,
       active: true,
-      layout: mgr.snapshot().workspace.layout,
+      boards: [expect.objectContaining({ layout: mgr.snapshot().workspace.board.layout })],
     });
   });
 });
@@ -167,7 +167,7 @@ describe("POST /send-keys", () => {
 
   test("literalと特殊キー名混在をバイト列に変換してPTYへ書き込む", async () => {
     const { mgr, writes } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/send-keys", {
@@ -200,7 +200,7 @@ describe("POST /send-keys", () => {
 
   test("不正なボディ（keysが空配列/未指定）は400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/send-keys", {
@@ -232,7 +232,7 @@ describe("GET /capture-tab", () => {
 
   test("対象タブの画面内容をプレーンテキストで返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch(`http://localhost/capture-tab?tabId=${tabId}`, { unix: socketPath });
@@ -278,7 +278,7 @@ describe("POST /split-tile", () => {
 
   test("対象タイルを分割し、新規tileId/tabIdを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/split-tile", {
@@ -291,7 +291,7 @@ describe("POST /split-tile", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; tileId: string; tabId: string };
     expect(body.ok).toBe(true);
-    expect(mgr.snapshot().workspace.layout.kind).toBe("split");
+    expect(mgr.snapshot().workspace.board.layout.kind).toBe("split");
     expect(mgr.hasTab(body.tabId)).toBe(true);
   });
 
@@ -311,7 +311,7 @@ describe("POST /split-tile", () => {
 
   test("不正なorientationは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/split-tile", {
@@ -326,7 +326,7 @@ describe("POST /split-tile", () => {
 
   test("cwdを指定すると新規タブのセッションへ渡る", async () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/split-tile", {
@@ -342,7 +342,7 @@ describe("POST /split-tile", () => {
 
   test("空文字列のcwdは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/split-tile", {
@@ -374,7 +374,7 @@ describe("POST /new-tab", () => {
 
   test("対象タイルに新規タブを作成し、tabIdを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -387,7 +387,7 @@ describe("POST /new-tab", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; tabId: string };
     expect(body.ok).toBe(true);
-    expect((mgr.snapshot().workspace.layout as TileLeaf).tabIds).toContain(body.tabId);
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).tabIds).toContain(body.tabId);
   });
 
   test("存在しないtileIdは404を返す", async () => {
@@ -406,7 +406,7 @@ describe("POST /new-tab", () => {
 
   test("urlを指定するとブラウザタブを作成する。hasTabはfalseのまま", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -419,7 +419,7 @@ describe("POST /new-tab", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; tabId: string };
     expect(body.ok).toBe(true);
-    expect(mgr.snapshot().workspace.tabs[body.tabId]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[body.tabId]).toEqual({
       kind: "browser",
       url: "https://example.com",
     });
@@ -428,7 +428,7 @@ describe("POST /new-tab", () => {
 
   test("空文字列のurlは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -443,7 +443,7 @@ describe("POST /new-tab", () => {
 
   test("customView:trueを指定すると設定済みのcustomViewを開くブラウザタブを作成する", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
@@ -459,7 +459,7 @@ describe("POST /new-tab", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; tabId: string };
     expect(body.ok).toBe(true);
-    expect(mgr.snapshot().workspace.tabs[body.tabId]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[body.tabId]).toEqual({
       kind: "browser",
       url: "file:///tmp/notes.html",
     });
@@ -467,7 +467,7 @@ describe("POST /new-tab", () => {
 
   test("customViewが未設定の状態でcustomView:trueを指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -482,7 +482,7 @@ describe("POST /new-tab", () => {
 
   test("urlとcustomViewを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
@@ -500,7 +500,7 @@ describe("POST /new-tab", () => {
 
   test("shellProfileIdを指定すると解決されたcommandでターミナルタブを作成する", async () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(
       socketPath,
       mgr,
@@ -527,7 +527,7 @@ describe("POST /new-tab", () => {
 
   test("未知のshellProfileIdを指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -542,7 +542,7 @@ describe("POST /new-tab", () => {
 
   test("urlとshellProfileIdを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -557,7 +557,7 @@ describe("POST /new-tab", () => {
 
   test("cwdを指定するとそのタブのセッションへ渡る", async () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -575,7 +575,7 @@ describe("POST /new-tab", () => {
 
   test("cwdとshellProfileIdは併用でき、両方がセッションへ渡る", async () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(
       socketPath,
       mgr,
@@ -600,7 +600,7 @@ describe("POST /new-tab", () => {
 
   test("空文字列のcwdは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -615,7 +615,7 @@ describe("POST /new-tab", () => {
 
   test("cwdとurlを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/new-tab", {
@@ -630,7 +630,7 @@ describe("POST /new-tab", () => {
 
   test("cwdとcustomViewを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
@@ -712,8 +712,8 @@ describe("POST /switch-tab", () => {
 
   test("対象タイル内でアクティブタブを切り替える", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newTab(tileId);
     server = await createIpcServer(socketPath, mgr);
 
@@ -726,12 +726,12 @@ describe("POST /switch-tab", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect((mgr.snapshot().workspace.layout as TileLeaf).activeTabId).toBe(firstTabId);
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId).toBe(firstTabId);
   });
 
   test("存在しないtileId/tabIdは404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/switch-tab", {
@@ -763,8 +763,8 @@ describe("POST /close-tab", () => {
 
   test("対象タブを閉じる", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newTab(tileId);
     server = await createIpcServer(socketPath, mgr);
 
@@ -782,7 +782,7 @@ describe("POST /close-tab", () => {
 
   test("ワークスペース最後の1枚のタイルの最後のタブは閉じられず404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/close-tab", {
@@ -814,7 +814,7 @@ describe("POST /focus-tile", () => {
 
   test("対象タイルへフォーカスを移す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     server = await createIpcServer(socketPath, mgr);
 
@@ -827,7 +827,7 @@ describe("POST /focus-tile", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(mgr.snapshot().workspace.focusedTileId).toBe(firstTileId);
+    expect(mgr.snapshot().workspace.board.focusedTileId).toBe(firstTileId);
   });
 
   test("存在しないtileIdは404を返す", async () => {
@@ -863,7 +863,7 @@ describe("POST /focus-direction", () => {
 
   test("指定方向の隣接タイルへフォーカスを移す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     mgr.focusTile(firstTileId);
     server = await createIpcServer(socketPath, mgr);
@@ -877,7 +877,7 @@ describe("POST /focus-direction", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(mgr.snapshot().workspace.focusedTileId).not.toBe(firstTileId);
+    expect(mgr.snapshot().workspace.board.focusedTileId).not.toBe(firstTileId);
   });
 
   test("不正なdirectionは400を返す", async () => {
@@ -913,7 +913,7 @@ describe("POST /zoom-tile", () => {
 
   test("1回目でズームON、2回目でOFFに戻る。トグル後の状態を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const on = await fetch("http://localhost/zoom-tile", {
@@ -924,7 +924,7 @@ describe("POST /zoom-tile", () => {
     });
     expect(on.status).toBe(200);
     expect(await on.json()).toEqual({ ok: true, zoomed: true });
-    expect(mgr.snapshot().workspace.zoomedTileId).toBe(tileId);
+    expect(mgr.snapshot().workspace.board.zoomedTileId).toBe(tileId);
 
     const off = await fetch("http://localhost/zoom-tile", {
       unix: socketPath,
@@ -934,7 +934,7 @@ describe("POST /zoom-tile", () => {
     });
     expect(off.status).toBe(200);
     expect(await off.json()).toEqual({ ok: true, zoomed: false });
-    expect(mgr.snapshot().workspace.zoomedTileId).toBeNull();
+    expect(mgr.snapshot().workspace.board.zoomedTileId).toBeNull();
   });
 
   test("存在しないtileIdは404を返す", async () => {
@@ -970,7 +970,7 @@ describe("POST /resize-tile", () => {
 
   test("指定方向へタイルを拡大する（既定量）", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     server = await createIpcServer(socketPath, mgr);
 
@@ -983,13 +983,13 @@ describe("POST /resize-tile", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    const split = mgr.snapshot().workspace.layout as TileSplit;
+    const split = mgr.snapshot().workspace.board.layout as TileSplit;
     expect(split.ratio).toBeCloseTo(0.55, 5);
   });
 
   test("amountを指定するとその分だけratioが変わる", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     server = await createIpcServer(socketPath, mgr);
 
@@ -1001,13 +1001,13 @@ describe("POST /resize-tile", () => {
     });
 
     expect(res.status).toBe(200);
-    const split = mgr.snapshot().workspace.layout as TileSplit;
+    const split = mgr.snapshot().workspace.board.layout as TileSplit;
     expect(split.ratio).toBeCloseTo(0.3, 5);
   });
 
   test("該当軸のsplit祖先が無い場合は404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/resize-tile", {
@@ -1022,7 +1022,7 @@ describe("POST /resize-tile", () => {
 
   test("不正なdirectionは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/resize-tile", {
@@ -1037,7 +1037,7 @@ describe("POST /resize-tile", () => {
 
   test("amountが範囲外(0以下・1超)は400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const zero = await fetch("http://localhost/resize-tile", {
@@ -1194,7 +1194,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: 対象がブラウザタブでアクティブなワークスペースならbrowserBridge.navigateを呼びok:trueを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     let received: unknown;
     const bridge = createFakeBrowserBridge({
@@ -1225,7 +1225,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: 成功時にworkspaceManager側のURLも更新される（永続化対象への追従）", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     server = await createIpcServer(
       socketPath,
@@ -1242,7 +1242,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
       body: JSON.stringify({ tabId, url: "https://example.org" }),
     });
 
-    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[tabId]).toEqual({
       kind: "browser",
       url: "https://example.org",
     });
@@ -1270,7 +1270,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: terminalタブを指定すると404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(
       socketPath,
       mgr,
@@ -1291,7 +1291,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: 対象タブの所属ワークスペースが非アクティブなら409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     mgr.newWorkspace(); // 以後、tabId所属のworkspaceは非アクティブ
     server = await createIpcServer(
@@ -1314,7 +1314,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: urlが空/未指定は400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     server = await createIpcServer(
       socketPath,
@@ -1336,7 +1336,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-navigate: browserBridge.navigateが失敗を返すと409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const bridge = createFakeBrowserBridge({
       navigate: async () => ({ ok: false, error: "navigation timed out waiting for page load" }),
@@ -1365,7 +1365,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-get-text: 対象がブラウザタブでアクティブなワークスペースならテキストを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const bridge = createFakeBrowserBridge({
       getText: async () => ({ ok: true, text: "Example Domain" }),
@@ -1388,8 +1388,8 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-get-text: terminalタブは404、tabId未指定は400、非アクティブワークスペースは409", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const browserTabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     mgr.newWorkspace();
     server = await createIpcServer(
@@ -1416,7 +1416,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browser-get-html: 対象がブラウザタブでアクティブなワークスペースならHTMLを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const bridge = createFakeBrowserBridge({
       getHtml: async () => ({ ok: true, html: "<html><body>hi</body></html>" }),
@@ -1456,7 +1456,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
 
   test("browserBridgeを渡さない場合はデフォルトのUNAVAILABLE扱いで409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     server = await createIpcServer(socketPath, mgr);
 
@@ -1487,7 +1487,7 @@ describe("GET /browser-screenshot", () => {
 
   test("対象がブラウザタブでアクティブなワークスペースならgetUrl→captureScreenshotの順で呼びPNGを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const bridge = createFakeBrowserBridge({
       getUrl: async () => ({ ok: true, url: "https://example.com/" }),
@@ -1536,7 +1536,7 @@ describe("GET /browser-screenshot", () => {
 
   test("terminalタブを指定すると404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(
       socketPath,
       mgr,
@@ -1571,7 +1571,7 @@ describe("GET /browser-screenshot", () => {
 
   test("対象タブの所属ワークスペースが非アクティブなら409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     mgr.newWorkspace();
     server = await createIpcServer(
@@ -1592,7 +1592,7 @@ describe("GET /browser-screenshot", () => {
 
   test("browserBridge.getUrlが失敗を返すと409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const bridge = createFakeBrowserBridge({
       getUrl: async () => ({ ok: false, error: "page not loaded yet" }),
@@ -1616,7 +1616,7 @@ describe("GET /browser-screenshot", () => {
 
   test("captureScreenshotが失敗を返すと409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     const captureScreenshot = createFakeCaptureScreenshot(async () => ({
       ok: false,
@@ -1641,7 +1641,7 @@ describe("GET /browser-screenshot", () => {
 
   test("browserBridgeを渡さない場合はデフォルトのUNAVAILABLE扱いで409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(tileId, "https://example.com") as string;
     server = await createIpcServer(socketPath, mgr);
 
@@ -1673,8 +1673,8 @@ describe("POST /show-tab", () => {
   test("非アクティブなワークスペースのタブでも、切替・フォーカス・アクティブ化・ウィンドウ前面化を行いok:trueを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newTab(firstTileId);
     mgr.newWorkspace(); // 以後firstIdは非アクティブ
     let activated = false;
@@ -1697,8 +1697,8 @@ describe("POST /show-tab", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, workspaceId: firstId, tileId: firstTileId });
     expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
-    expect((mgr.snapshot().workspace.layout as TileLeaf).activeTabId).toBe(firstTabId);
-    expect(mgr.snapshot().workspace.focusedTileId).toBe(firstTileId);
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId).toBe(firstTabId);
+    expect(mgr.snapshot().workspace.board.focusedTileId).toBe(firstTileId);
     expect(activated).toBe(true);
   });
 
@@ -1749,7 +1749,7 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("set-varで書いた値をget-var/list-varsで読める", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const setRes = await fetch("http://localhost/set-var", {
@@ -1776,8 +1776,8 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("別タイル(tileB)からtabAの変数を読める（tabBに書いても混ざらない）", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
     const tabB = splitResult?.tabId as string;
     server = await createIpcServer(socketPath, mgr);
@@ -1804,8 +1804,8 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("同一タイル内の別タブ(tabB)で変数が混ざらない", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const tabB = mgr.newTab(tileId) as string;
     server = await createIpcServer(socketPath, mgr);
 
@@ -1835,7 +1835,7 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("set-var: 不正なkey（空白を含む）は400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/set-var", {
@@ -1872,7 +1872,7 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("get-var: 存在するtabIdだが未設定のkeyは404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch(`http://localhost/get-var?tabId=${tabId}&key=not-set`, {
@@ -1901,7 +1901,7 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
 
   test("list-vars: 何も設定していないtabIdは空オブジェクトを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch(`http://localhost/list-vars?tabId=${tabId}`, {
@@ -2117,7 +2117,7 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(mgr.snapshot().workspace.popup).toBeNull();
+    expect(mgr.snapshot().workspace.board.popup).toBeNull();
   });
 
   test("toggle-popup: 表示/非表示を切り替え、トグル後のvisibleを返す。popup無しは409を返す", async () => {
@@ -2154,7 +2154,7 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
 
   test("promote-popup: フォーカス中タイルへ編入しtileId/tabIdを返す。popup無しは409を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     server = await createIpcServer(socketPath, mgr);
 
     const noneRes = await fetch("http://localhost/promote-popup", {
@@ -2175,8 +2175,8 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, tileId, tabId: popupTabId });
-    expect(mgr.snapshot().workspace.popup).toBeNull();
-    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(leaf.tabIds).toContain(popupTabId);
   });
 });

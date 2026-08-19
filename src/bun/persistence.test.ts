@@ -286,35 +286,89 @@ describe("loadPersistedState / savePersistedState", () => {
   test("保存→読み込みでラウンドトリップする", async () => {
     const path = join(dir, "nested", "workspaces.json");
     const state: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 1,
       workspaces: [
         {
-          layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
         },
         {
           name: "second",
-          layout: {
-            kind: "split",
-            direction: "row",
-            ratio: 0.5,
-            first: {
-              kind: "leaf",
-              tabs: [
-                { kind: "terminal", shell: "wsl.exe -d NixOS", vars: { cwd: "/home/eetann" } },
-                { kind: "browser", url: "https://example.com" },
-              ],
-              activeTabIndex: 1,
-              name: "left",
-              focused: true,
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "split",
+                direction: "row",
+                ratio: 0.5,
+                first: {
+                  kind: "leaf",
+                  tabs: [
+                    { kind: "terminal", shell: "wsl.exe -d NixOS", vars: { cwd: "/home/eetann" } },
+                    { kind: "browser", url: "https://example.com" },
+                  ],
+                  activeTabIndex: 1,
+                  name: "left",
+                  focused: true,
+                },
+                second: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              },
             },
-            second: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
-          },
+          ],
         },
       ],
     };
     await savePersistedState(path, state);
     expect(await loadPersistedState(path)).toEqual(state);
+  });
+
+  test("version 2の旧形式ファイルは単一Boardのworkspaceとしてマイグレーションされる（ADR 0006）", async () => {
+    const path = join(dir, "v2-migration.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 2,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            name: "legacy",
+            layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+          },
+          {
+            layout: {
+              kind: "leaf",
+              tabs: [{ kind: "browser", url: "https://example.com" }],
+              activeTabIndex: 0,
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(await loadPersistedState(path)).toEqual({
+      version: 3,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          name: "legacy",
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "leaf",
+                tabs: [{ kind: "browser", url: "https://example.com" }],
+                activeTabIndex: 0,
+              },
+            },
+          ],
+        },
+      ],
+    });
   });
 
   test("ファイルが存在しない場合はnullを返す", async () => {

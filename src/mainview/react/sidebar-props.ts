@@ -74,44 +74,54 @@ export function agentStatusBadgeClass(status: AgentStatus): string {
  * renderSidebar()旧実装のラベル整形・active判定ロジックを、DOM非依存の純粋関数として抽出したもの。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
  * タブラベルはタイル内の連番のみ（"Tile x / "は表示側でタイル見出しとして扱うため含めない）。
+ * TODO(ADR 0006): 現状はWorkspaceごとのアクティブBoardのみを表示する暫定実装。
+ * Workspace→Board→Tile→Tabの4段表示はroadmap「Board階層」節のサイドバー対応タスクで行う
  */
 export function buildSidebarWorkspaceItems(
   workspaces: WorkspaceListEntry[],
   currentActiveWorkspaceId: WorkspaceId | null,
 ): SidebarWorkspaceItem[] {
-  return workspaces.map((entry, workspaceIndex) => ({
-    workspaceId: entry.workspaceId,
-    label: entry.name || `Workspace ${workspaceIndex + 1}`,
-    active: entry.workspaceId === currentActiveWorkspaceId,
-    popup: entry.popup
-      ? {
-          tabId: entry.popup.tabId,
-          visible: entry.popup.visible,
-          label: entry.tabNames[entry.popup.tabId] || "Popup",
-        }
-      : null,
-    tiles: listLeaves(entry.layout).map((leaf, tileIndex) => ({
-      tileId: leaf.id,
-      label: entry.tileNames[leaf.id] || `Tile ${tileIndex + 1}`,
-      tabs: leaf.tabIds.map((tabId, tabIndex) => {
-        const vars = entry.tabVars[tabId];
-        const branch = vars?.["branch"] || null;
-        const agentName = vars?.["agent"] || null;
-        const agent: SidebarTabAgentInfo | null = agentName
-          ? {
-              agent: agentName,
-              status: normalizeAgentStatus(vars?.["agent_status"]),
-              statusText: vars?.["agent_status_text"] || null,
-            }
-          : null;
-        return {
-          tabId,
-          label: entry.tabNames[tabId] || `Tab ${tabIndex + 1}`,
-          active: entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
-          branch,
-          agent,
-        };
-      }),
-    })),
-  }));
+  return workspaces.map((entry, workspaceIndex) => {
+    const board = entry.boards.find((b) => b.boardId === entry.activeBoardId) ?? entry.boards[0];
+    const layout = board?.layout;
+    const tileNames = board?.tileNames ?? {};
+    const tabVars = board?.tabVars ?? {};
+    const tabNames = board?.tabNames ?? {};
+    const popup = board?.popup ?? null;
+    return {
+      workspaceId: entry.workspaceId,
+      label: entry.name || `Workspace ${workspaceIndex + 1}`,
+      active: entry.workspaceId === currentActiveWorkspaceId,
+      popup: popup
+        ? {
+            tabId: popup.tabId,
+            visible: popup.visible,
+            label: tabNames[popup.tabId] || "Popup",
+          }
+        : null,
+      tiles: (layout ? listLeaves(layout) : []).map((leaf, tileIndex) => ({
+        tileId: leaf.id,
+        label: tileNames[leaf.id] || `Tile ${tileIndex + 1}`,
+        tabs: leaf.tabIds.map((tabId, tabIndex) => {
+          const vars = tabVars[tabId];
+          const branch = vars?.["branch"] || null;
+          const agentName = vars?.["agent"] || null;
+          const agent: SidebarTabAgentInfo | null = agentName
+            ? {
+                agent: agentName,
+                status: normalizeAgentStatus(vars?.["agent_status"]),
+                statusText: vars?.["agent_status_text"] || null,
+              }
+            : null;
+          return {
+            tabId,
+            label: tabNames[tabId] || `Tab ${tabIndex + 1}`,
+            active: entry.workspaceId === currentActiveWorkspaceId && tabId === leaf.activeTabId,
+            branch,
+            agent,
+          };
+        }),
+      })),
+    };
+  });
 }

@@ -291,28 +291,29 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       render: (p: AppRenderState) => {
         activeWorkspaceId = p.activeWorkspaceId;
         workspaceIds = p.workspaceIds;
-        lastLayout = p.workspace.layout;
-        lastTabNames = p.workspace.tabNames;
+        const activeBoard = p.workspace.board;
+        lastLayout = activeBoard.layout;
+        lastTabNames = activeBoard.tabNames;
         // reconcile()がzoomedTileIdをモジュールスコープ変数から直接参照するため、
         // renderLayout()より前に確定させる必要がある（後回しにすると常に1render分古い
         // ズーム状態でreconcileしてしまい、ズーム切り替えの反映が一拍遅れて見た目が壊れる）
-        zoomedTileId = p.workspace.zoomedTileId;
+        zoomedTileId = activeBoard.zoomedTileId;
         // 昇格（promote）時、popupだったtabIdがここで通常タブとしてDOM登録される。
         // 後続のapplyPopupStateのteardownPopupContentはこの登録が既に上書き済みか判定して
         // 動くため、renderLayout→applyPopupStateの順序は変更しないこと
-        renderLayout(p.workspace.layout, p.workspace.tabs);
+        renderLayout(activeBoard.layout, activeBoard.tabs);
         lastWorkspaces = p.workspaces;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
-        focusedTileId = p.workspace.focusedTileId;
-        applyPopupState(p.workspace.popup);
+        focusedTileId = activeBoard.focusedTileId;
+        applyPopupState(activeBoard.popup);
         // ポップアップ表示中はキー入力・ペーストの送信先をポップアップへ向ける
         currentTabId =
           popupVisible && currentPopupTabId
             ? currentPopupTabId
             : ((focusedTileId && activeTabByTile.get(focusedTileId)) ?? null);
         updateFocusHighlight();
-        for (const tabId of Object.keys(p.workspace.tabs)) {
-          const renderState = p.workspace.tabs[tabId];
+        for (const tabId of Object.keys(activeBoard.tabs)) {
+          const renderState = activeBoard.tabs[tabId];
           if (!renderState || renderState.kind !== "terminal") continue;
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
@@ -1454,7 +1455,9 @@ function activateSidebarPopup(workspaceId: WorkspaceId): void {
     sendMessage("switchWorkspace", { workspaceId });
   }
   const entry = lastWorkspaces.find((w) => w.workspaceId === workspaceId);
-  if (entry?.popup && !entry.popup.visible) {
+  // TODO(ADR 0006): ポップアップは現状Board単位の暫定実装のため、アクティブBoardのみ見る
+  const popup = entry?.boards.find((b) => b.boardId === entry.activeBoardId)?.popup;
+  if (popup && !popup.visible) {
     sendMessage("togglePopupVisibility");
   }
   imeEl.focus({ preventScroll: true });

@@ -52,14 +52,23 @@ export interface PersistedTileSplit {
 
 export type PersistedTileNode = PersistedTileLeaf | PersistedTileSplit;
 
-export interface PersistedWorkspace {
+/** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
+export interface PersistedBoard {
   layout: PersistedTileNode;
+  /** ユーザーがサイドバーから設定したBoard名。未設定は省略する */
+  name?: string;
+}
+
+export interface PersistedWorkspace {
+  /** 最低1件。Board階層導入前のデータはマイグレーションで単一Boardとして読み替える（migrateV2ToV3） */
+  boards: PersistedBoard[];
+  activeBoardIndex: number;
   /** ユーザーがサイドバーから設定したワークスペース名。未設定は省略する */
   name?: string;
 }
 
 export interface PersistedState {
-  version: 2;
+  version: 3;
   workspaces: PersistedWorkspace[];
   activeWorkspaceIndex: number;
 }
@@ -186,30 +195,84 @@ function isPersistedTileNode(value: unknown): value is PersistedTileNode {
   return false;
 }
 
-function isPersistedWorkspace(value: unknown): value is PersistedWorkspace {
+function isPersistedBoard(value: unknown): value is PersistedBoard {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
   return isPersistedTileNode(v["layout"]);
 }
 
+function isPersistedWorkspace(value: unknown): value is PersistedWorkspace {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  if (typeof v["activeBoardIndex"] !== "number") return false;
+  const boards = v["boards"];
+  return Array.isArray(boards) && boards.length > 0 && boards.every(isPersistedBoard);
+}
+
 function isPersistedState(value: unknown): value is PersistedState {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  if (v["version"] !== 2) return false;
+  if (v["version"] !== 3) return false;
   if (typeof v["activeWorkspaceIndex"] !== "number") return false;
   const workspaces = v["workspaces"];
   if (!Array.isArray(workspaces)) return false;
   return workspaces.every(isPersistedWorkspace);
 }
 
-/** ファイルが無い・JSONとして壊れている・スキーマ不一致（旧バージョンのファイル含む）のいずれでも例外を投げずnullを返す */
+// ---- version 2 → 3 マイグレーション（ADR 0006: Board階層の追加） ----
+// v2はWorkspace直下に1本のlayoutを持つ構造だった。「Boardが1つだけのWorkspace」として読み替える。
+
+interface PersistedWorkspaceV2 {
+  layout: PersistedTileNode;
+  name?: string;
+}
+
+function isPersistedWorkspaceV2(value: unknown): value is PersistedWorkspaceV2 {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  return isPersistedTileNode(v["layout"]);
+}
+
+function isPersistedStateV2(
+  value: unknown,
+): value is { version: 2; workspaces: PersistedWorkspaceV2[]; activeWorkspaceIndex: number } {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (v["version"] !== 2) return false;
+  if (typeof v["activeWorkspaceIndex"] !== "number") return false;
+  const workspaces = v["workspaces"];
+  if (!Array.isArray(workspaces)) return false;
+  return workspaces.every(isPersistedWorkspaceV2);
+}
+
+function migrateV2ToV3(v2: {
+  workspaces: PersistedWorkspaceV2[];
+  activeWorkspaceIndex: number;
+}): PersistedState {
+  return {
+    version: 3,
+    workspaces: v2.workspaces.map((w) => {
+      const board: PersistedBoard = { layout: w.layout };
+      return w.name !== undefined
+        ? { boards: [board], activeBoardIndex: 0, name: w.name }
+        : { boards: [board], activeBoardIndex: 0 };
+    }),
+    activeWorkspaceIndex: v2.activeWorkspaceIndex,
+  };
+}
+
+/** ファイルが無い・JSONとして壊れている・スキーマ不一致（v2/v3以外）のいずれでも例外を投げずnullを返す */
 export async function loadPersistedState(path: string): Promise<PersistedState | null> {
   try {
     const file = Bun.file(path);
     if (!(await file.exists())) return null;
     const data: unknown = await file.json();
-    return isPersistedState(data) ? data : null;
+    if (isPersistedState(data)) return data;
+    if (isPersistedStateV2(data)) return migrateV2ToV3(data);
+    return null;
   } catch {
     return null;
   }

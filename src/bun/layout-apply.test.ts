@@ -116,10 +116,10 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     expect(mgr.snapshot().activeWorkspaceId).toBe(result.workspaceId);
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.layout as TileLeaf;
+    const leaf = entry?.boards[0]?.layout as TileLeaf;
     expect(leaf.tabIds.length).toBe(1);
     const tabId = leaf.tabIds[0] as string;
-    expect(entry?.tabNames[tabId]).toBe("editor");
+    expect(entry?.boards[0]?.tabNames[tabId]).toBe("editor");
 
     // プレースホルダーのセッションはdispose済み、実際のタブのセッションだけが残る想定
     const realSessionIndex = sessionOpts.findIndex((o) => o.cwd === "/tmp/project");
@@ -144,7 +144,7 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     if (!result.ok) throw new Error("unreachable");
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const tree = entry?.layout as TileNode & { kind: "split" };
+    const tree = entry?.boards[0]?.layout as TileNode & { kind: "split" };
     expect(tree.kind).toBe("split");
     expect(tree.direction).toBe("row"); // vertical(左右並び) = row
     expect(tree.ratio).toBe(0.7);
@@ -167,9 +167,9 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     if (!result.ok) throw new Error("unreachable");
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.layout as TileLeaf;
+    const leaf = entry?.boards[0]?.layout as TileLeaf;
     expect(leaf.tabIds.length).toBe(3);
-    expect(entry?.tabNames[leaf.activeTabId]).toBe("a");
+    expect(entry?.boards[0]?.tabNames[leaf.activeTabId]).toBe("a");
   });
 
   test("activeTab省略時は最後に作られたタブがアクティブになる", () => {
@@ -183,8 +183,8 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     if (!result.ok) throw new Error("unreachable");
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.layout as TileLeaf;
-    expect(entry?.tabNames[leaf.activeTabId]).toBe("b");
+    const leaf = entry?.boards[0]?.layout as TileLeaf;
+    expect(entry?.boards[0]?.tabNames[leaf.activeTabId]).toBe("b");
   });
 
   test("focus:trueのタブが、そのタイルのアクティブタブになり、tile自体のフォーカスも当たる", () => {
@@ -203,10 +203,10 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     if (!result.ok) throw new Error("unreachable");
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const tree = entry?.layout as TileNode & { kind: "split" };
+    const tree = entry?.boards[0]?.layout as TileNode & { kind: "split" };
     const secondLeaf = tree.second as TileLeaf;
-    expect(entry?.focusedTileId).toBe(secondLeaf.id);
-    expect(entry?.tabNames[secondLeaf.activeTabId]).toBe("focused");
+    expect(entry?.boards[0]?.focusedTileId).toBe(secondLeaf.id);
+    expect(entry?.boards[0]?.tabNames[secondLeaf.activeTabId]).toBe("focused");
   });
 
   test("varsを指定するとタブ変数として設定される", () => {
@@ -220,8 +220,8 @@ describe("applyLayoutPreset (target: new-workspace)", () => {
     if (!result.ok) throw new Error("unreachable");
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === result.workspaceId);
-    const leaf = entry?.layout as TileLeaf;
-    expect(entry?.tabVars[leaf.tabIds[0] as string]).toEqual({ role: "editor" });
+    const leaf = entry?.boards[0]?.layout as TileLeaf;
+    expect(entry?.boards[0]?.tabVars[leaf.tabIds[0] as string]).toEqual({ role: "editor" });
   });
 
   test("shellProfileを指定するとそのプロファイルのcommandでセッションが起動する", () => {
@@ -291,7 +291,7 @@ describe("applyLayoutPreset (target: replace)", () => {
     })();
 
     // 既存のワークスペースを2タイルへ分割しておく
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     const activeId = mgr.snapshot().activeWorkspaceId;
     const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
@@ -308,24 +308,24 @@ describe("applyLayoutPreset (target: replace)", () => {
     expect(mgr.snapshot().workspaceIds.length).toBe(workspaceCountBefore);
 
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === activeId);
-    const leaf = entry?.layout as TileLeaf;
+    const leaf = entry?.boards[0]?.layout as TileLeaf;
     expect(leaf.kind).toBe("leaf");
     expect(leaf.tabIds.length).toBe(1);
-    expect(entry?.tabNames[leaf.tabIds[0] as string]).toBe("fresh");
+    expect(entry?.boards[0]?.tabNames[leaf.tabIds[0] as string]).toBe("fresh");
 
     expect(created.length).toBeGreaterThan(0);
   });
 
   test("バリデーションに失敗した場合は既存のワークスペースに一切手を触れない", () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const before = mgr.snapshot().workspace.layout;
+    const before = mgr.snapshot().workspace.board.layout;
 
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [] } };
     const result = applyLayoutPreset(mgr, [], preset, "replace");
 
     expect(result.ok).toBe(false);
-    expect(mgr.snapshot().workspace.layout).toEqual(before);
+    expect(mgr.snapshot().workspace.board.layout).toEqual(before);
   });
 });

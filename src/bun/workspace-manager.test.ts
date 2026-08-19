@@ -66,7 +66,7 @@ describe("getDefaultShellの配線", () => {
     const mgr = createWorkspaceManager(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.newTab(tileId, "wsl.exe -d Ubuntu");
     expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
   });
@@ -78,7 +78,7 @@ describe("createWorkspaceManager", () => {
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const snap = mgr.snapshot();
     expect(snap.workspaceIds).toEqual([snap.activeWorkspaceId]);
-    expect(snap.workspace.layout.kind).toBe("leaf");
+    expect(snap.workspace.board.layout.kind).toBe("leaf");
   });
 
   test("tile/tab/workspaceのidは複数ワークスペース間で衝突しない", () => {
@@ -89,7 +89,7 @@ describe("createWorkspaceManager", () => {
     const ids = new Set<string>();
     for (const wid of mgr.snapshot().workspaceIds) {
       mgr.switchWorkspace(wid);
-      const layout = mgr.snapshot().workspace.layout as TileLeaf;
+      const layout = mgr.snapshot().workspace.board.layout as TileLeaf;
       expect(ids.has(wid)).toBe(false);
       expect(ids.has(layout.id)).toBe(false);
       expect(ids.has(layout.activeTabId)).toBe(false);
@@ -223,25 +223,25 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
 
     const newTabId = mgr.newTab(firstTileId);
     expect(newTabId).not.toBeNull();
     mgr.switchWorkspace(firstId);
-    const afterNewTab = mgr.snapshot().workspace.layout as TileLeaf;
+    const afterNewTab = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(afterNewTab.tabIds.length).toBe(2);
 
     const splitResult = mgr.splitTile(firstTileId, "vertical");
     expect(splitResult).not.toBeNull();
-    const afterSplit = mgr.snapshot().workspace.layout;
+    const afterSplit = mgr.snapshot().workspace.board.layout;
     expect(afterSplit.kind).toBe("split");
   });
 
   test("tabIdベースのhandleInput/handlePaste/handleResizeも所属workspaceへ届く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newWorkspace();
 
     // 例外を投げず、非アクティブワークスペース内のタブへも到達できることのみ確認
@@ -261,13 +261,13 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
 
     const newTabId = mgr.newBrowserTab(firstTileId, "https://example.com");
     expect(newTabId).not.toBeNull();
     mgr.switchWorkspace(firstId);
-    expect(mgr.snapshot().workspace.tabs[newTabId as string]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[newTabId as string]).toEqual({
       kind: "browser",
       url: "https://example.com",
     });
@@ -277,12 +277,12 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.newWorkspace(); // 以後、first workspaceは非アクティブ
 
     expect(mgr.toggleZoomTile(firstTileId)).toBe(true);
     mgr.switchWorkspace(firstId);
-    expect(mgr.snapshot().workspace.zoomedTileId).toBe(firstTileId);
+    expect(mgr.snapshot().workspace.board.zoomedTileId).toBe(firstTileId);
   });
 
   test("存在しないtileIdへのtoggleZoomTileはnullを返す", () => {
@@ -294,11 +294,11 @@ describe("tileId/tabIdベースの操作は所属workspaceへ自動的にルー�
   test("focusDirectionは常にアクティブなワークスペースへルーティングされる", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const before = mgr.snapshot().workspace.focusedTileId;
+    const before = mgr.snapshot().workspace.board.focusedTileId;
     mgr.focusDirection("left");
-    expect(mgr.snapshot().workspace.focusedTileId).not.toBe(before);
+    expect(mgr.snapshot().workspace.board.focusedTileId).not.toBe(before);
   });
 });
 
@@ -306,7 +306,7 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   test("非アクティブなワークスペースのタブへも届く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newWorkspace(); // 以後、firstTabId所属のworkspaceは非アクティブ
 
     expect(mgr.setTabVar(firstTabId, "status", "running")).toBe(true);
@@ -317,8 +317,8 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   test("タブAが書いた変数をタブBから読める（tabIdを指定すれば所属workspaceに関わらずアクセスできる）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
     const tabB = splitResult?.tabId as string;
 
@@ -338,8 +338,8 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   test("異なるタブ間で変数が混ざらない", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
     const tabB = splitResult?.tabId as string;
 
@@ -353,8 +353,8 @@ describe("タブ変数(setTabVar/getTabVar/listTabVars)", () => {
   test("同一タイル内の複数タブでも変数が混ざらない（タブ単位化の主目的）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const tabB = mgr.newTab(tileId) as string;
 
     mgr.setTabVar(tabA, "agent_status", "working");
@@ -377,12 +377,12 @@ describe("findTabsByVar", () => {
   test("別ワークスペース・別タイルにまたがっても値が一致するタブを全て見つける", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileA = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const tabA = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const splitResult = mgr.splitTile(tileA, "vertical");
     const tabB = splitResult?.tabId as string;
     mgr.newWorkspace();
-    const tabC = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
     mgr.setTabVar(tabA, "role", "editor");
     mgr.setTabVar(tabB, "role", "shell");
@@ -404,32 +404,32 @@ describe("タブ名・タイル名(setTabName/setTileName)", () => {
   test("setTabNameで設定した名前がlistWorkspaces()のtabNamesに反映される", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
     expect(mgr.setTabName(tabId, "roadmap")).toBe(true);
 
-    expect(mgr.listWorkspaces()[0]?.tabNames).toEqual({ [tabId]: "roadmap" });
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.tabNames).toEqual({ [tabId]: "roadmap" });
   });
 
   test("setTileNameで設定した名前がlistWorkspaces()のtileNamesに反映される", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
 
     expect(mgr.setTileName(tileId, "作業ペイン")).toBe(true);
 
-    expect(mgr.listWorkspaces()[0]?.tileNames).toEqual({ [tileId]: "作業ペイン" });
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.tileNames).toEqual({ [tileId]: "作業ペイン" });
   });
 
   test("空文字列を設定すると名前がクリアされデフォルトへ戻る", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
     mgr.setTabName(tabId, "roadmap");
     mgr.setTabName(tabId, "");
 
-    expect(mgr.listWorkspaces()[0]?.tabNames).toEqual({});
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.tabNames).toEqual({});
   });
 
   test("存在しないtabId/tileIdへのsetはfalseを返す", () => {
@@ -442,8 +442,8 @@ describe("タブ名・タイル名(setTabName/setTileName)", () => {
   test("非アクティブなワークスペースのタブ・タイルへも届く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newWorkspace(); // 以後、firstTileId/firstTabId所属のworkspaceは非アクティブ
 
     expect(mgr.setTabName(firstTabId, "roadmap")).toBe(true);
@@ -480,40 +480,54 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("workspaces配列の件数分ワークスペースが復元され、各leafの全タブ分セッションが起動する", () => {
     const { created, factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
-          layout: {
-            kind: "split",
-            direction: "row",
-            ratio: 0.5,
-            first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
-            second: {
-              kind: "leaf",
-              tabs: [{ kind: "terminal" }, { kind: "terminal" }],
-              activeTabIndex: 1,
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "split",
+                direction: "row",
+                ratio: 0.5,
+                first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                second: {
+                  kind: "leaf",
+                  tabs: [{ kind: "terminal" }, { kind: "terminal" }],
+                  activeTabIndex: 1,
+                },
+              },
             },
-          },
+          ],
         },
-        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+        {
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
 
     expect(mgr.snapshot().workspaceIds.length).toBe(2);
     expect(created.length).toBe(4); // 1つ目のworkspaceに3タブ、2つ目に1タブ
-    expect(mgr.snapshot().workspace.layout.kind).toBe("split");
+    expect(mgr.snapshot().workspace.board.layout.kind).toBe("split");
   });
 
   test("activeWorkspaceIndexで指定したワークスペースがアクティブになる", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 1,
       workspaces: [
-        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
-        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+        {
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
+        {
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
@@ -524,11 +538,17 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("範囲外のactiveWorkspaceIndexは末尾にクランプされる", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 99,
       workspaces: [
-        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
-        { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+        {
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
+        {
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
@@ -538,7 +558,7 @@ describe("restoreFrom（永続化からの復元）", () => {
 
   test("workspacesが空のrestoreFromは無視され、単一ワークスペースで初期化される", () => {
     const { factory } = createFakeSessionFactory();
-    const restoreFrom: PersistedState = { version: 2, activeWorkspaceIndex: 0, workspaces: [] };
+    const restoreFrom: PersistedState = { version: 3, activeWorkspaceIndex: 0, workspaces: [] };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
     expect(mgr.snapshot().workspaceIds.length).toBe(1);
   });
@@ -546,12 +566,13 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("ワークスペース名が復元されlistWorkspaces()のnameに反映される", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
           name: "作業env",
-          layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
         },
       ],
     };
@@ -562,21 +583,26 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("terminalタブのshell/vars.cwdがspawnされたセッションへ渡る", () => {
     const { created, factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
-          layout: {
-            kind: "leaf",
-            tabs: [
-              {
-                kind: "terminal",
-                shell: "wsl.exe -d NixOS",
-                vars: { cwd: "/home/eetann/project" },
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "leaf",
+                tabs: [
+                  {
+                    kind: "terminal",
+                    shell: "wsl.exe -d NixOS",
+                    vars: { cwd: "/home/eetann/project" },
+                  },
+                ],
+                activeTabIndex: 0,
               },
-            ],
-            activeTabIndex: 0,
-          },
+            },
+          ],
         },
       ],
     };
@@ -589,23 +615,28 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("browserタブはPTYセッションを増やさず復元される", () => {
     const { created, factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
-          layout: {
-            kind: "leaf",
-            tabs: [{ kind: "browser", url: "https://example.com" }],
-            activeTabIndex: 0,
-          },
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "leaf",
+                tabs: [{ kind: "browser", url: "https://example.com" }],
+                activeTabIndex: 0,
+              },
+            },
+          ],
         },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
     expect(created.length).toBe(0);
-    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[tabId]).toEqual({
       kind: "browser",
       url: "https://example.com",
     });
@@ -614,28 +645,33 @@ describe("restoreFrom（永続化からの復元）", () => {
   test("フォーカスされていたleafが復元後も同じ相対位置（split.second）でフォーカスされる", () => {
     const { factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {
-      version: 2,
+      version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
         {
-          layout: {
-            kind: "split",
-            direction: "row",
-            ratio: 0.5,
-            first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
-            second: {
-              kind: "leaf",
-              tabs: [{ kind: "terminal" }],
-              activeTabIndex: 0,
-              focused: true,
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "split",
+                direction: "row",
+                ratio: 0.5,
+                first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                second: {
+                  kind: "leaf",
+                  tabs: [{ kind: "terminal" }],
+                  activeTabIndex: 0,
+                  focused: true,
+                },
+              },
             },
-          },
+          ],
         },
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
-    const layout = mgr.snapshot().workspace.layout as TileNode & { kind: "split" };
-    expect(mgr.snapshot().workspace.focusedTileId).toBe((layout.second as TileLeaf).id);
+    const layout = mgr.snapshot().workspace.board.layout as TileNode & { kind: "split" };
+    expect(mgr.snapshot().workspace.board.focusedTileId).toBe((layout.second as TileLeaf).id);
   });
 });
 
@@ -643,16 +679,16 @@ describe("serializeForPersistence", () => {
   test("現在のワークスペース構成をPersistedStateとして書き出せる", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
     mgr.newWorkspace();
 
     const persisted = mgr.serializeForPersistence();
 
-    expect(persisted.version).toBe(2);
+    expect(persisted.version).toBe(3);
     expect(persisted.workspaces.length).toBe(2);
-    expect(persisted.workspaces[0]?.layout.kind).toBe("split");
-    expect(persisted.workspaces[1]?.layout).toEqual({
+    expect(persisted.workspaces[0]?.boards[0]?.layout.kind).toBe("split");
+    expect(persisted.workspaces[1]?.boards[0]?.layout).toEqual({
       kind: "leaf",
       tabs: [{ kind: "terminal" }],
       activeTabIndex: 0,
@@ -664,9 +700,9 @@ describe("serializeForPersistence", () => {
   test("serializeForPersistence -> restoreFrom のラウンドトリップで同じ骨格になる", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const split = mgr.snapshot().workspace.layout as TileNode & { kind: "split" };
+    const split = mgr.snapshot().workspace.board.layout as TileNode & { kind: "split" };
     mgr.newTab((split.first as TileLeaf).id);
 
     const persisted = mgr.serializeForPersistence();
@@ -682,8 +718,8 @@ describe("serializeForPersistence", () => {
     const mgr = createWorkspaceManager(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.setTabName(firstTabId, "work");
     mgr.setTileName(firstTileId, "editor");
     mgr.setTabVar(firstTabId, "cwd", "/home/eetann");
@@ -706,13 +742,13 @@ describe("setBrowserTabUrl", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
     mgr.newWorkspace();
 
     expect(mgr.setBrowserTabUrl(tabId, "https://example.com/next")).toBe(true);
     mgr.switchWorkspace(firstId);
-    expect(mgr.snapshot().workspace.tabs[tabId]).toEqual({
+    expect(mgr.snapshot().workspace.board.tabs[tabId]).toEqual({
       kind: "browser",
       url: "https://example.com/next",
     });
@@ -742,12 +778,12 @@ describe("listWorkspaces", () => {
   test("focusedTileIdとlayoutが各workspaceのgetLayout/getFocusedTileIdと一致する", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
 
     const entry = mgr.listWorkspaces()[0];
-    expect(entry?.layout).toEqual(mgr.snapshot().workspace.layout);
-    expect(entry?.focusedTileId).toBe(mgr.snapshot().workspace.focusedTileId);
+    expect(entry?.boards[0]?.layout).toEqual(mgr.snapshot().workspace.board.layout);
+    expect(entry?.boards[0]?.focusedTileId).toBe(mgr.snapshot().workspace.board.focusedTileId);
   });
 
   test("snapshot().workspacesはlistWorkspaces()と一致する（サイドバー描画用データ）", () => {
@@ -761,13 +797,13 @@ describe("listWorkspaces", () => {
   test("tabVarsに各タブのタブ変数がtabIdをキーに含まれる（未設定なら空オブジェクト）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const split = mgr.splitTile(firstTileId, "vertical");
     mgr.setTabVar(firstTabId, "branch", "main");
 
     const entry = mgr.listWorkspaces()[0];
-    expect(entry?.tabVars).toEqual({
+    expect(entry?.boards[0]?.tabVars).toEqual({
       [firstTabId]: { branch: "main" },
       [split?.tabId as string]: {},
     });
@@ -776,14 +812,14 @@ describe("listWorkspaces", () => {
   test("1タイル内に複数タブがあると、tabVarsのキーはタイル単位ではなくタブ単位で並ぶ", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const secondTabId = mgr.newTab(tileId) as string;
     mgr.setTabVar(firstTabId, "agent_status", "working");
     mgr.setTabVar(secondTabId, "agent_status", "idle");
 
     const entry = mgr.listWorkspaces()[0];
-    expect(entry?.tabVars).toEqual({
+    expect(entry?.boards[0]?.tabVars).toEqual({
       [firstTabId]: { agent_status: "working" },
       [secondTabId]: { agent_status: "idle" },
     });
@@ -794,7 +830,7 @@ describe("hasTab", () => {
   test("存在するtabIdはtrue、存在しないtabIdはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     expect(mgr.hasTab(tabId)).toBe(true);
     expect(mgr.hasTab("not-found")).toBe(false);
   });
@@ -805,13 +841,22 @@ describe("locateTab / locateBrowserTab / isWorkspaceActive", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstBoardId = mgr.snapshot().workspace.activeBoardId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const browserTabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
     mgr.newWorkspace(); // 以後、firstIdは非アクティブ
 
-    expect(mgr.locateTab(terminalTabId)).toEqual({ workspaceId: firstId, tileId: firstTileId });
-    expect(mgr.locateTab(browserTabId)).toEqual({ workspaceId: firstId, tileId: firstTileId });
+    expect(mgr.locateTab(terminalTabId)).toEqual({
+      workspaceId: firstId,
+      boardId: firstBoardId,
+      tileId: firstTileId,
+    });
+    expect(mgr.locateTab(browserTabId)).toEqual({
+      workspaceId: firstId,
+      boardId: firstBoardId,
+      tileId: firstTileId,
+    });
     expect(mgr.locateTab("not-found")).toBeNull();
   });
 
@@ -819,12 +864,14 @@ describe("locateTab / locateBrowserTab / isWorkspaceActive", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const terminalTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstBoardId = mgr.snapshot().workspace.activeBoardId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const browserTabId = mgr.newBrowserTab(firstTileId, "https://example.com") as string;
 
     expect(mgr.locateBrowserTab(browserTabId)).toEqual({
       workspaceId: firstId,
+      boardId: firstBoardId,
       tileId: firstTileId,
     });
     expect(mgr.locateBrowserTab(terminalTabId)).toBeNull();
@@ -847,7 +894,7 @@ describe("showTab", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const targetTabId = mgr.newTab(firstTileId) as string;
     mgr.newWorkspace(); // 以後、firstIdは非アクティブ
 
@@ -873,7 +920,7 @@ describe("getTabText", () => {
   test("存在するtabIdはテキストを返し、存在しないtabIdはnullを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     expect(mgr.getTabText(tabId)).toBe("");
     expect(mgr.getTabText("not-found")).toBeNull();
   });
@@ -881,7 +928,7 @@ describe("getTabText", () => {
   test("非アクティブなワークスペースのタブへも届く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newWorkspace();
     expect(mgr.getTabText(firstTabId)).toBe("");
   });
@@ -891,7 +938,7 @@ describe("switchTab / closeTab / focusTileの戻り値", () => {
   test("switchTabは成功時true、存在しないtileId/tabIdはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const newTabId = mgr.newTab(tileId) as string;
 
     expect(mgr.switchTab(tileId, newTabId)).toBe(true);
@@ -902,7 +949,7 @@ describe("switchTab / closeTab / focusTileの戻り値", () => {
   test("closeTabは成功時true、存在しないtileId/tabIdはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const newTabId = mgr.newTab(tileId) as string;
 
     expect(mgr.closeTab("not-found", newTabId)).toBe(false);
@@ -912,7 +959,7 @@ describe("switchTab / closeTab / focusTileの戻り値", () => {
   test("focusTileは成功時true、存在しないtileIdはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
 
     expect(mgr.focusTile(tileId)).toBe(true);
     expect(mgr.focusTile("not-found")).toBe(false);
@@ -923,14 +970,14 @@ describe("moveTab", () => {
   test("同一workspace内のタイル間移動は成功する", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const movingTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const movingTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     const split = mgr.splitTile(firstTileId, "vertical") as { tileId: string };
 
     const result = mgr.moveTab(firstTileId, movingTabId, split.tileId);
 
     expect(result).toBe(true);
-    const after = mgr.snapshot().workspace.layout;
+    const after = mgr.snapshot().workspace.board.layout;
     expect(after.kind).toBe("leaf");
     expect((after as TileLeaf).tabIds).toContain(movingTabId);
   });
@@ -939,22 +986,22 @@ describe("moveTab", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
-    const firstTabId = (mgr.snapshot().workspace.layout as TileLeaf).activeTabId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     mgr.newWorkspace();
-    const secondTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const secondTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
 
     const result = mgr.moveTab(firstTileId, firstTabId, secondTileId);
 
     expect(result).toBe(false);
     mgr.switchWorkspace(firstId);
-    expect((mgr.snapshot().workspace.layout as TileLeaf).tabIds).toEqual([firstTabId]);
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).tabIds).toEqual([firstTabId]);
   });
 
   test("存在しないtileIdはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
 
     expect(mgr.moveTab("not-found", leaf.activeTabId, leaf.id)).toBe(false);
     expect(mgr.moveTab(leaf.id, leaf.activeTabId, "not-found")).toBe(false);
@@ -971,7 +1018,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     expect(tabId).not.toBeNull();
     expect(created.length).toBe(before + 1);
-    expect(mgr.snapshot().workspace.popup).toEqual({
+    expect(mgr.snapshot().workspace.board.popup).toEqual({
       tabId: tabId as string,
       visible: true,
       width: undefined,
@@ -990,7 +1037,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     const ok = mgr.closePopup();
 
     expect(ok).toBe(true);
-    expect(mgr.snapshot().workspace.popup).toBeNull();
+    expect(mgr.snapshot().workspace.board.popup).toBeNull();
     expect(created[created.length - 1]?.disposed).toBe(true);
   });
 
@@ -1001,11 +1048,11 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     expect(mgr.togglePopupVisibility()).toBeNull();
 
     mgr.openPopup();
-    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
+    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(true);
     expect(mgr.togglePopupVisibility()).toBe(false);
-    expect(mgr.snapshot().workspace.popup?.visible).toBe(false);
+    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(false);
     expect(mgr.togglePopupVisibility()).toBe(true);
-    expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
+    expect(mgr.snapshot().workspace.board.popup?.visible).toBe(true);
   });
 
   test("promotePopupはpopup無しでnullを返す", () => {
@@ -1018,7 +1065,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
   test("promotePopupはフォーカス中タイルへ編入し、セッションを作り直さない", () => {
     const { created, factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const tileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const popupTabId = mgr.openPopup() as string;
     const createdCountAfterOpen = created.length;
 
@@ -1026,8 +1073,8 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     expect(result).toEqual({ tileId, tabId: popupTabId });
     expect(created.length).toBe(createdCountAfterOpen); // セッションが作り直されないこと（ADR 0005）
-    expect(mgr.snapshot().workspace.popup).toBeNull();
-    const leaf = mgr.snapshot().workspace.layout as TileLeaf;
+    expect(mgr.snapshot().workspace.board.popup).toBeNull();
+    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(leaf.tabIds).toContain(popupTabId);
     expect(leaf.activeTabId).toBe(popupTabId);
   });
@@ -1035,7 +1082,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
   test("promotePopupは常にopenPopup時ではなく実行時点のフォーカス中タイルへ編入する", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    const firstTileId = (mgr.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.openPopup();
     const split = mgr.splitTile(firstTileId, "vertical") as { tileId: string };
     // splitTileはfocusedTileIdを新しいタイルへ切り替える
@@ -1043,7 +1090,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     const result = mgr.promotePopup();
 
     expect(result?.tileId).toBe(split.tileId);
-    const leaf = mgr.snapshot().workspace.layout;
+    const leaf = mgr.snapshot().workspace.board.layout;
     expect(leaf.kind).toBe("split");
   });
 });

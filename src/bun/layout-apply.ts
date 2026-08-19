@@ -107,7 +107,8 @@ function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
   const entry = ctx.workspaceManager
     .listWorkspaces()
     .find((w) => w.workspaceId === ctx.workspaceId);
-  const node = entry && findNode(entry.layout, tileId);
+  const board = entry?.boards[0];
+  const node = board && findNode(board.layout, tileId);
   if (!node || node.kind !== "leaf" || node.tabIds.length !== 1) {
     throw new Error(`internal error: expected tile ${tileId} to have exactly 1 tab`);
   }
@@ -208,8 +209,9 @@ function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): v
 function resetToSingleTile(workspaceManager: WorkspaceManager, workspaceId: WorkspaceId): void {
   for (;;) {
     const entry = workspaceManager.listWorkspaces().find((w) => w.workspaceId === workspaceId);
-    if (!entry) return;
-    const leaves = listLeaves(entry.layout);
+    const board = entry?.boards[0];
+    if (!board) return;
+    const leaves = listLeaves(board.layout);
     const [firstLeaf] = leaves;
     if (!firstLeaf) return;
     if (leaves.length === 1 && firstLeaf.tabIds.length === 1) return;
@@ -226,8 +228,9 @@ function resetToSingleTile(workspaceManager: WorkspaceManager, workspaceId: Work
 
 function getRootTileId(workspaceManager: WorkspaceManager, workspaceId: WorkspaceId): TileId {
   const entry = workspaceManager.listWorkspaces().find((w) => w.workspaceId === workspaceId);
-  if (!entry) throw new Error(`internal error: workspace not found: ${workspaceId}`);
-  return entry.layout.id;
+  const board = entry?.boards[0];
+  if (!board) throw new Error(`internal error: workspace not found: ${workspaceId}`);
+  return board.layout.id;
 }
 
 /**

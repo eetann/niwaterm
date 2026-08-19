@@ -156,13 +156,13 @@ describe("runHandler（RPC経由でのcustomハンドラ実行）", () => {
 describe("niwa.tile", () => {
   test("current()はフォーカス中タイルのidを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     expect(niwa.tile.current()?.id).toBe(tileId);
   });
 
   test("split()はworkspaceManager.splitTileへ委譲し、新しいtileId/tabIdを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const before = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const before = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     const result = niwa.tile.split({ orientation: "vertical" });
     expect(result).not.toBeNull();
     expect(result?.tileId).not.toBe(before);
@@ -170,27 +170,27 @@ describe("niwa.tile", () => {
 
   test("close()はフォーカス中タイルのアクティブタブを閉じる", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     niwa.tile.split({ orientation: "vertical" });
     workspaceManager.focusTile(tileId);
     niwa.tile.close();
     // 元のタイルは1タブしかなかったため、閉じるとタイル自体が消える（残り1タイルへ畳まれる）
-    expect(workspaceManager.snapshot().workspace.layout.kind).toBe("leaf");
+    expect(workspaceManager.snapshot().workspace.board.layout.kind).toBe("leaf");
   });
 
   test("resize()はフォーカス中タイルをdirection方向へ拡大し、trueを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     niwa.tile.split({ orientation: "vertical" }); // row split, ratio 0.5
     workspaceManager.focusTile(tileId);
     expect(niwa.tile.resize({ direction: "right", amount: 0.1 })).toBe(true);
-    const tree = workspaceManager.snapshot().workspace.layout as TileNode & { kind: "split" };
+    const tree = workspaceManager.snapshot().workspace.board.layout as TileNode & { kind: "split" };
     expect(tree.ratio).toBeCloseTo(0.6);
   });
 
   test("resize()は軸が一致する祖先splitが無い場合はfalse", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     niwa.tile.split({ orientation: "vertical" }); // rowのみ、column方向は無い
     workspaceManager.focusTile(tileId);
     expect(niwa.tile.resize({ direction: "up" })).toBe(false);
@@ -198,18 +198,19 @@ describe("niwa.tile", () => {
 
   test("zoom()はフォーカス中タイルのズームを切り替え、トグル後の状態を返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const tileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     expect(niwa.tile.zoom()).toBe(true);
-    expect(workspaceManager.snapshot().workspace.zoomedTileId).toBe(tileId);
+    expect(workspaceManager.snapshot().workspace.board.zoomedTileId).toBe(tileId);
     expect(niwa.tile.zoom()).toBe(false);
-    expect(workspaceManager.snapshot().workspace.zoomedTileId).toBeNull();
+    expect(workspaceManager.snapshot().workspace.board.zoomedTileId).toBeNull();
   });
 });
 
 describe("niwa.tab", () => {
   test("current()はフォーカス中タイルのアクティブタブのtabIdを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
+      .tabIds[0] as string;
     expect(niwa.tab.current()?.tabId).toBe(tabId);
   });
 
@@ -222,7 +223,8 @@ describe("niwa.tab", () => {
 
   test("var.set/getでタブ変数を読み書きできる", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
+      .tabIds[0] as string;
     expect(niwa.tab.var.get(tabId, "role")).toBeUndefined();
     niwa.tab.var.set(tabId, "role", "editor");
     expect(niwa.tab.var.get(tabId, "role")).toBe("editor");
@@ -230,7 +232,8 @@ describe("niwa.tab", () => {
 
   test("var.findは全ワークスペース・タイルを横断して一致するtabIdを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tabA = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabA = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
+      .tabIds[0] as string;
     const tabB = niwa.tab.create()?.tabId as string;
     niwa.workspace.create();
     const tabC = niwa.tab.current()?.tabId as string;
@@ -246,7 +249,7 @@ describe("niwa.tab", () => {
   test("showは所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化をまとめて行う", () => {
     const { niwa, workspaceManager } = createTestSetup();
     const firstWorkspaceId = niwa.workspace.current();
-    const firstTileId = (workspaceManager.snapshot().workspace.layout as TileLeaf).id;
+    const firstTileId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
     const targetTabId = niwa.tab.create()?.tabId as string;
     niwa.workspace.create(); // 以後、firstWorkspaceIdは非アクティブ
 
@@ -262,14 +265,16 @@ describe("niwa.tab", () => {
 
   test("respawnは既存タブを再起動し、trueを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
+      .tabIds[0] as string;
     expect(niwa.tab.respawn(tabId)).toBe(true);
     expect(workspaceManager.hasTab(tabId)).toBe(true);
   });
 
   test("respawnは未知のshellProfileならfalseを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
-    const tabId = (workspaceManager.snapshot().workspace.layout as TileLeaf).tabIds[0] as string;
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
+      .tabIds[0] as string;
     expect(niwa.tab.respawn(tabId, { shellProfile: "no-such-profile" })).toBe(false);
   });
 
