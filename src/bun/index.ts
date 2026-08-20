@@ -148,6 +148,12 @@ function scheduleRender() {
 }
 
 function render() {
+  // onDirty経由でPTYの初回出力等から即座に呼ばれうるため、mainWindow構築（このファイル末尾の
+  // new BrowserWindow）が完了する前にscheduleRenderのsetTimeoutが発火する競合状態がありうる。
+  // 未構築時はmainWindowの参照自体はTDZに引っかからずundefinedを返す（Bunのバンドラーがトップ
+  // レベルconstをvar相当にscope-hoistingしているため）ので、明示的にガードする必要がある
+  // （実機で発生確認済み。ガード無しだとsetTimeoutコールバック内の例外でWorker全体が落ちる）
+  if (!mainWindow) return;
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
   const snap = workspaceManager.snapshot();
@@ -160,6 +166,8 @@ function render() {
 }
 
 function sendConfig() {
+  // render()と同じ理由でmainWindow構築前に呼ばれうるためガードする
+  if (!mainWindow) return;
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
   rpcSend.config({ keybindings, appearance: effectiveAppearance(), customView, shellProfiles });
