@@ -135,13 +135,13 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 
 ```sh
 niwaterm layout list
-niwaterm layout apply <name> [--replace [--board <boardId>] | [--workspace <workspaceId>]] [--cwd <dir>]
+niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>]
 ```
 
 `niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
 
 - `layout list` — 定義済みプリセットを`name<TAB>description`形式で表示する。1件も定義されていない場合はその旨を表示する
-- `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**。確認プロンプト等は無い）。`--replace`と`--workspace`、`--replace`未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
+- `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`/`--replace-force`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
 
 指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合（`shellProfile`が未知のid、`focus:true`が2つ以上、ratioが範囲外等）はいずれもエラーメッセージと共に終了コード1を返す。検証失敗時はBoardに一切変更を加えない。
 

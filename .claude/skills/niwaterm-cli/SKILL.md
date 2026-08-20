@@ -29,7 +29,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
-- `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)
+- `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 
 ## 詳しい使い方

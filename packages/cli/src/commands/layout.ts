@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
 import { applyLayout, listLayouts, resolveIpcEndpoint } from "../ipc-client";
@@ -20,6 +21,24 @@ const listCommand = define({
   },
 });
 
+/** 非対話環境（パイプ・スクリプト実行等）ではハングせずエラーで終了し、--replace-forceの利用を促す */
+async function confirmReplace(boardLabel: string): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    failAndExit(
+      "layout applyに失敗しました: 非対話環境のため--replaceの確認ができません。確認をスキップするには--replace-forceを使ってください",
+    );
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question(
+      `${boardLabel}の既存タブ・PTYをすべて閉じてレイアウトを適用します。よろしいですか？ (y/N) `,
+    );
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    rl.close();
+  }
+}
+
 const applyCommand = define({
   name: "apply",
   description: "レイアウトプリセットを適用する（ADR 0006、Board単位）",
@@ -30,18 +49,23 @@ const applyCommand = define({
     },
     replace: {
       type: "boolean",
-      description: "既存Boardを置き換えて適用する（既存タブ・PTYは無条件で閉じる）",
+      description:
+        "既存Boardを置き換えて適用する（既存タブ・PTYは無条件で閉じる。実行前にy/nで確認する）",
+    },
+    "replace-force": {
+      type: "boolean",
+      description: "--replaceと同じだが、確認なしで実行する",
     },
     workspace: {
       type: "string",
       short: "w",
       description:
-        "新規Boardの作成先workspaceId（--replace未指定時のみ有効。省略時は現在アクティブなワークスペース）",
+        "新規Boardの作成先workspaceId（--replace/--replace-force未指定時のみ有効。省略時は現在アクティブなワークスペース）",
     },
     board: {
       type: "string",
       description:
-        "--replace時の対象boardId（省略時は現在アクティブなBoard。--replace未指定時は指定不可）",
+        "--replace/--replace-force時の対象boardId（省略時は現在アクティブなBoard。それ以外は指定不可）",
     },
     cwd: {
       type: "string",
@@ -50,13 +74,28 @@ const applyCommand = define({
     },
   },
   run: async (ctx) => {
-    if (ctx.values.replace && ctx.values.workspace) {
-      failAndExit("layout applyに失敗しました: --replaceと--workspaceは同時に指定できません");
+    const isReplace = ctx.values.replace || ctx.values["replace-force"];
+    if (isReplace && ctx.values.workspace) {
+      failAndExit(
+        "layout applyに失敗しました: --replace/--replace-forceと--workspaceは同時に指定できません",
+      );
     }
-    if (!ctx.values.replace && ctx.values.board) {
-      failAndExit("layout applyに失敗しました: --boardは--replace指定時のみ使用できます");
+    if (!isReplace && ctx.values.board) {
+      failAndExit(
+        "layout applyに失敗しました: --boardは--replace/--replace-force指定時のみ使用できます",
+      );
     }
-    const target = ctx.values.replace ? "replace" : "new-board";
+
+    if (ctx.values.replace && !ctx.values["replace-force"]) {
+      const boardLabel = ctx.values.board ? `Board ${ctx.values.board}` : "現在アクティブなBoard";
+      const confirmed = await confirmReplace(boardLabel);
+      if (!confirmed) {
+        console.log("キャンセルしました");
+        return;
+      }
+    }
+
+    const target = isReplace ? "replace" : "new-board";
     const cwd = ctx.values.cwd ?? process.cwd();
     const result = await applyLayout(
       resolveIpcEndpoint(),
