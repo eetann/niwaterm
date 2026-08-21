@@ -30,12 +30,20 @@ export default {
 		},
 		mac: {
 			bundleCEF: false,
+			icons: "assets/icon/icon.iconset",
 		},
 		linux: {
 			bundleCEF: false,
+			icon: "assets/icon/icon.png",
 		},
 		win: {
 			bundleCEF: false,
+			icon: "assets/icon/icon.ico",
 		},
+	},
+	scripts: {
+		// electrobun 1.18.1のrcedit解決バグ（https://github.com/blackboardsh/electrobun/issues/429）の
+		// 回避策。詳細はscripts/embed-windows-icon.ts参照
+		postBuild: "scripts/embed-windows-icon.ts",
 	},
 } satisfies ElectrobunConfig;

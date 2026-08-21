@@ -24,6 +24,7 @@
         "bun-plugin-tailwind": "^0.1.2",
         "oxfmt": "^0.59.0",
         "oxlint": "^1.74.0",
+        "rcedit": "^4.0.1",
         "tailwindcss": "^4.3.3",
       },
     },
