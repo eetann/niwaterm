@@ -2447,3 +2447,185 @@ describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {
     expect(leaf.tabIds).toContain(popupTabId);
   });
 });
+
+/** fetchのPromiseがまだ解決していないことを確認する（ok:trueだと待ち続けてしまうため） */
+async function expectPending(promise: Promise<unknown>): Promise<void> {
+  const timeoutSentinel = Symbol("timeout");
+  const raceResult = await Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(timeoutSentinel), 50)),
+  ]);
+  expect(raceResult).toBe(timeoutSentinel);
+}
+
+describe("POST /popup", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("ポップアップを開きtabIdを返す。既に開いている場合は409を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: true; tabId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.snapshot().workspace.popup?.tabId).toBe(body.tabId);
+
+    const dupRes = await fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(dupRes.status).toBe(409);
+  });
+
+  test("wait未指定の場合、popupを開いたまま即座にレスポンスを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command: "echo hi" }),
+    });
+    expect(res.status).toBe(200);
+    // waitしていないので、コマンドの終了を待たずpopupは開いたまま
+    expect(mgr.snapshot().workspace.popup).not.toBeNull();
+  });
+
+  test("wait:trueの場合、コマンドが終了する（PTYのonExit発火）までレスポンスを遅らせる", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const fetchPromise = fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command: "fzf", wait: true }),
+    });
+    await expectPending(fetchPromise);
+    expect(mgr.snapshot().workspace.popup).not.toBeNull();
+
+    // popup用セッションが最後に作られたものとして、PTYの自然終了（onExit発火）を模擬する
+    const popupSessionOpts = sessionOpts[sessionOpts.length - 1];
+    popupSessionOpts?.onExit?.(0);
+
+    const res = await fetchPromise;
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: true; tabId: string };
+    expect(body.ok).toBe(true);
+    // onExit経由でpopup.close()が呼ばれ、既に閉じている
+    expect(mgr.snapshot().workspace.popup).toBeNull();
+  });
+
+  test("wait:trueの場合、手動closeでもレスポンスが解決される", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const fetchPromise = fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ wait: true }),
+    });
+    await expectPending(fetchPromise);
+
+    mgr.closePopup();
+
+    const res = await fetchPromise;
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { ok: true }).ok).toBe(true);
+  });
+
+  test("wait:trueの場合、タブへの昇格でもレスポンスが解決される", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const fetchPromise = fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ wait: true }),
+    });
+    await expectPending(fetchPromise);
+
+    mgr.promotePopup();
+
+    const res = await fetchPromise;
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { ok: true }).ok).toBe(true);
+  });
+
+  test("wait以外の不正な型は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ wait: "yes" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("captureStdout:trueの場合、コマンドの標準出力をキャプチャしてstdoutで返す（waitは暗黙で有効）", async () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const fetchPromise = fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command: "fzf", captureStdout: true }),
+    });
+    await expectPending(fetchPromise);
+
+    const popupSessionOpts = sessionOpts[sessionOpts.length - 1];
+    const captureFile = popupSessionOpts?.captureStdoutTo;
+    expect(typeof captureFile).toBe("string");
+    // PTY内のコマンドがcaptureStdoutToへ書き込む挙動を模擬する（実際のリダイレクトはpty.ts側）
+    await writeFile(captureFile as string, "selected-file.txt");
+    popupSessionOpts?.onExit?.(0);
+
+    const res = await fetchPromise;
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: true; tabId: string; stdout: string };
+    expect(body.ok).toBe(true);
+    expect(body.stdout).toBe("selected-file.txt");
+    expect(existsSync(captureFile as string)).toBe(false);
+  });
+
+  test("captureStdout:trueかつcommand未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/popup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ captureStdout: true }),
+    });
+    expect(res.status).toBe(400);
+  });
+});

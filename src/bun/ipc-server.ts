@@ -352,6 +352,8 @@ interface PopupRequestBody {
   command?: string;
   width?: number;
   height?: number;
+  wait?: boolean;
+  captureStdout?: boolean;
 }
 
 /** widthHeightは1〜100の整数パーセントのみ許可する */
@@ -360,7 +362,14 @@ function isValidPopupSize(value: unknown): value is number {
 }
 
 function parsePopupBody(body: unknown): PopupRequestBody | null {
-  const b = body as { cwd?: unknown; command?: unknown; width?: unknown; height?: unknown };
+  const b = body as {
+    cwd?: unknown;
+    command?: unknown;
+    width?: unknown;
+    height?: unknown;
+    wait?: unknown;
+    captureStdout?: unknown;
+  };
   const result: PopupRequestBody = {};
   if (b.cwd !== undefined) {
     if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
@@ -378,6 +387,16 @@ function parsePopupBody(body: unknown): PopupRequestBody | null {
     if (!isValidPopupSize(b.height)) return null;
     result.height = b.height;
   }
+  if (b.wait !== undefined) {
+    if (typeof b.wait !== "boolean") return null;
+    result.wait = b.wait;
+  }
+  if (b.captureStdout !== undefined) {
+    if (typeof b.captureStdout !== "boolean") return null;
+    result.captureStdout = b.captureStdout;
+  }
+  // captureStdoutはcommandの標準出力を受け取る機能のため、commandなしでは意味を成さない
+  if (result.captureStdout && result.command === undefined) return null;
   return result;
 }
 
@@ -884,7 +903,7 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { cwd?: string, command?: string, width?: number (1-100), height?: number (1-100) }",
+            "expected { cwd?: string, command?: string, width?: number (1-100), height?: number (1-100), wait?: boolean, captureStdout?: boolean (requires command) }",
         },
         400,
       );
@@ -896,6 +915,16 @@ function buildApp(
     // マウスクリックでしか復帰できなくなる不具合がある（詳細: docs/known-issues/
     // windows-popup-activatewindow-focus-loss.md）。popupは既にniwatermを操作中に開く
     // ケースが主なので、ウィンドウ前面化なしでも実用上の支障は小さいと判断した
+    //
+    // wait: trueの場合、ポップアップが閉じる（コマンド終了・手動close・昇格いずれも）まで
+    // レスポンスを遅らせる。openPopupと同期的に呼ぶことで、待機中にアクティブワークスペースが
+    // 切り替わっても開いた時点のポップアップを見続ける（workspace-manager.ts参照）。
+    // captureStdout: trueは結果を受け取るのに待機が前提のため、waitが未指定でも待つ
+    // （fzf-tmuxの`fzf ... > $fifo; cat $fifo`相当。詳細: docs/guide/cli.md「popup open」節）
+    if (parsed.wait || parsed.captureStdout) {
+      const output = await workspaceManager.waitForPopupClose();
+      if (parsed.captureStdout) return c.json({ ok: true, tabId, stdout: output ?? "" });
+    }
     return c.json({ ok: true, tabId });
   });
 

@@ -281,6 +281,12 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaces.get(activeId)?.closePopup() ?? false;
   }
 
+  // openPopup直後（同期的、間にawaitを挟まない）に呼ぶ前提。呼び出し時点のactiveIdを
+  // 見るため、待機中にワークスペースが切り替わっても開いた時点のポップアップを見続ける
+  function waitForPopupClose(): Promise<string | undefined> {
+    return workspaces.get(activeId)?.waitForPopupClose() ?? Promise.resolve(undefined);
+  }
+
   function togglePopupVisibility(): boolean | null {
     return workspaces.get(activeId)?.togglePopupVisibility() ?? null;
   }
@@ -536,6 +542,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setBrowserTabUrl,
     openPopup,
     closePopup,
+    waitForPopupClose,
     togglePopupVisibility,
     promotePopup,
     switchTab,

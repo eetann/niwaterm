@@ -2,6 +2,9 @@
 // tmuxのpopup/floating相当。Boardをまたいでも同じポップアップを使えるよう、Board単位ではなく
 // Workspace単位でTerminalSessionを1つだけ管理する。「タブへ昇格」時はPTYセッションを作り直さず、
 // takeForPromotion()でsessionをそのまま呼び出し側（workspace.ts）へ渡し、board.tsのadoptTabへ編入させる。
+import { readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createTerminalSession,
   type TerminalRenderState,
@@ -21,6 +24,13 @@ export interface OpenPopupOptions {
   cwd?: string;
   /** 指定すると、このコマンドをシェルの代わりに実行する（ワンショット実行）。終了すると自動的にポップアップも閉じる */
   command?: string;
+  /**
+   * trueかつcommand指定時、コマンドの標準出力を一時ファイルへリダイレクトし、
+   * 閉じた時点（waitForClose解決時）にその内容を返す（`popup open --wait --capture-stdout`用、
+   * fzf-tmuxの結果受け渡し方式を参考）。commandが標準出力に出したものだけが対象で、
+   * UI描画自体はPTY（画面）にそのまま残る
+   */
+  captureStdout?: boolean;
   /** 表示サイズ（1〜100のパーセント）。省略時はCSS側の既定値に従う */
   width?: number;
   height?: number;
@@ -64,6 +74,12 @@ export function createPopup(opts: PopupOptions) {
   let rows = 0;
   let shell: string | undefined;
   const vars = new Map<string, string>();
+  // popup open --wait（CLI）がPTY終了まで待つための待機列。close/takeForPromotion
+  // いずれの経路でポップアップが「開いていない」状態に戻っても解放する。
+  // 解決値はcaptureStdout時のキャプチャ結果（無ければundefined）
+  let closeWaiters: Array<(output: string | undefined) => void> = [];
+  // captureStdout指定時、commandの標準出力のリダイレクト先（close時に読み込んで削除する）
+  let captureFile: string | null = null;
 
   function reset(): void {
     tabId = null;
@@ -73,6 +89,27 @@ export function createPopup(opts: PopupOptions) {
     height = undefined;
     shell = undefined;
     vars.clear();
+  }
+
+  function settleCloseWaiters(output: string | undefined): void {
+    const waiters = closeWaiters;
+    closeWaiters = [];
+    for (const resolve of waiters) resolve(output);
+  }
+
+  /** captureFileが残っていれば読み込んで削除する。読めなければundefined（ベストエフォート） */
+  function consumeCaptureFile(): string | undefined {
+    if (!captureFile) return undefined;
+    const file = captureFile;
+    captureFile = null;
+    let output: string | undefined;
+    try {
+      output = readFileSync(file, "utf8");
+    } catch {}
+    try {
+      unlinkSync(file);
+    } catch {}
+    return output;
   }
 
   /**
@@ -90,12 +127,17 @@ export function createPopup(opts: PopupOptions) {
     cols = inherited.cols;
     rows = inherited.rows;
     vars.clear();
+    captureFile =
+      popupOpts.captureStdout && popupOpts.command !== undefined
+        ? join(tmpdir(), `niwaterm-popup-capture-${newTabId}.out`)
+        : null;
     session = createSession({
       cols: inherited.cols,
       rows: inherited.rows,
       shell: resolvedShell,
       cwd: popupOpts.cwd ?? inherited.cwd,
       command: popupOpts.command,
+      captureStdoutTo: captureFile ?? undefined,
       env: { NIWATERM_TAB_ID: newTabId },
       onOutput: () => opts.onDirty(),
       onExit: () => close(),
@@ -112,9 +154,23 @@ export function createPopup(opts: PopupOptions) {
   function close(): boolean {
     if (!tabId) return false;
     session?.dispose();
+    const output = consumeCaptureFile();
     reset();
     opts.onDirty();
+    settleCloseWaiters(output);
     return true;
+  }
+
+  /**
+   * ポップアップが閉じる（または昇格して「開いていない」状態に戻る）まで待つ。
+   * 既に閉じている場合は即座に解決する（`popup open --wait`のCLI応答用、ADR 0005拡張）。
+   * 解決値はcaptureStdout指定時のキャプチャ結果（`popup open --wait --capture-stdout`用）
+   */
+  function waitForClose(): Promise<string | undefined> {
+    if (!tabId) return Promise.resolve(undefined);
+    return new Promise((resolve) => {
+      closeWaiters.push(resolve);
+    });
   }
 
   /** ポップアップの表示/非表示を切り替える。戻り値はトグル後の可視状態。popupが開いていなければnull */
@@ -139,8 +195,11 @@ export function createPopup(opts: PopupOptions) {
       shell,
       vars: vars.size > 0 ? Object.fromEntries(vars) : undefined,
     };
+    // 昇格はPTYを継続実行するため、キャプチャ結果はまだ確定しない（ベストエフォートで掃除のみ）
+    consumeCaptureFile();
     reset();
     opts.onDirty();
+    settleCloseWaiters(undefined);
     return promoted;
   }
 
@@ -204,12 +263,15 @@ export function createPopup(opts: PopupOptions) {
 
   function dispose(): void {
     session?.dispose();
+    consumeCaptureFile();
     reset();
+    settleCloseWaiters(undefined);
   }
 
   return {
     open,
     close,
+    waitForClose,
     toggleVisibility,
     takeForPromotion,
     hasTab,

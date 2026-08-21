@@ -272,6 +272,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return popup.close();
   }
 
+  /**
+   * 開いているポップアップが閉じる（または昇格する）まで待つ。`popup open --wait`用。
+   * 解決値はcaptureStdout指定時のキャプチャ結果（`popup open --wait --capture-stdout`用）
+   */
+  function waitForPopupClose(): Promise<string | undefined> {
+    return popup.waitForClose();
+  }
+
   function togglePopupVisibility(): boolean | null {
     return popup.toggleVisibility();
   }
@@ -556,6 +564,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setBrowserTabUrl,
     openPopup,
     closePopup,
+    waitForPopupClose,
     togglePopupVisibility,
     promotePopup,
     switchTab,

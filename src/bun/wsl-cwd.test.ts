@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { applyWslCdArg, extractWslDistro, resolveActualCwd } from "./wsl-cwd";
+import {
+  applyWslCdArg,
+  extractWslDistro,
+  resolveActualCwd,
+  windowsPathToWslMountPath,
+} from "./wsl-cwd";
 
 describe("extractWslDistro", () => {
   test("wsl.exe -d <distro>形式からディストロ名を抽出する", () => {
@@ -83,5 +88,22 @@ describe("applyWslCdArg", () => {
     const unc = "\\\\wsl.localhost\\NixOS\\home\\user\\project";
     expect(applyWslCdArg(cmd, unc, "win32")).toBe(unc);
     expect(cmd).toEqual(["wsl.exe", "-d", "NixOS"]);
+  });
+});
+
+describe("windowsPathToWslMountPath", () => {
+  test("Windows絶対パスを/mnt/<drive>形式へ変換する", () => {
+    expect(windowsPathToWslMountPath("C:\\Users\\eetann\\AppData\\Local\\Temp\\foo.out")).toBe(
+      "/mnt/c/Users/eetann/AppData/Local/Temp/foo.out",
+    );
+  });
+
+  test("ドライブ文字は小文字化する", () => {
+    expect(windowsPathToWslMountPath("D:\\data\\foo.out")).toBe("/mnt/d/data/foo.out");
+  });
+
+  test("Windows絶対パス形式でない値はnullを返す", () => {
+    expect(windowsPathToWslMountPath("/mnt/c/already/linux/path")).toBeNull();
+    expect(windowsPathToWslMountPath("relative\\path")).toBeNull();
   });
 });

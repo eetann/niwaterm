@@ -441,11 +441,15 @@ export function applyLayout(
   return postJson(endpoint, "/apply-layout", body);
 }
 
-export type OpenPopupResult = { ok: true; tabId: TabId } | { ok: false; error: string };
+export type OpenPopupResult =
+  | { ok: true; tabId: TabId; stdout?: string }
+  | { ok: false; error: string };
 
 /**
  * アクティブなワークスペースにポップアップを開く（tmuxのpopup/floating相当）。
- * commandを指定すると、シェルの代わりにそのコマンドを実行し、終了すると自動的にポップアップも閉じる（ワンショット実行）
+ * commandを指定すると、シェルの代わりにそのコマンドを実行し、終了すると自動的にポップアップも閉じる（ワンショット実行）。
+ * wait:trueの場合、ポップアップが閉じる（コマンド終了・手動close・昇格いずれも）までレスポンスを待つ。
+ * captureStdout:trueの場合、commandの標準出力をキャプチャしてレスポンスのstdoutで返す（waitは暗黙にtrueとなる）
  */
 export function openPopup(
   endpoint: IpcEndpoint,
@@ -453,12 +457,23 @@ export function openPopup(
   command?: string,
   width?: number,
   height?: number,
+  wait?: boolean,
+  captureStdout?: boolean,
 ): Promise<OpenPopupResult> {
-  const body: { cwd?: string; command?: string; width?: number; height?: number } = {};
+  const body: {
+    cwd?: string;
+    command?: string;
+    width?: number;
+    height?: number;
+    wait?: boolean;
+    captureStdout?: boolean;
+  } = {};
   if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
   if (command !== undefined) body.command = command;
   if (width !== undefined) body.width = width;
   if (height !== undefined) body.height = height;
+  if (wait !== undefined) body.wait = wait;
+  if (captureStdout !== undefined) body.captureStdout = captureStdout;
   return postJson(endpoint, "/popup", body);
 }
 

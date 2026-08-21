@@ -36,6 +36,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     term: opts.term,
     env: opts.env,
     command: opts.command,
+    captureStdoutTo: opts.captureStdoutTo,
   });
   const term = createGhosttyTerminal(opts.cols, opts.rows, opts.maxScrollback);
 

@@ -49,3 +49,17 @@ export function applyWslCdArg(
   cmd.push("--cd", cwd ?? "~");
   return undefined;
 }
+
+/**
+ * Windows側の絶対パス（例: `C:\Users\eetann\AppData\Local\Temp\foo.out`）を、WSL2の
+ * デフォルトドライブマウント経由でLinux側から書き込める形式（`/mnt/c/Users/eetann/...`）へ
+ * 変換する。`popup open --capture-stdout`のcaptureStdoutToをwsl.exeプロファイルへ渡す用途
+ * （pty.ts参照）。`/etc/wsl.conf`でマウント設定をカスタマイズしている環境では正しく解決できない
+ * ため、その場合はnullを返しキャプチャ自体を諦めさせる想定
+ */
+export function windowsPathToWslMountPath(winPath: string): string | null {
+  const m = /^([A-Za-z]):\\(.*)$/.exec(winPath);
+  if (!m) return null;
+  const [, drive, rest] = m;
+  return `/mnt/${drive.toLowerCase()}/${rest.replaceAll("\\", "/")}`;
+}
