@@ -21,7 +21,6 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 ### ドキュメント種別ごとの追加ルール
 
 - **ADR**（`docs/adr/`）: 内容面の基準は adr-creator スキルの「ADR に書かないこと」が正本。実装手順・コード全文・事後追記を書かないこと
-- **Plan**（`docs/planning/roadmap.md`）: 1つの項目は1行。完了（`[x]`）にする際も詳細を書き込まない。実装の詳細はgit log・PRに残っていれば十分
 - **Reference / Runbook**（`docs/guide/`・`docs/build/`）: 「今どうすればよいか」に徹する。実施ログ・確認ログのための節は持たない
 
 ## 新規ドキュメントを書くとき
@@ -38,13 +37,13 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 
 2. `type` は下表（ADR 0002 §3 と同じ）から選ぶ。当てはまるものがなければ新しい type 名を作ってよいが、その場合 ADR 0002 の表も更新する（中央レジストリを持たない OKF の思想どおり、type 語彙はプロジェクト内で自由に拡張できる）。
 
-   | type | 用途 | 置き場所 |
-   |------|------|----------|
-   | `Concept` | プロダクトのコンセプト・思想 | `docs/planning/` |
-   | `Plan` | 進行計画 | `docs/planning/` |
-   | `ADR` | 意思決定記録 | `docs/adr/` |
-   | `Reference` | コマンド・設定項目のリファレンス（ユーザー向け） | `docs/guide/` |
-   | `Runbook` | 手順書（開発者向け） | `docs/build/` |
+   | type        | 用途                                             | 置き場所         |
+   | ----------- | ------------------------------------------------ | ---------------- |
+   | `Concept`   | プロダクトのコンセプト・思想                     | `docs/planning/` |
+   | `Plan`      | MVPなど                                          | `docs/planning/` |
+   | `ADR`       | 意思決定記録                                     | `docs/adr/`      |
+   | `Reference` | コマンド・設定項目のリファレンス（ユーザー向け） | `docs/guide/`    |
+   | `Runbook`   | 手順書（開発者向け）                             | `docs/build/`    |
 
 3. ADR を新規作成する場合は adr-creator スキルで本文（Status/Context/Decision/Consequences...）を作り、frontmatter は本スキルのルールで追加する。`type: ADR`、`title` は本文見出し `# ADR NNNN: ...` と同じ文字列にする。
 
