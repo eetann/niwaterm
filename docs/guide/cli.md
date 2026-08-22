@@ -95,6 +95,8 @@ niwaterm popup open [--cwd <dir>] [--width <1-100>] [--height <1-100>] [--wait] 
 selected=$(niwaterm popup open --capture-stdout "fzf --multi --preview 'bat --color=always {}'")
 ```
 
+このパターンを`fzf-tmux`互換のラッパーとして実装したものが`fzf-niwaterm`コマンド（`packages/cli`に同梱、`@niwaterm/cli`のインストールで一緒にPATHへ入る）。zenoの各widgetや`FZF_CTRL_T_COMMAND`のように「fzfコマンド名を差し替え可能」なツールであれば、`fzf-tmux`を使っていた場所を`fzf-niwaterm`に置き換えるだけで、既存のツール側は無改造のままpopup連携できる。詳細は[packages/cli/README.md](../../packages/cli/README.md#fzf-niwaterm)参照。
+
 ```sh
 niwaterm popup close
 niwaterm popup toggle
