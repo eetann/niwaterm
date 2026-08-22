@@ -15,6 +15,14 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 確認すべきは「Windows上で動くniwatermアプリが、WSLディストロをどう扱うか」なので、
 アプリ自体は必ずWindows実機ビルドで動かす。
 
+**動作確認は必ずdevチャンネル（`mise run start`）を使い、daily（`niwaterm-daily-dev`、
+`mise run start:daily`）には触らないこと**。dailyはユーザーが普段使いしているインスタンスで、
+起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際も
+`niwaterm ping`等が意図せずdaily側（アプリ名未指定時のCLIのデフォルト接続先はdaily相当、
+packages/cli/src/ipc-client.ts参照）に繋がらないよう、devチャンネルが使うソケット/ポートを
+明示する（`NIWATERM_SOCKET`・`NIWATERM_BRIDGE_PORT`。値はdevチャンネル起動ログの
+`ipc server listening on ...`行で確認できる）。
+
 ## 前提: WSL→Windows同期
 
 コードはWindows側に別途チェックアウトされている前提（Electrobunはクロスビルド不可）。

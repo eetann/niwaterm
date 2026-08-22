@@ -35,4 +35,4 @@ AIエージェント向けの操作ガイドは[.claude/skills/niwaterm-cli/SKIL
 ZENO_FZF_COMMAND=fzf-niwaterm zeno-history-selection
 ```
 
-niwatermのタブ内（`NIWATERM_TAB_ID`が設定されている）でない場合や、popup起動に失敗した場合（アプリ未起動・既にpopup使用中等）は、ローカルの`fzf`にフォールバックする。呼び出し元シェルの`FZF_DEFAULT_OPTS`・`FZF_DEFAULT_OPTS_FILE`・`FZF_DEFAULT_COMMAND`・`BAT_THEME`はpopup内へ引き継がれる。
+niwatermのタブ内（`NIWATERM_TAB_ID`が設定されている）でない場合や、popup起動に失敗した場合（アプリ未起動・既にpopup使用中等）は、ローカルの`fzf`にフォールバックする。呼び出し元シェルの`FZF_DEFAULT_OPTS`・`FZF_DEFAULT_OPTS_FILE`・`FZF_DEFAULT_COMMAND`・`BAT_THEME`はpopup内へ引き継がれるが、`FZF_DEFAULT_OPTS`由来の`--height`（通常のターミナル使用を想定した縮小表示）はpopup内では意味が無いため`--height=100%`で上書きし、popup全体を使い切る（fzf本家の`--tmux`が内部で行うのと同じ扱い）。

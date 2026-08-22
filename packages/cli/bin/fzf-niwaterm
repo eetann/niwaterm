@@ -47,8 +47,12 @@ envs+="FZF_DEFAULT_OPTS=$(printf %q "${FZF_DEFAULT_OPTS:-}") "
 envs+="FZF_DEFAULT_OPTS_FILE=$(printf %q "${FZF_DEFAULT_OPTS_FILE:-}"); "
 [[ -n "${BAT_THEME:-}" ]] && envs+="export BAT_THEME=$(printf %q "$BAT_THEME"); "
 
+# popupは専用に確保した領域なので、呼び出し元シェルのFZF_DEFAULT_OPTS由来の--height（通常の
+# ターミナル使用を想定した縮小表示）はここでは不要・むしろ有害（fzf本家のtmux popup統合が
+# 内部で--height=100%を渡して上書きするのと同じ理由）。コマンドライン引数はFZF_DEFAULT_OPTSより
+# 優先されるため、末尾に付けるだけで確実に上書きできる
 if ! niwaterm popup open --width 80 --height 80 --capture-stdout \
-  "$envs fzf $opts < $(printf %q "$inputfile")"; then
+  "$envs fzf $opts --height=100% < $(printf %q "$inputfile")"; then
   "$fzf_bin" "$@" < "$inputfile"
   exit $?
 fi
