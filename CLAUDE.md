@@ -6,11 +6,13 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - コンセプト: docs/planning/mvp.md
 - 進行計画: .rrmap/
 - 意思決定記録: docs/adr/
+- ビルド・実行手順（macOS/Windowsのプラットフォーム差分・実機確認済み範囲を含む）: docs/build/
+- 既知の問題・ハマりどころの記録: docs/known-issues/（何かに詰まったら先にここをgrepする）
 
 ## セットアップ・コマンド
 
 - `mise run start` — devモードでアプリ起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
-- `mise run start:daily` — 普段遣い用ビルドをビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルは配布用インストーラ作成が目的でそのまま直接実行できるappバンドルを作らないため採用していない。詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のdevビルドと同時に起動しても干渉しない。Windows実機の停止は`mise run win:stop:dev` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
+- `mise run start:daily` — 普段遣い用ビルドをビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルを避けている理由はdocs/known-issues/参照）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のdevビルドと同時に起動しても干渉しない。Windows実機の停止は`mise run win:stop:dev` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
@@ -29,7 +31,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/pty.ts — Bun.Terminal（Bun 1.3.5+）ベースのPTY（createPtyファクトリ関数）
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
-- src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはmacOSが`~/Library/Application Support/niwaterm/niwaterm.sock`、Windowsが`%APPDATA%\niwaterm\niwaterm.sock`（src/bun/app-paths.tsで解決）
+- src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはmacOSが`~/Library/Application Support/niwaterm/niwaterm.sock`、Windowsが`%APPDATA%\niwaterm\niwaterm.sock`（src/bun/app-paths.tsで解決）。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
 - packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.claude/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
@@ -49,19 +51,9 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 ## プラットフォーム対応
 
 macOSとWindows（x64）に対応する。Windowsは起動・ターミナル・タイル分割・IPC/CLI・ブラウザタブ・
-customViewまで実機確認済み。`browser screenshot`のみBun本体側の既知issue（Windows上でChrome/Edgeの
-自動起動に失敗する、oven-sh/bun#29102）により動作しない。手順とハマりどころ: docs/build/windows-build.md
-
-- **Electrobunはクロスビルド不可**。アプリ本体はWindows実機でビルドする。一方ネイティブ成果物（libghostty-vt / シム）はzigでLinux・WSLからクロスコンパイルできるため、Windows側にzigやMSVCは要らない
-- **ネイティブ成果物の命名・配置がOSで異なる**: macOS `lib/libghostty-vt.dylib`・`lib/libniwashim.dylib` / Windows `bin/ghostty-vt.dll`・`bin/niwashim.dll`（zigはWindowsのみDLL本体をbin/へ出し、lib/にはリンク用の.libを置く）。分岐はsrc/bun/ghostty.tsの`nativeLayout`
-- **WindowsのDLL依存解決順に注意**。`niwashim.dll`は`ghostty-vt.dll`に依存するが、WindowsのローダーはDLL自身と同じディレクトリを依存解決の対象にしない（`@loader_path`相当が無い）。ghostty.tsは**ghostty-vtを先にdlopenする**ことで解決している。順序を戻すと`error code 126`（ERROR_MOD_NOT_FOUND）で起動時に落ちる
-- **Bun.TerminalのWindows対応（ConPTY）はBun 1.3.14+**。ここで効くのは開発機のBunではなく**Electrobunがアプリへ同梱するBun**で、1.18.1の同梱版は1.3.13。`electrobun.config.ts` の `build.bunVersion` で上書きしている（外すと`PTY not supported on this platform`で落ちる）
-- **キーバインドはOSで別テーブル**: macOSはcmd系、Windowsはctrl+shift系（`defaultKeybindings` / `defaultWindowsKeybindings`）。ctrl単独はCtrl+C/Ctrl+D/Ctrl+B等ターミナルの制御文字と衝突するため必ずshiftかaltを伴わせる
-- Windowsにはプロセスグループもシグナルも無いため、pty.tsのSIGINT/SIGWINCH補完はmacOSのみ実行する
-- IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。`tab send-keys`・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
-- **`mainWindow.activate()`は呼ぶだけでwebviewのOSキーボードフォーカスを壊すことがある**（Windows実機）。呼んだ後はJS側から`imeEl.focus()`を何度呼んでも回復せず、実際のマウスクリックでしか復帰できない。目視確認が主目的で直後にキー入力を想定しない操作（`tab show`等）では許容できるが、直後の入力を前提とする操作では呼ばないこと。詳細: docs/known-issues/windows-popup-activatewindow-focus-loss.md
-- **stable/canaryビルドは、ビルド後すぐ直接実行できる展開済みappバンドルを作らない**（Electrobun 1.18.1の意図した設計。配布用インストーラ(self-extractor)作成が目的で、appバンドルはtar圧縮後にディレクトリごと削除・作り直される）。niwatermは普段遣い用ビルドにこのチャンネルを使わず、devチャンネルのままアプリ名だけ変える方式（`NIWATERM_APP_NAME`）を採用している。詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md
+customViewまで実機確認済み（`browser screenshot`のみBun本体側の既知issueで動作しない）。
+OS差分（ネイティブ成果物の配置、DLL依存解決順、キーバインドテーブル等）・実機確認済み範囲の詳細は
+docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 
 ## bun:ffiのハマりどころ
 
