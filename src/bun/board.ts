@@ -2,6 +2,7 @@
 // 1つのBoardが1本のTileツリーを保持する（ADR 0006）。workspace.tsがBoardを複数束ね、
 // bun/index.tsはworkspace-manager.ts経由でのみタイル・タブ・PTYを操作する。
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
+import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import type {
   PersistedBrowserTab,
   PersistedTab,
@@ -130,8 +131,14 @@ export function createBoard(opts: BoardOptions) {
       shell,
       cwd,
       command,
-      // シェル統合スクリプトやタブ内のCLI呼び出しが`--tab`省略でこのタブを指せるようにする
-      env: { NIWATERM_TAB_ID: tabId },
+      // シェル統合スクリプトやタブ内のCLI呼び出しが`--tab`省略でこのタブを指せるようにする。
+      // NIWATERM_SOCKET/NIWATERM_BRIDGE_PORTはniwaterm CLIが接続先を自インスタンスへ
+      // 固定するために使う（devビルドと普段遣いビルドを同時に動かした際の混線防止）
+      env: {
+        NIWATERM_TAB_ID: tabId,
+        NIWATERM_SOCKET: ipcSocketPath(),
+        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+      },
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
       // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）

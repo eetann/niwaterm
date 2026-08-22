@@ -96,6 +96,22 @@ bun run start
 GUIアプリなのでフォアグラウンドで実行するとブロックする。バックグラウンド実行や
 別ターミナルからの起動が扱いやすい。終了は `pkill -f 'niwaterm-dev.app'`。
 
+### 普段遣い用ビルドを同時に動かす
+
+niwaterm自体の開発中は上記のdevビルド（appフォルダ名`niwaterm-dev`）を使う一方、
+日常の作業には別途起動した普段遣い用ビルド（appフォルダ名`niwaterm-daily-dev`）を使うと、
+開発中の不具合や再起動で普段の作業が巻き込まれない。
+
+普段遣い用も**devチャンネルのままアプリ名だけ`NIWATERM_APP_NAME`環境変数で変える**方式を採る
+（stable/canaryチャンネルは配布用インストーラ作成が目的でビルド後すぐ直接実行できるappバンドルを
+作らないため採用していない。詳細: [Windowsのstable/canaryビルドはそのまま直接実行できる展開済みappバンドルを作らない](/known-issues/windows-stable-build-not-directly-runnable.md)、
+macOSでも同じ設計上の制約が該当する）。設定ファイル・IPCソケットはアプリ名別に分離されている
+（`src/bun/app-paths.ts`参照）ため、devビルドと同時に起動しても干渉しない。
+
+```bash
+mise run start:daily   # NIWATERM_APP_NAME=niwaterm-daily bun x electrobun dev と同義
+```
+
 ## vendorの更新が必要かどうかの見分け方
 
 `src/bun/ghostty.ts` や `src/native/shim.c` がlibghostty-vtの新しいAPIに追随するコミットの後、

@@ -207,6 +207,29 @@ powershell.exe -NoProfile -Command "\
 > （`bun.exe` / `bsdiff.exe` / `bspatch.exe` / `libNativeWrapper.dll`）を
 > GitHub Releasesからダウンロードするため。2回目以降はキャッシュが効く。
 
+### 普段遣い用ビルドを同時に動かす
+
+niwaterm自体の開発中は上記のdevビルド（`electrobun dev`、appフォルダ名`niwaterm-dev`）を使う一方、
+日常の作業には別途起動した普段遣い用ビルド（appフォルダ名`niwaterm-daily-dev`）を使うと、
+開発中の不具合や再起動で普段の作業が巻き込まれない。
+
+普段遣い用も**devチャンネルのままアプリ名だけ`NIWATERM_APP_NAME`環境変数で変える**方式を採る。
+stable/canaryチャンネルは配布用インストーラ(self-extractor)作成が目的で、ビルド後すぐ直接実行
+できる展開済みappバンドルを作らない設計になっているため採用していない
+（詳細: [Windowsのstable/canaryビルドはそのまま直接実行できる展開済みappバンドルを作らない](/known-issues/windows-stable-build-not-directly-runnable.md)）。
+
+設定ファイル・IPCソケット・WSLブリッジポートはアプリ名別に分離されている
+（`src/bun/app-paths.ts`・`src/bun/ipc-server.ts`参照）ため、devビルドと同時に起動しても干渉しない。
+
+```powershell
+cd $env:USERPROFILE\niwaterm
+$env:NIWATERM_APP_NAME = "niwaterm-daily"
+bun x electrobun dev
+```
+
+WSLから同期・起動する場合は`mise run start:daily`（内部で`win:sync` → `win:start:daily`）、
+停止は`mise run win:stop:daily`（devビルドの停止は`win:stop:dev`、両方まとめては`win:stop`）。
+
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
 `niwaterm browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
@@ -265,12 +288,15 @@ niwaterm固有の問題ではない。
   WSL用Hyper-V仮想アダプタ（`vEthernet (WSL)`等、名前に`wsl`を含むもの）のIPv4アドレスに限定する。
   このアダプタはWindowsホスト⇔WSL VM間の内部NATに閉じており、LANの他端末からは到達できない
   （`0.0.0.0`だと同一LAN上の他端末からも到達しうるため、意図的に避けている）
-- **ポート**: 固定ポート`47831`（`packages/cli/src/ipc-client.ts`の`WSL_BRIDGE_PORT`と
-  `src/bun/ipc-server.ts`の`WSL_BRIDGE_PORT`に意図的に重複させている。変更時は両方揃えること）
+- **ポート**: ビルドチャンネル別の固定ポート（`src/bun/ipc-server.ts`の
+  `WSL_BRIDGE_PORT_BY_CHANNEL`で管理。stable=`47831`、dev=`47832`、canary=`47833`）。
+  devビルドと普段遣い(stable)ビルドを同時にWindows実機で動かしてもポートが衝突しないようにするため
 - **接続元(WSL側)の判定**: `packages/cli/src/ipc-client.ts`が`/proc/version`の内容で
   WSL上かどうかを判定し、WSL上であれば`/proc/net/route`からデフォルトゲートウェイ
   （＝Windowsホスト側の上記アダプタのIP）を読み取ってTCP接続する。ゲートウェイIPは
-  WSL VM再起動のたびに変わりうるため、実行のたびに動的に読み直す（キャッシュしない）
+  WSL VM再起動のたびに変わりうるため、実行のたびに動的に読み直す（キャッシュしない）。
+  ポート番号自体は、niwatermが起動したPTY内であれば`NIWATERM_BRIDGE_PORT`環境変数
+  （自インスタンスの値）を優先し、未設定時のみ`47831`（stable相当）にフォールバックする
 
 対応済みのため、WSLディストロのタブ内でも他プラットフォーム同様にCLIが使える:
 

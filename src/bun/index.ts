@@ -1,4 +1,5 @@
 import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema, Utils } from "electrobun/bun";
+import { APP_VARIANT } from "./app-variant.generated";
 import type {
   KeybindingsConfig,
   LayoutsConfig,
@@ -159,8 +160,8 @@ function render() {
   const snap = workspaceManager.snapshot();
   mainWindow.setTitle(
     snap.workspaceIds.length === 1
-      ? "niwaterm"
-      : `niwaterm — Workspace ${snap.workspaceIds.indexOf(snap.activeWorkspaceId) + 1}/${snap.workspaceIds.length}`,
+      ? APP_VARIANT
+      : `${APP_VARIANT} — Workspace ${snap.workspaceIds.indexOf(snap.activeWorkspaceId) + 1}/${snap.workspaceIds.length}`,
   );
   rpcSend.render(snap);
 }
@@ -513,7 +514,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
 });
 
 const mainWindow = new BrowserWindow({
-  title: "niwaterm",
+  // 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
+  // タイトルバーで見分けられるよう、実際のアプリ名をそのまま使う
+  title: APP_VARIANT,
   url: "views://mainview/index.html",
   frame: {
     width: 900,

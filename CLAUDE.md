@@ -10,6 +10,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 ## セットアップ・コマンド
 
 - `mise run start` — devモードでアプリ起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
+- `mise run start:daily` — 普段遣い用ビルドをビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルは配布用インストーラ作成が目的でそのまま直接実行できるappバンドルを作らないため採用していない。詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のdevビルドと同時に起動しても干渉しない。Windows実機の停止は`mise run win:stop:dev` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
@@ -43,6 +44,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - bundlerは依存の `__dirname` をリポジトリ絶対パス（node_modules内）に焼き込む。実行時のファイル解決に注意
 - devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-dev.app'`。他の自作Electrobunアプリも同時に動いていると同名"bun"プロセスが複数存在し、さらに1プロセスが名前なしヘルパーウィンドウ＋本体ウィンドウの複数を持つことがある。正確な絞り込み方はmacos-gui-testingスキル参照
 - **アプリメニューが無いとCmd+C/Cmd+V等がWebViewに届かない**（macOSのkey equivalentはメニュー経由）。`ApplicationMenu.setApplicationMenu` でEditメニューを `role: "copy"/"paste"` + `accelerator: "Command+C"` 形式で設定する（実装済み、src/bun/index.ts冒頭）
+- **`buildFolder`配下は"{channel}-{os}-{arch}"単位でビルドの度に丸ごと削除・作り直される（アプリ名は含まれない）**。同じ`build/`のまま別アプリ名（開発中ビルドniwaterm-devと普段遣いビルドniwaterm-daily-dev等）を同時にビルドすると、片方のビルド中にもう片方の成果物ごと削除され、起動中プロセスがファイルをロックしているとEACCESで失敗する。アプリ名ごとに`build.buildFolder`自体を分けて回避する（実装済み、electrobun.config.ts）
 
 ## プラットフォーム対応
 
@@ -59,6 +61,7 @@ customViewまで実機確認済み。`browser screenshot`のみBun本体側の�
 - IPCサーバーは`Bun.serve({unix})`のままWindowsでも動く（named pipeへの移行は不要だった）。ソケットパスの解決はsrc/bun/app-paths.tsとpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
 - **既知の重大バグ: PTY終了直後のdispose()でuse-after-freeクラッシュする**（Windows実機、Bun 1.3.14）。`tab send-keys`・レイアウトやpopupの`command`実行など、PTYへ書き込みを行う機能全般が対象。詳細・原因・対処方法: docs/known-issues/windows-pty-dispose-use-after-free.md
 - **`mainWindow.activate()`は呼ぶだけでwebviewのOSキーボードフォーカスを壊すことがある**（Windows実機）。呼んだ後はJS側から`imeEl.focus()`を何度呼んでも回復せず、実際のマウスクリックでしか復帰できない。目視確認が主目的で直後にキー入力を想定しない操作（`tab show`等）では許容できるが、直後の入力を前提とする操作では呼ばないこと。詳細: docs/known-issues/windows-popup-activatewindow-focus-loss.md
+- **stable/canaryビルドは、ビルド後すぐ直接実行できる展開済みappバンドルを作らない**（Electrobun 1.18.1の意図した設計。配布用インストーラ(self-extractor)作成が目的で、appバンドルはtar圧縮後にディレクトリごと削除・作り直される）。niwatermは普段遣い用ビルドにこのチャンネルを使わず、devチャンネルのままアプリ名だけ変える方式（`NIWATERM_APP_NAME`）を採用している。詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md
 
 ## bun:ffiのハマりどころ
 

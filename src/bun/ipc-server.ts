@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
 import type { LayoutsConfig, ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
+import { APP_VARIANT } from "./app-variant.generated";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
@@ -36,9 +37,17 @@ export function ipcSocketPath(): string {
  * WSLディストロ内からはWindows側のUnix domain socketへ接続できない
  * （9p/drvfs越しにソケットファイルとして扱えず、Linux側から見るとただの空の
  * regular fileになるため。実機検証済み）ため、Windows限定でこのポートも追加でlistenする。
- * packages/cli/src/ipc-client.tsに同じ値を意図的に重複させている（変更時は両方揃えること）。
+ *
+ * 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時にWindows実機で
+ * 動かすとポートが衝突するため、アプリ名(APP_VARIANT)別に固定ポートを割り当てる。
+ * CLI側（packages/cli/src/ipc-client.ts）はPTY起動時に注入されるNIWATERM_BRIDGE_PORT
+ * 環境変数からこの値を受け取るため、このマッピング自体を重複させる必要はない
+ * （niwaterm-dev以外は普段遣い相当の47831にフォールバックする）。
  */
-export const WSL_BRIDGE_PORT = 47831;
+const WSL_BRIDGE_PORT_BY_VARIANT: Record<string, number> = {
+  "niwaterm-dev": 47832,
+};
+export const WSL_BRIDGE_PORT = WSL_BRIDGE_PORT_BY_VARIANT[APP_VARIANT] ?? 47831;
 
 /**
  * WSL用のHyper-V仮想アダプタ（"vEthernet (WSL)"等、名前に"wsl"を含むもの）のIPv4アドレスを返す。

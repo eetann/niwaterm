@@ -5,6 +5,7 @@
 import { readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import {
   createTerminalSession,
   type TerminalRenderState,
@@ -138,7 +139,11 @@ export function createPopup(opts: PopupOptions) {
       cwd: popupOpts.cwd ?? inherited.cwd,
       command: popupOpts.command,
       captureStdoutTo: captureFile ?? undefined,
-      env: { NIWATERM_TAB_ID: newTabId },
+      env: {
+        NIWATERM_TAB_ID: newTabId,
+        NIWATERM_SOCKET: ipcSocketPath(),
+        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+      },
       onOutput: () => opts.onDirty(),
       onExit: () => close(),
       onPwdChanged: (cwd) => vars.set("cwd", cwd),

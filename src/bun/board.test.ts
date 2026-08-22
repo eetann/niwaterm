@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import type { PersistedTab, RestoredTreeMeta } from "./persistence";
 import type {
   TerminalSession,
@@ -239,11 +240,19 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
 });
 
 describe("NIWATERM_TAB_ID環境変数の注入", () => {
+  function expectedEnv(tabId: string) {
+    return {
+      NIWATERM_TAB_ID: tabId,
+      NIWATERM_SOCKET: ipcSocketPath(),
+      NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+    };
+  }
+
   test("初期タブのセッションには自身のtabIdがNIWATERM_TAB_IDとして渡る", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
-    expect(created[0]?.opts.env).toEqual({ NIWATERM_TAB_ID: tabId });
+    expect(created[0]?.opts.env).toEqual(expectedEnv(tabId));
   });
 
   test("splitTileで生成される新タブのセッションには新tabIdが渡る", () => {
@@ -252,7 +261,7 @@ describe("NIWATERM_TAB_ID環境変数の注入", () => {
     const firstTileId = (ws.snapshot().layout as TileLeaf).id;
     const result = ws.splitTile(firstTileId, "vertical");
     expect(result).not.toBeNull();
-    expect(created[1]?.opts.env).toEqual({ NIWATERM_TAB_ID: result?.tabId as string });
+    expect(created[1]?.opts.env).toEqual(expectedEnv(result?.tabId as string));
   });
 
   test("newTabで既存タイルに追加されるセッションには新規タブ自身のtabIdが渡る（同一タイル内の既存タブとは異なる値）", () => {
@@ -261,8 +270,17 @@ describe("NIWATERM_TAB_ID環境変数の注入", () => {
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     const firstTabEnv = created[0]?.opts.env;
     const newTabId = ws.newTab(tileId) as string;
-    expect(created[1]?.opts.env).toEqual({ NIWATERM_TAB_ID: newTabId });
+    expect(created[1]?.opts.env).toEqual(expectedEnv(newTabId));
     expect(created[1]?.opts.env).not.toEqual(firstTabEnv);
+  });
+});
+
+describe("NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT環境変数の注入", () => {
+  test("PTY起動時に自インスタンスのIPCソケットパスとブリッジポートが渡る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    createBoard(baseOpts({ createSession: factory }));
+    expect(created[0]?.opts.env?.["NIWATERM_SOCKET"]).toBe(ipcSocketPath());
+    expect(created[0]?.opts.env?.["NIWATERM_BRIDGE_PORT"]).toBe(String(WSL_BRIDGE_PORT));
   });
 });
 

@@ -6,8 +6,13 @@
 // WSL(NixOS等)からは、Windows側アプリのUnix domain socketへ直接接続できない
 // （9p/drvfs越しにソケットファイルとして扱えず、Linux側から見るとただの空のregular fileに
 // なるため。実機検証済み）。そのためWSL上ではsrc/bun/ipc-server.tsが追加でlistenしている
-// TCPブリッジへ接続する。ブリッジのポート番号（WSL_BRIDGE_PORT）もipc-server.tsと
-// 意図的に重複させている。
+// TCPブリッジへ接続する。
+//
+// 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に動かすと
+// ソケットパス・ブリッジポートがアプリ名別に分かれる（src/bun/app-paths.ts・ipc-server.ts参照）。
+// niwatermが起動するPTY内では自インスタンスのNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
+// 環境変数として渡るため、それを最優先で使う。未設定（niwatermのタブ外から叩いた場合等）は
+// 普段遣い(niwaterm-daily-dev)相当の固定値にフォールバックする。
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -16,16 +21,18 @@ import { join } from "node:path";
 function appSupportDir(): string {
   if (process.platform === "win32") {
     const appData = process.env["APPDATA"] ?? join(homedir(), "AppData", "Roaming");
-    return join(appData, "niwaterm");
+    return join(appData, "niwaterm-daily-dev");
   }
-  return join(homedir(), "Library", "Application Support", "niwaterm");
+  return join(homedir(), "Library", "Application Support", "niwaterm-daily-dev");
 }
 
+/** NIWATERM_SOCKET未設定時のフォールバック（普段遣いインスタンス相当の固定パス） */
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
 }
 
-const WSL_BRIDGE_PORT = 47831;
+/** NIWATERM_BRIDGE_PORT未設定時のフォールバック（普段遣いインスタンス相当の固定ポート） */
+const DEFAULT_WSL_BRIDGE_PORT = 47831;
 
 /** /proc/versionに"microsoft"を含むかどうかでWSL上かを判定する（is-wsl等でも使われる標準的な手法） */
 function isWsl(): boolean {
@@ -69,15 +76,18 @@ export type IpcEndpoint =
 
 /**
  * 接続先を解決する。WSL上ではUnix domain socketへ接続できないため、
- * デフォルトゲートウェイが解決できればTCPブリッジ（WSL_BRIDGE_PORT）を使う。
- * それ以外（macOS・Windows実機）は従来通りUnix domain socketを使う
+ * デフォルトゲートウェイが解決できればTCPブリッジを使う。それ以外（macOS・Windows実機）は
+ * 従来通りUnix domain socketを使う。
+ * niwatermのタブ内シェルから叩く場合はNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
+ * 自インスタンスの値に設定されているため、それを優先する（未設定時は普段遣い相当にフォールバック）
  */
 export function resolveIpcEndpoint(): IpcEndpoint {
   if (isWsl()) {
     const gateway = wslDefaultGateway();
-    if (gateway) return { kind: "tcp", host: gateway, port: WSL_BRIDGE_PORT };
+    const port = Number(process.env["NIWATERM_BRIDGE_PORT"]) || DEFAULT_WSL_BRIDGE_PORT;
+    if (gateway) return { kind: "tcp", host: gateway, port };
   }
-  return { kind: "unix", path: ipcSocketPath() };
+  return { kind: "unix", path: process.env["NIWATERM_SOCKET"] || ipcSocketPath() };
 }
 
 /**
