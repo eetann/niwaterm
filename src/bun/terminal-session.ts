@@ -77,7 +77,12 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     callbacks.onOutput?.();
   });
 
+  // dispose()経由のpty.kill()もこのコールバックを発火させるため、明示的にdisposeした場合は
+  // 「プロセスが予期せず終了した」通知を出さないようガードする（respawnTabがdispose→spawnし直す際、
+  // ガード無しだとhandleTabProcessExitがtreeからタブを削除してしまい、最後の1タブなら
+  // アプリごと終了する重大バグになる。実機検証で発覚）
   pty.onExit((code) => {
+    if (disposed) return;
     callbacks.onExit?.(code);
   });
 
