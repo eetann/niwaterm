@@ -797,6 +797,68 @@ describe("POST /close-tab", () => {
   });
 });
 
+describe("POST /respawn-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("対象タブを再起動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/respawn-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: firstTabId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  test("存在しないtabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/respawn-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("未知のshellProfileIdは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/respawn-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: firstTabId, shellProfileId: "unknown" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /focus-tile", () => {
   let dir: string;
   let socketPath: string;

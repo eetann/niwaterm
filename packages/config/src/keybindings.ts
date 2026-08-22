@@ -43,6 +43,7 @@ export const KEYBIND_ACTIONS = [
   "new-custom-view-tab",
   "next-tab",
   "prev-tab",
+  "restart-tab",
   "new-workspace",
   "next-workspace",
   "prev-workspace",

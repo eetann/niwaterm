@@ -89,6 +89,8 @@ export type NiwaRPC = {
       switchTab: { tileId: TileId; tabId: TabId };
       moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
       closeTab: { tileId: TileId; tabId: TabId };
+      /** mainview側のConfirmDialogで確認済みのタブ再起動要求（niwa.tab.respawnと同機構、常にデフォルトシェル・元cwd引き継ぎ） */
+      restartTab: { tabId: TabId };
       focusTile: { tileId: TileId };
       focusDirection: { direction: "up" | "down" | "left" | "right" };
       toggleZoomTile: { tileId: TileId };
@@ -457,6 +459,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.closeTab(tileId, tabId);
+      },
+      restartTab: ({ tabId }: { tabId: TabId }) => {
+        workspaceManager.respawnTab(tabId);
       },
       focusTile: ({ tileId }: { tileId: TileId }) => {
         workspaceManager.focusTile(tileId);

@@ -32,6 +32,7 @@ export type TileCommand =
   | { type: "newBrowserTab" }
   | { type: "newCustomViewTab" }
   | { type: "cycleTab"; delta: 1 | -1 }
+  | { type: "restartTab" }
   | { type: "newWorkspace" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
@@ -150,6 +151,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "cycleTab", delta: 1 };
     case "prev-tab":
       return { type: "cycleTab", delta: -1 };
+    case "restart-tab":
+      return { type: "restartTab" };
     case "new-workspace":
       return { type: "newWorkspace" };
     case "next-workspace":

@@ -542,6 +542,25 @@ export function closeTab(
   return postJson(endpoint, "/close-tab", { tileId, tabId });
 }
 
+export type RespawnTabResult = { ok: true } | { ok: false; error: string };
+
+/** 指定タブのプロセスを強制終了し、同じtabIdのまま再起動する（tmux respawn-pane -k相当） */
+export function respawnTab(
+  endpoint: IpcEndpoint,
+  tabId: TabId,
+  shellProfileId?: string,
+  cwd?: string,
+  command?: string,
+): Promise<RespawnTabResult> {
+  const body: { tabId: TabId; shellProfileId?: string; cwd?: string; command?: string } = {
+    tabId,
+  };
+  if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
+  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (command !== undefined) body.command = command;
+  return postJson(endpoint, "/respawn-tab", body);
+}
+
 export type FocusTileResult = { ok: true } | { ok: false; error: string };
 
 export function focusTile(endpoint: IpcEndpoint, tileId: TileId): Promise<FocusTileResult> {

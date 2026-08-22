@@ -195,6 +195,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   "resize-down",
   "resize-left",
   "resize-right",
+  // restart-tabも同様に既定キーを持たない（respawn-pane相当の破壊的操作のため、tmux文化を踏襲し
+  // ユーザーが明示的に割り当てる想定。実行前にy/n確認ダイアログを挟む）
+  "restart-tab",
 ];
 
 describe("defaultKeybindings", () => {

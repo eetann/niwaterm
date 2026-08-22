@@ -346,6 +346,16 @@ describe("createKeybindResolver（カスタムprefix・カスタムbindings）",
     resolver.handleKeydown(prefix());
     expect(resolver.handleKeydown(key("w"))).toEqual({ kind: "consumed" });
   });
+
+  test("restart-tabはデフォルトバインド無しのため、ユーザー設定で割り当てて初めて発火する", () => {
+    const custom = compileKeybindings({ prefix: "ctrl+b", bindings: { r: "restart-tab" } });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("r"))).toEqual({
+      kind: "command",
+      command: { type: "restartTab" },
+    });
+  });
 });
 
 describe("createKeybindResolver（niwa.keybindの関数ハンドラ = custom BindingTarget）", () => {

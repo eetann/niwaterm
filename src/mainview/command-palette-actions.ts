@@ -29,6 +29,7 @@ import {
   PanelLeft,
   PictureInPicture2,
   Plus,
+  RefreshCw,
   RotateCcw,
   Rows2,
   X,
@@ -178,6 +179,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "前のタブへ切り替え",
     category: "タブ",
     icon: ChevronLeft,
+  },
+  {
+    action: "restart-tab",
+    labelEn: "Restart Tab",
+    label: "タブを再起動",
+    category: "タブ",
+    icon: RefreshCw,
+    keywords: ["respawn-pane", "respawn"],
   },
   {
     action: "new-workspace",

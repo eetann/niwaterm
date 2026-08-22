@@ -175,6 +175,32 @@ function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   return result;
 }
 
+interface RespawnTabRequestBody extends TabIdRequestBody {
+  shellProfileId?: string;
+  cwd?: string;
+  command?: string;
+}
+
+function parseRespawnTabBody(body: unknown): RespawnTabRequestBody | null {
+  const tabIdBody = parseTabIdBody(body);
+  if (!tabIdBody) return null;
+  const b = body as { shellProfileId?: unknown; cwd?: unknown; command?: unknown };
+  const result: RespawnTabRequestBody = { ...tabIdBody };
+  if (b.shellProfileId !== undefined) {
+    if (typeof b.shellProfileId !== "string" || b.shellProfileId.length === 0) return null;
+    result.shellProfileId = b.shellProfileId;
+  }
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  if (b.command !== undefined) {
+    if (typeof b.command !== "string" || b.command.length === 0) return null;
+    result.command = b.command;
+  }
+  return result;
+}
+
 interface SplitTileRequestBody extends TileIdRequestBody {
   orientation: SplitOrientation;
   cwd?: string;
@@ -704,6 +730,34 @@ function buildApp(
         { ok: false, error: `tile/tab not found (or last tab): ${parsed.tileId}/${parsed.tabId}` },
         404,
       );
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/respawn-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseRespawnTabBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error:
+            "expected { tabId: string, shellProfileId?: string, cwd?: string, command?: string }",
+        },
+        400,
+      );
+    }
+    const resolved = resolveShellProfileCommand(getShellProfiles(), parsed.shellProfileId);
+    if (!resolved.ok) return c.json({ ok: false, error: resolved.error }, 400);
+    const ok = workspaceManager.respawnTab(
+      parsed.tabId,
+      resolved.command,
+      parsed.cwd,
+      parsed.command,
+    );
+    if (!ok) {
+      return c.json({ ok: false, error: `tab not found (or browser tab): ${parsed.tabId}` }, 404);
     }
     return c.json({ ok: true });
   });

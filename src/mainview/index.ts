@@ -25,6 +25,7 @@ import { keyToBytes } from "./key-to-bytes";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
 import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
+import { ConfirmDialog } from "./react/confirm-dialog";
 import { PopupToolbar } from "./react/popup-toolbar";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
@@ -53,6 +54,7 @@ const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
 const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
 const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
+const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -147,6 +149,48 @@ function renderCommandPalette(): void {
 function openCommandPalette(): void {
   commandPaletteOpen = true;
   renderCommandPalette();
+}
+
+// ---- 確認ダイアログ: キーバインドから起動する破壊的操作向け（y/n・Escでキーボード操作完結）----
+const confirmDialogRoot = createRoot(confirmDialogRootEl);
+let confirmDialogOpen = false;
+let confirmDialogTitle = "";
+let confirmDialogDescription: string | undefined;
+let confirmDialogOnConfirm: (() => void) | null = null;
+
+function renderConfirmDialog(): void {
+  confirmDialogRoot.render(
+    createElement(ConfirmDialog, {
+      open: confirmDialogOpen,
+      title: confirmDialogTitle,
+      description: confirmDialogDescription,
+      onConfirm: () => {
+        const onConfirm = confirmDialogOnConfirm;
+        closeConfirmDialog();
+        onConfirm?.();
+      },
+      onCancel: () => closeConfirmDialog(),
+    }),
+  );
+}
+
+function closeConfirmDialog(): void {
+  confirmDialogOpen = false;
+  confirmDialogOnConfirm = null;
+  renderConfirmDialog();
+  imeEl.focus({ preventScroll: true });
+}
+
+function openConfirmDialog(
+  title: string,
+  description: string | undefined,
+  onConfirm: () => void,
+): void {
+  confirmDialogTitle = title;
+  confirmDialogDescription = description;
+  confirmDialogOnConfirm = onConfirm;
+  confirmDialogOpen = true;
+  renderConfirmDialog();
 }
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
@@ -1262,6 +1306,9 @@ document.addEventListener("keydown", (e) => {
   // ブラウザタブのURL入力欄編集中は、そのままネイティブのテキスト編集に任せる
   // （PTYへのバイト送信やタイル操作キーバインドに奪われないようにする）
   if (e.target instanceof HTMLInputElement) return;
+  // 確認ダイアログ表示中はConfirmDialog内のonKeyDown（y/n/Esc）に処理を委ね、PTYへの入力や
+  // 他のキーバインド発火を止める（inputEl判定と違いDialogContentはdiv要素のため上のガードでは拾えない）
+  if (confirmDialogOpen) return;
 
   const result = keybindResolver.handleKeydown(e);
   if (result.kind === "command") {
@@ -1346,6 +1393,14 @@ function handleTileCommand(cmd: TileCommand): void {
     case "newCustomViewTab":
       sendMessage("newCustomViewTab", { tileId: focusedTileId });
       break;
+    case "restartTab": {
+      if (!currentTabId) return;
+      const tabId = currentTabId;
+      openConfirmDialog("タブを再起動しますか？", "実行中のプロセスは強制終了されます。", () => {
+        sendMessage("restartTab", { tabId });
+      });
+      break;
+    }
     case "cycleTab": {
       if (!lastLayout) return;
       const leaf = findNode(lastLayout, focusedTileId);
