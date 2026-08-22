@@ -2587,6 +2587,10 @@ describe("POST /popup", () => {
     });
     await expectPending(fetchPromise);
     expect(mgr.snapshot().workspace.popup).not.toBeNull();
+    // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで
+    // 起動する（TASK-0045）。実際のwebviewの代わりにここで送ってやる
+    const tabId = mgr.snapshot().workspace.popup?.tabId as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
 
     // popup用セッションが最後に作られたものとして、PTYの自然終了（onExit発火）を模擬する
     const popupSessionOpts = sessionOpts[sessionOpts.length - 1];
@@ -2662,6 +2666,10 @@ describe("POST /popup", () => {
       body: JSON.stringify({ command: "fzf", captureStdout: true }),
     });
     await expectPending(fetchPromise);
+    // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで
+    // 起動する（TASK-0045）。実際のwebviewの代わりにここで送ってやる
+    const tabId = mgr.snapshot().workspace.popup?.tabId as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
 
     const popupSessionOpts = sessionOpts[sessionOpts.length - 1];
     const captureFile = popupSessionOpts?.captureStdoutTo;

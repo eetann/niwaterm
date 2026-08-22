@@ -75,6 +75,11 @@ export function createPopup(opts: PopupOptions) {
   let rows = 0;
   let shell: string | undefined;
   const vars = new Map<string, string>();
+  // open()時点ではまだPTYを起動しない。webview側から実際のポップアップ枠サイズが届く
+  // 最初のhandleResizeまで保留し、そこで確定サイズを渡して起動する（spawnSession参照）。
+  // openPopupOpts/inheritedはその起動に必要な情報を一時的に保持するだけの箱
+  let pendingOpts: OpenPopupOptions | null = null;
+  let pendingInherited: InheritedTabSnapshot | null = null;
   // popup open --wait（CLI）がPTY終了まで待つための待機列。close/takeForPromotion
   // いずれの経路でポップアップが「開いていない」状態に戻っても解放する。
   // 解決値はcaptureStdout時のキャプチャ結果（無ければundefined）
@@ -90,6 +95,43 @@ export function createPopup(opts: PopupOptions) {
     height = undefined;
     shell = undefined;
     vars.clear();
+    pendingOpts = null;
+    pendingInherited = null;
+  }
+
+  /**
+   * 保留していたPTYを実際に起動する。webview側で実測したポップアップ枠のcols/rowsで
+   * 一発目から起動することで、SIGWINCHへの追従に頼らない（TASK-0045）。
+   * 起動直後にresizeでサイズを送り直す旧実装だと、fzf等「起動がSIGWINCH到達に間に合わず、
+   * かつ一度取りこぼすと再送しても二度と反映されないTUI」がポップアップ枠の半分程度の
+   * 高さのまま固着するバグがあった（起動から十分後に届いたSIGWINCHでは追従できることを
+   * 実験で確認済み。取りこぼしたSIGWINCHはOS側で再送されず、キー入力等アプリ内の
+   * 別イベントが起きるまで反映されない）
+   */
+  function spawnSession(spawnCols: number, spawnRows: number): void {
+    if (!tabId || !pendingOpts || !pendingInherited) return;
+    const popupOpts = pendingOpts;
+    const inherited = pendingInherited;
+    pendingOpts = null;
+    pendingInherited = null;
+    cols = spawnCols;
+    rows = spawnRows;
+    session = createSession({
+      cols: spawnCols,
+      rows: spawnRows,
+      shell,
+      cwd: popupOpts.cwd ?? inherited.cwd,
+      command: popupOpts.command,
+      captureStdoutTo: captureFile ?? undefined,
+      env: {
+        NIWATERM_TAB_ID: tabId,
+        NIWATERM_SOCKET: ipcSocketPath(),
+        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+      },
+      onOutput: () => opts.onDirty(),
+      onExit: () => close(),
+      onPwdChanged: (cwd) => vars.set("cwd", cwd),
+    });
   }
 
   function settleCloseWaiters(output: string | undefined): void {
@@ -125,6 +167,8 @@ export function createPopup(opts: PopupOptions) {
     const newTabId = opts.genTabId();
     const resolvedShell = opts.getDefaultShell?.();
     shell = resolvedShell;
+    // 継承元タブのサイズを暫定値として持っておく（PTY起動前でもsnapshot/promotion等が
+    // 参照できるように）。実際の起動サイズはhandleResize到達時にspawnSessionが上書きする
     cols = inherited.cols;
     rows = inherited.rows;
     vars.clear();
@@ -132,26 +176,12 @@ export function createPopup(opts: PopupOptions) {
       popupOpts.captureStdout && popupOpts.command !== undefined
         ? join(tmpdir(), `niwaterm-popup-capture-${newTabId}.out`)
         : null;
-    session = createSession({
-      cols: inherited.cols,
-      rows: inherited.rows,
-      shell: resolvedShell,
-      cwd: popupOpts.cwd ?? inherited.cwd,
-      command: popupOpts.command,
-      captureStdoutTo: captureFile ?? undefined,
-      env: {
-        NIWATERM_TAB_ID: newTabId,
-        NIWATERM_SOCKET: ipcSocketPath(),
-        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
-      },
-      onOutput: () => opts.onDirty(),
-      onExit: () => close(),
-      onPwdChanged: (cwd) => vars.set("cwd", cwd),
-    });
     tabId = newTabId;
     visible = true;
     width = popupOpts.width;
     height = popupOpts.height;
+    pendingOpts = popupOpts;
+    pendingInherited = inherited;
     opts.onDirty();
     return newTabId;
   }
@@ -191,7 +221,11 @@ export function createPopup(opts: PopupOptions) {
    * 以後このポップアップは「閉じている」状態になる（PTYセッションはdisposeしない。所有権の移転のみ）
    */
   function takeForPromotion(): PromotedPopup | null {
-    if (!tabId || !session) return null;
+    if (!tabId) return null;
+    // resize未到達のまま昇格されるケース（webview到達前のごく短い競合、テスト等）向けの
+    // フォールバック。継承サイズのまま起動してでも昇格自体は必ず成功させる
+    if (pendingOpts) spawnSession(cols, rows);
+    if (!session) return null;
     const promoted: PromotedPopup = {
       tabId,
       session,
@@ -240,6 +274,11 @@ export function createPopup(opts: PopupOptions) {
   }
 
   function handleResize(c: number, r: number, cellWidthPx: number, cellHeightPx: number): void {
+    if (pendingOpts) {
+      spawnSession(c, r);
+      opts.onDirty();
+      return;
+    }
     if (!session) return;
     if (session.resize(c, r, cellWidthPx, cellHeightPx)) {
       cols = c;

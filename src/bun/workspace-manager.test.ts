@@ -1131,6 +1131,10 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     const before = created.length;
 
     const tabId = mgr.openPopup();
+    // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで起動する
+    // （TASK-0045: SIGWINCH到達前に起動しているとresizeを取りこぼすTUIがあるため）
+    expect(created.length).toBe(before);
+    mgr.handleResize(tabId as string, 80, 24, 8, 16);
 
     expect(tabId).not.toBeNull();
     expect(created.length).toBe(before + 1);
@@ -1149,7 +1153,8 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     expect(mgr.closePopup()).toBe(false);
 
-    mgr.openPopup();
+    const tabId = mgr.openPopup();
+    mgr.handleResize(tabId as string, 80, 24, 8, 16);
     const ok = mgr.closePopup();
 
     expect(ok).toBe(true);
@@ -1183,6 +1188,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const popupTabId = mgr.openPopup() as string;
+    mgr.handleResize(popupTabId, 80, 24, 8, 16);
     const createdCountAfterOpen = created.length;
 
     const result = mgr.promotePopup();
