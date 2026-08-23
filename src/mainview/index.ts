@@ -370,12 +370,13 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           termEl.innerHTML = renderState.html;
           fixWideChars(termEl);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
-          // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）
+          // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
+          // 加えて、フォーカスしていないタイルのタブではカーソルを表示しない（tmux同様の挙動）
           updateCursorForTab(
             tabId,
             renderState.cursorX,
             renderState.cursorY,
-            renderState.cursorVisible && renderState.viewportPinned,
+            renderState.cursorVisible && renderState.viewportPinned && tabId === currentTabId,
             renderState.cursorShape,
           );
           updateScrollIndicator(tabId, renderState.viewportPinned);
