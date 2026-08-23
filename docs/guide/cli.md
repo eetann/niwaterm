@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`respawn`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、Board操作（`niwaterm board new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`/`zoom`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`respawn`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、Board操作（`niwaterm board new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`/`zoom`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、OSのデスクトップ通知の送信（`niwaterm notify`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
 
 ## セットアップ
 
@@ -40,6 +40,12 @@ niwaterm list
 ```
 
 ワークスペース→Board→タイル→タブの階層構造を表示する。Boardが1つのみのワークスペースはBoard行を省略する（ADR 0006、サイドバー表示と同じ方針）。アクティブなワークスペース/Board/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(active)`/`(focused)`/`(active)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
+
+```sh
+niwaterm notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent]
+```
+
+OSのデスクトップ通知を出す。AIエージェントがタスク完了等をユーザーへ知らせる用途を想定（`--title`のみ必須）。クリックしてもniwatermへのフォーカス移動は行わない。Windows実機ではElectrobun本体の通知APIが機能しない既知の不具合があり、PowerShell経由の代替実装を使っている（詳細: `docs/known-issues/windows-shell-notifyicon-not-registered.md`）。
 
 ```sh
 niwaterm tab send-keys --tab <tabId> <keys...>

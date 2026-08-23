@@ -14,6 +14,7 @@ import {
   type LayoutPreset,
   type LayoutsConfig,
   type Niwa,
+  type NiwaNotifyOptions,
   type NiwatermConfig,
   parseKeyBindingString,
   parseSecondKeyString,
@@ -455,6 +456,7 @@ export async function loadAndResolveConfig(
   path: string,
   workspaceManager: WorkspaceManager,
   detectedShellProfiles: ShellProfile[] = [],
+  sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
 ): Promise<{
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
@@ -478,6 +480,7 @@ export async function loadAndResolveConfig(
       NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
     }),
     getDefaultShell: () => resolveShell(userConfig),
+    sendNotification,
   });
   return {
     keybindings: resolveKeybindings(userConfig, niwaApi),

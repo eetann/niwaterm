@@ -137,6 +137,15 @@ export interface NiwaWorkspaceApi {
   current(): string;
 }
 
+export interface NiwaNotifyOptions {
+  title: string;
+  body?: string;
+  /** サブタイトル（macOSのみ独立表示、他OSはbodyの下の追加行として表示される） */
+  subtitle?: string;
+  /** trueなら通知音を鳴らさない */
+  silent?: boolean;
+}
+
 export interface NiwaClipboardApi {
   write(text: string): void;
   /** 読み取れない場合は空文字列 */
@@ -207,6 +216,11 @@ export interface Niwa {
    * ハンドラ内で必要な待ちはこれで明示する（layoutsプリセットのdelayフィールドと同じ思想）
    */
   sleep(ms: number): Promise<void>;
+  /**
+   * OSのデスクトップ通知を出す（クリックしてもniwatermへのフォーカス移動は行わない。
+   * 現時点ではElectrobun側にクリック検知の仕組みが無いための制約）
+   */
+  notify(opts: NiwaNotifyOptions): void;
   tile: NiwaTileApi;
   tab: NiwaTabApi;
   popup: NiwaPopupApi;

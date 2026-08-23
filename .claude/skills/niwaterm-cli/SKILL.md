@@ -1,7 +1,7 @@
 ---
 name: niwaterm-cli
 description: |
-  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示）。
+  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示、OSデスクトップ通知の送信）。
   トリガー: "niwaterm", "niwatermを操作", "niwaterm CLI", "タイルを分割して", "タブにキー送信", "niwatermのブラウザタブを操作", "niwatermで確認したい"
 user-invocable: true
 allowed-tools: Bash(niwaterm:*)
@@ -18,7 +18,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## できること（概要）
 
-コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`layout`/`font-size`/`shell-profiles`/`docs`はリソース単体に属さないためトップレベル）。
+コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`layout`/`font-size`/`shell-profiles`/`notify`/`docs`はリソース単体に属さないためトップレベル）。
 
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）
@@ -31,6 +31,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
 - `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
+- `notify --title <title> [--body] [--subtitle] [--silent]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。クリックしてもniwatermへのフォーカス移動は行わない）
 
 ## 詳しい使い方
 

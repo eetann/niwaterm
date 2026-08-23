@@ -771,3 +771,15 @@ export async function listTabVars(endpoint: IpcEndpoint, tabId: TabId): Promise<
     return { ok: false, error: describeError(endpoint, err) };
   }
 }
+
+export type SendNotificationResult = { ok: true } | { ok: false; error: string };
+
+export function sendNotification(
+  endpoint: IpcEndpoint,
+  title: string,
+  body?: string,
+  subtitle?: string,
+  silent?: boolean,
+): Promise<SendNotificationResult> {
+  return postJson(endpoint, "/notify", { title, body, subtitle, silent });
+}

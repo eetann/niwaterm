@@ -60,6 +60,7 @@ function createTestNiwaApi(): NiwaApiHandle {
     getShellProfiles: () => [],
     getShellRunEnv: () => ({}),
     getDefaultShell: () => undefined,
+    sendNotification: () => {},
   });
 }
 

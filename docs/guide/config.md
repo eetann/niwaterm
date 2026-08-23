@@ -85,6 +85,7 @@ export default defineConfig({
 | `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない） |
 | `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
 | `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
+| `niwa.notify(opts)` | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent? }`（`title`のみ必須）。クリックしてもniwatermへのフォーカス移動は行わない |
 | `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
 | `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
 | `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |

@@ -76,6 +76,7 @@ function createTestSetup(
     getShellProfiles,
     getShellRunEnv: () => ({}),
     getDefaultShell: () => "bash",
+    sendNotification: () => {},
   });
   return { workspaceManager, ...api };
 }

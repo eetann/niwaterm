@@ -8,6 +8,7 @@ import fontSizeCommand from "./commands/font-size";
 import initCommand from "./commands/init";
 import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
+import notifyCommand from "./commands/notify";
 import pingCommand from "./commands/ping";
 import popupCommand from "./commands/popup";
 import shellProfilesCommand from "./commands/shell-profiles";
@@ -37,6 +38,7 @@ try {
       ping: pingCommand,
       init: initCommand,
       list: listCommand,
+      notify: notifyCommand,
       tab: tabCommand,
       workspace: workspaceCommand,
       board: boardCommand,

@@ -11,6 +11,7 @@ import type {
   KeybindHandler,
   KeybindingsConfig,
   Niwa,
+  NiwaNotifyOptions,
   SecondKeyString,
   ShellProfile,
 } from "@niwaterm/config";
@@ -39,6 +40,11 @@ export interface CreateNiwaApiDeps {
    * 恩恵を受けているが、shell.runはPTYを経由しないため自前で行う必要がある）
    */
   getDefaultShell: () => string | undefined;
+  /**
+   * OSのデスクトップ通知を出す。niwa-api.tsはElectrobunに直接依存しない設計のため
+   * （テストでモックしやすくするため）、実体（Utils.showNotification）は呼び出し元が注入する
+   */
+  sendNotification: (opts: NiwaNotifyOptions) => void;
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
@@ -101,6 +107,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     },
     sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    notify(opts) {
+      deps.sendNotification(opts);
     },
     tile: {
       current() {

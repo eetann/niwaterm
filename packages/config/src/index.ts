@@ -52,6 +52,7 @@ export {
   type Niwa,
   type NiwaClipboardApi,
   type NiwaNewTabOptions,
+  type NiwaNotifyOptions,
   type NiwaPopupApi,
   type NiwaPopupOpenOptions,
   type NiwaSplitOptions,

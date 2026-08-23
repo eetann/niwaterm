@@ -7,7 +7,12 @@ import { mkdir } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
-import type { LayoutsConfig, ResolvedCustomViewConfig, ShellProfile } from "@niwaterm/config";
+import type {
+  LayoutsConfig,
+  NiwaNotifyOptions,
+  ResolvedCustomViewConfig,
+  ShellProfile,
+} from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import { APP_VARIANT } from "./app-variant.generated";
 import type { BrowserBridge } from "./browser-bridge";
@@ -435,6 +440,37 @@ function parsePopupBody(body: unknown): PopupRequestBody | null {
   return result;
 }
 
+interface NotifyRequestBody {
+  title: string;
+  body?: string;
+  subtitle?: string;
+  silent?: boolean;
+}
+
+function parseNotifyBody(body: unknown): NotifyRequestBody | null {
+  const b = body as {
+    title?: unknown;
+    body?: unknown;
+    subtitle?: unknown;
+    silent?: unknown;
+  };
+  if (typeof b.title !== "string" || b.title.length === 0) return null;
+  const result: NotifyRequestBody = { title: b.title };
+  if (b.body !== undefined) {
+    if (typeof b.body !== "string") return null;
+    result.body = b.body;
+  }
+  if (b.subtitle !== undefined) {
+    if (typeof b.subtitle !== "string") return null;
+    result.subtitle = b.subtitle;
+  }
+  if (b.silent !== undefined) {
+    if (typeof b.silent !== "boolean") return null;
+    result.silent = b.silent;
+  }
+  return result;
+}
+
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
 async function readJsonBody(c: Context): Promise<unknown | undefined> {
   try {
@@ -462,6 +498,7 @@ function buildApp(
   increaseFontSize: () => number,
   decreaseFontSize: () => number,
   resetFontSize: () => number,
+  sendNotification: (opts: NiwaNotifyOptions) => void,
 ) {
   const app = new Hono();
 
@@ -1033,6 +1070,25 @@ function buildApp(
     return c.json({ ok: true, fontSize });
   });
 
+  // OSのデスクトップ通知を出す（config内のniwa.notifyと同じ実体）。クリックしてもniwatermへの
+  // フォーカス移動は行わない（現時点ではElectrobun側にクリック検知の仕組みが無いための制約）
+  app.post("/notify", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseNotifyBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error: "expected { title: string, body?: string, subtitle?: string, silent?: boolean }",
+        },
+        400,
+      );
+    }
+    sendNotification(parsed);
+    return c.json({ ok: true });
+  });
+
   // tabIdだけを受け取り、所属ワークスペースへの切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化を
   // まとめて行う。人間がAIの操作結果を任意に目視確認するための高レベルコマンド
   // （switch-tab/focus-tileと違いワークスペース跨ぎ・ウィンドウ前面化まで面倒を見る）。
@@ -1086,6 +1142,7 @@ export async function createIpcServer(
   increaseFontSize: () => number = () => 0,
   decreaseFontSize: () => number = () => 0,
   resetFontSize: () => number = () => 0,
+  sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1102,6 +1159,7 @@ export async function createIpcServer(
     increaseFontSize,
     decreaseFontSize,
     resetFontSize,
+    sendNotification,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で

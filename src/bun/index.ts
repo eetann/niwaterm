@@ -3,6 +3,7 @@ import { APP_VARIANT } from "./app-variant.generated";
 import type {
   KeybindingsConfig,
   LayoutsConfig,
+  NiwaNotifyOptions,
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
@@ -19,6 +20,7 @@ import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
+import { sendWindowsNotification } from "./windows-notification";
 import {
   createWorkspaceManager,
   type AppRenderState,
@@ -256,6 +258,11 @@ const detectedShellProfiles = await detectShellProfiles();
 
 const restoreFrom = await loadPersistedState(persistedFilePath());
 
+// ElectrobunのUtils.showNotificationはWindows実機で機能しない（windows-notification.ts参照）ため、
+// Windowsだけ自前のPowerShell経由実装に差し替える
+const sendNotification: (opts: NiwaNotifyOptions) => void =
+  process.platform === "win32" ? sendWindowsNotification : Utils.showNotification;
+
 // niwa.tile/tab/popup等のAPI（設定ファイルの関数ハンドラから呼ばれる）がworkspaceManagerを
 // 操作するため、config読み込み（refreshConfig）より先にworkspaceManagerを作る必要がある。
 // getDefaultShell/getDefaultCwdは遅延評価のクロージャなので、生成時点でdefaultShell等が
@@ -285,7 +292,12 @@ async function refreshConfig(): Promise<void> {
     layouts,
     workspaceDefaultCwd,
     runKeybindHandler,
-  } = await loadAndResolveConfig(configFilePath(), workspaceManager, detectedShellProfiles));
+  } = await loadAndResolveConfig(
+    configFilePath(),
+    workspaceManager,
+    detectedShellProfiles,
+    sendNotification,
+  ));
 }
 
 await refreshConfig();
@@ -328,6 +340,7 @@ try {
     () => adjustFontSize(FONT_SIZE_STEP),
     () => adjustFontSize(-FONT_SIZE_STEP),
     () => resetFontSizeZoom(),
+    sendNotification,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {

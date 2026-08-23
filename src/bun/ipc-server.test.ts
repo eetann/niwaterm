@@ -1931,6 +1931,67 @@ describe("GET /browser-screenshot", () => {
   });
 });
 
+describe("POST /notify", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("titleを渡すとsendNotificationへそのまま渡り、ok:trueを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const notified: unknown[] = [];
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (opts) => notified.push(opts),
+    );
+
+    const res = await fetch("http://localhost/notify", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "ビルド完了", body: "npm run build", silent: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(notified).toEqual([{ title: "ビルド完了", body: "npm run build", silent: true }]);
+  });
+
+  test("title未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/notify", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "本文だけ" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /show-tab", () => {
   let dir: string;
   let socketPath: string;
