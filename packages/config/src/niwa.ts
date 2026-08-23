@@ -221,6 +221,13 @@ export interface Niwa {
    * 現時点ではElectrobun側にクリック検知の仕組みが無いための制約）
    */
   notify(opts: NiwaNotifyOptions): void;
+  /**
+   * 設定ファイルを再読み込みする（ファイル監視での自動リロード・reload-configキーバインドと同じ処理）。
+   * 完了を待ってから後続処理（例: niwa.notifyでリロード完了を通知）を書ける。
+   * 呼び出し元のハンドラ自体もこの再読み込みでniwa.keybindが再登録されるが、実行中のハンドラは
+   * 差し替え前の登録内容のまま最後まで走る（handlerRegistryの参照を握っているため）
+   */
+  reloadConfig(): Promise<void>;
   tile: NiwaTileApi;
   tab: NiwaTabApi;
   popup: NiwaPopupApi;

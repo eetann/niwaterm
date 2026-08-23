@@ -297,6 +297,7 @@ async function refreshConfig(): Promise<void> {
     workspaceManager,
     detectedShellProfiles,
     sendNotification,
+    () => handleConfigFileChanged(),
   ));
 }
 

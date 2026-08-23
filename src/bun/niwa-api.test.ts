@@ -62,6 +62,9 @@ function createFakeSessionFactory() {
 function createTestSetup(
   overrides: Partial<WorkspaceManagerOptions> = {},
   getShellProfiles: () => ShellProfile[] = () => [],
+  depsOverrides: Partial<
+    Pick<Parameters<typeof createNiwaApi>[0], "sendNotification" | "reloadConfig">
+  > = {},
 ) {
   const workspaceManager = createWorkspaceManager({
     initialCols: 80,
@@ -77,6 +80,8 @@ function createTestSetup(
     getShellRunEnv: () => ({}),
     getDefaultShell: () => "bash",
     sendNotification: () => {},
+    reloadConfig: async () => {},
+    ...depsOverrides,
   });
   return { workspaceManager, ...api };
 }
@@ -395,5 +400,31 @@ describe("niwa.sleep", () => {
     const start = Date.now();
     await niwa.sleep(10);
     expect(Date.now() - start).toBeGreaterThanOrEqual(9);
+  });
+});
+
+describe("niwa.notify", () => {
+  test("渡したoptsのままsendNotificationへ委譲する", () => {
+    const received: unknown[] = [];
+    const { niwa } = createTestSetup({}, undefined, {
+      sendNotification: (opts) => received.push(opts),
+    });
+    niwa.notify({ title: "t", body: "b" });
+    expect(received).toEqual([{ title: "t", body: "b" }]);
+  });
+});
+
+describe("niwa.reloadConfig", () => {
+  test("reloadConfigの完了を待ってから後続処理へ進める", async () => {
+    const calls: string[] = [];
+    const { niwa } = createTestSetup({}, undefined, {
+      reloadConfig: async () => {
+        calls.push("reload");
+      },
+      sendNotification: () => calls.push("notify"),
+    });
+    await niwa.reloadConfig();
+    niwa.notify({ title: "done" });
+    expect(calls).toEqual(["reload", "notify"]);
   });
 });

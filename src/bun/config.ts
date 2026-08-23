@@ -457,6 +457,7 @@ export async function loadAndResolveConfig(
   workspaceManager: WorkspaceManager,
   detectedShellProfiles: ShellProfile[] = [],
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
+  reloadConfig: () => Promise<void> = async () => {},
 ): Promise<{
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
@@ -481,6 +482,7 @@ export async function loadAndResolveConfig(
     }),
     getDefaultShell: () => resolveShell(userConfig),
     sendNotification,
+    reloadConfig,
   });
   return {
     keybindings: resolveKeybindings(userConfig, niwaApi),

@@ -45,6 +45,11 @@ export interface CreateNiwaApiDeps {
    * （テストでモックしやすくするため）、実体（Utils.showNotification）は呼び出し元が注入する
    */
   sendNotification: (opts: NiwaNotifyOptions) => void;
+  /**
+   * 設定ファイルを再読み込みする実体。index.tsのhandleConfigFileChanged
+   * （ファイル監視での自動リロードと同じ処理）を注入する
+   */
+  reloadConfig: () => Promise<void>;
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
@@ -110,6 +115,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     },
     notify(opts) {
       deps.sendNotification(opts);
+    },
+    reloadConfig() {
+      return deps.reloadConfig();
     },
     tile: {
       current() {
