@@ -8,8 +8,25 @@ import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
-import type { TileLeaf, TileSplit } from "./tile-layout";
+import { listLeaves, type TileLeaf, type TileSplit } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
+
+/**
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * テストではcreateTestWorkspaceManager/split-tile/new-tab等の直後にこれを呼び、pending中の
+ * 全タブへダミーのcols/rowsを送ってPTY起動を確定させる
+ */
+function resolvePending(mgr: WorkspaceManager, cols = 80, rows = 24): void {
+  for (const entry of mgr.snapshot().workspaces) {
+    for (const board of entry.boards) {
+      for (const leaf of listLeaves(board.layout)) {
+        for (const tabId of leaf.tabIds) {
+          mgr.handleResize(tabId, cols, rows, 8, 18);
+        }
+      }
+    }
+  }
+}
 
 function createFakeBrowserBridge(overrides: Partial<BrowserBridge> = {}): BrowserBridge {
   return {
@@ -66,6 +83,9 @@ function createTestWorkspaceManager(): {
     onAllWorkspacesClosed: () => {},
     createSession,
   });
+  // 初期タブのPTY起動はwebview側の実測cols/rowsが届くまで保留される（TASK-0047）。
+  // このテストダブルでは即座に確定させ、以降のテストがsessionOpts/writesを同期的に検証できるようにする
+  resolvePending(mgr);
   return { mgr, writes, sessionOpts };
 }
 
@@ -336,6 +356,7 @@ describe("POST /split-tile", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ tileId, orientation: "vertical", cwd: "/tmp/project" }),
     });
+    resolvePending(mgr);
 
     expect(res.status).toBe(200);
     expect(sessionOpts[1]?.cwd).toBe("/tmp/project");
@@ -2298,7 +2319,7 @@ describe("GET /layouts, POST /apply-layout", () => {
   });
 
   test("POST /apply-layout: cwdを指定すると、cwd未指定のタブへ既定値として渡る", async () => {
-    const { sessionOpts, serverPromise } = createServerWithLayouts(LAYOUTS);
+    const { mgr, sessionOpts, serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;
 
     const res = await fetch("http://localhost/apply-layout", {
@@ -2307,6 +2328,7 @@ describe("GET /layouts, POST /apply-layout", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: "dev", cwd: "/invocation/dir" }),
     });
+    resolvePending(mgr);
 
     expect(res.status).toBe(200);
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);

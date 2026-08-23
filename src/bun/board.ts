@@ -114,6 +114,23 @@ export function createBoard(opts: BoardOptions) {
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
+  // PTY起動をwebview側の実測cols/rowsが届くまで保留中のタブ（TASK-0047）。新規タイル作成時・
+  // アプリ起動時の全タブに使う固定値/分割元の全体サイズは実際の表示領域と一致しないことが多く、
+  // 「起動直後にresizeで送り直す」設計だとSIGWINCH到達が子プロセスのシグナルハンドラ登録に
+  // 間に合わず、取りこぼしたまま二度と追従しない（TASK-0045で確認済み。popup.tsの
+  // spawnSession保留パターンと同じ理由）。正しいサイズが判明するまでPTY自体を起動しないことで
+  // この競合を避ける
+  const pendingSpawnByTabId = new Map<
+    TabId,
+    { shellOverride?: string; cwd?: string; command?: string }
+  >();
+
+  /** webview側の初回resize到達まで実際のPTY起動を保留する。sizeByTabIdはまだ確定しない */
+  function spawnSessionPending(tabId: TabId, shellOverride?: string, cwd?: string): void {
+    pendingSpawnByTabId.set(tabId, { shellOverride, cwd });
+    shellByTabId.set(tabId, shellOverride ?? opts.getDefaultShell?.());
+  }
+
   function spawnSession(
     tabId: TabId,
     cols: number,
@@ -149,14 +166,11 @@ export function createBoard(opts: BoardOptions) {
 
   /**
    * 永続化からの復元専用。初期構築フェーズ（createBoard呼び出し中）はonDirtyを呼ばない既存方針を
-   * 踏襲するため、setTabVar/setTabName等の公開セッターは経由せずtabVars/tabNames/browserTabsへ直接書き込む
+   * 踏襲するため、setTabVar/setTabName等の公開セッターは経由せずtabVars/tabNames/browserTabsへ直接書き込む。
+   * PTY起動はwebview側の実測cols/rowsが届く（handleResize）までspawnSessionPendingで保留する
+   * （前回終了時の保存済みサイズは今回起動時のウィンドウサイズと一致するとは限らないため）
    */
-  function restoreTab(
-    tabId: TabId,
-    cols: number,
-    rows: number,
-    meta: PersistedTab | undefined,
-  ): void {
+  function restoreTab(tabId: TabId, meta: PersistedTab | undefined): void {
     if (meta?.name !== undefined) tabNames.set(tabId, meta.name);
     if (meta?.vars) {
       const entries = Object.entries(meta.vars);
@@ -170,7 +184,7 @@ export function createBoard(opts: BoardOptions) {
     // vars.cwdはOSC7報告の生値（WSL変換前）。actualCwdOfと同じ変換を復元時にも適用する
     const rawCwd = meta?.vars?.["cwd"];
     const cwd = rawCwd !== undefined ? resolveActualCwd(rawCwd, shell) : opts.getDefaultCwd?.();
-    spawnSession(tabId, cols, rows, shell, cwd);
+    spawnSessionPending(tabId, shell, cwd);
   }
 
   let tree: TileNode;
@@ -186,7 +200,7 @@ export function createBoard(opts: BoardOptions) {
       const tileName = meta?.tileNames.get(leaf.id);
       if (tileName !== undefined) tileNames.set(leaf.id, tileName);
       for (const tabId of leaf.tabIds) {
-        restoreTab(tabId, opts.initialCols, opts.initialRows, meta?.tabMeta.get(tabId));
+        restoreTab(tabId, meta?.tabMeta.get(tabId));
       }
     }
   } else {
@@ -194,13 +208,7 @@ export function createBoard(opts: BoardOptions) {
     const firstTileId = genTileId();
     tree = { kind: "leaf", id: firstTileId, tabIds: [firstTabId], activeTabId: firstTabId };
     focusedTileId = firstTileId;
-    spawnSession(
-      firstTabId,
-      opts.initialCols,
-      opts.initialRows,
-      undefined,
-      opts.initialCwd ?? opts.getDefaultCwd?.(),
-    );
+    spawnSessionPending(firstTabId, undefined, opts.initialCwd ?? opts.getDefaultCwd?.());
   }
 
   function disposeSessions(tabIds: TabId[]): void {
@@ -210,6 +218,7 @@ export function createBoard(opts: BoardOptions) {
       sizeByTabId.delete(tabId);
       shellByTabId.delete(tabId);
       browserTabs.delete(tabId);
+      pendingSpawnByTabId.delete(tabId);
     }
   }
 
@@ -276,11 +285,9 @@ export function createBoard(opts: BoardOptions) {
     );
     if (!result) return null;
     tree = result.tree;
-    const size = sizeByTabId.get(target.activeTabId) ?? {
-      cols: opts.initialCols,
-      rows: opts.initialRows,
-    };
-    spawnSession(newTabId, size.cols, size.rows, undefined, cwd ?? actualCwdOf(target.activeTabId));
+    // 新タイルは分割元の分割前サイズより物理的に小さくなるため、分割元の現在サイズを
+    // そのまま渡さずwebview側の実測cols/rowsが届くまでPTY起動を保留する（TASK-0047）
+    spawnSessionPending(newTabId, undefined, cwd ?? actualCwdOf(target.activeTabId));
     focusedTileId = newTileId;
     // ズーム中のtileを分割した場合、新しいtileが隠れたままになってしまうため自動でズーム解除する
     // （tmuxのresize-pane -Zも同様に、ペイン数が変わる操作でズームを解除する）
@@ -502,6 +509,13 @@ export function createBoard(opts: BoardOptions) {
     cellWidthPx: number,
     cellHeightPx: number,
   ): void {
+    const pending = pendingSpawnByTabId.get(tabId);
+    if (pending) {
+      pendingSpawnByTabId.delete(tabId);
+      spawnSession(tabId, cols, rows, pending.shellOverride, pending.cwd, pending.command);
+      opts.onDirty();
+      return;
+    }
     const session = sessions.get(tabId);
     if (!session) return;
     if (session.resize(cols, rows, cellWidthPx, cellHeightPx)) {
@@ -514,6 +528,18 @@ export function createBoard(opts: BoardOptions) {
     const tabs: Record<TabId, TabRenderState> = {};
     for (const [tabId, session] of sessions) {
       tabs[tabId] = session.renderState();
+    }
+    // PTY起動保留中でも.term要素を生成させ、ResizeObserverによる実測cols/rows到達
+    // （handleResize）を発火させる必要があるため、空のterminal renderStateを返す
+    for (const tabId of pendingSpawnByTabId.keys()) {
+      tabs[tabId] = {
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: false,
+        viewportPinned: true,
+      };
     }
     for (const [tabId, state] of browserTabs) {
       tabs[tabId] = { kind: "browser", url: state.url };
@@ -541,7 +567,7 @@ export function createBoard(opts: BoardOptions) {
   /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
   function getPersistableTabs(): Record<TabId, PersistedTab> {
     const result: Record<TabId, PersistedTab> = {};
-    for (const tabId of sessions.keys()) {
+    for (const tabId of new Set([...sessions.keys(), ...pendingSpawnByTabId.keys()])) {
       const tab: PersistedTerminalTab = { kind: "terminal" };
       const shell = shellByTabId.get(tabId);
       if (shell !== undefined) tab.shell = shell;
@@ -572,7 +598,7 @@ export function createBoard(opts: BoardOptions) {
   }
 
   function hasTab(tabId: TabId): boolean {
-    return sessions.has(tabId);
+    return sessions.has(tabId) || pendingSpawnByTabId.has(tabId);
   }
 
   function hasBrowserTab(tabId: TabId): boolean {

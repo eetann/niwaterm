@@ -3,8 +3,25 @@ import type { LayoutPreset, ShellProfile } from "@niwaterm/config";
 import type { BoardId } from "./board";
 import { applyLayoutPreset, validateLayoutPreset } from "./layout-apply";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
-import type { TileLeaf, TileNode } from "./tile-layout";
+import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
+
+/**
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * テストではapplyLayoutPreset等の直後にこれを呼び、pending中の全タブへダミーのcols/rowsを
+ * 送ってPTY起動を確定させる
+ */
+function resolvePending(mgr: WorkspaceManager, cols = 80, rows = 24): void {
+  for (const entry of mgr.snapshot().workspaces) {
+    for (const board of entry.boards) {
+      for (const leaf of listLeaves(board.layout)) {
+        for (const tabId of leaf.tabIds) {
+          mgr.handleResize(tabId, cols, rows, 8, 18);
+        }
+      }
+    }
+  }
+}
 
 function createTestWorkspaceManager(): {
   mgr: WorkspaceManager;
@@ -265,6 +282,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ name: "editor" }] } };
 
     const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/proj");
+    resolvePending(mgr);
 
     expect(result.ok).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/proj")).toBe(true);
@@ -272,7 +290,8 @@ describe("applyLayoutPreset (target: new-board)", () => {
 
   test("invocationCwdはcwd未指定のタブすべてに既定値として使われ、tabConfig.cwdがあれば優先される", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const boardId = newBoardInActiveWorkspace(mgr);
+    // 実運用ではipc-server.tsがnewBoardにも同じcwdを渡す（プレースホルダー自体がこのcwdで作られる）
+    const boardId = newBoardInActiveWorkspace(mgr, "/invocation/dir");
     const preset: LayoutPreset = {
       layout: {
         kind: "split",
@@ -283,6 +302,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     };
 
     const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/invocation/dir");
+    resolvePending(mgr);
 
     expect(result.ok).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
@@ -326,6 +346,7 @@ describe("applyLayoutPreset (target: replace)", () => {
       layout: { kind: "tile", tabs: [{ name: "fresh" }] },
     };
     const result = applyLayoutPreset(mgr, [], preset, "replace", boardId);
+    resolvePending(mgr);
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");

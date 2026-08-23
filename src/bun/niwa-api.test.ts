@@ -1,9 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import { isCustomBindingRef, type KeybindingsConfig, type ShellProfile } from "@niwaterm/config";
-import type { TileLeaf, TileNode } from "./tile-layout";
+import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
-import { createWorkspaceManager, type WorkspaceManagerOptions } from "./workspace-manager";
+import {
+  createWorkspaceManager,
+  type WorkspaceManager,
+  type WorkspaceManagerOptions,
+} from "./workspace-manager";
+
+/**
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * テストではcreateWorkspaceManager直後にこれを呼び、pending中の全タブへダミーのcols/rowsを
+ * 送ってPTY起動を確定させる
+ */
+function resolvePending(mgr: WorkspaceManager, cols = 80, rows = 24): void {
+  for (const entry of mgr.snapshot().workspaces) {
+    for (const board of entry.boards) {
+      for (const leaf of listLeaves(board.layout)) {
+        for (const tabId of leaf.tabIds) {
+          mgr.handleResize(tabId, cols, rows, 8, 18);
+        }
+      }
+    }
+  }
+}
 
 /** テスト内でniwa.keybindに渡した関数ハンドラのidを取り出す */
 function customHandlerId(config: KeybindingsConfig, key: string): string {
@@ -274,6 +295,7 @@ describe("niwa.tab", () => {
 
   test("respawnは既存タブを再起動し、trueを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
+    resolvePending(workspaceManager);
     const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf)
       .tabIds[0] as string;
     expect(niwa.tab.respawn(tabId)).toBe(true);

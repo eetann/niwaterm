@@ -6,12 +6,25 @@ import type {
   TerminalSessionCallbacks,
   TerminalSessionOptions,
 } from "./terminal-session";
-import type { TileLeaf, TileNode } from "./tile-layout";
-import { createBoard, type BoardOptions } from "./board";
+import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
+import { createBoard, type Board, type BoardOptions } from "./board";
 
 function idGen(prefix: string): () => string {
   let n = 0;
   return () => `${prefix}-${n++}`;
+}
+
+/**
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * テストではcreateBoard/splitTile/newTab直後にこれを呼び、pending中の全タブへ
+ * ダミーのcols/rowsを送ってPTY起動（createSession呼び出し）を確定させる
+ */
+function resolvePending(ws: Board, cols = 80, rows = 24): void {
+  for (const leaf of listLeaves(ws.getLayout())) {
+    for (const tabId of leaf.tabIds) {
+      ws.handleResize(tabId, cols, rows, 8, 18);
+    }
+  }
 }
 
 interface FakeSessionRecord {
@@ -93,6 +106,7 @@ describe("initialTree（永続化からの復元）", () => {
       },
     };
     const ws = createBoard(baseOpts({ createSession: factory, initialTree }));
+    resolvePending(ws);
 
     expect(ws.getLayout()).toEqual(initialTree);
     expect(created.length).toBe(3);
@@ -156,6 +170,7 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
     ]);
     const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
     const ws = createBoard(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+    resolvePending(ws);
 
     expect(created[0]?.opts.shell).toBe("wsl.exe -d NixOS");
     expect(ws.listTabNames()).toEqual({ "tab-restored-1": "work" });
@@ -168,7 +183,8 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
       ["tab-restored-1", { kind: "terminal", vars: { cwd: "/home/eetann/project" } }],
     ]);
     const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
-    createBoard(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+    const ws = createBoard(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+    resolvePending(ws);
 
     expect(created[0]?.opts.cwd).toBe("/home/eetann/project");
   });
@@ -177,7 +193,7 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
     const { created, factory } = createFakeSessionFactory();
     const tabMeta = new Map<string, PersistedTab>([["tab-restored-1", { kind: "terminal" }]]);
     const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
-    createBoard(
+    const ws = createBoard(
       baseOpts({
         createSession: factory,
         initialTree,
@@ -185,6 +201,7 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
         getDefaultCwd: () => "/home/eetann",
       }),
     );
+    resolvePending(ws);
 
     expect(created[0]?.opts.cwd).toBe("/home/eetann");
   });
@@ -196,6 +213,7 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
     ]);
     const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
     const ws = createBoard(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+    resolvePending(ws);
 
     expect(created.length).toBe(1); // tab-restored-1のみ（terminal、メタ情報なし）
     expect(ws.hasBrowserTab("tab-restored-2")).toBe(true);
@@ -252,21 +270,25 @@ describe("NIWATERM_TAB_ID環境変数の注入", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    resolvePending(ws);
     expect(created[0]?.opts.env).toEqual(expectedEnv(tabId));
   });
 
   test("splitTileで生成される新タブのセッションには新tabIdが渡る", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const firstTileId = (ws.snapshot().layout as TileLeaf).id;
     const result = ws.splitTile(firstTileId, "vertical");
     expect(result).not.toBeNull();
+    resolvePending(ws);
     expect(created[1]?.opts.env).toEqual(expectedEnv(result?.tabId as string));
   });
 
   test("newTabで既存タイルに追加されるセッションには新規タブ自身のtabIdが渡る（同一タイル内の既存タブとは異なる値）", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     const firstTabEnv = created[0]?.opts.env;
     const newTabId = ws.newTab(tileId) as string;
@@ -278,7 +300,8 @@ describe("NIWATERM_TAB_ID環境変数の注入", () => {
 describe("NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT環境変数の注入", () => {
   test("PTY起動時に自インスタンスのIPCソケットパスとブリッジポートが渡る", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(baseOpts({ createSession: factory }));
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     expect(created[0]?.opts.env?.["NIWATERM_SOCKET"]).toBe(ipcSocketPath());
     expect(created[0]?.opts.env?.["NIWATERM_BRIDGE_PORT"]).toBe(String(WSL_BRIDGE_PORT));
   });
@@ -287,13 +310,17 @@ describe("NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT環境変数の注入", () => {
 describe("getDefaultShellによるシェル指定", () => {
   test("getDefaultShell省略時はshellがundefinedのまま渡る（pty.ts側のOS標準にフォールバック）", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(baseOpts({ createSession: factory }));
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     expect(created[0]?.opts.shell).toBeUndefined();
   });
 
   test("getDefaultShellが返す値が初期タブのセッションへshellとして渡る", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }));
+    const ws = createBoard(
+      baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
+    );
+    resolvePending(ws);
     expect(created[0]?.opts.shell).toBe("/bin/bash");
   });
 
@@ -302,6 +329,7 @@ describe("getDefaultShellによるシェル指定", () => {
     const ws = createBoard(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     expect(created[1]?.opts.shell).toBe("/bin/bash");
@@ -311,6 +339,7 @@ describe("getDefaultShellによるシェル指定", () => {
     const { created, factory } = createFakeSessionFactory();
     let current = "/bin/bash";
     const ws = createBoard(baseOpts({ createSession: factory, getDefaultShell: () => current }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     current = "/bin/fish";
     ws.newTab(tileId);
@@ -322,25 +351,30 @@ describe("getDefaultShellによるシェル指定", () => {
 describe("getDefaultCwdによる新規Boardのcwd指定", () => {
   test("getDefaultCwd省略時はcwdがundefinedのまま渡る（pty.ts側のOS標準ホームディレクトリにフォールバック）", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(baseOpts({ createSession: factory }));
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     expect(created[0]?.opts.cwd).toBeUndefined();
   });
 
   test("getDefaultCwdが返す値が初期タブのセッションへcwdとして渡る", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(baseOpts({ createSession: factory, getDefaultCwd: () => "/home/eetann/projects" }));
+    const ws = createBoard(
+      baseOpts({ createSession: factory, getDefaultCwd: () => "/home/eetann/projects" }),
+    );
+    resolvePending(ws);
     expect(created[0]?.opts.cwd).toBe("/home/eetann/projects");
   });
 
   test("initialCwdを明示指定した場合はgetDefaultCwdより優先される", () => {
     const { created, factory } = createFakeSessionFactory();
-    createBoard(
+    const ws = createBoard(
       baseOpts({
         createSession: factory,
         initialCwd: "/explicit/cwd",
         getDefaultCwd: () => "/home/eetann/projects",
       }),
     );
+    resolvePending(ws);
     expect(created[0]?.opts.cwd).toBe("/explicit/cwd");
   });
 
@@ -362,6 +396,7 @@ describe("splitTile", () => {
     const firstTileId = (ws.snapshot().layout as TileLeaf).id;
     const result = ws.splitTile(firstTileId, "vertical");
     expect(result).not.toBeNull();
+    resolvePending(ws);
     const splitTree = ws.snapshot().layout;
     expect(splitTree.kind).toBe("split");
     const secondLeaf = (splitTree as typeof splitTree & { kind: "split" }).second as TileLeaf;
@@ -400,6 +435,7 @@ describe("newTab", () => {
   test("対象タイルにタブを追加し、新規セッションが起動して active になる。戻り値は新規tabId", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const before = ws.snapshot().layout as TileLeaf;
     const result = ws.newTab(before.id);
     const after = ws.snapshot().layout as TileLeaf;
@@ -424,6 +460,7 @@ describe("newTab", () => {
     const ws = createBoard(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
+    resolvePending(ws);
     const before = ws.snapshot().layout as TileLeaf;
     ws.newTab(before.id, "wsl.exe -d Ubuntu");
     expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
@@ -434,6 +471,7 @@ describe("newTab", () => {
   test("cwdを渡すとそのタブのセッションへ渡る。初期タブはcwd未指定のまま", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const before = ws.snapshot().layout as TileLeaf;
     ws.newTab(before.id, undefined, "/tmp/project");
     expect(created[1]?.opts.cwd).toBe("/tmp/project");
@@ -475,6 +513,7 @@ describe("respawnTab", () => {
   test("既存セッションをdisposeし、同じtabId・タイル位置で新しいセッションを起動する", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const before = ws.snapshot().layout as TileLeaf;
     const tabId = before.activeTabId;
     const ok = ws.respawnTab(tabId);
@@ -489,6 +528,7 @@ describe("respawnTab", () => {
   test("shellOverride/cwd/commandを渡すと新しいセッションへ反映される", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     ws.respawnTab(tabId, "wsl.exe -d Ubuntu", "/tmp/project", "lazygit");
     expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
@@ -499,6 +539,7 @@ describe("respawnTab", () => {
   test("cwd省略時はOSC7報告済みの直前のcwdを引き継ぐ", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     created[0]?.opts.onPwdChanged?.("/tmp/reported");
     ws.respawnTab(tabId);
@@ -524,6 +565,7 @@ describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
   test("onPwdChangedが呼ばれるとtabVarsの'cwd'へ反映される", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     created[0]?.opts.onPwdChanged?.("/home/user/project");
     expect(ws.getTabVar(tabId, "cwd")).toEqual({ found: true, value: "/home/user/project" });
@@ -532,6 +574,7 @@ describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
   test("newTabでcwd省略時、対象タイルのアクティブタブが報告済みのcwdをデフォルトとして使う", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     created[0]?.opts.onPwdChanged?.("/home/user/project");
     ws.newTab(tileId);
@@ -541,6 +584,7 @@ describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
   test("newTabでcwdを明示指定した場合は報告済みのcwdより優先する", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     created[0]?.opts.onPwdChanged?.("/home/user/project");
     ws.newTab(tileId, undefined, "/explicit/dir");
@@ -550,15 +594,18 @@ describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
   test("splitTileでもcwd省略時、分割元タイルのアクティブタブが報告済みのcwdをデフォルトとして使う", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     created[0]?.opts.onPwdChanged?.("/home/user/project");
     ws.splitTile(tileId, "vertical");
+    resolvePending(ws);
     expect(created[1]?.opts.cwd).toBe("/home/user/project");
   });
 
   test("報告が無いタブを対象にnewTab/splitTileしてもcwdはundefinedのまま", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     expect(created[1]?.opts.cwd).toBeUndefined();
@@ -569,6 +616,7 @@ describe("newBrowserTab", () => {
   test("対象タイルにタブを追加するが、PTYセッションは増やさない。snapshotはkind:browserを返す", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const before = ws.snapshot().layout as TileLeaf;
     const result = ws.newBrowserTab(before.id, "https://example.com");
     const after = ws.snapshot().layout as TileLeaf;
@@ -757,6 +805,7 @@ describe("closeTab", () => {
   test("複数タブのうち1つを閉じるとそのセッションだけdisposeされ、タイルは残る。戻り値はtrue", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     const leaf = ws.snapshot().layout as TileLeaf;
@@ -831,6 +880,7 @@ describe("getTabText", () => {
   test("存在するtabIdはセッションのdumpTextの結果を返す", () => {
     const { factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     expect(ws.getTabText(tabId)).toBe("");
   });
@@ -1087,6 +1137,7 @@ describe("handleScroll/handleScrollToTop/handleScrollToBottom", () => {
     const { factory } = createFakeSessionFactory();
     let dirtyCount = 0;
     const ws = createBoard(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     dirtyCount = 0;
 
@@ -1099,6 +1150,7 @@ describe("handleScroll/handleScrollToTop/handleScrollToBottom", () => {
     const { factory } = createFakeSessionFactory();
     let dirtyCount = 0;
     const ws = createBoard(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     dirtyCount = 0;
 
@@ -1111,6 +1163,7 @@ describe("handleScroll/handleScrollToTop/handleScrollToBottom", () => {
     const { factory } = createFakeSessionFactory();
     let dirtyCount = 0;
     const ws = createBoard(baseOpts({ createSession: factory, onDirty: () => dirtyCount++ }));
+    resolvePending(ws);
     const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
     dirtyCount = 0;
 
@@ -1217,6 +1270,7 @@ describe("シェルプロセス終了時の挙動(onExit経由)", () => {
   test("複数タブがあるタイルで1つのプロセスが終了しても、そのタブだけ消えタイルは残る", () => {
     const { created, factory } = createFakeSessionFactory();
     const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
     const tileId = (ws.snapshot().layout as TileLeaf).id;
     ws.newTab(tileId);
     const leaf = ws.snapshot().layout as TileLeaf;
@@ -1235,7 +1289,7 @@ describe("シェルプロセス終了時の挙動(onExit経由)", () => {
     const ws = createBoard(
       baseOpts({ createSession: factory, onAllTabsClosed: () => (allClosed = true) }),
     );
-    void ws;
+    resolvePending(ws);
     created[0]?.opts.onExit?.(0);
     expect(allClosed).toBe(true);
   });

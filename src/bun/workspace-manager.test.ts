@@ -1,8 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import type { PersistedState } from "./persistence";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
-import type { TileLeaf, TileNode } from "./tile-layout";
-import { createWorkspaceManager, type WorkspaceManagerOptions } from "./workspace-manager";
+import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
+import {
+  createWorkspaceManager,
+  type WorkspaceManager,
+  type WorkspaceManagerOptions,
+} from "./workspace-manager";
+
+/**
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * テストではcreateWorkspaceManager/newTab/splitTile等の直後にこれを呼び、pending中の
+ * 全ワークスペース・全Boardの全タブへダミーのcols/rowsを送ってPTY起動を確定させる
+ */
+function resolvePending(mgr: WorkspaceManager, cols = 80, rows = 24): void {
+  for (const entry of mgr.snapshot().workspaces) {
+    for (const board of entry.boards) {
+      for (const leaf of listLeaves(board.layout)) {
+        for (const tabId of leaf.tabIds) {
+          mgr.handleResize(tabId, cols, rows, 8, 18);
+        }
+      }
+    }
+  }
+}
 
 interface FakeSessionRecord {
   opts: TerminalSessionOptions;
@@ -56,9 +77,10 @@ function baseOpts(
 describe("getDefaultShellの配線", () => {
   test("getDefaultShellが返す値がworkspace.tsまで届き、初期タブのセッションへshellとして渡る", () => {
     const { created, factory } = createFakeSessionFactory();
-    createWorkspaceManager(
+    const mgr = createWorkspaceManager(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
+    resolvePending(mgr);
     expect(created[0]?.opts.shell).toBe("/bin/bash");
   });
 
@@ -67,6 +89,7 @@ describe("getDefaultShellの配線", () => {
     const mgr = createWorkspaceManager(
       baseOpts({ createSession: factory, getDefaultShell: () => "/bin/bash" }),
     );
+    resolvePending(mgr);
     const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     mgr.newTab(tileId, "wsl.exe -d Ubuntu");
     expect(created[1]?.opts.shell).toBe("wsl.exe -d Ubuntu");
@@ -139,6 +162,7 @@ describe("newWorkspace / switchWorkspace / closeWorkspace", () => {
     const firstId = mgr.snapshot().activeWorkspaceId;
     mgr.newWorkspace();
     const secondId = mgr.snapshot().activeWorkspaceId;
+    resolvePending(mgr);
     mgr.switchWorkspace(firstId);
 
     expect(mgr.closeWorkspace(secondId)).toEqual({ ok: true });
@@ -573,6 +597,7 @@ describe("ワークスペースが空になった時の挙動", () => {
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
     mgr.newWorkspace();
+    resolvePending(mgr);
 
     created[1]?.opts.onExit?.(0);
 
@@ -586,7 +611,7 @@ describe("ワークスペースが空になった時の挙動", () => {
     const mgr = createWorkspaceManager(
       baseOpts({ createSession: factory, onAllWorkspacesClosed: () => (allClosed = true) }),
     );
-    void mgr;
+    resolvePending(mgr);
     created[0]?.opts.onExit?.(0);
     expect(allClosed).toBe(true);
   });
@@ -624,6 +649,7 @@ describe("restoreFrom（永続化からの復元）", () => {
       ],
     };
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    resolvePending(mgr);
 
     expect(mgr.snapshot().workspaceIds.length).toBe(2);
     expect(created.length).toBe(4); // 1つ目のworkspaceに3タブ、2つ目に1タブ
@@ -722,7 +748,8 @@ describe("restoreFrom（永続化からの復元）", () => {
         },
       ],
     };
-    createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    resolvePending(mgr);
 
     expect(created[0]?.opts.shell).toBe("wsl.exe -d NixOS");
     expect(created[0]?.opts.cwd).toBe("/home/eetann/project");
@@ -1036,6 +1063,7 @@ describe("getTabText", () => {
   test("存在するtabIdはテキストを返し、存在しないtabIdはnullを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    resolvePending(mgr);
     const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     expect(mgr.getTabText(tabId)).toBe("");
     expect(mgr.getTabText("not-found")).toBeNull();
@@ -1045,6 +1073,7 @@ describe("getTabText", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    resolvePending(mgr);
     mgr.newWorkspace();
     expect(mgr.getTabText(firstTabId)).toBe("");
   });
