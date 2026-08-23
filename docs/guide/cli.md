@@ -6,7 +6,7 @@ description: niwaterm CLI（niwatermコマンド）のセットアップとサ�
 
 # CLIからの操作
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは操作対象のリソース単位でグループ化されている: タブ操作全般（`niwaterm tab new`/`switch`/`close`/`respawn`/`show`/`capture`/`send-keys`/`var get`/`var set`/`var list`）、ワークスペース操作（`niwaterm workspace new`/`switch`/`close`/`rename`）、Board操作（`niwaterm board new`/`switch`/`close`/`rename`）、タイル操作（`niwaterm tile split`/`focus`/`resize`/`zoom`）、ポップアップ操作（`niwaterm popup open`/`close`/`toggle`/`promote`）、ブラウザタブ操作（`niwaterm browser navigate`/`get-text`/`get-html`/`screenshot`）に対応。このほか、疎通確認（`niwaterm ping`）、設定ディレクトリの初期セットアップ（`niwaterm init`）、ワークスペース・タイル・タブの一覧取得（`niwaterm list`）、レイアウトプリセットの一覧・適用（`niwaterm layout list`/`layout apply`）、フォントサイズの拡大・縮小・リセット（`niwaterm font-size`）、OSのデスクトップ通知の送信（`niwaterm notify`）、このドキュメント自体のCLI経由での閲覧（`niwaterm docs`）に対応。AIエージェントがCLIを操作する際は、リポジトリを直接読まなくても`niwaterm docs show cli`でこのドキュメントを取得できる。
+niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは`niwaterm <resource> <verb>`の形でリソース単位にグループ化されている（命名規則は後述）。サブコマンドの全体像は`niwaterm --help`で確認できる。
 
 ## セットアップ
 
@@ -93,11 +93,11 @@ niwaterm popup open [--cwd <dir>] [--width <1-100>] [--height <1-100>] [--wait] 
 
 表示/非表示の切り替えはキーバインド（既定: prefix `ctrl+b` → `` ` ``、macOS/Windows共通）でも行える。GUIでは`popup-box`右上のツールバーからも操作できる。ポップアップが既に開いている場合、このコマンドはエラーメッセージと共に終了コード1を返す。
 
-**既知の制約**: `command...`は複数の位置引数として渡され、CLIパーサーが`-`から始まるトークンを自身のオプションと誤認識するため（`--`によるオプション終端はサポートされていない）、`--multi`や`--preview '...'`のようなオプションを含む複雑なコマンドは、呼び出し元シェルの側で1つの引用符文字列にまとめて渡すこと（`niwaterm popup open "fzf --multi --preview 'bat {}'"`のように、シェル全体をダブルクォート等で1トークンにする）。WSLプロファイルではさらに、この1トークンをスペース区切りで単純分割して渡す（クォート・エスケープ非対応、`shell`オプションと同様）。`--capture-stdout`と組み合わせた場合はwsl.exeでも`bash -c`経由の実行に切り替わるため、この制約は無くシェル構文をそのまま使える（後述）。
+**既知の制約**: `command...`は複数の位置引数として渡されるため、CLIパーサーが`-`から始まるトークンを自身のオプションと誤認識する（`--`によるオプション終端はサポートされていない）。`--multi`や`--preview '...'`のようなオプションを含む複雑なコマンドは、呼び出し元シェルの側で1つの引用符文字列にまとめて渡すこと（`niwaterm popup open "fzf --multi --preview 'bat {}'"`のように、シェル全体をダブルクォート等で1トークンにする）。WSLプロファイルではさらに、この1トークンをスペース区切りで単純分割して渡す（クォート・エスケープ非対応、`shell`オプションと同様）。`--capture-stdout`と組み合わせた場合はwsl.exeでも`bash -c`経由の実行に切り替わるため、この制約は無くシェル構文をそのまま使える（後述）。
 
 `--wait`を指定すると、ポップアップが閉じるまで（コマンドの自然終了・`popup close`・GUIでの手動close・`popup promote`によるタブへの昇格のいずれも）コマンドの終了を待つ。省略時（デフォルト）は`tabId`を表示した直後に即座に終了し、ポップアップ内のコマンドはバックグラウンドで動き続ける。`command`を省略した場合はユーザーが手動でポップアップを閉じるまで無期限に待つ。
 
-`--capture-stdout`を指定すると、`command`の標準出力を一時ファイルへリダイレクトした上でキャプチャし、ポップアップが閉じた時点でこのCLIプロセス自身の標準出力へそのまま出力する（`--wait`は指定しなくても暗黙に有効になる。`command`と同時指定必須）。UI描画自体はポップアップ内にそのまま残るため、fzf等の対話的な選択画面をポップアップ内で見せつつ、選択結果だけを呼び出し元シェルへ直接渡せる（`fzf-tmux`が新しいtmux paneでfzfを実行し、標準出力だけをFIFO経由で呼び出し元へ返す設計と同じ発想）。wsl.exeプロファイルでは`bash -c`経由の実行に切り替わる（`/mnt/<drive>/...`形式へ変換した一時ファイルパスへリダイレクトする。`/etc/wsl.conf`でドライブマウント設定を変更している環境では機能しないことがある）。
+`--capture-stdout`を指定すると、`command`の標準出力を一時ファイルへリダイレクトしてキャプチャする。ポップアップが閉じた時点で、その内容をこのCLIプロセス自身の標準出力へそのまま出力する（`--wait`は指定しなくても暗黙に有効になる。`command`と同時指定必須）。UI描画自体はポップアップ内にそのまま残るため、fzf等の対話的な選択画面をポップアップ内で見せつつ、選択結果だけを呼び出し元シェルへ直接渡せる。これは`fzf-tmux`が新しいtmux paneでfzfを実行し、標準出力だけをFIFO経由で呼び出し元へ返す設計と同じ発想である。wsl.exeプロファイルでは`bash -c`経由の実行に切り替わる（`/mnt/<drive>/...`形式へ変換した一時ファイルパスへリダイレクトする。`/etc/wsl.conf`でドライブマウント設定を変更している環境では機能しないことがある）。
 
 ```sh
 selected=$(niwaterm popup open --capture-stdout "fzf --multi --preview 'bat --color=always {}'")
@@ -117,7 +117,7 @@ niwaterm popup promote
 - `popup toggle` — ポップアップの表示/非表示を切り替える。非表示化してもPTYは生きたままで、裏で動いているプロセスは継続する（成功時 `popup: visible`/`popup: hidden` を表示）
 - `popup promote` — ポップアップの中身を、フォーカス中タイル（`niwaterm list`の`(focused)`で確認できる）へ通常タブとして編入する（タブへ昇格）。PTYセッションは作り直されない（成功時、編入先の`tileId`と`tabId`を表示）
 
-いずれも開いているポップアップが無い場合はエラーメッセージと共に終了コード1を返す。
+開いているポップアップが無い場合、いずれもエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm workspace new
@@ -161,7 +161,7 @@ niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [
 - `layout list` — 定義済みプリセットを`name<TAB>description`形式で表示する。1件も定義されていない場合はその旨を表示する
 - `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`/`--replace-force`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
 
-指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合（`shellProfile`が未知のid、`focus:true`が2つ以上、ratioが範囲外等）はいずれもエラーメッセージと共に終了コード1を返す。検証失敗時はBoardに一切変更を加えない。
+指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合はいずれもエラーメッセージと共に終了コード1を返す（検証失敗の主な原因は`shellProfile`の未知のid、`focus:true`の重複、ratioの範囲外指定等）。検証失敗時はBoardに一切変更を加えない。
 
 ```sh
 niwaterm font-size increase|decrease|reset
@@ -187,7 +187,7 @@ niwaterm tab var get --tab <tabId> <key>
 niwaterm tab var list --tab <tabId>
 ```
 
-タブごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される（**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**）。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`tab var set`で書き、別タブがその値を`tab var get`で参照しつつ`tab send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`tab var get`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
+タブごとのkey-value変数を設定・取得・一覧する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される。**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`tab var set`で書き、別タブがその値を`tab var get`で参照しつつ`tab send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`tab var get`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
 `--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
@@ -195,7 +195,7 @@ niwaterm tab var list --tab <tabId>
 
 `contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm tab var set branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
 
-同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm tab var set`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている（ホスト名検証はしない。ghostty本家はSSH越しの偽装対策として行うが、niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている）。`niwaterm tile split`/`niwaterm tab new`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる（Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される。`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**（OSC 7自体はlibghostty-vt側に制約は無いが、niwaterm.ps1へのOSC 7送信追加は今後の対応）。
+同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm tab var set`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている。ホスト名検証はしていない。ghostty本家はSSH越しの偽装対策としてホスト名を検証する。niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている。`niwaterm tile split`/`niwaterm tab new`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる。Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される（`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**。OSC 7自体はlibghostty-vt側に制約は無く、niwaterm.ps1へのOSC 7送信追加は今後の対応として残っている。
 
 ```sh
 # ~/.zshrc
@@ -221,7 +221,7 @@ if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwa
 
 ## エージェント統合
 
-`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する（`niwaterm tab var set agent_status working`相当を内部で呼ぶ）。サイドバーのタブ行に状態ドットが表示されるようになる。
+`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する。内部では`niwaterm tab var set agent_status working`相当を呼んでいる。サイドバーのタブ行に状態ドットが表示されるようになる。
 
 ```sh
 # ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
@@ -250,14 +250,14 @@ niwaterm tab show --tab <tabId>
 - `browser get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
 - `browser screenshot` — 指定したブラウザタブの現在URLをheadlessブラウザ（Bun本体がv1.3.12以降ネイティブに提供する`Bun.WebView`、macOSはniwatermのElectrobun側と同じWKWebViewベース）で別途開き直し、スクリーンショットをPNGファイルに保存する。**表示中タブそのものではなく、別インスタンスで同じURLを新規に開いた場合の見た目**になる点に注意（ログイン状態やスクロール位置、フォーム入力中の値などは反映されない）
 
-いずれも対象`tabId`がterminalタブの場合、または存在しない場合はエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab show`で対象ワークスペースをアクティブ化してから呼び直す。
+対象`tabId`がterminalタブの場合、または存在しない場合は、いずれもエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab show`で対象ワークスペースをアクティブ化してから呼び直す。
 
 - `tab show` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`tab switch`/`tile focus`と役割が重なって見えるが、粒度が異なる合成コマンドである:
   - `tab switch --tile --tab` — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
   - `tile focus --tile` — フォーカス（キー入力の宛先）を移すのみ
   - `tab show --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
 
-「表示中タブそのものの見た目を確認したい」場合は`tab show`で実ウィンドウを前面化して直接目視するか、`browser screenshot`で同じURLのheadlessスクショを撮る（後者はDOM状態が再現されない代わりに人間が画面の前にいなくても確認できる）。使い分けの目安として、両者は互いを置き換えるものではない。
+「表示中タブそのものの見た目を確認したい」場合は、`tab show`で実ウィンドウを前面化して直接目視するか、`browser screenshot`で同じURLのheadlessスクショを撮る。後者はDOM状態が再現されない代わりに、人間が画面の前にいなくても確認できる。使い分けの目安として、両者は互いを置き換えるものではない。
 
 ```sh
 niwaterm --help
