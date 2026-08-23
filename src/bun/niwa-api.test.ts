@@ -49,6 +49,7 @@ function createFakeSessionFactory() {
       cursorX: 0,
       cursorY: 0,
       cursorVisible: true,
+      cursorShape: "block",
       viewportPinned: true,
     }),
     dumpText: () => "",

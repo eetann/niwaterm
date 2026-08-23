@@ -2,7 +2,7 @@
 // index.tsはPTY/FFIの詳細を知らずにこのモジュールだけを使う。
 // 将来のタブ実装は createTerminalSession() 1呼び出し = タブ1つに対応させる想定。
 import { writeClipboardText } from "./clipboard";
-import { createGhosttyTerminal } from "./ghostty";
+import { type CursorShape, createGhosttyTerminal } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
@@ -23,6 +23,7 @@ export interface TerminalRenderState {
   cursorX: number;
   cursorY: number;
   cursorVisible: boolean;
+  cursorShape: CursorShape;
   /** ビューポートが最新行に追従しているか。falseはスクロールバックを閲覧中 */
   viewportPinned: boolean;
 }
@@ -134,6 +135,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       cursorX: cursor.x,
       cursorY: cursor.y,
       cursorVisible: cursor.visible,
+      cursorShape: cursor.shape,
       viewportPinned: term.viewportPinned(),
     };
   }

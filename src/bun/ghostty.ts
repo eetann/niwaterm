@@ -62,6 +62,24 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
     args: [FFIType.ptr, FFIType.u64, FFIType.bool, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
+  // カーソルの視覚的な形状（bar/block/underline）はghostty_terminal_getでは取得できず、
+  // render state経由でのみ読める（GHOSTTY_RENDER_STATE_DATA_CURSOR_VISUAL_STYLE）
+  ghostty_render_state_new: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_render_state_free: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_render_state_update: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_render_state_get: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
 });
 
 const shim = dlopen(join(libDir, nativeLayout.shim), {
@@ -92,6 +110,13 @@ const DATA_VIEWPORT_ACTIVE = 32;
 const DATA_MODE = 37;
 const DATA_PWD = 13;
 
+// GhosttyRenderStateData
+const RENDER_DATA_CURSOR_VISUAL_STYLE = 10;
+
+// GhosttyRenderStateCursorVisualStyle（インデックスがそのままenum値に対応する）
+const CURSOR_SHAPES = ["bar", "block", "underline", "block_hollow"] as const;
+export type CursorShape = (typeof CURSOR_SHAPES)[number];
+
 // GhosttyFormatterFormat
 const FORMAT_PLAIN = 0;
 const FORMAT_HTML = 2;
@@ -105,6 +130,7 @@ export interface CursorState {
   x: number;
   y: number;
   visible: boolean;
+  shape: CursorShape;
 }
 
 export function createGhosttyTerminal(cols: number, rows: number, maxScrollback = 10_000) {
@@ -118,12 +144,19 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   const scrollbackLimit = new BigUint64Array([BigInt(maxScrollback)]);
   vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(scrollbackLimit));
 
+  // カーソル形状（DECSCUSR）読み取り専用のrender state。行データ等は一切使わない
+  const renderStateHandle = new BigUint64Array(1);
+  rc = vt.symbols.ghostty_render_state_new(null, ptr(renderStateHandle));
+  if (rc !== 0) throw new Error(`ghostty_render_state_new failed: ${rc}`);
+  const renderState = read.ptr(ptr(renderStateHandle)) as Pointer;
+
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
   let pwdChangedCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
   const u16Out = new Uint16Array(1);
   const u8Out = new Uint8Array(1);
+  const i32Out = new Int32Array(1);
 
   /** DSR等のクエリ応答をPTYへ書き戻すコールバックを登録する */
   function onWritePty(fn: (data: Uint8Array) => void): void {
@@ -265,7 +298,13 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     vt.symbols.ghostty_terminal_get(term, DATA_CURSOR_Y, ptr(u16Out));
     const y = u16Out[0] ?? 0;
     vt.symbols.ghostty_terminal_get(term, DATA_CURSOR_VISIBLE, ptr(u8Out));
-    return { x, y, visible: u8Out[0] !== 0 };
+    const visible = u8Out[0] !== 0;
+
+    vt.symbols.ghostty_render_state_update(renderState, term);
+    vt.symbols.ghostty_render_state_get(renderState, RENDER_DATA_CURSOR_VISUAL_STYLE, ptr(i32Out));
+    const shape = CURSOR_SHAPES[i32Out[0] ?? 1] ?? "block";
+
+    return { x, y, visible, shape };
   }
 
   /**
@@ -327,6 +366,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   }
 
   function free(): void {
+    vt.symbols.ghostty_render_state_free(renderState);
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
     clipboardCallback?.close();

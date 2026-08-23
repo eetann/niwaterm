@@ -538,6 +538,7 @@ export function createBoard(opts: BoardOptions) {
         cursorX: 0,
         cursorY: 0,
         cursorVisible: false,
+        cursorShape: "block",
         viewportPinned: true,
       };
     }

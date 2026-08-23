@@ -12,6 +12,7 @@ import {
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
+import type { CursorShape } from "../bun/ghostty";
 import type { TabRenderState } from "../bun/workspace";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type {
@@ -375,6 +376,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             renderState.cursorX,
             renderState.cursorY,
             renderState.cursorVisible && renderState.viewportPinned,
+            renderState.cursorShape,
           );
           updateScrollIndicator(tabId, renderState.viewportPinned);
           if (tabId === currentTabId && renderState.viewportPinned) {
@@ -1117,7 +1119,15 @@ function updateFocusHighlight(): void {
 }
 
 // ---- カーソル描画（タイルごと） ----
-function updateCursorForTab(tabId: TabId, x: number, y: number, visible: boolean): void {
+// DECSCUSRの視覚形状ごとにDOM要素のサイズ・位置を変える（bar=左端の縦線、underline=下端の横線、
+// block_hollow=枠線のみ）。libghostty-vtからshape不明値が来た場合も安全にblock扱いへフォールバックする
+function updateCursorForTab(
+  tabId: TabId,
+  x: number,
+  y: number,
+  visible: boolean,
+  shape: CursorShape,
+): void {
   const cursorEl = cursorElByTabId.get(tabId);
   if (!cursorEl) return;
   if (!visible) {
@@ -1125,10 +1135,27 @@ function updateCursorForTab(tabId: TabId, x: number, y: number, visible: boolean
     return;
   }
   cursorEl.style.display = "block";
-  cursorEl.style.width = `${cellWidth}px`;
-  cursorEl.style.height = `${cellHeight}px`;
+  cursorEl.classList.toggle("shape-bar", shape === "bar");
+  cursorEl.classList.toggle("shape-underline", shape === "underline");
+  cursorEl.classList.toggle("shape-block-hollow", shape === "block_hollow");
   cursorEl.style.left = `${x * cellWidth}px`;
-  cursorEl.style.top = `${y * cellHeight}px`;
+  switch (shape) {
+    case "bar":
+      cursorEl.style.top = `${y * cellHeight}px`;
+      cursorEl.style.width = "2px";
+      cursorEl.style.height = `${cellHeight}px`;
+      break;
+    case "underline":
+      cursorEl.style.top = `${(y + 1) * cellHeight - 2}px`;
+      cursorEl.style.width = `${cellWidth}px`;
+      cursorEl.style.height = "2px";
+      break;
+    default:
+      cursorEl.style.top = `${y * cellHeight}px`;
+      cursorEl.style.width = `${cellWidth}px`;
+      cursorEl.style.height = `${cellHeight}px`;
+      break;
+  }
 }
 
 /** スクロールバック閲覧中であることを示すバッジの表示切替（CSSの::afterで描画） */

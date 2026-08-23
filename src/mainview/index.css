@@ -434,6 +434,14 @@ body {
   display: none;
 }
 
+/* block_hollow（DECSCUSRには無いが、フォーカス外れ等でghosttyが返すことがある形状）は枠線のみにする */
+.tile .cursor.shape-block-hollow,
+#popup .cursor.shape-block-hollow {
+  background: transparent;
+  border: 1px solid #f5e0dc;
+  box-sizing: border-box;
+}
+
 /* スクロールバック閲覧中であることを示すバッジ（マウスホイール/Cmd+Up等で表示） */
 .tab-content.scrolled-history::after {
   content: "SCROLLBACK · キー入力で最新行へ戻る";
