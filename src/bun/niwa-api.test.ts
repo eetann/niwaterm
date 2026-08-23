@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isCustomBindingRef, type KeybindingsConfig } from "@niwaterm/config";
+import { isCustomBindingRef, type KeybindingsConfig, type ShellProfile } from "@niwaterm/config";
 import type { TileLeaf, TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
@@ -37,7 +37,10 @@ function createFakeSessionFactory() {
   return factory;
 }
 
-function createTestSetup(overrides: Partial<WorkspaceManagerOptions> = {}) {
+function createTestSetup(
+  overrides: Partial<WorkspaceManagerOptions> = {},
+  getShellProfiles: () => ShellProfile[] = () => [],
+) {
   const workspaceManager = createWorkspaceManager({
     initialCols: 80,
     initialRows: 24,
@@ -46,7 +49,12 @@ function createTestSetup(overrides: Partial<WorkspaceManagerOptions> = {}) {
     createSession: createFakeSessionFactory(),
     ...overrides,
   });
-  const api = createNiwaApi({ workspaceManager, getShellProfiles: () => [] });
+  const api = createNiwaApi({
+    workspaceManager,
+    getShellProfiles,
+    getShellRunEnv: () => ({}),
+    getDefaultShell: () => "bash",
+  });
   return { workspaceManager, ...api };
 }
 
@@ -329,6 +337,31 @@ describe("niwa.workspace", () => {
     expect(niwa.workspace.current()).toBe(secondId);
     niwa.workspace.switch(firstId);
     expect(niwa.workspace.current()).toBe(firstId);
+  });
+});
+
+describe("niwa.shell.run", () => {
+  test("コマンドを実行して結果を返す", async () => {
+    const { niwa } = createTestSetup({}, () => [
+      { id: "test-shell", name: "test", command: "bash" },
+    ]);
+    const result = await niwa.shell.run("echo hi", { shellProfile: "test-shell" });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("hi");
+  });
+
+  test("shellProfile省略時はgetDefaultShell()（shell.default設定）にフォールバックする", async () => {
+    const { niwa } = createTestSetup();
+    const result = await niwa.shell.run("echo hi");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.trim()).toBe("hi");
+  });
+
+  test("未知のshellProfileならexitCode 1とエラーメッセージを返す", async () => {
+    const { niwa } = createTestSetup();
+    const result = await niwa.shell.run("echo hi", { shellProfile: "no-such-profile" });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unknown shellProfileId");
   });
 });
 

@@ -54,7 +54,12 @@ function createTestNiwaApi(): NiwaApiHandle {
     onAllWorkspacesClosed: () => {},
     createSession: () => fakeSession,
   });
-  return createNiwaApi({ workspaceManager, getShellProfiles: () => [] });
+  return createNiwaApi({
+    workspaceManager,
+    getShellProfiles: () => [],
+    getShellRunEnv: () => ({}),
+    getDefaultShell: () => undefined,
+  });
 }
 
 describe("configFilePath", () => {

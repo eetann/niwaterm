@@ -143,6 +143,30 @@ export interface NiwaClipboardApi {
   read(): Promise<string>;
 }
 
+export interface NiwaShellRunOptions {
+  /** shell.profilesで定義したid。省略時はdefaultShell */
+  shellProfile?: string;
+  cwd?: string;
+  /** 追加で設定する環境変数（wsl.exeプロファイルの場合はWSLENVへも自動で追記される） */
+  env?: Record<string, string>;
+}
+
+export interface NiwaShellRunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface NiwaShellApi {
+  /**
+   * 指定コマンドを、現在のシェルプロファイル設定（wsl.exe/powershell.exe/zsh等）に従って
+   * ログイン・インタラクティブシェル経由で実行し、結果を返す（tmuxのrun-shell相当）。
+   * PTYを使わないワンショット実行で、GUI上にタブ・ポップアップは作らない。対話的な出力を
+   * 見せたい場合はpopup.open({ command })を使うこと
+   */
+  run(command: string, opts?: NiwaShellRunOptions): Promise<NiwaShellRunResult>;
+}
+
 export interface KeybindOptions {
   /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrl/altのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
@@ -188,4 +212,5 @@ export interface Niwa {
   popup: NiwaPopupApi;
   workspace: NiwaWorkspaceApi;
   clipboard: NiwaClipboardApi;
+  shell: NiwaShellApi;
 }

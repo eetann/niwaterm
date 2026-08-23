@@ -18,8 +18,9 @@ export interface PtyOptions {
   env?: Record<string, string>;
   /**
    * 指定すると、シェルの対話セッションの代わりにこのコマンドを実行する（ワンショット実行）。
-   * シェルの-c/-Command相当でexecされるため、コマンド終了=シェルプロセス終了となり、
-   * PTYのonExitが自然に発火する（popupのワンショット実行で使用）
+   * シェルの-l -c/-Command相当でexecされるため、コマンド終了=シェルプロセス終了となり、
+   * PTYのonExitが自然に発火する（popupのワンショット実行で使用）。ログインシェル経由なので
+   * .zshrc/.bash_profile等でのみPATHに追加されたコマンドも解決できる
    */
   command?: string;
   /**
@@ -27,7 +28,7 @@ export interface PtyOptions {
    * （`popup open --capture-stdout`用。UIはPTY自体に残ったまま描画され、
    * コマンドの標準出力だけを分離してファイルへ落とす。fzf-tmuxの`fzf ... > $fifo`と同じ発想）。
    * 常にWindows側の絶対パス（アプリ本体側のtmpdir()）で渡される。wsl.exeプロファイルの場合は
-   * windowsPathToWslMountPathでLinux側から書けるパスへ変換した上でbash -c経由で実行する
+   * windowsPathToWslMountPathでLinux側から書けるパスへ変換した上でbash -l -c経由で実行する
    */
   captureStdoutTo?: string;
 }
@@ -47,7 +48,7 @@ export interface Pty {
  * shellはスペース区切りで単純分割する（クォート・エスケープ非対応）。WSLディストロ起動
  * （"wsl.exe -d Ubuntu"等）やシェルプロファイルの引数指定に対応するため
  */
-function shellCommand(shell: string | undefined): string[] {
+export function shellCommand(shell: string | undefined): string[] {
   if (shell) {
     const parts = shell.split(" ").filter((s) => s.length > 0);
     if (parts.length > 0) return parts;
@@ -70,7 +71,7 @@ function quoteForPosixShell(path: string): string {
  * 必ずapplyWslCdArg（--cdの追記）より後に呼ぶこと: wsl.exeの`--`以降は全てLinux側でexecする
  * コマンドの引数として扱われるため、`--cd`は`--`より前に無ければならない。
  */
-function appendCommandArgs(
+export function appendCommandArgs(
   cmd: string[],
   command: string | undefined,
   captureStdoutTo: string | undefined,
@@ -85,29 +86,34 @@ function appendCommandArgs(
     return;
   }
   if (head === "wsl.exe") {
-    // captureStdoutTo指定時のみ、`--`以降を`bash -c "<command> > <path>"`という1コマンドに
-    // 包んでexecする。Windows側の絶対パス（tmpdir()由来）は/mnt/c/...形式に変換すれば
-    // Linux側からも書き込める（WSL2のデフォルトドライブマウント前提）。bash -c経由になる分、
-    // commandの内容はシェル構文としてそのまま解釈される（パイプ・クォート等が使える）
+    // `--`以降を`bash -c 'exec "$SHELL" -l -i -c "<command>"'`という1コマンドに包んでexecする。
+    // 外側のbashは$SHELL（ユーザーの実際のログインシェル）を展開してexecするだけのブートストラップ。
+    // -l（ログイン）だけでは不十分: zsh/bashとも-cでコマンドを渡すと「非インタラクティブ」扱いになり、
+    // インタラクティブシェル専用の初期化ファイル（.zshrc等。niwaterm CLI自身や、bun/cargo/pnpm/nvm等の
+    // PATH追加は大抵ここにある）が読まれない。-i（インタラクティブ強制）を併用することで.zshrc等も
+    // 読ませる（詳細: .mywork/work-logs/2026-08-22-tab-respawn-command-non-login-shell-path-issue.md）。
+    // Windows側の絶対パス（tmpdir()由来）は/mnt/c/...形式に変換すればLinux側からも書き込める
+    // （WSL2のデフォルトドライブマウント前提）。bash経由になる分、commandの内容はシェル構文
+    // としてそのまま解釈される（パイプ・クォート等が使える）
+    let withCapture = command;
     if (captureStdoutTo) {
       const wslPath = windowsPathToWslMountPath(captureStdoutTo);
-      if (wslPath) {
-        cmd.push("--", "bash", "-c", `${command} > ${quoteForPosixShell(wslPath)}`);
-        return;
-      }
+      if (wslPath) withCapture = `${command} > ${quoteForPosixShell(wslPath)}`;
     }
-    // wsl.exeの`--`以降は複数の個別引数として渡す必要がある（1つの文字列のままだと
-    // その全体を実行ファイル名として探そうとして失敗する）。shellCommand同様、
-    // スペース区切りで単純分割する（クォート・エスケープ非対応）
-    const parts = command.split(" ").filter((s) => s.length > 0);
-    cmd.push("--", ...parts);
+    const inner = `exec "$SHELL" -l -i -c ${quoteForPosixShell(withCapture)}`;
+    cmd.push("--", "bash", "-c", inner);
     return;
   }
-  // Unix系シェル(zsh/bash/fish等): -cはシェル共通のコマンド実行オプション。実行完了でシェルは自動終了する
+  // Unix系シェル(zsh/bash/fish等): -l（ログイン）だけでは不十分: -cでコマンドを渡すと
+  // 「非インタラクティブ」扱いになり、インタラクティブシェル専用の初期化ファイル（.zshrc等。
+  // niwaterm CLI自身や、bun/cargo/pnpm/nvm等のPATH追加は大抵ここにある）が読まれない。
+  // -i（インタラクティブ強制）を併用することで.zshrc等も読ませる
+  // （詳細: .mywork/work-logs/2026-08-22-tab-respawn-command-non-login-shell-path-issue.md）。
+  // 実行完了でシェルは自動終了する
   const withCapture = captureStdoutTo
     ? `${command} > ${quoteForPosixShell(captureStdoutTo)}`
     : command;
-  cmd.push("-c", withCapture);
+  cmd.push("-l", "-i", "-c", withCapture);
 }
 
 /**
@@ -116,7 +122,7 @@ function appendCommandArgs(
  * niwatermがPTY起動時に注入する変数（NIWATERM_TAB_ID等）をWSL内のシェルまで
  * 届けるため、WSLプロファイル起動時のみWSLENVへ追記する
  */
-function buildEnv(
+export function buildEnv(
   cmd: string[],
   term: string,
   extraEnv: Record<string, string> | undefined,

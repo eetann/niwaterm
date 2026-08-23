@@ -24,6 +24,7 @@ import {
   type ResolvedCustomViewConfig,
   type ShellProfile,
 } from "@niwaterm/config";
+import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import type { WorkspaceManager } from "./workspace-manager";
 
@@ -469,7 +470,15 @@ export async function loadAndResolveConfig(
   const userConfig = await loadUserConfig(path);
   const shellProfiles = resolveShellProfiles(userConfig, detectedShellProfiles);
   // niwa.tab.createのshellProfile解決に使うため、resolveKeybindingsより先にshellProfilesを確定させる
-  const niwaApi = createNiwaApi({ workspaceManager, getShellProfiles: () => shellProfiles });
+  const niwaApi = createNiwaApi({
+    workspaceManager,
+    getShellProfiles: () => shellProfiles,
+    getShellRunEnv: () => ({
+      NIWATERM_SOCKET: ipcSocketPath(),
+      NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+    }),
+    getDefaultShell: () => resolveShell(userConfig),
+  });
   return {
     keybindings: resolveKeybindings(userConfig, niwaApi),
     appearance: resolveAppearance(userConfig),

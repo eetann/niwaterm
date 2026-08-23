@@ -16,6 +16,7 @@ import type {
 } from "@niwaterm/config";
 import { readClipboardText, writeClipboardText } from "./clipboard";
 import { resolveShellProfileCommand } from "./shell-profiles";
+import { runShellCommand } from "./shell-run";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
 
@@ -23,6 +24,21 @@ export interface CreateNiwaApiDeps {
   workspaceManager: WorkspaceManager;
   /** ホットリロードでの変化を反映するため、呼び出し毎に評価する */
   getShellProfiles: () => ShellProfile[];
+  /**
+   * niwa.shell.runで実行するコマンドへ自動で環境変数として渡す、niwaterm CLIの接続先情報
+   * （NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT）。ipc-server.tsがniwa-api.tsに依存しているため
+   * ここでは直接importできず、呼び出し元（config.ts）から注入する。tab.new/tab.respawn/
+   * popup.open相当のPTY起動では自動付与済みだが、shell.runはPTYを使わないため同様に必要
+   * （詳細: .mywork/work-logs/2026-08-22-tab-respawn-command-non-login-shell-path-issue.md）
+   */
+  getShellRunEnv: () => Record<string, string>;
+  /**
+   * shell.default（config.tsのshell設定）を返す。resolveShellProfileCommandは
+   * shellProfile未指定時にcommand: undefinedを返すだけで、defaultShellへのフォールバックは
+   * 責務外（tab.new/tab.respawnはworkspaceManager.newTab/respawnTab内部でこのフォールバックの
+   * 恩恵を受けているが、shell.runはPTYを経由しないため自前で行う必要がある）
+   */
+  getDefaultShell: () => string | undefined;
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
@@ -190,6 +206,20 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
       read() {
         return readClipboardText();
+      },
+    },
+    shell: {
+      run(command, opts) {
+        const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);
+        if (!resolved.ok) {
+          console.log(`[bun] niwa.shell.run: ${resolved.error}`);
+          return Promise.resolve({ exitCode: 1, stdout: "", stderr: resolved.error });
+        }
+        return runShellCommand(command, {
+          shell: resolved.command ?? deps.getDefaultShell(),
+          cwd: opts?.cwd,
+          env: { ...deps.getShellRunEnv(), ...opts?.env },
+        });
       },
     },
   };

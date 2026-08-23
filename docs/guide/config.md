@@ -105,6 +105,7 @@ export default defineConfig({
 | `niwa.workspace.list()` | 全ワークスペースを表示順で`{ id, name, active }[]`として返す。`name`は未設定なら`null` |
 | `niwa.workspace.current()` | 現在アクティブなワークスペースのidを返す（tmuxの`switch-client`が参照する`current-window`相当） |
 | `niwa.clipboard.write(text)` / `niwa.clipboard.read()` | クリップボードの読み書き |
+| `niwa.shell.run(command, opts?)` | 現在のシェルプロファイル設定（wsl.exe/powershell.exe/zsh等）に従ってログイン・インタラクティブシェル経由でコマンドを実行し、結果（`{ exitCode, stdout, stderr }`）を返す（tmuxの`run-shell`相当）。`opts: { shellProfile?, cwd?, env? }`（`shellProfile`省略時はdefaultShell）。PTYを使わないワンショット実行でGUI上にタブ・ポップアップは作らない。対話的な出力を見せたい場合は`popup.open({ command })`を使う。`-i`（インタラクティブ）指定の副作用でシェルが「no job control」等の警告をstderrへ出すことがあるため、判定にはexitCodeを使い、stderrの完全一致は避けること |
 
 **非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
 
