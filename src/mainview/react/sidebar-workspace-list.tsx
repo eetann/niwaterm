@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronRight, PictureInPicture2 } from "lucide-react";
+import { AlertTriangle, ChevronRight, Maximize2, PictureInPicture2 } from "lucide-react";
 import { useState } from "react";
 import {
   ContextMenu,
@@ -133,12 +133,15 @@ export function SidebarWorkspaceList({
         : board.agent?.status === "blocked"
           ? "bg-amber-500 shadow-[0_0_4px] shadow-amber-500"
           : "bg-muted-foreground/30";
+    const titleParts: string[] = [];
+    if (board.zoomed) titleParts.push("ズーム中");
+    if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
     return (
       <ContextMenu key={board.boardId}>
         <ContextMenuTrigger asChild>
           <div
             className={cn("flex flex-col rounded-md", board.active && "bg-accent")}
-            title={board.agent ? `${board.agent.agent}: ${board.agent.status}` : undefined}
+            title={titleParts.length > 0 ? titleParts.join(" / ") : undefined}
           >
             <button
               type="button"
@@ -152,6 +155,12 @@ export function SidebarWorkspaceList({
             >
               <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
               <span className="min-w-0 flex-1 truncate text-xs font-semibold">{board.label}</span>
+              {board.zoomed && (
+                <Maximize2
+                  aria-label="ズーム中"
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
+              )}
             </button>
             {hasStatusLine && (
               <div className="flex gap-1.5 px-1.5 pb-1.5">

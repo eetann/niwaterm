@@ -18,6 +18,8 @@ export interface SidebarBoardItem {
   active: boolean;
   branch: string | null;
   agent: SidebarBoardAgentInfo | null;
+  /** フォーカス中タイルがズーム表示中か（toggle-zoom）。Board内のどのタイルかは問わず、見た目上は1行のBoardが対象 */
+  zoomed: boolean;
 }
 
 export interface SidebarPopupItem {
@@ -117,6 +119,7 @@ export function buildSidebarWorkspaceItems(
         active: entry.workspaceId === currentActiveWorkspaceId && board.active,
         branch,
         agent,
+        zoomed: board.zoomedTileId !== null,
       };
     }),
   }));

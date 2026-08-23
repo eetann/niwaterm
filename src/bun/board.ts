@@ -598,6 +598,11 @@ export function createBoard(opts: BoardOptions) {
     return focusedTileId;
   }
 
+  /** サイドバー一覧用の軽量な参照。ズーム中でなければnull */
+  function getZoomedTileId(): TileId | null {
+    return zoomedTileId;
+  }
+
   function hasTab(tabId: TabId): boolean {
     return sessions.has(tabId) || pendingSpawnByTabId.has(tabId);
   }
@@ -704,6 +709,7 @@ export function createBoard(opts: BoardOptions) {
     snapshot,
     getLayout,
     getFocusedTileId,
+    getZoomedTileId,
     hasTab,
     hasBrowserTab,
     findTileIdForTab,

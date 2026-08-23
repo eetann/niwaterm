@@ -24,6 +24,7 @@ function board(
     focusedTileId?: string;
     tabVars?: Record<string, Record<string, string>>;
     name?: string | null;
+    zoomedTileId?: string | null;
   } = {},
 ): BoardListEntry {
   return {
@@ -35,6 +36,7 @@ function board(
     tabNames: {},
     tileNames: {},
     name: options.name ?? null,
+    zoomedTileId: options.zoomedTileId ?? null,
   };
 }
 
@@ -78,6 +80,7 @@ describe("buildSidebarWorkspaceItems", () => {
             active: false,
             branch: null,
             agent: null,
+            zoomed: false,
           },
         ],
       },
@@ -93,6 +96,7 @@ describe("buildSidebarWorkspaceItems", () => {
             active: true,
             branch: null,
             agent: null,
+            zoomed: false,
           },
         ],
       },
@@ -284,6 +288,26 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.agent).toBeNull();
+  });
+
+  test("フォーカス中タイルがズーム中の場合、Boardはzoomed:trueになる", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { zoomedTileId: "tile-1" }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.zoomed).toBe(true);
+  });
+
+  test("ズーム中でなければzoomed:falseになる", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.zoomed).toBe(false);
   });
 
   test("非アクティブワークスペースのBoardは常にactive:falseになる", () => {

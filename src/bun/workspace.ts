@@ -56,6 +56,8 @@ export interface BoardListEntry {
   tileNames: Record<TileId, string>;
   /** ユーザーがサイドバーから設定したBoard名。未設定はnull（表示側で連番にフォールバック） */
   name: string | null;
+  /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。ズームしていなければnull */
+  zoomedTileId: TileId | null;
 }
 
 export interface BoardLocation {
@@ -448,6 +450,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tabNames: board.listTabNames(),
         tileNames: board.listTileNames(),
         name: boardNames.get(id) ?? null,
+        zoomedTileId: board.getZoomedTileId(),
       };
     });
   }
