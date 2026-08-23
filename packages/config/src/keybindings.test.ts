@@ -198,6 +198,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // restart-tabも同様に既定キーを持たない（respawn-pane相当の破壊的操作のため、tmux文化を踏襲し
   // ユーザーが明示的に割り当てる想定。実行前にy/n確認ダイアログを挟む）
   "restart-tab",
+  // reload-configも同様に既定キーを持たない（設定ファイルの手動リロードは使う人・使わない人が
+  // 分かれる操作のため、ユーザーが明示的に割り当てる想定）
+  "reload-config",
 ];
 
 describe("defaultKeybindings", () => {

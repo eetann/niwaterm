@@ -224,7 +224,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（33種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（34種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -248,6 +248,7 @@ keybindings: {
 | `scroll-to-top` / `scroll-to-bottom` | スクロールバックの先頭/最新行へジャンプ |
 | `command-palette` | コマンドパレットを開く |
 | `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
+| `reload-config` | 設定ファイルを手動で再読み込みする（ファイル保存時の自動リロードと同じ処理。既定キーは無いため使うには自分で割り当てる必要がある） |
 
 不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`/`ctrl`/`alt`のいずれも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 
@@ -441,6 +442,8 @@ niwaterm layout apply dev --replace
 構文エラーのある内容を保存した場合は、コンソールに警告ログが出た上でデフォルト設定（キーバインド・外観とも）にフォールバックする。「直前の有効な設定を保持する」のではなく、初回読み込み時と同様に毎回デフォルトから解決し直す設計のため、エラーを直して再保存すれば元通り反映される。
 
 `~/.config/niwaterm/`ディレクトリ自体が存在しない場合（未セットアップ）は監視そのものがスキップされ、コンソールにログが出るだけでアプリは通常通り起動する。
+
+ファイル監視による自動リロードのほか、`reload-config`アクション（コマンドパレット、または`niwa.keybind`で割り当てたキー）から同じ処理を手動で呼び出すこともできる。挙動は保存時の自動リロードと同一（毎回デフォルトから解決し直すため、`niwa.keybind`/`niwa.unbind`で加えた変更をconfigファイルから削除して再読み込みすれば、その分は未設定またはデフォルトの割り当てに戻る）。
 
 ## 既知の制約
 

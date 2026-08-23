@@ -59,6 +59,7 @@ export const KEYBIND_ACTIONS = [
   "increase-font-size",
   "decrease-font-size",
   "reset-font-size",
+  "reload-config",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];

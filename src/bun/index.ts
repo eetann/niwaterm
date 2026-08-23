@@ -108,6 +108,8 @@ export type NiwaRPC = {
       renameBoard: { boardId: BoardId; name: string };
       /** keybindingsのBindingTargetがkind:"custom"の場合に発火する。handlerIdはniwa-api.tsのhandlerRegistryのキー */
       runKeybindHandler: { handlerId: string };
+      /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
+      reloadConfig: {};
     };
   }>;
   webview: RPCSchema<{
@@ -512,6 +514,11 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
         runKeybindHandler(handlerId).catch((err: unknown) => {
           console.log(`[bun] keybind handler error: ${String(err)}`);
+        });
+      },
+      reloadConfig: () => {
+        handleConfigFileChanged().catch((err: unknown) => {
+          console.log(`[bun] manual config reload error: ${String(err)}`);
         });
       },
     },

@@ -31,6 +31,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  RotateCw,
   Rows2,
   X,
   ZoomIn,
@@ -45,7 +46,8 @@ export type CommandPaletteCategory =
   | "ワークスペース"
   | "表示"
   | "編集"
-  | "スクロール";
+  | "スクロール"
+  | "設定";
 
 export interface CommandPaletteActionDef {
   action: Exclude<KeybindAction, "command-palette">;
@@ -290,5 +292,13 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "表示",
     icon: RotateCcw,
     keywords: ["zoom reset"],
+  },
+  {
+    action: "reload-config",
+    labelEn: "Reload Config",
+    label: "設定ファイルを再読み込み",
+    category: "設定",
+    icon: RotateCw,
+    keywords: ["source-file", "config reload"],
   },
 ];

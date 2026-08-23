@@ -1388,6 +1388,10 @@ function handleTileCommand(cmd: TileCommand): void {
     sendMessage("resetFontSizeZoom");
     return;
   }
+  if (cmd.type === "reloadConfig") {
+    sendMessage("reloadConfig");
+    return;
+  }
   // niwa.keybindの関数ハンドラ。実際の処理はbun側（niwa-api.ts）で行うため、
   // ここではRPCで実行を依頼するだけでよい（focusedTileIdの有無に依存しない）
   if (cmd.type === "custom") {

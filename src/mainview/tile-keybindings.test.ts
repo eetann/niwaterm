@@ -356,6 +356,16 @@ describe("createKeybindResolver（カスタムprefix・カスタムbindings）",
       command: { type: "restartTab" },
     });
   });
+
+  test("reload-configはデフォルトバインド無しのため、ユーザー設定で割り当てて初めて発火する", () => {
+    const custom = compileKeybindings({ prefix: "ctrl+b", bindings: { r: "reload-config" } });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("r"))).toEqual({
+      kind: "command",
+      command: { type: "reloadConfig" },
+    });
+  });
 });
 
 describe("createKeybindResolver（niwa.keybindの関数ハンドラ = custom BindingTarget）", () => {
