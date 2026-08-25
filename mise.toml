@@ -31,6 +31,7 @@ if [ -z "$NIWATERM_WIN_REPO" ]; then
   exit 1
 fi
 rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude 'vendor' \
+  --exclude '.hutch' --exclude '.tailwind-build' \
   ./ "$NIWATERM_WIN_REPO/"
 echo "synced to $NIWATERM_WIN_REPO"
 '''

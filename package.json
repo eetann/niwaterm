@@ -19,7 +19,7 @@
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"cmdk": "^1.1.1",
-		"electrobun": "latest",
+		"electrobun": "2.0.1",
 		"hono": "^4.12.32",
 		"lucide-react": "^1.31.0",
 		"radix-ui": "^1.6.7",
@@ -28,13 +28,12 @@
 		"tailwind-merge": "^3.6.0"
 	},
 	"devDependencies": {
+		"@tailwindcss/cli": "^4.3.3",
 		"@types/bun": "latest",
 		"@types/react": "^19.2.18",
 		"@types/react-dom": "^19.2.4",
-		"bun-plugin-tailwind": "^0.1.2",
 		"oxfmt": "^0.59.0",
 		"oxlint": "^1.74.0",
-		"rcedit": "^4.0.1",
 		"tailwindcss": "^4.3.3"
 	}
 }

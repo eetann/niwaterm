@@ -4,6 +4,12 @@ dist/
 artifacts/
 *.tsbuildinfo
 
+# electrobun 2.x: Hutchがプロジェクトへ投影するSDK devkit（~/.hutchの共有キャッシュから生成）
+.hutch/
+
+# scripts/build-tailwind.ts(preBuild)がビルドの度に生成するCSS
+.tailwind-build/
+
 # libghostty-vt ビルド成果物（zig build -Demit-lib-vt で再現）
 vendor/
 

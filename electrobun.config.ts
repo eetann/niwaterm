@@ -1,8 +1,4 @@
 import type { ElectrobunConfig } from "electrobun";
-import tailwind from "bun-plugin-tailwind";
-import { createMainviewAliasPlugin } from "./bun-mainview-alias-plugin";
-
-const mainviewRoot = `${import.meta.dir}/src/mainview`;
 
 export default {
 	app: {
@@ -25,23 +21,26 @@ export default {
 		// 起動中のプロセスがファイルをロックしているとEACCESでビルド自体が失敗する
 		// （実機で確認済み）。アプリ名ごとにbuildFolder自体を分けることで回避する
 		buildFolder: process.env.NIWATERM_APP_NAME ? `build/${process.env.NIWATERM_APP_NAME}` : "build",
-		// Electrobun 1.18.1が同梱するBunは1.3.13で、Bun.TerminalのWindows対応(ConPTY)が入った
-		// 1.3.14に届かない。そのままだとWindowsでPTY生成時に
-		// "PTY not supported on this platform" で落ちるため、明示的に上書きする
-		bunVersion: "1.3.14",
+		// Bun.Terminal（PTY）に依存しているため、メインプロセスはcottontailではなくbunのまま使う
+		mainProcess: "bun",
+		bun: {
+			entrypoint: "src/bun/index.ts",
+		},
 		views: {
 			mainview: {
 				entrypoint: "src/mainview/index.ts",
-				// ElectrobunのCLIはコンパイル済みバイナリとして動くため、内部のBun.build()は
-				// tsconfig.jsonの"paths"エイリアス(@/*)を解決できない（実機検証で確認済み）。
-				// 自前のonResolveプラグインでエイリアス解決を肩代わりする
-				plugins: [createMainviewAliasPlugin(mainviewRoot), tailwind],
-				jsx: { runtime: "automatic" },
+				alias: { "@/*": "./src/mainview/*" },
 			},
 		},
 		copy: {
 			"src/mainview/index.html": "views/mainview/index.html",
+			// scripts/build-tailwind.ts(preBuild)が生成する。electrobun 2.xでviews.<name>.pluginsが
+			// 廃止され、bun-plugin-tailwindによるビルド時変換ができなくなったための代替
+			".tailwind-build/index.css": "views/mainview/index.css",
 		},
+		// src/mainview/index.cssはentrypoint・copyのどちらにも列挙されないため、
+		// devの--watchで変更を検知させるために明示する
+		watch: ["src/mainview/index.css"],
 		mac: {
 			bundleCEF: false,
 			icons: "assets/icon/icon.iconset",
@@ -56,11 +55,9 @@ export default {
 		},
 	},
 	scripts: {
-		// 実際に使われたアプリ名(niwaterm-dev / niwaterm-daily-dev等)を
-		// src/bun/app-variant.generated.tsへ焼き込む。詳細はscripts/write-app-variant.ts参照
-		preBuild: "scripts/write-app-variant.ts",
-		// electrobun 1.18.1のrcedit解決バグ（https://github.com/blackboardsh/electrobun/issues/429）の
-		// 回避策。詳細はscripts/embed-windows-icon.ts参照
-		postBuild: "scripts/embed-windows-icon.ts",
+		// preBuildは1スクリプトしか指定できないため、複数の前処理をscripts/pre-build.ts経由でまとめる。
+		// 中身は実際に使われたアプリ名の焼き込み(scripts/write-app-variant.ts)とTailwind CSSの
+		// ビルド(scripts/build-tailwind.ts)
+		preBuild: "scripts/pre-build.ts",
 	},
 } satisfies ElectrobunConfig;

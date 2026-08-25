@@ -33,21 +33,14 @@ zig build (クロスコンパイル)
 
 | ツール           | 用途                                                          | 確認コマンド    |
 | ---------------- | ------------------------------------------------------------- | --------------- |
-| Bun 1.3.14以上   | ランタイム。**Bun.TerminalのWindows(ConPTY)対応が1.3.14から** | `bun --version` |
+| Bun 1.4.0以上   | ランタイム。**Bun.TerminalのWindows(ConPTY)対応が1.3.14から** | `bun --version` |
 | Git              | リポジトリのclone                                             | `git --version` |
 | WebView2 Runtime | Electrobunの描画基盤                                          | 下記参照        |
 
-> **開発機のBunとは別に、アプリに同梱されるBunがある。**
-> Electrobunはビルド時に自前のBunをアプリへ同梱するため、開発機のBunを上げても
-> アプリ内のランタイムは変わらない。Electrobun 1.18.1の同梱版は**1.3.13**でConPTY対応前なので、
-> `electrobun.config.ts` で明示的に上書きしている:
->
-> ```ts
-> build: {
->   bunVersion: "1.3.14",
->   ...
-> }
-> ```
+> **開発機のBunとは別に、Hutch（electrobunのビルドツールチェーン）がアプリに同梱するBunがある。**
+> electrobun 2.0.1が同梱するBunは**1.4.0**でConPTY対応(1.3.14以降)を満たしている。
+> electrobun 1.x時代にあった`build.bunVersion`での明示的上書きは2.x系で廃止された
+> （Hutchがelectrobunのバージョンとペアリングされたランタイムを自動で用意するため）。
 
 WebView2 Runtimeは Windows 11 および最近のWindows 10には標準で入っている。
 未導入なら [Microsoft公式](https://developer.microsoft.com/microsoft-edge/webview2/) から Evergreen Runtime を入れる。
@@ -321,7 +314,7 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 | クロスビルドがMSVC関連で失敗する                                            | `-Dtarget` に `-gnu` を付け忘れている                                                                                                                                                                                                                                                                                                                                                 |
 | `dlopen` でDLLが見つからない                                                | `.dll` は `lib/` ではなく `bin/` に出る。配置先を確認する                                                                                                                                                                                                                                                                                                                             |
 | `Failed to open library "niwashim.dll": error code 126`                     | 126は ERROR_MOD_NOT_FOUND。**DLL自体ではなく依存先の `ghostty-vt.dll` が見つかっていない**。WindowsのローダーはDLL自身と同じディレクトリを依存解決の対象にしない（macOSの `@loader_path` rpathに相当するものが無い）。先に `ghostty-vt.dll` を `dlopen` してプロセスにロード済みにしてから開く（src/bun/ghostty.tsで対応済み）。2つの`.dll`が同じディレクトリに揃っているかも確認する |
-| `error: PTY not supported on this platform`                                 | **アプリに同梱されるBun**が1.3.14未満。Electrobun 1.18.1の同梱版は1.3.13なので、`electrobun.config.ts` の `build.bunVersion` で上書きする（設定済み）。開発機のBunを上げるだけでは直らない点に注意                                                                                                                                                                                    |
+| `error: PTY not supported on this platform`                                 | electrobunが同梱するBunが1.3.14未満。electrobun 2.0.1（同梱Bun 1.4.0）以降なら発生しない                                                                                                                                                                                                                                                                                             |
 | ターミナルが起動しない / PTYが動かない                                      | Windows側のBunが1.3.14未満。`bun upgrade` する                                                                                                                                                                                                                                                                                                                                        |
 | WebViewが真っ白                                                             | WebView2 Runtime未導入                                                                                                                                                                                                                                                                                                                                                                |
 | `browser-screenshot` が `unexpected status 500` で失敗する                  | Bun本体のWindows版`Bun.WebView`の既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)）。`BUN_CHROME_PATH`を設定しても直らない。niwaterm側の回避策は無く、Bun側の修正待ち                                                                                                                                                                                    |
