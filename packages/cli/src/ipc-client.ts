@@ -8,7 +8,7 @@
 // なるため。実機検証済み）。そのためWSL上ではsrc/bun/ipc-server.tsが追加でlistenしている
 // TCPブリッジへ接続する。
 //
-// 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に動かすと
+// 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に動かすと
 // ソケットパス・ブリッジポートがアプリ名別に分かれる（src/bun/app-paths.ts・ipc-server.ts参照）。
 // niwatermが起動するPTY内では自インスタンスのNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
 // 環境変数として渡るため、それを最優先で使う。未設定（niwatermのタブ外から叩いた場合等）は

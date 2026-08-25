@@ -436,13 +436,13 @@ describe("loadPersistedState / savePersistedState", () => {
 });
 
 describe("persistedFilePath", () => {
-  test("アプリケーションサポートディレクトリ配下のniwaterm-{channel}/workspaces.jsonを指す", () => {
+  test("アプリケーションサポートディレクトリ配下のniwaterm-wip-dev/workspaces.jsonを指す", () => {
     // Windowsは%APPDATA%配下、それ以外(macOS)はApplication Support配下。
-    // テスト実行時はbuild-channel.generated.tsのデフォルト値("dev")が使われる
+    // テスト実行時はapp-variant.generated.tsのデフォルト値("niwaterm-wip-dev")が使われる
     expect(persistedFilePath()).toMatch(
       process.platform === "win32"
-        ? /Roaming\\niwaterm-dev\\workspaces\.json$/
-        : /Library\/Application Support\/niwaterm-dev\/workspaces\.json$/,
+        ? /Roaming\\niwaterm-wip-dev\\workspaces\.json$/
+        : /Library\/Application Support\/niwaterm-wip-dev\/workspaces\.json$/,
     );
   });
 });

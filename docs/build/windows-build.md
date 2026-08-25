@@ -202,7 +202,7 @@ powershell.exe -NoProfile -Command "\
 
 ### 普段遣い用ビルドを同時に動かす
 
-niwaterm自体の開発中は上記のdevビルド（`electrobun dev`、appフォルダ名`niwaterm-dev`）を使う一方、
+niwaterm自体の開発中は上記の開発中ビルドwip（`electrobun dev`、appフォルダ名`niwaterm-wip-dev`）を使う一方、
 日常の作業には別途起動した普段遣い用ビルド（appフォルダ名`niwaterm-daily-dev`）を使うと、
 開発中の不具合や再起動で普段の作業が巻き込まれない。
 
@@ -212,7 +212,7 @@ stable/canaryチャンネルは配布用インストーラ(self-extractor)作成
 （詳細: [Windowsのstable/canaryビルドはそのまま直接実行できる展開済みappバンドルを作らない](/known-issues/windows-stable-build-not-directly-runnable.md)）。
 
 設定ファイル・IPCソケット・WSLブリッジポートはアプリ名別に分離されている
-（`src/bun/app-paths.ts`・`src/bun/ipc-server.ts`参照）ため、devビルドと同時に起動しても干渉しない。
+（`src/bun/app-paths.ts`・`src/bun/ipc-server.ts`参照）ため、wipビルドと同時に起動しても干渉しない。
 
 ```powershell
 cd $env:USERPROFILE\niwaterm
@@ -221,7 +221,7 @@ bun x electrobun dev
 ```
 
 WSLから同期・起動する場合は`mise run start:daily`（内部で`win:sync` → `win:start:daily`）、
-停止は`mise run win:stop:daily`（devビルドの停止は`win:stop:dev`、両方まとめては`win:stop`）。
+停止は`mise run win:stop:daily`（wipビルドの停止は`win:stop:wip`、両方まとめては`win:stop`）。
 
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 

@@ -15,12 +15,12 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 確認すべきは「Windows上で動くniwatermアプリが、WSLディストロをどう扱うか」なので、
 アプリ自体は必ずWindows実機ビルドで動かす。
 
-**動作確認は必ずdevチャンネル（`mise run start`）を使い、daily（`niwaterm-daily-dev`、
+**動作確認は必ず開発中ビルドwip（`niwaterm-wip-dev`、`mise run start`）を使い、daily（`niwaterm-daily-dev`、
 `mise run start:daily`）には触らないこと**。dailyはユーザーが普段使いしているインスタンスで、
 起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際も
 `niwaterm ping`等が意図せずdaily側（アプリ名未指定時のCLIのデフォルト接続先はdaily相当、
-packages/cli/src/ipc-client.ts参照）に繋がらないよう、devチャンネルが使うソケット/ポートを
-明示する（`NIWATERM_SOCKET`・`NIWATERM_BRIDGE_PORT`。値はdevチャンネル起動ログの
+packages/cli/src/ipc-client.ts参照）に繋がらないよう、wipビルドが使うソケット/ポートを
+明示する（`NIWATERM_SOCKET`・`NIWATERM_BRIDGE_PORT`。値はwipビルド起動ログの
 `ipc server listening on ...`行で確認できる）。
 
 ## 前提: WSL→Windows同期
@@ -76,7 +76,7 @@ devモードはGUIアプリなのでバックグラウンド起動し、ログ�
 `NIWATERM_DEBUG_PTY=1`は一時的な診断用（コミット対象外のデバッグコードを仕込んだ時のみ使う）。
 
 ```bash
-powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > /path/to/scratchpad/niwaterm-dev.log 2>&1 &
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > /path/to/scratchpad/niwaterm-wip.log 2>&1 &
 disown
 ```
 

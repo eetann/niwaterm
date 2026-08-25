@@ -1,5 +1,5 @@
 // niwatermのアプリケーションサポートディレクトリ（設定・永続化・IPCソケットの置き場所）の解決。
-// 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev、NIWATERM_APP_NAME環境変数で
+// 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev、NIWATERM_APP_NAME環境変数で
 // アプリ名を変えて起動する。electrobun.config.ts参照)を同時に動かしても設定・IPCソケットが
 // 衝突しないよう、実際に使われたアプリ名(APP_VARIANT)別にディレクトリを分ける。
 

@@ -58,7 +58,7 @@ GitHub上の[blackboardsh/electrobun](https://github.com/blackboardsh/electrobun
 
 代わりに、**niwatermは普段遣い用ビルドにstable/canaryチャンネルを使わない方針にした**。devチャンネルのままアプリ名だけを変えることで、開発中ビルドと普段遣いビルドを別インスタンスとして共存させる。
 
-- `electrobun.config.ts`の`app.name`を`process.env.NIWATERM_APP_NAME || "niwaterm"`にして環境変数で切り替え可能にした
+- `electrobun.config.ts`の`app.name`を`process.env.NIWATERM_APP_NAME || "niwaterm-wip"`にして環境変数で切り替え可能にした
 - 普段遣い用は`NIWATERM_APP_NAME=niwaterm-daily`を指定して`electrobun dev`（devチャンネル）でビルド・起動する（`mise run start:daily` / `win:start:daily`）。実際のappフォルダ名は`niwaterm-daily-dev`になる
 - devチャンネルはtar圧縮・インストーラ作成処理を通らないため、この問題の影響を受けない
 - `src/bun/app-paths.ts`の`appSupportDir()`は、ビルドチャンネルではなく実際に使われたアプリ名（`APP_VARIANT`、`scripts/write-app-variant.ts`が`preBuild`フックで焼き込む）でディレクトリを分岐させている

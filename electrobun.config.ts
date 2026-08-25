@@ -2,21 +2,24 @@ import type { ElectrobunConfig } from "electrobun";
 
 export default {
 	app: {
-		// 普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`を指定して起動する
-		// （mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
-		// アプリ名だけ変えることで、開発中ビルド(niwaterm-dev)と普段遣いビルド
-		// (niwaterm-daily-dev)を同時に安全に動かせるようにしている。
+		// 開発中ビルド(niwaterm-wip)がデフォルト。普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`
+		// を指定して起動する（mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
+		// アプリ名だけ変えることで、開発中ビルド(niwaterm-wip-dev)と普段遣いビルド
+		// (niwaterm-daily-dev)を同時に安全に動かせるようにしている。両方とも"wip"/"daily"という
+		// 一目で区別できる単語にすることで、AIエージェントが指示を取り違えて普段遣いの方を
+		// 操作してしまう事故を防ぐ（過去に"niwaterm"(無印)/"niwaterm-daily"というdevチャンネル
+		// サフィックス頼みの命名で頻発したため改名した）。
 		// stable/canaryチャンネルは配布用インストーラ作成が目的でビルド後すぐ直接実行できる
 		// appバンドルを作らないため採用していない
 		// （詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md）
-		name: process.env.NIWATERM_APP_NAME || "niwaterm",
+		name: process.env.NIWATERM_APP_NAME || "niwaterm-wip",
 		identifier: "dev.eetann.niwaterm",
 		version: "0.0.1",
 	},
 	build: {
 		// ElectrobunはbuildFolder配下を"{channel}-{os}-{arch}"単位でビルドの度に
 		// rmSync(recursive)で丸ごと削除・作り直す（アプリ名は含まれない）。そのため
-		// 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同じ"build/"の
+		// 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同じ"build/"の
 		// まま同時にビルドすると、片方のビルド中にもう片方の成果物ごと削除されてしまい、
 		// 起動中のプロセスがファイルをロックしているとEACCESでビルド自体が失敗する
 		// （実機で確認済み）。アプリ名ごとにbuildFolder自体を分けることで回避する

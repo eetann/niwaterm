@@ -540,7 +540,7 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
 });
 
 const mainWindow = new BrowserWindow({
-  // 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
+  // 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
   // タイトルバーで見分けられるよう、実際のアプリ名をそのまま使う
   title: APP_VARIANT,
   url: "views://mainview/index.html",

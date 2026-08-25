@@ -3,8 +3,8 @@ import { buildToastScript } from "./windows-notification";
 
 describe("buildToastScript", () => {
   test("appId/titleをPowerShellのシングルクォート文字列リテラルとして埋め込む", () => {
-    const script = buildToastScript("dev.eetann.niwaterm-dev", { title: "ビルド完了" });
-    expect(script).toContain("$AppId = 'dev.eetann.niwaterm-dev'");
+    const script = buildToastScript("dev.eetann.niwaterm-wip-dev", { title: "ビルド完了" });
+    expect(script).toContain("$AppId = 'dev.eetann.niwaterm-wip-dev'");
     expect(script).toContain("[System.Security.SecurityElement]::Escape('ビルド完了')");
   });
 

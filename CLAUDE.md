@@ -11,8 +11,8 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 ## セットアップ・コマンド
 
-- `mise run start` — devモードでアプリ起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
-- `mise run start:daily` — 普段遣い用ビルドをビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルを避けている理由はdocs/known-issues/参照）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のdevビルドと同時に起動しても干渉しない。Windows実機の停止は`mise run win:stop:dev` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
+- `mise run start` — 開発中ビルド(niwaterm-wip)をdevモードで起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
+- `mise run start:daily` — 普段遣い用ビルド(niwaterm-daily)をビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルを避けている理由はdocs/known-issues/参照）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のwipビルドと同時に起動しても干渉しない。**niwaterm-wip（作業・動作確認対象）とniwaterm-daily（ユーザーの常用インスタンス。動作確認では絶対に触らない）を混同しないこと**。Windows実機の停止は`mise run win:stop:wip` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
@@ -44,9 +44,9 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - **キーボード入力には明示的なフォーカスが必要**: bun側 `mainWindow.activate()` + webview側 `tabIndex=-1` と `focus()`（実装済み）
 - electrobun.config.ts の `copy` の出力先は `Resources/app/` 基準の相対パス
 - bundlerは依存の `__dirname` をリポジトリ絶対パス（node_modules内）に焼き込む。実行時のファイル解決に注意
-- devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-dev.app'`。他の自作Electrobunアプリも同時に動いていると同名"bun"プロセスが複数存在し、さらに1プロセスが名前なしヘルパーウィンドウ＋本体ウィンドウの複数を持つことがある。正確な絞り込み方はmacos-gui-testingスキル参照
+- devアプリのプロセス名は "bun"（osascriptでの操作時）。停止は `pkill -f 'niwaterm-wip-dev.app'`。他の自作Electrobunアプリも同時に動いていると同名"bun"プロセスが複数存在し、さらに1プロセスが名前なしヘルパーウィンドウ＋本体ウィンドウの複数を持つことがある。正確な絞り込み方はmacos-gui-testingスキル参照
 - **アプリメニューが無いとCmd+C/Cmd+V等がWebViewに届かない**（macOSのkey equivalentはメニュー経由）。`ApplicationMenu.setApplicationMenu` でEditメニューを `role: "copy"/"paste"` + `accelerator: "Command+C"` 形式で設定する（実装済み、src/bun/index.ts冒頭）
-- **`buildFolder`配下は"{channel}-{os}-{arch}"単位でビルドの度に丸ごと削除・作り直される（アプリ名は含まれない）**。同じ`build/`のまま別アプリ名（開発中ビルドniwaterm-devと普段遣いビルドniwaterm-daily-dev等）を同時にビルドすると、片方のビルド中にもう片方の成果物ごと削除され、起動中プロセスがファイルをロックしているとEACCESで失敗する。アプリ名ごとに`build.buildFolder`自体を分けて回避する（実装済み、electrobun.config.ts）
+- **`buildFolder`配下は"{channel}-{os}-{arch}"単位でビルドの度に丸ごと削除・作り直される（アプリ名は含まれない）**。同じ`build/`のまま別アプリ名（開発中ビルドniwaterm-wip-devと普段遣いビルドniwaterm-daily-dev等）を同時にビルドすると、片方のビルド中にもう片方の成果物ごと削除され、起動中プロセスがファイルをロックしているとEACCESで失敗する。アプリ名ごとに`build.buildFolder`自体を分けて回避する（実装済み、electrobun.config.ts）
 
 ## プラットフォーム対応
 

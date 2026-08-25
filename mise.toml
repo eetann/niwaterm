@@ -58,15 +58,15 @@ powershell.exe -NoProfile -Command "$PS_PREFIX Get-Process | Where-Object { \$_.
 echo "停止コマンドを送りました"
 '''
 
-# 開発中ビルド(niwaterm-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動できるよう、
+# 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動できるよう、
 # appSupportDir・IPCソケット・WSLブリッジポートをアプリ名別に分けている
 # （src/bun/app-paths.ts・ipc-server.ts参照。NIWATERM_APP_NAME環境変数でアプリ名を切り替える。
 # electrobun.config.ts参照）。停止時に無印win:stopで両方まとめて巻き込まないよう、
 # 実行ファイルのパス(ExecutablePath)で判別して個別に停止できるタスクを用意する。
-[tasks."win:stop:dev"]
-description = "Windows実機で起動中の開発中ビルドniwatermのみ停止する"
+[tasks."win:stop:wip"]
+description = "Windows実機で起動中の開発中ビルド(niwaterm-wip)のみ停止する"
 run = '''
-powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*\niwaterm-dev\*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }"
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*\niwaterm-wip-dev\*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }"
 echo "開発中ビルドの停止コマンドを送りました"
 '''
 
