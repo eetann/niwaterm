@@ -541,6 +541,30 @@ describe("findTabsByVar", () => {
   });
 });
 
+describe("findTabsByVarInWorkspace", () => {
+  test("scopeTabIdと同じワークスペース内のみを検索し、別ワークスペースの一致は含まない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tabB = splitResult?.tabId as string;
+    mgr.newWorkspace();
+    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    mgr.setTabVar(tabA, "role", "claude");
+    mgr.setTabVar(tabC, "role", "claude");
+
+    expect(mgr.findTabsByVarInWorkspace(tabB, "role", "claude")).toEqual([tabA]);
+  });
+
+  test("存在しないscopeTabIdはnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.findTabsByVarInWorkspace("not-found", "role", "claude")).toBeNull();
+  });
+});
+
 describe("タブ名・タイル名(setTabName/setTileName)", () => {
   test("setTabNameで設定した名前がlistWorkspaces()のtabNamesに反映される", () => {
     const { factory } = createFakeSessionFactory();

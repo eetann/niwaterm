@@ -425,6 +425,35 @@ layouts: {
 | `vars` | `Record<string, string>` | タブ変数（`tab var set`相当で注入） |
 | `focus` | `boolean` | このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる |
 
+`command`はそのタブ自身にしか作用せず、vde-layoutの`{{pane_id:name}}`のような「同じプリセット内の別タブを参照するテンプレート構文」は無い（タブIDは適用のたびに再採番されるため、プリセット定義時点では固定できない）。同じプリセット内の別タブ（例: `role`変数で`claude`と印を付けたタブ）へ向けてコマンドを送りたい場合は、`command`の中で`niwaterm tab var find`（`docs/guide/cli.md`「タブ変数」節参照）を使い、実行時に対象タブのtabIdを検索する。`tab var find`は既定で起点タブ（自分自身）と同じワークスペース内だけを検索するため、同じrole名を使う複数プリセットを並行適用していても混線しない。
+
+```ts
+layout: {
+  kind: "split",
+  orientation: "vertical",
+  first: {
+    kind: "tile",
+    tabs: [{ name: "claude", command: "claude", vars: { role: "claude" } }],
+  },
+  second: {
+    kind: "tile",
+    tabs: [
+      {
+        name: "editprompt",
+        vars: { role: "editprompt" },
+        command:
+          'editprompt="editprompt open --editor nvim --always-copy"; ' +
+          'target=$(niwaterm tab var find role claude | head -n1); ' +
+          '[ -n "$target" ] && $editprompt --target-pane "$target" || $editprompt',
+        focus: true,
+      },
+    ],
+  },
+},
+```
+
+`claude`タブの`vars`は作成直後（`command`送信より前）に反映されるため、ツリー内で先に定義した兄弟タイルのタブは、後から作成されるタブの`command`から`tab var find`で確実に見つけられる。
+
 適用はCLIから行う。
 
 ```sh

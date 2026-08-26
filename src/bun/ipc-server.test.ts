@@ -2248,6 +2248,88 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, vars: {} });
   });
+
+  test("find-vars: scopeTabIdを指定すると同じワークスペース内のみ検索する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const splitResult = mgr.splitTile(tileA, "vertical");
+    const tabB = splitResult?.tabId as string;
+    mgr.newWorkspace();
+    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabA, key: "role", value: "claude" }),
+    });
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabC, key: "role", value: "claude" }),
+    });
+
+    // tabB（tabAと同じワークスペース）を起点にすると、別ワークスペースのtabCは見つからない
+    const res = await fetch(`http://localhost/find-vars?key=role&value=claude&scopeTabId=${tabB}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, tabIds: [tabA] });
+  });
+
+  test("find-vars: scopeTabId未指定は全ワークスペースを横断して検索する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace();
+    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabA, key: "role", value: "claude" }),
+    });
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabC, key: "role", value: "claude" }),
+    });
+
+    const res = await fetch("http://localhost/find-vars?key=role&value=claude", {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { tabIds: string[] }).toEqual({
+      ok: true,
+      tabIds: expect.arrayContaining([tabA, tabC]),
+    });
+  });
+
+  test("find-vars: 存在しないscopeTabIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(
+      "http://localhost/find-vars?key=role&value=claude&scopeTabId=not-found",
+      {
+        unix: socketPath,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  test("find-vars: key/value未指定は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/find-vars?key=role", { unix: socketPath });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("GET /layouts, POST /apply-layout", () => {

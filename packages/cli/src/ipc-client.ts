@@ -772,6 +772,32 @@ export async function listTabVars(endpoint: IpcEndpoint, tabId: TabId): Promise<
   }
 }
 
+export type FindTabsByVarResult = { ok: true; tabIds: TabId[] } | { ok: false; error: string };
+
+export async function findTabsByVar(
+  endpoint: IpcEndpoint,
+  key: string,
+  value: string,
+  scopeTabId?: TabId,
+): Promise<FindTabsByVarResult> {
+  try {
+    const query = new URLSearchParams({ key, value });
+    if (scopeTabId) query.set("scopeTabId", scopeTabId);
+    const res = await fetch(ipcUrl(endpoint, `/find-vars?${query}`), ipcFetchInit(endpoint));
+    const body = (await res.json().catch(() => null)) as {
+      tabIds?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.tabIds)) {
+      return { ok: true, tabIds: body.tabIds as TabId[] };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export type SendNotificationResult = { ok: true } | { ok: false; error: string };
 
 export function sendNotification(

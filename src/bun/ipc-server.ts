@@ -913,6 +913,24 @@ function buildApp(
     return c.json({ ok: true, vars });
   });
 
+  app.get("/find-vars", (c) => {
+    const key = c.req.query("key");
+    const value = c.req.query("value");
+    const scopeTabId = c.req.query("scopeTabId");
+    if (!key || !value) {
+      return c.json(
+        { ok: false, error: "expected ?key=<key>&value=<value>[&scopeTabId=<tabId>]" },
+        400,
+      );
+    }
+    if (!scopeTabId) {
+      return c.json({ ok: true, tabIds: workspaceManager.findTabsByVar(key, value) });
+    }
+    const tabIds = workspaceManager.findTabsByVarInWorkspace(scopeTabId, key, value);
+    if (tabIds === null) return c.json({ ok: false, error: `tab not found: ${scopeTabId}` }, 404);
+    return c.json({ ok: true, tabIds });
+  });
+
   // ブラウザタブのURLを遷移する（Playwrightのpage.goto()相当）。対象タブの所属ワークスペースが
   // 非アクティブ（gcStaleでDOM破棄済みの可能性）な場合は409を返す。人間が確認したい場合は
   // show-tabで先に対象ワークスペースをアクティブ化してから呼び直す

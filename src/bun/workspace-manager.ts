@@ -459,6 +459,15 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return result;
   }
 
+  // CLIの`tab var find`向け。scopeTabIdと同じワークスペース内だけで検索する（複数ワークスペースで
+  // 同じrole名を使い回すレイアウトプリセットが並行稼働していても、自分と同じレイアウトインスタンス内の
+  // タブだけを見つけられる）。scopeTabIdが存在しない場合はnull
+  function findTabsByVarInWorkspace(scopeTabId: TabId, key: string, value: string): TabId[] | null {
+    const owner = findOwnerByTabId(scopeTabId);
+    if (!owner) return null;
+    return owner.findTabsByVar(key, value);
+  }
+
   // niwa.tab.show向け（tmuxのselect-pane、CLIの`tab show`相当）。所属ワークスペース・boardへの切替・
   // タイルフォーカス・タブのアクティブ化をまとめて行う。ウィンドウ前面化はCLI版(ipc-server.tsの
   // /show-tab)のみの責務（niwa APIはniwatermウィンドウ内から呼ばれるため不要）
@@ -575,6 +584,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     getTabVar,
     listTabVars,
     findTabsByVar,
+    findTabsByVarInWorkspace,
     showTab,
     setTabName,
     setTileName,
