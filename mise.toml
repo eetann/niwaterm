@@ -103,3 +103,18 @@ disown
 echo "起動しました（バックグラウンド）。ログ: $LOG_FILE"
 echo "停止するには: mise run win:stop:daily"
 '''
+
+# niwaterm-wipとniwaterm-dailyを別worktree（devブランチ/mainブランチ）に分離した運用を前提に、
+# daily側のworktreeでdevの変更を取り込むためのタスク
+# ビルドロックがworktreeをまたいでも同一project_rootだと競合するため、worktree自体を分けている。
+[tasks."daily:merge-dev"]
+description = "daily側worktree(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係を入れ直す"
+run = '''
+current_branch=$(git branch --show-current)
+if [ "$current_branch" != "main" ]; then
+  echo "mainブランチではありません（現在: $current_branch）。daily側のworktreeで実行してください" >&2
+  exit 1
+fi
+git merge --ff-only dev
+bun install
+'''

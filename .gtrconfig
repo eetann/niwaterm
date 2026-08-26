@@ -1,0 +1,4 @@
+[hooks]
+    postCreate = ln -s "$(git rev-parse --path-format=relative --git-common-dir | xargs dirname)/.mywork" .mywork
+    postCreate = ln -s "$(git rev-parse --path-format=relative --git-common-dir | xargs dirname)/mise.local.toml" mise.local.toml && mise trust
+    postCreate = bun install
