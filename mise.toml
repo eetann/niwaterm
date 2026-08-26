@@ -54,10 +54,12 @@ rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude 'build' --
 echo "synced to $TARGET"
 # vendor/はghosttyソース全体(数百MB)を含むため丸ごとの同期対象からは除外しているが、
 # 実行時に必要なビルド成果物(bin/*.dll・include/、docs/build/windows-build.md ステップ3参照)だけは
-# 新規ディレクトリ作成時の同期漏れを防ぐため個別に同期する。
+# 新規ディレクトリ作成時の同期漏れを防ぐため個別に同期する。宛先の"vendor"自体が存在しない
+# 新規ディレクトリの場合、rsyncが多階層の中間ディレクトリを一度に作れず失敗するため、
+# --mkpathで宛先の中間ディレクトリを明示的に作らせる。
 if [ -d vendor/libghostty/bin ]; then
-  rsync -a vendor/libghostty/bin/ "$TARGET/vendor/libghostty/bin/"
-  rsync -a vendor/libghostty/include/ "$TARGET/vendor/libghostty/include/"
+  rsync -a --mkpath vendor/libghostty/bin/ "$TARGET/vendor/libghostty/bin/"
+  rsync -a --mkpath vendor/libghostty/include/ "$TARGET/vendor/libghostty/include/"
 fi
 # node_modulesはrsync対象外（ネイティブなbunバイナリが必要なため）なので、
 # 新規ディレクトリ作成時・package.json変更時の同期漏れを防ぐため毎回入れ直す。
@@ -109,8 +111,10 @@ echo "停止コマンドを送りました（$APP_NAME）"
 # mainブランチ（メインワークツリー、daily側）でdevブランチ（gtrで追加したworktree、wip側）の
 # 変更を取り込むためのタスク。ビルドロックが同一project_root配下だと競合するため、
 # 実体自体を分けている（詳細は本ファイル冒頭のコメント参照）。
+# vendor/はgitignore対象（worktree作成時は.gtrconfigのpostCreateフックでmainからコピーされる）
+# なので、devで検証済みのビルド成果物をここでmain側にもコピーして反映する。
 [tasks."daily:merge-dev"]
-description = "daily側(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係を入れ直す"
+description = "daily側(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係とvendorを入れ直す"
 run = '''
 current_branch=$(git branch --show-current)
 if [ "$current_branch" != "main" ]; then
@@ -119,4 +123,12 @@ if [ "$current_branch" != "main" ]; then
 fi
 git merge --ff-only dev
 bun install
+DEV_WORKTREE=$(git worktree list --porcelain | awk '/^worktree /{path=$2} /^branch refs\/heads\/dev$/{print path; exit}')
+if [ -z "$DEV_WORKTREE" ]; then
+  echo "devブランチのworktreeが見つかりません。vendorの同期はスキップします" >&2
+elif [ -d "$DEV_WORKTREE/vendor" ]; then
+  rm -rf vendor
+  cp -r "$DEV_WORKTREE/vendor" vendor
+  echo "vendorを$DEV_WORKTREEから同期しました"
+fi
 '''

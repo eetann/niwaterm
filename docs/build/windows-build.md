@@ -121,6 +121,12 @@ bun install
 
 Zigはクロスコンパイルできるので、WSL側でWindows向けの`.dll`を作る。
 
+`vendor/`はgit worktree間で共有されない（`.gitignore`対象のため）。gtrでdev用worktreeを
+作成した際は`.gtrconfig`の`postCreate`フックがmainブランチ側から`vendor/`を丸ごとコピーするため、
+通常このセクションを新規worktreeごとに実行する必要はない。以下は初回セットアップ、または
+libghostty-vtのバージョンを上げるなどvendorそのものを更新する場合の手順（更新後は
+`mise run daily:merge-dev`実行時にdev側からmain側へ同様にコピーされる）。
+
 ### 3-1. ghosttyのソースを取得する
 
 `vendor/` は `.gitignore` 対象なので、各環境で取得する。
