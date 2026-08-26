@@ -464,7 +464,23 @@ export function createBoard(opts: BoardOptions) {
     cwd?: string,
     command?: string,
   ): boolean {
-    if (!sessions.has(tabId) || browserTabs.has(tabId)) return false;
+    if (browserTabs.has(tabId)) return false;
+    // PTY起動待ち（TASK-0047のspawnSessionPending）のタブへのrespawnは、保留中のパラメータを
+    // 上書きするだけにとどめる。実際の起動はhandleResizeでの実測cols/rows到達を待つ
+    // （niwa.tile.split直後にniwa.tab.respawnでcommandを渡すconfig.tsパターンが、
+    // まだsessionsに登録されていないタブに対してno-opになっていたバグの修正）
+    const pending = pendingSpawnByTabId.get(tabId);
+    if (pending) {
+      pendingSpawnByTabId.set(tabId, {
+        shellOverride: shellOverride ?? pending.shellOverride,
+        cwd: cwd ?? pending.cwd,
+        command,
+      });
+      if (shellOverride !== undefined) shellByTabId.set(tabId, shellOverride);
+      opts.onDirty();
+      return true;
+    }
+    if (!sessions.has(tabId)) return false;
     const size = sizeByTabId.get(tabId) ?? { cols: opts.initialCols, rows: opts.initialRows };
     const resolvedCwd = cwd ?? actualCwdOf(tabId);
     sessions.get(tabId)?.dispose();

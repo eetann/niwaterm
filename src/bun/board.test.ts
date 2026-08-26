@@ -560,6 +560,28 @@ describe("respawnTab", () => {
     const browserTabId = ws.newBrowserTab(tileId, "https://example.com");
     expect(ws.respawnTab(browserTabId as string)).toBe(false);
   });
+
+  test("PTY起動待ち（split直後等）のタブへのrespawnはtrueを返し、resize到達時に指定commandで起動する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const split = ws.splitTile(tileId, "vertical");
+    expect(split).not.toBeNull();
+    const newTabId = split?.tabId as TabId;
+
+    // niwa.tile.split直後は起動保留中のため、まだセッションは作られていない
+    expect(created.some((s) => s.opts.command === "lazygit")).toBe(false);
+
+    const ok = ws.respawnTab(newTabId, undefined, undefined, "lazygit");
+    expect(ok).toBe(true);
+    // resize到達前はまだ起動しない
+    expect(created.some((s) => s.opts.command === "lazygit")).toBe(false);
+
+    ws.handleResize(newTabId, 80, 24, 8, 18);
+    const spawned = created.find((s) => s.opts.command === "lazygit");
+    expect(spawned).toBeDefined();
+  });
 });
 
 describe("OSC7（onPwdChanged）によるcwd自動反映", () => {
