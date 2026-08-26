@@ -258,6 +258,18 @@ WSLから同期・起動する場合は、mainブランチ側のディレクト�
 両方まとめてなら`win:stop`。dev側の変更をdaily側へ取り込むには、mainブランチ側で
 `mise run daily:merge-dev`（`main`ブランチであることを確認した上でff-onlyマージ + `bun install`）。
 
+> **project_root分離だけでは`electrobun dev`（`mise run start`）の同時起動はできない
+> （[[TASK-0058]]）。** Hutchは`~/.hutch/state/locks/graph.lock`という**ユーザー単位で
+> グローバルな**ロックも持っており、project_rootを分けていても、Hutchプロセス
+> （`electrobun dev`・`electrobun build`いずれも）が1つでも生きている間は、別のHutch
+> プロセスの起動処理そのものが完全にブロックされる（実機で確認済み。`--watch`の有無は
+> 無関係）。先発側を止めた瞬間に後発側は即座に前進するため、デッドロックではなく
+> 「先発が生きている間だけ後発を待たせる」直列化。wip・dailyを同時に動かして見比べたい
+> 場合は、両方を**順番に**`mise run start`でビルド完了させてから`mise run win:stop:mine`
+> で止め（同時にビルドさせないこと）、それぞれで`mise run win:start:built`を使って
+> ビルド済みの`launcher.exe`を`electrobun dev`を経由せず直接起動する。Hutchを経由しないため
+> グローバルロックの影響を受けず、真の同時起動ができる（ホットリロードは失われる）。
+
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
 `niwaterm browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
