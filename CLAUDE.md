@@ -11,8 +11,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 ## セットアップ・コマンド
 
-- `mise run start` — 開発中ビルド(niwaterm-wip)をdevモードで起動（WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）
-- `mise run start:daily` — 普段遣い用ビルド(niwaterm-daily)をビルド・起動する。`NIWATERM_APP_NAME=niwaterm-daily`でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルを避けている理由はdocs/known-issues/参照）。appSupportDir・IPCソケット・WSLブリッジポートがアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、`mise run start`のwipビルドと同時に起動しても干渉しない。**niwaterm-wip（作業・動作確認対象）とniwaterm-daily（ユーザーの常用インスタンス。動作確認では絶対に触らない）を混同しないこと**。Windows実機の停止は`mise run win:stop:wip` / `win:stop:daily`で個別に、両方まとめてなら`win:stop`
+- `mise run start` — 現在のブランチに応じてniwatermをdevモードで起動する（`main`ブランチなら普段遣いビルドniwaterm-daily、それ以外（`dev`等）なら開発中ビルドniwaterm-wipとして扱う。WSLならWindows実機へ同期して起動、Macならローカルで起動。GUIアプリなのでbackgroundで実行する）。`NIWATERM_APP_NAME`環境変数でdevチャンネルのままアプリ名だけ変える方式（stable/canaryチャンネルを避けている理由はdocs/known-issues/参照）。electrobun 2.0.1のプロジェクトビルドロックが同一ディレクトリ配下だと同時起動を許さないため（TASK-0056）、wip用はgtrで追加したgit worktree（devブランチ）、daily用はこのリポジトリ本体（mainブランチ、gitのメインワークツリー）という別々の実体で動かす運用にしている。appSupportDir・IPCソケット・WSLブリッジポートもアプリ名別に分離されているため（src/bun/app-paths.ts・ipc-server.ts参照）、実体分離と合わせて両者は干渉しない。**niwaterm-wip（作業・動作確認対象）とniwaterm-daily（ユーザーの常用インスタンス。動作確認では絶対に触らない）を混同しないこと**。Windows実機の停止は現在のブランチに対応する方だけなら`mise run win:stop:mine`、両方まとめてなら`win:stop`。dev側の変更をdaily側へ取り込むにはdaily側（mainブランチ）で`mise run daily:merge-dev`（ff-onlyマージ+`bun install`）
 - `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）

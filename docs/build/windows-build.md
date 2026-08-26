@@ -82,28 +82,40 @@ powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::U
 `\\wsl$` 越しにWSL側のリポジトリを直接ビルドする方法もあるが、ファイルI/Oが遅く
 パス解決やファイル監視で問題が出やすいため、**Windows側に実体を置く**。
 
+**wip用・daily用で別ディレクトリが必要**。electrobun 2.0.1のプロジェクトビルドロック
+（`.hutch/locks/`）は同一ディレクトリ配下だと同時起動を許さないため、両方を同じディレクトリで
+動かせない（詳細は「普段遣い用ビルドを同時に動かす」節参照）。wip用はgtrで追加したgit worktree
+（devブランチ）、daily用はこのリポジトリ本体（mainブランチ、gitのメインワークツリー）という
+別々の実体を使い、Windows側もそれぞれ`$env:USERPROFILE\niwaterm-worktrees\<ディレクトリ名>`の
+ようにサブディレクトリへ配置する。
+
 Windows側にgitを入れてcloneする場合:
 
 ```powershell
-cd $env:USERPROFILE
-git clone <このリポジトリのURL> niwaterm
+cd $env:USERPROFILE\niwaterm-worktrees
+git clone <このリポジトリのURL> <ディレクトリ名>
 ```
 
-gitを入れずにWSLのリポジトリからコピーする場合（動作確認だけならこれで十分）:
+gitを入れずにWSLのリポジトリからコピーする場合（`mise run win:sync`相当。動作確認だけならこれで十分）:
 
 ```bash
-WIN=/mnt/c/Users/<ユーザー名>/niwaterm
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+WIN="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME"
 mkdir -p "$WIN"
 rsync -a --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude 'vendor' \
   <repo>/ "$WIN/"
 ```
 
-`node_modules` はWindows側で入れ直す（ネイティブなbunバイナリが必要なため）:
+`node_modules` はWindows側で入れ直す（ネイティブなbunバイナリが必要なため、rsyncの同期対象外）:
 
 ```powershell
-cd $env:USERPROFILE\niwaterm
+cd $env:USERPROFILE\niwaterm-worktrees\<worktree名>
 bun install
 ```
+
+`mise run win:sync`はこの`bun install`まで自動で行う（新規ディレクトリ作成時・`package.json`変更時の
+同期漏れを防ぐため毎回実行する。依存が変わっていなければキャッシュが効き高速）。上記は
+`mise`を使わず完全手動でセットアップする場合の代替手順。
 
 ## 3. ネイティブライブラリをビルドする（WSL側）
 
@@ -173,7 +185,8 @@ mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
 WSLからWindowsのファイルシステムは `/mnt/c/` で見える。
 
 ```bash
-WIN_REPO=/mnt/c/Users/<ユーザー名>/niwaterm
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+WIN_REPO="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME"
 mkdir -p "$WIN_REPO/vendor/libghostty/bin"
 cp vendor/libghostty/bin/*.dll "$WIN_REPO/vendor/libghostty/bin/"
 cp -r vendor/libghostty/include "$WIN_REPO/vendor/libghostty/"
@@ -181,10 +194,13 @@ cp -r vendor/libghostty/include "$WIN_REPO/vendor/libghostty/"
 
 ## 5. 起動する
 
-Windows側で:
+`mise run start`をWSL側のworktreeディレクトリ内で実行するのが基本
+（worktree名を自動解決してWindows側へ同期・起動する）。
+
+手動で行う場合、Windows側で:
 
 ```powershell
-cd $env:USERPROFILE\niwaterm
+cd $env:USERPROFILE\niwaterm-worktrees\<worktree名>
 bun run start
 ```
 
@@ -193,7 +209,7 @@ WSLから起動する場合:
 ```bash
 powershell.exe -NoProfile -Command "\
   \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \
-  cd C:\Users\<ユーザー名>\niwaterm; bun run start"
+  cd C:\Users\<ユーザー名>\niwaterm-worktrees\<worktree名>; bun run start"
 ```
 
 > **初回起動は数分かかる。** Electrobunが自分のCLIバイナリ（数十MB）とコアバイナリ
@@ -214,14 +230,27 @@ stable/canaryチャンネルは配布用インストーラ(self-extractor)作成
 設定ファイル・IPCソケット・WSLブリッジポートはアプリ名別に分離されている
 （`src/bun/app-paths.ts`・`src/bun/ipc-server.ts`参照）ため、wipビルドと同時に起動しても干渉しない。
 
+**ただし、electrobun 2.0.1で追加されたプロジェクトビルドロック（`.hutch/locks/`）は
+ディレクトリ単位でかかるため、wipとdailyが同じディレクトリを共有していると片方の起動中は
+もう片方のビルドが`Waiting for the project build lock...`のまま進まなくなる**。これを避けるため、
+wip用はgtrで追加した**git worktree**（devブランチ）、daily用は**このリポジトリ本体**
+（mainブランチ、gitのメインワークツリー）という別々の実体で動かす。
+
+`mise run start`は現在のブランチを見て自動的にwip/dailyを判定するので、
+`NIWATERM_APP_NAME`を手動で指定する専用タスクは用意していない
+（手動で叩く場合のみ以下のように指定する）:
+
 ```powershell
-cd $env:USERPROFILE\niwaterm
+cd $env:USERPROFILE\niwaterm-worktrees\<mainブランチ側のディレクトリ名>
 $env:NIWATERM_APP_NAME = "niwaterm-daily"
 bun x electrobun dev
 ```
 
-WSLから同期・起動する場合は`mise run start:daily`（内部で`win:sync` → `win:start:daily`）、
-停止は`mise run win:stop:daily`（wipビルドの停止は`win:stop:wip`、両方まとめては`win:stop`）。
+WSLから同期・起動する場合は、mainブランチ側のディレクトリ内で`mise run start`
+（内部で自動的に`NIWATERM_APP_NAME=niwaterm-daily`をセットしてから`win:sync` → `win:start`。
+ディレクトリ名は自動解決する）、停止は現在のブランチに対応する方だけなら`mise run win:stop:mine`、
+両方まとめてなら`win:stop`。dev側の変更をdaily側へ取り込むには、mainブランチ側で
+`mise run daily:merge-dev`（`main`ブランチであることを確認した上でff-onlyマージ + `bun install`）。
 
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
@@ -260,7 +289,7 @@ CLI本体はWindows側リポジトリで`bun link`しても、WSLディストロ
 
 ```bash
 # WSLディストロ内で実行
-cd /mnt/c/Users/<ユーザー名>/niwaterm/packages/cli
+cd /mnt/c/Users/<ユーザー名>/niwaterm-worktrees/<worktree名>/packages/cli
 bun link
 ```
 

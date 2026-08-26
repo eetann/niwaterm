@@ -6,15 +6,31 @@
 # 例:
 #
 #   [env]
-#   NIWATERM_WIN_REPO = "/mnt/c/Users/<ユーザー名>/niwaterm"
+#   NIWATERM_WIN_WORKTREES_ROOT = "/mnt/c/Users/<ユーザー名>/niwaterm-worktrees"
+#
+# niwaterm-wip（開発中ビルド）はgtrで作成した追加のgit worktree（devブランチ）で、
+# niwaterm-daily（普段遣いビルド）はこのリポジトリ本体（mainブランチ、gitの
+# メインワークツリー）で動かす運用にしている（TASK-0056: electrobun 2.0.1のプロジェクト
+# ビルドロックが同一project_root配下だと同時起動できないため、実体そのものを分離する必要が
+# あった）。Windows側もそれぞれ $NIWATERM_WIN_WORKTREES_ROOT/<ディレクトリ名>/ へ配置する。
+# ディレクトリ名はgit管理下のディレクトリのbasenameをそのまま使うため、mainブランチ側
+# （メインワークツリー）も追加のgit worktreeも同じロジックで解決できる。値自体はどちらの
+# 作業ディレクトリでも共通なので、mise.local.tomlはそれぞれにこの1行をコピーするだけでよい。
+#
+# アプリ名(NIWATERM_APP_NAME)は現在のブランチから自動判定する（mainならniwaterm-daily、
+# それ以外はniwaterm-wip）。詳細はstartタスク参照。
 
 # devモードの起動口はこのタスクに一本化する（`npm run start`は廃止）。
-# WSLとMac(Linux実機含む)で実行環境が異なるため、ここで判別して分岐する。
+# 現在のブランチからアプリ名(wip/daily)を自動判定するため、`start:daily`のような
+# 専用タスクは用意しない。WSLとMac(Linux実機含む)で実行環境が異なるため、ここで判別して分岐する。
 # 停止方法もOSで異なる（Mac等はフォアグラウンド実行なのでCtrl+Cで止まるが、
-# WSL→Windows実機はバックグラウンド起動のため`mise run win:stop`が別途必要）。
+# WSL→Windows実機はバックグラウンド起動のため`mise run win:stop:mine`が別途必要）。
 [tasks.start]
-description = "devモードでniwatermを起動する（WSLならWindows実機へ同期して起動、それ以外はローカルでelectrobun devを起動）"
+description = "現在のブランチに応じてniwatermをdevモードで起動する（mainはdaily扱い、それ以外はwip扱い。WSLならWindows実機へ同期して起動、それ以外はローカルでelectrobun devを起動）"
 run = '''
+if [ "$(git branch --show-current)" = "main" ]; then
+  export NIWATERM_APP_NAME=niwaterm-daily
+fi
 if grep -qi microsoft /proc/version 2>/dev/null; then
   mise run win:sync
   mise run win:start
@@ -24,28 +40,43 @@ fi
 '''
 
 [tasks."win:sync"]
-description = "WSL側のソースコードをWindows側のリポジトリへrsyncで同期する（docs/windows-build.md ステップ2相当）"
+description = "WSL側のソースコードをWindows側のworktree別ディレクトリへrsyncで同期し、依存関係も入れ直す（docs/windows-build.md ステップ2相当）"
 run = '''
-if [ -z "$NIWATERM_WIN_REPO" ]; then
-  echo "NIWATERM_WIN_REPO が未設定です。mise.toml先頭のコメントを参照し mise.local.toml に設定してください" >&2
+if [ -z "$NIWATERM_WIN_WORKTREES_ROOT" ]; then
+  echo "NIWATERM_WIN_WORKTREES_ROOT が未設定です。mise.toml先頭のコメントを参照し mise.local.toml に設定してください" >&2
   exit 1
 fi
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+TARGET="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME"
 rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude 'vendor' \
   --exclude '.hutch' --exclude '.tailwind-build' \
-  ./ "$NIWATERM_WIN_REPO/"
-echo "synced to $NIWATERM_WIN_REPO"
+  ./ "$TARGET/"
+echo "synced to $TARGET"
+# vendor/はghosttyソース全体(数百MB)を含むため丸ごとの同期対象からは除外しているが、
+# 実行時に必要なビルド成果物(bin/*.dll・include/、docs/build/windows-build.md ステップ3参照)だけは
+# 新規ディレクトリ作成時の同期漏れを防ぐため個別に同期する。
+if [ -d vendor/libghostty/bin ]; then
+  rsync -a vendor/libghostty/bin/ "$TARGET/vendor/libghostty/bin/"
+  rsync -a vendor/libghostty/include/ "$TARGET/vendor/libghostty/include/"
+fi
+# node_modulesはrsync対象外（ネイティブなbunバイナリが必要なため）なので、
+# 新規ディレクトリ作成時・package.json変更時の同期漏れを防ぐため毎回入れ直す。
+# 依存が変わっていなければbun installはキャッシュが効き高速なので、常時実行のコストは小さい。
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun install"
 '''
 
 # ログは固定パスに毎回上書き（ファイルが際限なく増えないようにするため）。
 # 起動コマンド自体は .claude/skills/windows-gui-testing/SKILL.md の定型と同じ。
 [tasks."win:start"]
-description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み）"
+description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み。startタスクが解決したNIWATERM_APP_NAMEを引き継ぐ）"
 run = '''
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
 LOG_FILE=/tmp/niwaterm-win-dev.log
-nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
+nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
-echo "起動しました（バックグラウンド）。ログ: $LOG_FILE"
-echo "停止するには: mise run win:stop"
+echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LOG_FILE"
+echo "停止するには: mise run win:stop:mine"
 '''
 
 # WSL→Windows間はプロセスグループもシグナルも共有しないため、win:startをCtrl+Cで止めても
@@ -62,57 +93,28 @@ echo "停止コマンドを送りました"
 # appSupportDir・IPCソケット・WSLブリッジポートをアプリ名別に分けている
 # （src/bun/app-paths.ts・ipc-server.ts参照。NIWATERM_APP_NAME環境変数でアプリ名を切り替える。
 # electrobun.config.ts参照）。停止時に無印win:stopで両方まとめて巻き込まないよう、
-# 実行ファイルのパス(ExecutablePath)で判別して個別に停止できるタスクを用意する。
-[tasks."win:stop:wip"]
-description = "Windows実機で起動中の開発中ビルド(niwaterm-wip)のみ停止する"
+# 現在のブランチに対応する方だけを実行ファイルのパス(ExecutablePath)で判別して停止する。
+[tasks."win:stop:mine"]
+description = "現在のブランチに対応するniwatermビルドのみWindows実機で停止する（mainはdaily扱い、それ以外はwip扱い）"
 run = '''
-powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*\niwaterm-wip-dev\*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }"
-echo "開発中ビルドの停止コマンドを送りました"
-'''
-
-[tasks."win:stop:daily"]
-description = "Windows実機で起動中の普段遣いビルドniwatermのみ停止する"
-run = '''
-powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*\niwaterm-daily-dev\*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }"
-echo "普段遣いビルドの停止コマンドを送りました"
-'''
-
-# ここから普段遣い用ビルドのタスク。開発中ビルドと同時に起動しても
-# appSupportDir/IPCソケット/WSLブリッジポートが分離されているため干渉しない。
-# NIWATERM_APP_NAME=niwaterm-dailyを指定してdevチャンネルのままアプリ名だけ変える
-# （stable/canaryチャンネルは配布用インストーラ作成が目的でbin/launcher.exeが
-# self-extractorに置き換わってしまうため採用していない。
-# 詳細: docs/known-issues/windows-stable-build-launcher-overwrite.md）。
-[tasks."start:daily"]
-description = "普段遣い用ビルドをビルドして起動する（WSLならWindows実機へ同期して起動、それ以外はローカルでelectrobun devを起動）"
-run = '''
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  mise run win:sync
-  mise run win:start:daily
+if [ "$(git branch --show-current)" = "main" ]; then
+  APP_NAME=niwaterm-daily
 else
-  NIWATERM_APP_NAME=niwaterm-daily bun x electrobun dev
+  APP_NAME=niwaterm-wip
 fi
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*$APP_NAME-dev\*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }"
+echo "停止コマンドを送りました（$APP_NAME）"
 '''
 
-[tasks."win:start:daily"]
-description = "Windows実機で普段遣い用ビルドをバックグラウンド起動する（要win:sync済み）"
-run = '''
-LOG_FILE=/tmp/niwaterm-win-daily.log
-nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='niwaterm-daily'; cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
-disown
-echo "起動しました（バックグラウンド）。ログ: $LOG_FILE"
-echo "停止するには: mise run win:stop:daily"
-'''
-
-# niwaterm-wipとniwaterm-dailyを別worktree（devブランチ/mainブランチ）に分離した運用を前提に、
-# daily側のworktreeでdevの変更を取り込むためのタスク
-# ビルドロックがworktreeをまたいでも同一project_rootだと競合するため、worktree自体を分けている。
+# mainブランチ（メインワークツリー、daily側）でdevブランチ（gtrで追加したworktree、wip側）の
+# 変更を取り込むためのタスク。ビルドロックが同一project_root配下だと競合するため、
+# 実体自体を分けている（詳細は本ファイル冒頭のコメント参照）。
 [tasks."daily:merge-dev"]
-description = "daily側worktree(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係を入れ直す"
+description = "daily側(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係を入れ直す"
 run = '''
 current_branch=$(git branch --show-current)
 if [ "$current_branch" != "main" ]; then
-  echo "mainブランチではありません（現在: $current_branch）。daily側のworktreeで実行してください" >&2
+  echo "mainブランチではありません（現在: $current_branch）。daily側で実行してください" >&2
   exit 1
 fi
 git merge --ff-only dev

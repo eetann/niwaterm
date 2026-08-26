@@ -15,8 +15,11 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 確認すべきは「Windows上で動くniwatermアプリが、WSLディストロをどう扱うか」なので、
 アプリ自体は必ずWindows実機ビルドで動かす。
 
-**動作確認は必ず開発中ビルドwip（`niwaterm-wip-dev`、`mise run start`）を使い、daily（`niwaterm-daily-dev`、
-`mise run start:daily`）には触らないこと**。dailyはユーザーが普段使いしているインスタンスで、
+**動作確認は必ず開発中ビルドwip（`niwaterm-wip-dev`）を使い、daily（`niwaterm-daily-dev`）には
+触らないこと**。`mise run start`は現在の作業ディレクトリのブランチで自動判定する
+（`main`ブランチ＝このリポジトリ本体のメインワークツリーならdaily、それ以外
+（gtrで追加したdevブランチのworktree）ならwip）ため、**必ずdevブランチのworktree内にいることを
+確認してから実行する**。dailyはユーザーが普段使いしているインスタンスで、
 起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際も
 `niwaterm ping`等が意図せずdaily側（アプリ名未指定時のCLIのデフォルト接続先はdaily相当、
 packages/cli/src/ipc-client.ts参照）に繋がらないよう、wipビルドが使うソケット/ポートを
@@ -32,7 +35,11 @@ packages/cli/src/ipc-client.ts参照）に繋がらないよう、wipビルド�
 mise run win:sync
 ```
 
-（初回で`NIWATERM_WIN_REPO`未設定の場合はコマンドが設定方法を案内するので、それに従う）
+（初回で`NIWATERM_WIN_WORKTREES_ROOT`未設定の場合はコマンドが設定方法を案内するので、それに従う。
+wipはgtrで追加したgit worktree（devブランチ）、dailyはこのリポジトリ本体（mainブランチ、
+gitのメインワークツリー）という別々の実体から動かす運用のため、Windows側も
+`niwaterm-worktrees/<ディレクトリ名>/`という配置になる。以降のコマンド例の`<worktree名>`は、
+操作対象のディレクトリ名（`basename "$(git rev-parse --show-toplevel)"`で取得できる）に読み替える）
 
 ## PowerShellコマンドの定型
 
@@ -52,7 +59,8 @@ powershell.exe -NoProfile -Command "$PS_PREFIX <実行したいコマンド>"
 CLIはWindows側リポジトリで別途linkが必要（WSL側でlinkしても同期されない・意味がない）。
 
 ```bash
-powershell.exe -NoProfile -Command "$PS_PREFIX cd \$env:USERPROFILE\niwaterm\packages\cli; bun link"
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+powershell.exe -NoProfile -Command "$PS_PREFIX cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME\packages\cli; bun link"
 ```
 
 `niwaterm --version`で疎通確認。`command not found`になる場合は上記PS_PREFIXの
@@ -62,7 +70,7 @@ powershell.exe -NoProfile -Command "$PS_PREFIX cd \$env:USERPROFILE\niwaterm\pac
 別途`bun link`が要る**（Windows側でlinkしても別のLinux環境なので反映されない）。
 
 ```bash
-cd /mnt/c/Users/<ユーザー名>/niwaterm/packages/cli
+cd /mnt/c/Users/<ユーザー名>/niwaterm-worktrees/<worktree名>/packages/cli
 bun link
 ```
 
@@ -76,7 +84,8 @@ devモードはGUIアプリなのでバックグラウンド起動し、ログ�
 `NIWATERM_DEBUG_PTY=1`は一時的な診断用（コミット対象外のデバッグコードを仕込んだ時のみ使う）。
 
 ```bash
-powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm; bun x electrobun dev" > /path/to/scratchpad/niwaterm-wip.log 2>&1 &
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > /path/to/scratchpad/niwaterm-wip.log 2>&1 &
 disown
 ```
 
