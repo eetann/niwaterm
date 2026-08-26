@@ -45,12 +45,16 @@ export function ipcSocketPath(): string {
  *
  * 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時にWindows実機で
  * 動かすとポートが衝突するため、アプリ名(APP_VARIANT)別に固定ポートを割り当てる。
+ * APP_VARIANTの実際の値はappフォルダ名（"-dev"サフィックス付き）ではなく
+ * electrobun.config.tsのapp.nameそのもの（"niwaterm-wip"）である点に注意
+ * （src/bun/app-variant.generated.ts参照。以前"niwaterm-wip-dev"というキーで
+ * 登録していたためマッチせず、常に47831へフォールバックしていた）。
  * CLI側（packages/cli/src/ipc-client.ts）はPTY起動時に注入されるNIWATERM_BRIDGE_PORT
  * 環境変数からこの値を受け取るため、このマッピング自体を重複させる必要はない
- * （niwaterm-wip-dev以外は普段遣い相当の47831にフォールバックする）。
+ * （niwaterm-wip以外は普段遣い相当の47831にフォールバックする）。
  */
 const WSL_BRIDGE_PORT_BY_VARIANT: Record<string, number> = {
-  "niwaterm-wip-dev": 47832,
+  "niwaterm-wip": 47832,
 };
 export const WSL_BRIDGE_PORT = WSL_BRIDGE_PORT_BY_VARIANT[APP_VARIANT] ?? 47831;
 

@@ -112,6 +112,26 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 echo "停止コマンドを送りました（$APP_NAME）"
 '''
 
+# TASK-0056の調査中、reader lease（起動中インスタンスの生存確認、正常終了・クラッシュ問わず
+# OSが自動解放するはずのadvisory file lock）が実機でstaleのまま残り続け、後続のビルドが
+# `Waiting for the project build lock...`のまま無期限に止まるケースを複数回確認した。
+# 本来hutch側が自動検出・削除する設計のはずだが機能しないことがあるため、手動診断・復旧用に
+# 用意する。build.lockのロック状態を表示し、readers配下のstale lease（ロック不能=解放済み）は
+# その場で削除、生存中のものは残す。
+[tasks."win:lock-status"]
+description = "現在のブランチに対応するniwatermのHutchビルドロック状態を診断する（staleなreader leaseは自動削除）"
+run = '''
+if [ "$(git branch --show-current)" = "main" ]; then
+  APP_NAME=niwaterm-daily
+else
+  APP_NAME=niwaterm-wip
+fi
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+echo "対象: $APP_NAME ($WORKTREE_NAME)"
+powershell.exe -NoProfile -Command "\$lockDir = \$env:USERPROFILE + '\niwaterm-worktrees\' + '$WORKTREE_NAME' + '\.hutch\locks'; \$buildLock = Join-Path \$lockDir 'electrobun-build.lock'; if (Test-Path \$buildLock) { try { \$fs = [System.IO.File]::Open(\$buildLock,'Open','ReadWrite','None'); \$fs.Close(); Write-Output 'build.lock: OK (unlocked)' } catch { Write-Output 'build.lock: LOCKED (someone is building or running)' } } else { Write-Output 'build.lock: not created yet' }; \$readersDir = Join-Path \$lockDir 'electrobun-readers'; if (Test-Path \$readersDir) { \$leases = Get-ChildItem \$readersDir -Filter '*.lease'; if (\$leases.Count -eq 0) { Write-Output 'readers: none' }; foreach (\$lease in \$leases) { try { \$fs = [System.IO.File]::Open(\$lease.FullName,'Open','ReadWrite','None'); \$fs.Close(); Remove-Item \$lease.FullName -Force; Write-Output \"reader lease STALE, removed: \$(\$lease.Name)\" } catch { Write-Output \"reader lease ALIVE, kept: \$(\$lease.Name)\" } } } else { Write-Output 'readers dir: none' }; Write-Output '--- hutch-related processes (all worktrees) ---'; Get-CimInstance Win32_Process | Where-Object { \$_.ProcessName -match 'hutch' } | Select-Object ProcessId,ParentProcessId,ProcessName,ExecutablePath | Format-Table -AutoSize"
+echo "build.lockがLOCKEDのまま進まない場合は、上のhutch関連プロセスを確認しStop-Processで手動終了する"
+'''
+
 # mainブランチ（メインワークツリー、daily側）でdevブランチ（gtrで追加したworktree、wip側）の
 # 変更を取り込むためのタスク。ビルドロックが同一project_root配下だと競合するため、
 # 実体自体を分けている（詳細は本ファイル冒頭のコメント参照）。
