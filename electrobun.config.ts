@@ -1,19 +1,26 @@
 import type { ElectrobunConfig } from "electrobun";
 
+// 開発中ビルド(niwaterm-wip)がデフォルト。普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`
+// を指定して起動する（mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
+// アプリ名だけ変えることで、開発中ビルド(niwaterm-wip-dev)と普段遣いビルド
+// (niwaterm-daily-dev)を同時に安全に動かせるようにしている。両方とも"wip"/"daily"という
+// 一目で区別できる単語にすることで、AIエージェントが指示を取り違えて普段遣いの方を
+// 操作してしまう事故を防ぐ（過去に"niwaterm"(無印)/"niwaterm-daily"というdevチャンネル
+// サフィックス頼みの命名で頻発したため改名した）。
+const appName = process.env.NIWATERM_APP_NAME || "niwaterm-wip";
+
 export default {
 	app: {
-		// 開発中ビルド(niwaterm-wip)がデフォルト。普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`
-		// を指定して起動する（mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
-		// アプリ名だけ変えることで、開発中ビルド(niwaterm-wip-dev)と普段遣いビルド
-		// (niwaterm-daily-dev)を同時に安全に動かせるようにしている。両方とも"wip"/"daily"という
-		// 一目で区別できる単語にすることで、AIエージェントが指示を取り違えて普段遣いの方を
-		// 操作してしまう事故を防ぐ（過去に"niwaterm"(無印)/"niwaterm-daily"というdevチャンネル
-		// サフィックス頼みの命名で頻発したため改名した）。
 		// stable/canaryチャンネルは配布用インストーラ作成が目的でビルド後すぐ直接実行できる
 		// appバンドルを作らないため採用していない
 		// （詳細: docs/known-issues/windows-stable-build-not-directly-runnable.md）
-		name: process.env.NIWATERM_APP_NAME || "niwaterm-wip",
-		identifier: "dev.eetann.niwaterm",
+		name: appName,
+		// identifierをアプリ名ごとに分離する。Electrobunネイティブ層はWindowsのWebView2用
+		// UserDataFolderを`%LOCALAPPDATA%/<identifier>/<channel>/WebView2`という式のみで
+		// 決めており（identifier/channelのみ、nameは無関係）、以前はidentifierが
+		// wip/dailyで共通の固定文字列だったため、両方を同時起動するとWebView2の
+		// UserDataFolderが衝突し、後発側の初期化が不安定になっていた（TASK-0057）
+		identifier: `dev.eetann.${appName}`,
 		version: "0.0.1",
 	},
 	build: {
