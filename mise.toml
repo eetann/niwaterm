@@ -74,7 +74,7 @@ description = "Windows実機でniwatermをdevモードでバックグラウン�
 run = '''
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
-LOG_FILE=/tmp/niwaterm-win-dev.log
+LOG_FILE="/tmp/niwaterm-win-${APP_NAME#niwaterm-}.log"
 nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
 echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LOG_FILE"
@@ -83,11 +83,15 @@ echo "停止するには: mise run win:stop:mine"
 
 # WSL→Windows間はプロセスグループもシグナルも共有しないため、win:startをCtrl+Cで止めても
 # Windows側のbun.exe/electrobun.exeは残り続ける。停止は明示的なプロセスkillが必須。
+# hutch.exe/hutch-engine.exe（Hutchのビルドプロセス。TASK-0056参照）も対象に含める。
+# Windowsのプロセスは親をkillしても子は自動終了しないため、ビルド中に強制終了すると
+# hutch-engine.exeが孤児プロセスとして残り、.hutch/locks/electrobun-build.lockを掴んだまま
+# 後続のビルドを無期限にブロックすることがある（実機で確認済み）。
 [tasks."win:stop"]
 description = "Windows実機で起動中のniwaterm（開発中/普段遣い問わず全て）を停止する"
 run = '''
 PS_PREFIX='[Console]::OutputEncoding=[Text.Encoding]::UTF8; $env:PATH=[Environment]::GetEnvironmentVariable("PATH","User")+";"+[Environment]::GetEnvironmentVariable("PATH","Machine"); '
-powershell.exe -NoProfile -Command "$PS_PREFIX Get-Process | Where-Object { \$_.ProcessName -match 'bun|electrobun' } | Stop-Process -Force -ErrorAction SilentlyContinue"
+powershell.exe -NoProfile -Command "$PS_PREFIX Get-Process | Where-Object { \$_.ProcessName -match 'bun|electrobun|hutch' } | Stop-Process -Force -ErrorAction SilentlyContinue"
 echo "停止コマンドを送りました"
 '''
 
