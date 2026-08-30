@@ -150,6 +150,31 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("macOSのOption+英数字（e.keyが別文字になる）でもdirectバインドが発火する", () => {
+    const resolver = createKeybindResolver(
+      compileKeybindings({
+        prefix: "ctrl+b",
+        direct: { "alt+n": "next-board", "alt+1": "toggle-zoom" },
+      }),
+    );
+    // US配列のOption+Nはe.key === "Dead"（デッドキー）、Option+1は"¡"になる
+    expect(resolver.handleKeydown(key("Dead", { altKey: true, code: "KeyN" }))).toEqual({
+      kind: "command",
+      command: { type: "switchBoard", delta: 1 },
+    });
+    expect(resolver.handleKeydown(key("\u00a1", { altKey: true, code: "Digit1" }))).toEqual({
+      kind: "command",
+      command: { type: "toggleZoom" },
+    });
+  });
+
+  test("Alt無しのkeydownはcodeへフォールバックしない（通常のe.key判定のまま）", () => {
+    const resolver = createKeybindResolver(
+      compileKeybindings({ prefix: "ctrl+b", direct: { "alt+n": "next-board" } }),
+    );
+    expect(resolver.handleKeydown(key("Dead", { code: "KeyN" }))).toEqual({ kind: "passthrough" });
+  });
+
   test("next-board / prev-board はBoard切替コマンドへ変換される", () => {
     expect(actionToTileCommand("next-board")).toEqual({ type: "switchBoard", delta: 1 });
     expect(actionToTileCommand("prev-board")).toEqual({ type: "switchBoard", delta: -1 });

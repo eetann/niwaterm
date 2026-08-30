@@ -1703,8 +1703,11 @@ function attachSidebarDividerDrag(): void {
 
 // ---- キー入力 → タイル操作 or PTYバイト列 ----
 document.addEventListener("keydown", (e) => {
-  // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）
-  if (e.isComposing || e.keyCode === 229) return;
+  // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）。
+  // ただしmacOSのOption+英数字はデッドキー（Option+N/E/U/I等）もkeyCode 229で通知されるため、
+  // Altを伴うkeydownはこのガードから除外する（除外しないとalt+nのようなdirectバインドが
+  // 一度も発火しない）。実際に変換中かどうかはisComposingで判定できるのでそちらは残す
+  if (e.isComposing || (e.keyCode === 229 && !e.altKey)) return;
   // ブラウザタブのURL入力欄編集中は、そのままネイティブのテキスト編集に任せる
   // （PTYへのバイト送信やタイル操作キーバインドに奪われないようにする）
   if (e.target instanceof HTMLInputElement) return;

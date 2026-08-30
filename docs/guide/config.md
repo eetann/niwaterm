@@ -538,4 +538,4 @@ niwaterm layout apply dev --replace
 ## 既知の制約
 
 - **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
-- **macOSのOption+文字キーはレイアウト依存でずれる場合がある**。Optionキーを押しながら文字キーを押すと、`e.key`がUnicode記号に変換されることがある（キーボードレイアウト依存）。矢印キーと角括弧（`code`で判定）は影響を受けないが、`cmd+alt+d`のような「Alt+文字キー」の組み合わせは型上書けても実行時に意図通りマッチしない可能性がある。`alt+h`のような`noPrefix`/`direct`のalt単独バインドも同じ理由でずれうる（US配列など、レイアウトによって記号化されないキーを選ぶと安定する）
+- **macOSのOption+英数字キーは英数字・数字キーのみ対応している**。Optionを押しながら文字キーを押すと`e.key`がUnicode記号やデッドキーに変わる（`Option+P`→`π`、`Option+N`→`˜`）が、`alt+n`のような英数字（`a`〜`z`）・数字（`0`〜`9`）のバインドは物理キー位置(`e.code`)から復元しているため`noPrefix`/`direct`でもそのまま動く。一方、記号キー（`alt+;`等）はレイアウトでキー位置がずれるため復元対象外で、macOSでは意図通りマッチしない可能性がある。詳細: `docs/known-issues/macos-option-key-breaks-alt-keybindings.md`

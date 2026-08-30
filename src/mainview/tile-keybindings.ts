@@ -79,6 +79,23 @@ export interface KeybindResolver {
 // 待ち状態がキャンセルされてしまうため、無視して待ち状態を維持する。
 const MODIFIER_KEY_NAMES = new Set(["Shift", "Control", "Alt", "Meta"]);
 
+// macOSのOptionキーは「修飾」ではなく「別の文字の入力」として扱われるため、Optionを押しながらの
+// 英数字キーはe.keyが元の文字にならない（US配列でOption+N → "Dead"、Option+J → "∆"、
+// Option+P → "π"等）。tmuxの`bind-key -n M-key`相当をmacOSでも書けるよう、Altを含む場合だけ
+// 物理キー位置のe.code（KeyN/Digit1）から文字を復元する。英数字キーはJIS/US等の主要配列で
+// 位置が共通なので配列差の影響を受けにくく、逆に記号キーは配列でずれるため対象にしない
+// （記号のalt+バインドが要るようになったらここを見直す）。
+const ALT_LETTER_CODE = /^Key([A-Z])$/;
+const ALT_DIGIT_CODE = /^Digit([0-9])$/;
+
+function altKeyBodyFromCode(code: string): string | null {
+  const letter = ALT_LETTER_CODE.exec(code);
+  if (letter?.[1]) return letter[1].toLowerCase();
+  const digit = ALT_DIGIT_CODE.exec(code);
+  if (digit?.[1]) return digit[1];
+  return null;
+}
+
 // @niwaterm/configのKeyBindingString表記（"up"/"["/"]"等）にキー本体を正規化する。
 // ブラケット・バッククォートのみcodeで判定する（Shiftで文字自体が変わる
 // （例: ` → ~）ためe.keyでは判定できない。toggle-popupの既定"`"がこれに該当する）。
@@ -86,6 +103,10 @@ function keyBodyFromEvent(e: KeyboardEventLike): string {
   if (e.code === "BracketRight") return "]";
   if (e.code === "BracketLeft") return "[";
   if (e.code === "Backquote") return "`";
+  if (e.altKey) {
+    const fromCode = altKeyBodyFromCode(e.code);
+    if (fromCode !== null) return fromCode;
+  }
   switch (e.key) {
     case "ArrowUp":
       return "up";
