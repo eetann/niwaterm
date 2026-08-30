@@ -417,6 +417,21 @@ body {
   width: calc(2 * var(--cell-w));
 }
 
+/*
+ * 罫線・ブロック文字（█ ▀ ▐ ─ │ 等）を行の高さいっぱいへ引き伸ばす。
+ * フォントのグリフはfont-size基準の高さしか無く、行間（lineHeight - フォントのセル高）の分だけ
+ * 上下に隙間ができてしまうため、█のインク矩形を行ボックスへ写す縦方向の変換をかける。
+ * 係数はJS側で実測してCSS変数へ入れる（src/mainview/cell-glyph.ts）。
+ * transformを効かせるためinline-blockにする必要があるが、連続する文字はまとめて1つのspanに
+ * 入るので、run内の文字送りは通常のテキストのまま保たれる。
+ */
+.tile .term .cell-glyph,
+#popup .term .cell-glyph {
+  display: inline-block;
+  transform-origin: 0 0;
+  transform: translateY(var(--cell-glyph-shift, 0px)) scaleY(var(--cell-glyph-scale, 1));
+}
+
 #measure {
   position: absolute;
   top: 0;

@@ -36,6 +36,13 @@ import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
+import {
+  type CellGlyphTransform,
+  computeCellGlyphTransform,
+  identityCellGlyphTransform,
+  isCellGlyphChar,
+  isIdentityCellGlyphTransform,
+} from "./cell-glyph";
 import { isWideChar } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -329,6 +336,8 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-fg", config.foreground);
   root.setProperty("--term-bg", config.background);
   applyAnsiPalette(config.ansiColors);
+  // 罫線・ブロック文字を行の高さへ合わせる変換はフォント・サイズ・行高に依存するため測り直す
+  updateCellGlyphTransform();
   // フォントサイズ変更でcellWidth/cellHeightが変わりうるため、表示中の全タブへ再計測・再送する
   for (const tabId of activeTabByTile.values()) {
     sendResize(tabId);
@@ -376,7 +385,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
           termEl.innerHTML = renderState.html;
-          fixWideChars(termEl);
+          fixGlyphs(termEl);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
           // 加えて、フォーカスしていないタイルのタブではカーソルを表示しない（tmux同様の挙動）
@@ -446,18 +455,77 @@ function measureCell() {
   document.documentElement.style.setProperty("--cell-w", `${cellWidth}px`);
 }
 
-// ---- 全角文字の幅補正 ----
+// ---- 罫線・ブロック文字のセル充填 ----
+// フォントの█のインク矩形を行ボックス全体へ写す変換をCSS変数として持ち、
+// .cell-glyph（fixGlyphsが付ける）へtransformで適用する。詳細はcell-glyph.ts参照
+let cellGlyphTransform: CellGlyphTransform = identityCellGlyphTransform;
+let cellGlyphMeasureCtx: CanvasRenderingContext2D | null = null;
+
 /**
- * テキストノード中の全角文字を <span class="wide"> でラップして2セル幅に強制する。
- * フォーマッタ出力はプレーンテキストなので、フォント任せだと桁がズレるため。
+ * 行ボックス上端からベースラインまでの距離を実測する。
+ * 中身が空のinline-blockはベースラインが下マージン辺（＝高さ0なら自分の上端）になる
+ * CSSの規定を使い、行ボックス上端からのオフセットとして読み取る。
+ * フォントメトリクスから計算するより、実際のブラウザの行ボックス計算に一致する。
  */
-function fixWideChars(root: HTMLElement) {
+function measureBaselineOffset(style: CSSStyleDeclaration): number {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:absolute;top:0;left:-9999px;visibility:hidden;white-space:pre;" +
+    `font-family:${style.fontFamily};font-size:${style.fontSize};line-height:${style.lineHeight};`;
+  const marker = document.createElement("span");
+  marker.style.cssText = "display:inline-block;width:0;height:0;";
+  probe.append(document.createTextNode("█"), marker);
+  document.body.appendChild(probe);
+  const baseline = marker.getBoundingClientRect().top - probe.getBoundingClientRect().top;
+  probe.remove();
+  return baseline;
+}
+
+/** フォント・フォントサイズ・行の高さが変わったときに変換を測り直す */
+function updateCellGlyphTransform() {
+  const style = getComputedStyle(measureEl);
+  const fontSize = Number.parseFloat(style.fontSize);
+  const lineHeight = Number.parseFloat(style.lineHeight);
+  cellGlyphTransform = identityCellGlyphTransform;
+  if (Number.isFinite(fontSize) && Number.isFinite(lineHeight)) {
+    // インク矩形（グリフの実際の描画範囲）はDOMからは取れないのでcanvasで測る。
+    // 同じフォント指定を渡せばフォールバックの解決結果も描画側と揃う
+    cellGlyphMeasureCtx ??= document.createElement("canvas").getContext("2d");
+    const ctx = cellGlyphMeasureCtx;
+    if (ctx) {
+      ctx.font = `${fontSize}px ${style.fontFamily}`;
+      ctx.textBaseline = "alphabetic";
+      const m = ctx.measureText("█");
+      cellGlyphTransform = computeCellGlyphTransform({
+        lineHeight,
+        baseline: measureBaselineOffset(style),
+        inkAscent: m.actualBoundingBoxAscent,
+        inkDescent: m.actualBoundingBoxDescent,
+      });
+    }
+  }
+  const root = document.documentElement.style;
+  root.setProperty("--cell-glyph-scale", `${cellGlyphTransform.scaleY}`);
+  root.setProperty("--cell-glyph-shift", `${cellGlyphTransform.shiftY}px`);
+}
+
+// ---- グリフ補正（全角文字の幅・罫線/ブロック文字のセル充填）----
+/**
+ * フォーマッタ出力のテキストノードを走査して、フォント任せだと崩れる文字をspanでラップする。
+ * - 全角文字: <span class="wide"> で2セル幅に強制する（フォント任せだと桁がズレるため）
+ * - 罫線・ブロック文字: <span class="cell-glyph"> で行の高さいっぱいに引き伸ばす
+ *   （連続する分をまとめて1つのspanにするので、run内の文字送りは通常のテキストのまま）
+ */
+function fixGlyphs(root: HTMLElement) {
+  // 変換が恒等（行の高さ＝フォントのセル高）なら罫線・ブロック文字のラップは不要
+  const fillCellGlyphs = !isIdentityCellGlyphTransform(cellGlyphTransform);
+  const needsFix = (cp: number) => isWideChar(cp) || (fillCellGlyphs && isCellGlyphChar(cp));
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const targets: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = (node as Text).data;
     for (const ch of text) {
-      if (isWideChar(ch.codePointAt(0) ?? 0)) {
+      if (needsFix(ch.codePointAt(0) ?? 0)) {
         targets.push(node as Text);
         break;
       }
@@ -466,12 +534,30 @@ function fixWideChars(root: HTMLElement) {
   for (const node of targets) {
     const frag = document.createDocumentFragment();
     let narrow = "";
+    let cellRun = "";
+    const flushNarrow = () => {
+      if (!narrow) return;
+      frag.appendChild(document.createTextNode(narrow));
+      narrow = "";
+    };
+    const flushCellRun = () => {
+      if (!cellRun) return;
+      const span = document.createElement("span");
+      span.className = "cell-glyph";
+      span.textContent = cellRun;
+      frag.appendChild(span);
+      cellRun = "";
+    };
     for (const ch of node.data) {
-      if (isWideChar(ch.codePointAt(0) ?? 0)) {
-        if (narrow) {
-          frag.appendChild(document.createTextNode(narrow));
-          narrow = "";
-        }
+      const cp = ch.codePointAt(0) ?? 0;
+      if (fillCellGlyphs && isCellGlyphChar(cp)) {
+        flushNarrow();
+        cellRun += ch;
+        continue;
+      }
+      flushCellRun();
+      if (isWideChar(cp)) {
+        flushNarrow();
         const span = document.createElement("span");
         span.className = "wide";
         span.textContent = ch;
@@ -480,7 +566,8 @@ function fixWideChars(root: HTMLElement) {
         narrow += ch;
       }
     }
-    if (narrow) frag.appendChild(document.createTextNode(narrow));
+    flushCellRun();
+    flushNarrow();
     node.parentNode?.replaceChild(frag, node);
   }
 }
