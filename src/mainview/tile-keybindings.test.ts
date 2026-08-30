@@ -4,7 +4,7 @@ import {
   defaultKeybindings,
   defaultWindowsKeybindings,
 } from "@niwaterm/config";
-import { createKeybindResolver, type KeydownResult } from "./tile-keybindings";
+import { actionToTileCommand, createKeybindResolver, type KeydownResult } from "./tile-keybindings";
 
 function key(
   k: string,
@@ -148,6 +148,11 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
       kind: "command",
       command: { type: "switchWorkspace", delta: -1 },
     });
+  });
+
+  test("next-board / prev-board はBoard切替コマンドへ変換される", () => {
+    expect(actionToTileCommand("next-board")).toEqual({ type: "switchBoard", delta: 1 });
+    expect(actionToTileCommand("prev-board")).toEqual({ type: "switchBoard", delta: -1 });
   });
 
   test("prefix -> b でサイドバートグル", () => {

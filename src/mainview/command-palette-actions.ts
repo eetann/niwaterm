@@ -44,6 +44,7 @@ import type { KeybindAction } from "@niwaterm/config";
 export type CommandPaletteCategory =
   | "タイル"
   | "タブ"
+  | "Board"
   | "ワークスペース"
   | "表示"
   | "編集"
@@ -190,6 +191,22 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "タブ",
     icon: RefreshCw,
     keywords: ["respawn-pane", "respawn"],
+  },
+  {
+    action: "next-board",
+    labelEn: "Next Board",
+    label: "次のBoardへ切り替え",
+    category: "Board",
+    icon: ChevronsRight,
+    keywords: ["next-window", "window"],
+  },
+  {
+    action: "prev-board",
+    labelEn: "Previous Board",
+    label: "前のBoardへ切り替え",
+    category: "Board",
+    icon: ChevronsLeft,
+    keywords: ["previous-window", "window"],
   },
   {
     action: "new-workspace",

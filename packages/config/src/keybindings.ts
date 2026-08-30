@@ -44,6 +44,8 @@ export const KEYBIND_ACTIONS = [
   "next-tab",
   "prev-tab",
   "restart-tab",
+  "next-board",
+  "prev-board",
   "new-workspace",
   "next-workspace",
   "prev-workspace",

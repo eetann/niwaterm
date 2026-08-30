@@ -201,6 +201,11 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // reload-configも同様に既定キーを持たない（設定ファイルの手動リロードは使う人・使わない人が
   // 分かれる操作のため、ユーザーが明示的に割り当てる想定）
   "reload-config",
+  // next-board/prev-boardも既定キーを持たない（2打目キーのn/pはタブ切替、]/[はワークスペース切替に
+  // 埋まっており、Board切替に自然に割り当てられる空きキーが無いため。tmuxのM-n/M-p風に
+  // directで割り当てる等、ユーザーの好みに委ねる）
+  "next-board",
+  "prev-board",
 ];
 
 describe("defaultKeybindings", () => {

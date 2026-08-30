@@ -34,6 +34,7 @@ export type TileCommand =
   | { type: "cycleTab"; delta: 1 | -1 }
   | { type: "restartTab" }
   | { type: "newWorkspace" }
+  | { type: "switchBoard"; delta: 1 | -1 }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "togglePopup" }
@@ -155,6 +156,10 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "cycleTab", delta: -1 };
     case "restart-tab":
       return { type: "restartTab" };
+    case "next-board":
+      return { type: "switchBoard", delta: 1 };
+    case "prev-board":
+      return { type: "switchBoard", delta: -1 };
     case "new-workspace":
       return { type: "newWorkspace" };
     case "next-workspace":

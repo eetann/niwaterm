@@ -227,6 +227,10 @@ let lastTabNames: Record<TabId, string> = {};
 // ワークスペース切替（Cmd+Option+]/[）の次/前の対象を解決するために保持する
 let activeWorkspaceId: WorkspaceId | null = null;
 let workspaceIds: WorkspaceId[] = [];
+// Board切替（next-board/prev-board）の次/前の対象を解決するために保持する。
+// アクティブワークスペース分のみ（render()はアクティブワークスペースのBoard群しか送らない）
+let activeBoardId: BoardId | null = null;
+let boardIds: BoardId[] = [];
 // ポップアップ（タイルに所属しない一時的な画面。ADR 0005）の現在のtabId・表示状態
 let currentPopupTabId: TabId | null = null;
 let popupVisible = false;
@@ -358,6 +362,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       render: (p: AppRenderState) => {
         activeWorkspaceId = p.activeWorkspaceId;
         workspaceIds = p.workspaceIds;
+        activeBoardId = p.workspace.activeBoardId;
+        boardIds = p.workspace.boardIds;
         const activeBoard = p.workspace.board;
         lastLayout = activeBoard.layout;
         lastTabNames = activeBoard.tabNames;
@@ -1836,6 +1842,14 @@ function handleTileCommand(cmd: TileCommand): void {
     case "newWorkspace":
       sendMessage("newWorkspace");
       break;
+    case "switchBoard": {
+      if (!activeBoardId || boardIds.length < 2) return;
+      const index = boardIds.indexOf(activeBoardId);
+      const len = boardIds.length;
+      const boardId = boardIds[(index + cmd.delta + len) % len];
+      sendMessage("switchBoard", { boardId });
+      break;
+    }
     case "switchWorkspace": {
       if (!activeWorkspaceId || workspaceIds.length < 2) return;
       const index = workspaceIds.indexOf(activeWorkspaceId);
