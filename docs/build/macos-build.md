@@ -18,6 +18,7 @@ opensrc でghosttyソース取得
   └─ zig build (ローカル) ──▶ vendor/libghostty/lib/libghostty-vt.dylib
                           └─▶ vendor/libghostty/include/
 cc (shimビルド) ──▶ vendor/libghostty/lib/libniwashim.dylib
+cc (ptyexecビルド) ──▶ vendor/libghostty/lib/niwaterm-ptyexec
 electrobun dev  ← アプリ起動
 ```
 
@@ -83,9 +84,12 @@ bun run build:native
 cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c \
   -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path \
   -o vendor/libghostty/lib/libniwashim.dylib
+cc -O2 src/native/ptyexec.c -o vendor/libghostty/lib/niwaterm-ptyexec
 ```
 
-生成物: `vendor/libghostty/lib/libniwashim.dylib`
+生成物: `vendor/libghostty/lib/libniwashim.dylib` と `vendor/libghostty/lib/niwaterm-ptyexec`
+
+`niwaterm-ptyexec`（`src/native/ptyexec.c`）はPTYの子プロセスへ制御端末を設定するための小さなラッパー実行ファイル。これが無いとniwatermを端末から起動した際にpopup・タブ内のfzf等が固まる（詳細: [../known-issues/macos-pty-child-controlling-terminal.md](../known-issues/macos-pty-child-controlling-terminal.md)）。無くてもアプリ自体は起動する（ラップせずに従来どおりPTYを起動する）
 
 ## 3. 起動する
 

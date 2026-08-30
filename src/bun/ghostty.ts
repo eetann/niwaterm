@@ -1,7 +1,7 @@
 // libghostty-vt の bun:ffi バインディング
 import { dlopen, FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } from "bun:ffi";
-import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { findNativeArtifact } from "./native-artifacts";
 
 // ネイティブ成果物の配置と命名はプラットフォームで異なる。
 // zigはWindowsのみDLL本体をbin/へ出す（lib/に入るのはリンク用のインポートライブラリ）
@@ -14,14 +14,8 @@ const libSubdir = join("vendor/libghostty", nativeLayout.subdir);
 
 // ビルド成果物(build/内)から実行されるため、repoルートのvendorを上方向に探索する
 function findLibDir(): string {
-  let dir = process.cwd();
-  for (let i = 0; i < 10; i++) {
-    const candidate = join(dir, libSubdir);
-    if (existsSync(join(candidate, nativeLayout.vt))) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+  const found = findNativeArtifact(join(libSubdir, nativeLayout.vt));
+  if (found) return dirname(found);
   throw new Error(
     `${libSubdir} が見つからない。\`bun run build:native\` の前に libghostty-vt をビルドすること`,
   );

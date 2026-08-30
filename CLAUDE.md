@@ -15,7 +15,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
   - **niwaterm-wip（作業・動作確認対象）とniwaterm-daily（ユーザーの常用インスタンス。動作確認では絶対に触らない）を混同しないこと**
   - wip/dailyの同時起動の制約・停止・daily側への取り込み手順の詳細: docs/build/windows-build.md
   - 同時起動はHutchのグローバルなロック競合で長らくできなかったが、`HUTCH_HOME`をアプリ名別に分けて解決した（`start`タスクが自動設定。macOS実機で検証済み、Windows実機は未検証）。機序: docs/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md
-- `bun run build:native` — Cシム（src/native/shim.c）をmacOS向けにビルド
+- `bun run build:native` — Cシム（src/native/shim.c）とPTYの制御端末ラッパー（src/native/ptyexec.c）をmacOS向けにビルド
 - `bun run build:vendor:win` / `bun run build:native:win` — Windows向けのlibghostty-vt / シムをLinux・WSLからクロスビルド（詳細: docs/build/windows-build.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）

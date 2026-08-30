@@ -5,7 +5,7 @@
 	"workspaces": ["packages/*"],
 	"scripts": {
 		"dev": "electrobun dev --watch",
-		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib",
+		"build:native": "cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path -o vendor/libghostty/lib/libniwashim.dylib && cc -O2 src/native/ptyexec.c -o vendor/libghostty/lib/niwaterm-ptyexec",
 		"build:vendor:win": "cd vendor/libghostty && mise exec zig@0.16.0 -- zig build -Demit-lib-vt -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast --prefix \"$PWD\"",
 		"build:native:win": "mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared -Ivendor/libghostty/include src/native/shim.c -Lvendor/libghostty/lib -lghostty-vt -o vendor/libghostty/bin/niwashim.dll",
 		"lint": "oxlint src packages",

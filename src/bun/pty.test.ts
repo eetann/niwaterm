@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { appendCommandArgs } from "./pty";
+import { appendCommandArgs, withPtyExec } from "./pty";
 
 describe("appendCommandArgs", () => {
   test("commandが未指定なら何もしない", () => {
@@ -101,6 +101,37 @@ describe("appendCommandArgs", () => {
       "bash",
       "-c",
       "exec \"$SHELL\" -l -i -c 'fzf'",
+    ]);
+  });
+});
+
+describe("withPtyExec", () => {
+  test("ラッパーのパスが解決できていればcmdの先頭へ差し込む", () => {
+    expect(
+      withPtyExec(["/bin/zsh", "-il"], "/repo/vendor/libghostty/lib/niwaterm-ptyexec"),
+    ).toEqual(["/repo/vendor/libghostty/lib/niwaterm-ptyexec", "/bin/zsh", "-il"]);
+  });
+
+  test("ラッパーが無い場合（Windows・build:native未実行）はcmdをそのまま返す", () => {
+    const cmd = ["powershell.exe", "-NoLogo"];
+    expect(withPtyExec(cmd, undefined)).toEqual(cmd);
+  });
+
+  test("空のcmdはラップしない", () => {
+    expect(withPtyExec([], "/repo/vendor/libghostty/lib/niwaterm-ptyexec")).toEqual([]);
+  });
+
+  test("シェルの-l -i -c等を組み立てた後の引数列もそのまま保たれる", () => {
+    const cmd = ["/bin/zsh", "-il"];
+    appendCommandArgs(cmd, "ghq-select", "/tmp/out");
+    expect(withPtyExec(cmd, "/ptyexec")).toEqual([
+      "/ptyexec",
+      "/bin/zsh",
+      "-il",
+      "-l",
+      "-i",
+      "-c",
+      "ghq-select > '/tmp/out'",
     ]);
   });
 });

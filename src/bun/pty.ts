@@ -3,6 +3,7 @@
 // WindowsではBun 1.3.14+が必要（ConPTY実装がそのバージョンから入った）。
 
 import { homedir } from "node:os";
+import { findNativeArtifact } from "./native-artifacts";
 import { applyWslCdArg, windowsPathToWslMountPath } from "./wsl-cwd";
 
 const isWindows = process.platform === "win32";
@@ -40,6 +41,35 @@ export interface Pty {
   write(data: string | Uint8Array): void;
   resize(cols: number, rows: number): void;
   kill(): void;
+}
+
+/**
+ * PTYの子プロセスへ制御端末を持たせるラッパー（src/native/ptyexec.c、`bun run build:native`で生成）。
+ * Bun.TerminalはPTYを子の制御端末に設定しないため、これを挟まないとniwatermを端末から起動した際に
+ * PTY内の子がniwaterm自身の起動元ttyを制御端末として引き継ぎ、/dev/ttyを開くプログラム（fzf等）が
+ * SIGTTIN/SIGTTOUで停止する（詳細: docs/known-issues/macos-pty-child-controlling-terminal.md）
+ */
+const PTYEXEC_REL_PATH = "vendor/libghostty/lib/niwaterm-ptyexec";
+
+/** 未解決を表す番兵。findNativeArtifactはundefinedを返しうるため、キャッシュ済みかの判別に使う */
+const UNRESOLVED = Symbol("unresolved");
+let ptyExecPathCache: string | undefined | typeof UNRESOLVED = UNRESOLVED;
+
+/** ptyexecラッパーの絶対パス。Windows（ConPTY）と未ビルド時はundefined */
+export function ptyExecPath(): string | undefined {
+  if (isWindows) return undefined;
+  if (ptyExecPathCache === UNRESOLVED) ptyExecPathCache = findNativeArtifact(PTYEXEC_REL_PATH);
+  return ptyExecPathCache;
+}
+
+/**
+ * PTY起動コマンドの先頭へptyexecラッパーを差し込む。
+ * ラッパーが無い場合（Windows・`build:native`未実行）はcmdをそのまま返し、
+ * 制御端末が設定されない従来どおりの起動にフォールバックする
+ */
+export function withPtyExec(cmd: string[], ptyExec: string | undefined): string[] {
+  if (!ptyExec || cmd.length === 0) return cmd;
+  return [ptyExec, ...cmd];
 }
 
 /**
@@ -166,9 +196,13 @@ export function createPty(opts: PtyOptions): Pty {
     },
   };
 
+  // 制御端末の設定はcmdの組み立て（wsl.exeの--cd・シェルの-l -i -c）が全て終わった後に行う。
+  // 先頭要素でシェル種別を判定している処理があるため、ラップは最後の最後に噛ませる
+  const spawnArgv = withPtyExec(cmd, ptyExecPath());
+
   let proc: Bun.Subprocess;
   try {
-    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: spawnCwd ?? homedir() });
+    proc = Bun.spawn(spawnArgv, { ...spawnOptions, cwd: spawnCwd ?? homedir() });
   } catch (err) {
     // uv_spawnのENOENTはcwd不在・実行ファイル不在いずれでも発生し、エラー自体からは
     // 区別できない（libuv/Windowsの既知の癖）。spawnCwdを明示指定していた場合は
@@ -179,7 +213,7 @@ export function createPty(opts: PtyOptions): Pty {
     console.log(
       `[bun] failed to spawn pty with cwd=${spawnCwd}, falling back to home directory: ${String(err)}`,
     );
-    proc = Bun.spawn(cmd, { ...spawnOptions, cwd: homedir() });
+    proc = Bun.spawn(spawnArgv, { ...spawnOptions, cwd: homedir() });
   }
 
   function onData(fn: (data: Uint8Array) => void): void {
