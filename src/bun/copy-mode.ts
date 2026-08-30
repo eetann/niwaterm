@@ -28,6 +28,21 @@ export interface CopyModeRange {
   mode: "char" | "line";
 }
 
+export type CopyModeSearchDirection = "forward" | "backward";
+
+export interface CopyModeSearch {
+  direction: CopyModeSearchDirection;
+  query: string;
+}
+
+/** 検索の一致箇所。桁は両端とも含む（startXが一致の先頭セル、endXが末尾セル） */
+export interface CopyModeMatch {
+  /** 画面座標の行 */
+  y: number;
+  startX: number;
+  endX: number;
+}
+
 export interface CopyModeState {
   cursor: CopyModePoint;
   /** 選択の始点。selectionModeが"none"の間はnull */
@@ -40,6 +55,10 @@ export interface CopyModeState {
   desiredX: number;
   /** ggの1打目のgを受け取った状態か */
   pendingG: boolean;
+  /** 検索文字列の入力中（/ か ? を押してからEnter/Escapeまで）。入力中でなければnull */
+  searchInput: CopyModeSearch | null;
+  /** 直近に実行した検索。n/Nで繰り返すために保持する */
+  lastSearch: CopyModeSearch | null;
 }
 
 /**
@@ -64,6 +83,11 @@ export type CopyModeEffect =
   | { type: "none" }
   /** 選択範囲をクリップボードへ入れてコピーモードを抜ける */
   | { type: "yank"; range: CopyModeRange }
+  /**
+   * 検索を実行してカーソルを一致箇所へ移す。スクロールバック全体の走査には
+   * ビューポート外の行テキストが要るため、実際の探索は呼び出し側（terminal-session.ts）が行う
+   */
+  | { type: "search"; search: CopyModeSearch }
   | { type: "exit" };
 
 export interface CopyModeKeyResult {
@@ -87,6 +111,8 @@ export function createCopyModeState(cursor: CopyModePoint): CopyModeState {
     selectionMode: "none",
     desiredX: cursor.x,
     pendingG: false,
+    searchInput: null,
+    lastSearch: null,
   };
 }
 
@@ -355,6 +381,100 @@ export function copyModeSelectionRows(
   return rows;
 }
 
+// ---- 検索（/ ? n N）----
+
+/**
+ * 大文字を含むクエリのときだけ大文字小文字を区別する（vimのsmartcase）。
+ * ターミナルのログはパス・オプション名など小文字が主体で、常に区別ありだと打ちづらいため
+ */
+function isCaseSensitiveQuery(query: string): boolean {
+  return query !== query.toLowerCase();
+}
+
+/** 文字列インデックス→桁の対応表（末尾に行全体の幅を1つ余分に持つ） */
+function columnMap(line: string): number[] {
+  const map: number[] = Array.from({ length: line.length + 1 }, () => 0);
+  let col = 0;
+  let index = 0;
+  for (const ch of line) {
+    for (let k = 0; k < ch.length; k++) map[index + k] = col;
+    index += ch.length;
+    col += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
+  }
+  map[line.length] = col;
+  return map;
+}
+
+/** 1行の中の一致をすべて桁区間で返す（左から順） */
+function matchesInLine(line: string, query: string): Array<{ startX: number; endX: number }> {
+  const results: Array<{ startX: number; endX: number }> = [];
+  if (query === "") return results;
+  const caseSensitive = isCaseSensitiveQuery(query);
+  const lowered = line.toLowerCase();
+  // toLowerCaseで長さが変わる文字（İなど）が含まれる行は桁の対応が崩れるため区別ありで探す
+  const usable = !caseSensitive && lowered.length === line.length;
+  const haystack = usable ? lowered : line;
+  const needle = usable ? query.toLowerCase() : query;
+  const map = columnMap(line);
+  let from = 0;
+  for (;;) {
+    const index = haystack.indexOf(needle, from);
+    if (index < 0) return results;
+    const startX = map[index] ?? 0;
+    const endX = Math.max((map[index + needle.length] ?? startX + 1) - 1, startX);
+    results.push({ startX, endX });
+    // 重なり合う一致も拾えるよう1文字だけ進める
+    from = index + 1;
+  }
+}
+
+/** 与えられた行テキストの中の一致をすべて返す（ハイライト用） */
+export function findCopyModeMatches(params: {
+  lines: string[];
+  firstLineRow: number;
+  query: string;
+}): CopyModeMatch[] {
+  const matches: CopyModeMatch[] = [];
+  params.lines.forEach((line, i) => {
+    for (const m of matchesInLine(line, params.query)) {
+      matches.push({ y: params.firstLineRow + i, startX: m.startX, endX: m.endX });
+    }
+  });
+  return matches;
+}
+
+/**
+ * 与えられた行テキストの中から、fromの次（forward）／前（backward）の一致を1つ返す。
+ * fromがnullなら範囲の端から探す（折り返し検索の2周目で使う）
+ */
+export function findCopyModeMatch(params: {
+  lines: string[];
+  firstLineRow: number;
+  query: string;
+  direction: CopyModeSearchDirection;
+  /** この位置ちょうどは一致とみなさない起点。範囲全体を探すならnull */
+  from: CopyModePoint | null;
+}): CopyModeMatch | null {
+  const { lines, firstLineRow, query, direction, from } = params;
+  if (query === "") return null;
+  const forward = direction === "forward";
+  for (
+    let i = forward ? 0 : lines.length - 1;
+    forward ? i < lines.length : i >= 0;
+    i += forward ? 1 : -1
+  ) {
+    const y = firstLineRow + i;
+    if (from && (forward ? y < from.y : y > from.y)) continue;
+    const found = matchesInLine(lines[i] ?? "", query);
+    const ordered = forward ? found : [...found].reverse();
+    for (const m of ordered) {
+      if (from && y === from.y && (forward ? m.startX <= from.x : m.startX >= from.x)) continue;
+      return { y, startX: m.startX, endX: m.endX };
+    }
+  }
+  return null;
+}
+
 // ---- スクロール・クランプ ----
 
 /** カーソルがビューポートに入るために必要なビューポート先頭行（現在位置で足りるならそのまま返す） */
@@ -398,6 +518,8 @@ function normalizeKey(key: string): string {
       return "down";
     case "Escape":
       return "escape";
+    case "Backspace":
+      return "backspace";
     case "Enter":
       return "enter";
     case "Home":
@@ -426,8 +548,81 @@ function unhandled(state: CopyModeState): CopyModeKeyResult {
   return { state: { ...state, pendingG: false }, effect: { type: "none" }, handled: false };
 }
 
+function withoutSearchInput(state: CopyModeState): CopyModeKeyResult {
+  return { state: { ...state, searchInput: null }, effect: { type: "none" }, handled: true };
+}
+
 /**
- * コピーモード中の1キーを処理する。副作用（スクロール・クリップボード）は起こさず、
+ * 検索文字列の入力中（/ ? の後）のキー処理。移動キーとしては解釈せず、
+ * 未割当のキーも飲み込む（PTYへ抜けて画面が動くと入力中の文脈が壊れるため）
+ */
+function applySearchInputKey(state: CopyModeState, key: CopyModeKey): CopyModeKeyResult {
+  const input = state.searchInput;
+  if (!input) return unhandled(state);
+  const name = normalizeKey(key.key);
+  const dropLastChar = (query: string): string => [...query].slice(0, -1).join("");
+
+  if (key.ctrl) {
+    switch (name) {
+      case "c":
+      case "[":
+        return withoutSearchInput(state);
+      case "u":
+        return {
+          state: { ...state, searchInput: { ...input, query: "" } },
+          effect: { type: "none" },
+          handled: true,
+        };
+      case "h":
+        return {
+          state: { ...state, searchInput: { ...input, query: dropLastChar(input.query) } },
+          effect: { type: "none" },
+          handled: true,
+        };
+      default:
+        return { state, effect: { type: "none" }, handled: true };
+    }
+  }
+
+  switch (name) {
+    case "escape":
+      return withoutSearchInput(state);
+    case "backspace":
+      // 空の状態でのBackspaceは検索そのものを取りやめる（vimのコマンドラインと同じ）
+      if (input.query === "") return withoutSearchInput(state);
+      return {
+        state: { ...state, searchInput: { ...input, query: dropLastChar(input.query) } },
+        effect: { type: "none" },
+        handled: true,
+      };
+    case "enter": {
+      // 空のままEnterは直前の検索文字列を使い回す（vimの / + Enter と同じ）
+      const query = input.query !== "" ? input.query : (state.lastSearch?.query ?? "");
+      if (query === "") return withoutSearchInput(state);
+      const search: CopyModeSearch = { direction: input.direction, query };
+      return {
+        state: { ...state, searchInput: null, lastSearch: search },
+        effect: { type: "search", search },
+        handled: true,
+      };
+    }
+    default:
+      break;
+  }
+
+  // 1文字のキー（記号・空白・IME確定済みの日本語1文字を含む）だけを検索文字列へ足す
+  if ([...key.key].length === 1) {
+    return {
+      state: { ...state, searchInput: { ...input, query: input.query + key.key } },
+      effect: { type: "none" },
+      handled: true,
+    };
+  }
+  return { state, effect: { type: "none" }, handled: true };
+}
+
+/**
+ * コピーモード中の1キーを処理する。副作用（スクロール・クリップボード・検索の走査）は起こさず、
  * 次の状態と呼び出し側にやってほしいこと（CopyModeEffect）だけを返す
  */
 export function applyCopyModeKey(
@@ -435,6 +630,8 @@ export function applyCopyModeKey(
   key: CopyModeKey,
   ctx: CopyModeContext,
 ): CopyModeKeyResult {
+  if (state.searchInput) return applySearchInputKey(state, key);
+
   const name = normalizeKey(key.key);
   const halfPage = Math.max(Math.floor(ctx.viewportRows / 2), 1);
   const fullPage = Math.max(ctx.viewportRows - 1, 1);
@@ -607,6 +804,31 @@ export function applyCopyModeKey(
         effect: { type: "none" },
         handled: true,
       };
+    case "/":
+    case "?":
+      return {
+        state: {
+          ...state,
+          pendingG: false,
+          searchInput: { direction: name === "/" ? "forward" : "backward", query: "" },
+        },
+        effect: { type: "none" },
+        handled: true,
+      };
+    case "n":
+    case "N": {
+      const last = state.lastSearch;
+      const cleared = { ...state, pendingG: false };
+      if (!last) return { state: cleared, effect: { type: "none" }, handled: true };
+      // Nは「直前の検索の逆向き」。lastSearch自体の向きは上書きしない（vimと同じ）
+      const direction: CopyModeSearchDirection =
+        name === "n" ? last.direction : last.direction === "forward" ? "backward" : "forward";
+      return {
+        state: cleared,
+        effect: { type: "search", search: { direction, query: last.query } },
+        handled: true,
+      };
+    }
     case "v":
       return {
         state: {

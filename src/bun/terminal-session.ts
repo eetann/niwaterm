@@ -8,8 +8,13 @@ import {
   copyModeRange,
   copyModeSelectionRows,
   createCopyModeState,
+  findCopyModeMatch,
+  findCopyModeMatches,
   type CopyModeContext,
   type CopyModeKey,
+  type CopyModeMatch,
+  type CopyModePoint,
+  type CopyModeSearch,
   type CopyModeSelectionMode,
   type CopyModeState,
   viewportOffsetForCursor,
@@ -36,6 +41,12 @@ export interface CopyModeRenderState {
   selectionMode: CopyModeSelectionMode;
   /** 選択範囲を行ごとの桁区間へ落としたもの（両端とも含む） */
   selectionRows: Array<{ y: number; startX: number; endX: number }>;
+  /** 検索文字列に一致した箇所（ビューポート内のみ。入力中は打ちかけの文字列で先行表示する） */
+  searchRows: Array<{ y: number; startX: number; endX: number }>;
+  /** 検索文字列の入力中に表示するプロンプト（"/foo" / "?foo"）。入力中でなければnull */
+  searchPrompt: string | null;
+  /** 「パターンが見つかりません」等の一時メッセージ。無ければnull */
+  message: string | null;
 }
 
 export interface TerminalRenderState {
@@ -76,6 +87,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
    * スクロールしたときだけ更新し、出力による追従はこの値へ引き戻す
    */
   let copyModeOffset = 0;
+  /** 検索結果などをコピーモード中に一時表示するメッセージ。次のキー入力で消える */
+  let copyModeMessage: string | null = null;
   let currentCols = opts.cols;
   let currentRows = opts.rows;
   let disposed = false;
@@ -218,6 +231,75 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     return clampCopyModeCursor(state, next);
   }
 
+  /**
+   * 1回のダンプで走査する行数。スクロールバック全体を一度に文字列化すると重いので、
+   * カーソルに近い側から少しずつ取り出して最初の一致で打ち切る
+   */
+  const SEARCH_CHUNK_ROWS = 200;
+
+  /** 画面座標の[startY, endY]をチャンクに割ってダンプし、最初の一致を返す */
+  function scanRowsForMatch(
+    startY: number,
+    endY: number,
+    search: CopyModeSearch,
+    from: CopyModePoint | null,
+  ): CopyModeMatch | null {
+    if (endY < startY) return null;
+    const chunks: Array<[number, number]> = [];
+    for (let y = startY; y <= endY; y += SEARCH_CHUNK_ROWS) {
+      chunks.push([y, Math.min(y + SEARCH_CHUNK_ROWS - 1, endY)]);
+    }
+    // 後方検索は下のチャンクから見ていく（カーソルに近い一致を先に見つけるため）
+    if (search.direction === "backward") chunks.reverse();
+    for (const [chunkStart, chunkEnd] of chunks) {
+      const dumped = term.dumpScreenRange({
+        startX: 0,
+        startY: chunkStart,
+        endX: Math.max(currentCols - 1, 0),
+        endY: chunkEnd,
+      });
+      if (dumped === "") continue;
+      const match = findCopyModeMatch({
+        lines: dumped.split("\n"),
+        firstLineRow: chunkStart,
+        query: search.query,
+        direction: search.direction,
+        from,
+      });
+      if (match) return match;
+    }
+    return null;
+  }
+
+  /**
+   * スクロールバックを含む画面全体を走査してカーソルを次の一致へ移す（見つからなければnull）。
+   * 端まで行ったら反対の端から折り返して起点まで探す（vimのwrapscan相当）
+   */
+  function searchCopyMode(state: CopyModeState, search: CopyModeSearch): CopyModeState | null {
+    const bar = term.scrollbar();
+    const lastRow = Math.max(bar.total, 1) - 1;
+    const cursor = state.cursor;
+    const cursorRow = Math.min(Math.max(cursor.y, 0), lastRow);
+    // [走査範囲, 起点]の並び。2つ目が折り返しぶんで、起点の行をもう一度含める
+    const segments: Array<[number, number, CopyModePoint | null]> =
+      search.direction === "forward"
+        ? [
+            [cursorRow, lastRow, cursor],
+            [0, cursorRow, null],
+          ]
+        : [
+            [0, cursorRow, cursor],
+            [cursorRow, lastRow, null],
+          ];
+    for (const [startY, endY, from] of segments) {
+      const match = scanRowsForMatch(startY, endY, search, from);
+      if (match) {
+        return { ...state, cursor: { x: match.startX, y: match.y }, desiredX: match.startX };
+      }
+    }
+    return null;
+  }
+
   function isCopyMode(): boolean {
     return copyMode !== null;
   }
@@ -239,6 +321,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   function exitCopyMode(): void {
     if (!copyMode) return;
     copyMode = null;
+    copyModeMessage = null;
     term.scrollToBottom();
   }
 
@@ -250,6 +333,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (!copyMode) return false;
     const result = applyCopyModeKey(copyMode, key, copyModeContext());
     if (!result.handled) return false;
+    // メッセージは次のキー入力まで（キーを1つ処理したら消す）
+    copyModeMessage = null;
     switch (result.effect.type) {
       case "yank": {
         const { start, end, mode } = result.effect.range;
@@ -268,6 +353,15 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
         exitCopyMode();
         return true;
       }
+      case "search": {
+        const { search } = result.effect;
+        const found = searchCopyMode(result.state, search);
+        if (!found) {
+          copyModeMessage = `見つかりません: ${search.query}`;
+        }
+        copyMode = syncCopyModeViewport(found ?? result.state);
+        return true;
+      }
       case "exit":
         exitCopyMode();
         return true;
@@ -275,6 +369,20 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
         copyMode = syncCopyModeViewport(result.state);
         return true;
     }
+  }
+
+  /**
+   * ビューポート内の検索一致をハイライト用に集める。入力中は打ちかけの文字列で先に光らせ、
+   * 確定後は直前の検索文字列を光らせ続ける（vimのhlsearch相当）
+   */
+  function copyModeSearchRows(
+    ctx: CopyModeContext,
+  ): Array<{ y: number; startX: number; endX: number }> {
+    const query = copyMode?.searchInput?.query ?? copyMode?.lastSearch?.query ?? "";
+    if (query === "") return [];
+    return findCopyModeMatches({ lines: ctx.lines, firstLineRow: ctx.firstLineRow, query })
+      .filter((m) => m.y >= ctx.viewportOffset && m.y < ctx.viewportOffset + ctx.viewportRows)
+      .map((m) => ({ y: m.y - ctx.viewportOffset, startX: m.startX, endX: m.endX }));
   }
 
   function copyModeRenderState(): CopyModeRenderState | null {
@@ -289,6 +397,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
           : null,
       selectionMode: copyMode.selectionMode,
       selectionRows: range ? copyModeSelectionRows(range, ctx) : [],
+      searchRows: copyModeSearchRows(ctx),
+      searchPrompt: copyMode.searchInput
+        ? `${copyMode.searchInput.direction === "forward" ? "/" : "?"}${copyMode.searchInput.query}`
+        : null,
+      message: copyModeMessage,
     };
   }
 

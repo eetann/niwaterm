@@ -462,6 +462,35 @@ body {
   opacity: 0.3;
 }
 
+/* 検索文字列に一致した箇所。選択（青）と区別できるよう黄系にする */
+.copy-overlay .search-hit {
+  position: absolute;
+  background: #f9e2af;
+  opacity: 0.35;
+}
+
+/* 検索プロンプト・メッセージ（vimのコマンドライン相当。画面下端に出す） */
+.copy-overlay .copy-status {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #1e1e2e;
+  background: #89b4fa;
+  border-radius: 0 4px 0 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.95;
+}
+
+.copy-overlay .copy-status.warn {
+  background: #f38ba8;
+}
+
 .copy-overlay .copy-cursor {
   position: absolute;
   box-sizing: border-box;
@@ -471,7 +500,7 @@ body {
 
 /* コピーモード中であることを示すバッジ（スクロールバックのバッジと同じ位置・体裁） */
 .copy-overlay.active::after {
-  content: "COPY MODE · hjkl/w/b 移動 · v/V 選択 · y コピー · q 終了";
+  content: "COPY MODE · hjkl/w/b 移動 · /? n/N 検索 · v/V 選択 · y コピー · q 終了";
   position: absolute;
   top: 6px;
   right: 10px;

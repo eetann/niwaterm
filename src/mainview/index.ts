@@ -70,6 +70,8 @@ const cursorElByTabId = new Map<TabId, HTMLDivElement>();
 const copyOverlayElByTabId = new Map<TabId, HTMLDivElement>();
 /** コピーモード中のタブ（キー入力をPTYではなくbunのコピーモードへ回すかの判定に使う） */
 const copyModeTabIds = new Set<TabId>();
+/** コピーモードの検索文字列を入力中のタブ（IME確定・ペーストを検索文字列へ回すかの判定に使う） */
+const copyModeSearchTabIds = new Set<TabId>();
 const browserElByTabId = new Map<TabId, WebviewTagElement>();
 const browserToolbarRootByTabId = new Map<TabId, Root>();
 // webviewId確定・初回dom-ready発火済みか（execBrowserJs/browserNavigateの前提条件判定に使う）
@@ -852,6 +854,7 @@ function teardownPopupContent(): void {
   if (copyOverlayElByTabId.get(currentPopupTabId) === popupCopyOverlayEl) {
     copyOverlayElByTabId.delete(currentPopupTabId);
     copyModeTabIds.delete(currentPopupTabId);
+    copyModeSearchTabIds.delete(currentPopupTabId);
   }
   // 昇格後（tabContentElByTabIdへ通常タブとして登録済み）はスクロール状態をリセットすべきでない
   if (!tabContentElByTabId.has(currentPopupTabId)) {
@@ -977,6 +980,7 @@ function gcStale(
     cursorElByTabId.delete(tabId);
     copyOverlayElByTabId.delete(tabId);
     copyModeTabIds.delete(tabId);
+    copyModeSearchTabIds.delete(tabId);
     wheelAccumPxByTabId.delete(tabId);
     wheelAccumPxXByTabId.delete(tabId);
     mouseTrackingByTabId.delete(tabId);
@@ -1198,13 +1202,26 @@ function updateCopyModeForTab(tabId: TabId, copyMode: CopyModeRenderState | null
   if (!overlayEl) return;
   if (!copyMode) {
     copyModeTabIds.delete(tabId);
+    copyModeSearchTabIds.delete(tabId);
     if (overlayEl.childElementCount > 0) overlayEl.replaceChildren();
     overlayEl.classList.remove("active");
     return;
   }
   copyModeTabIds.add(tabId);
+  if (copyMode.searchPrompt === null) copyModeSearchTabIds.delete(tabId);
+  else copyModeSearchTabIds.add(tabId);
   overlayEl.classList.add("active");
   const frag = document.createDocumentFragment();
+  // 検索の一致は選択の下に敷く（選択したまま検索を続けても選択範囲が見えるように）
+  for (const row of copyMode.searchRows) {
+    const el = document.createElement("div");
+    el.className = "search-hit";
+    el.style.left = `${row.startX * cellWidth}px`;
+    el.style.top = `${row.y * cellHeight}px`;
+    el.style.width = `${(row.endX - row.startX + 1) * cellWidth}px`;
+    el.style.height = `${cellHeight}px`;
+    frag.appendChild(el);
+  }
   for (const row of copyMode.selectionRows) {
     const el = document.createElement("div");
     el.className = "sel";
@@ -1221,6 +1238,14 @@ function updateCopyModeForTab(tabId: TabId, copyMode: CopyModeRenderState | null
     el.style.top = `${copyMode.cursor.y * cellHeight}px`;
     el.style.width = `${cellWidth}px`;
     el.style.height = `${cellHeight}px`;
+    frag.appendChild(el);
+  }
+  // 検索プロンプト・メッセージはvimのコマンドラインと同じく画面下端に出す
+  if (copyMode.searchPrompt !== null || copyMode.message !== null) {
+    const el = document.createElement("div");
+    el.className = copyMode.searchPrompt !== null ? "copy-status" : "copy-status warn";
+    el.textContent =
+      copyMode.searchPrompt !== null ? `${copyMode.searchPrompt}▏` : (copyMode.message ?? "");
     frag.appendChild(el);
   }
   overlayEl.replaceChildren(frag);
@@ -1597,6 +1622,14 @@ document.addEventListener("keydown", (e) => {
   // コピーモード中は、キーバインドに該当しなかったキーをPTYではなくbun側のコピーモードへ回す。
   // 修飾キー単体は無視する（Shiftを押した瞬間にコピーモードが反応してしまわないように）
   if (copyModeTabIds.has(currentTabId)) {
+    // 検索文字列の入力中のペーストだけはブラウザのpasteイベントへ通す（下のpasteリスナが検索文字列へ回す）
+    if (
+      copyModeSearchTabIds.has(currentTabId) &&
+      (e.metaKey || e.ctrlKey) &&
+      e.key.toLowerCase() === "v"
+    ) {
+      return;
+    }
     e.preventDefault();
     if (!MODIFIER_ONLY_KEYS.has(e.key)) {
       sendMessage("copyModeKey", { tabId: currentTabId, key: e.key, ctrl: e.ctrlKey });
@@ -1757,9 +1790,22 @@ imeEl.addEventListener("compositionend", (e) => {
   compositionEl.textContent = "";
   imeEl.value = "";
   if (e.data && currentTabId) {
+    if (sendTextToCopyModeSearch(currentTabId, e.data)) return;
     sendMessage("input", { tabId: currentTabId, data: e.data });
   }
 });
+
+/**
+ * コピーモードの検索文字列を入力中なら、確定した文字列を1文字ずつコピーモードへ送る（送ったらtrue）。
+ * bun側のコピーモードはキー単位でしか受け取らないため、IME確定・ペーストもここでキー列へ均す
+ */
+function sendTextToCopyModeSearch(tabId: TabId, text: string): boolean {
+  if (!copyModeSearchTabIds.has(tabId)) return false;
+  for (const ch of text) {
+    sendMessage("copyModeKey", { tabId, key: ch, ctrl: false });
+  }
+  return true;
+}
 
 // composition外でtextareaに入った入力の保険（dead key等）。二重送信はcomposingフラグで防ぐ
 imeEl.addEventListener("input", (e) => {
@@ -1776,7 +1822,9 @@ document.addEventListener("paste", (e) => {
   if (e.target instanceof HTMLInputElement) return;
   e.preventDefault();
   const text = e.clipboardData?.getData("text/plain");
-  if (text && currentTabId) sendMessage("paste", { tabId: currentTabId, data: text });
+  if (!text || !currentTabId) return;
+  if (sendTextToCopyModeSearch(currentTabId, text)) return;
+  sendMessage("paste", { tabId: currentTabId, data: text });
 });
 
 // ---- フォーカスルーティング（クリックされたタイル/タブへ切り替える）----

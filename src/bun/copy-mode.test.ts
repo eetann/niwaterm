@@ -6,6 +6,8 @@ import {
   copyModeRange,
   copyModeSelectionRows,
   createCopyModeState,
+  findCopyModeMatch,
+  findCopyModeMatches,
   type CopyModeContext,
   type CopyModeKey,
   type CopyModeState,
@@ -354,5 +356,214 @@ describe("copyModeSelectionRows", () => {
       { y: 1, startX: 0, endX: 9 },
       { y: 2, startX: 0, endX: 9 },
     ]);
+  });
+});
+
+describe("findCopyModeMatches", () => {
+  test("行内の一致をすべて桁区間で返す", () => {
+    const matches = findCopyModeMatches({
+      lines: ["foo bar foo", "baz"],
+      firstLineRow: 10,
+      query: "foo",
+    });
+    expect(matches).toEqual([
+      { y: 10, startX: 0, endX: 2 },
+      { y: 10, startX: 8, endX: 10 },
+    ]);
+  });
+
+  test("全角文字を含む行でも桁で返す（1文字2桁）", () => {
+    const matches = findCopyModeMatches({
+      lines: ["あいbc"],
+      firstLineRow: 0,
+      query: "bc",
+    });
+    expect(matches).toEqual([{ y: 0, startX: 4, endX: 5 }]);
+  });
+
+  test("小文字のみのクエリは大文字小文字を区別しない（smartcase）", () => {
+    expect(findCopyModeMatches({ lines: ["Foo"], firstLineRow: 0, query: "foo" })).toEqual([
+      { y: 0, startX: 0, endX: 2 },
+    ]);
+    expect(findCopyModeMatches({ lines: ["Foo"], firstLineRow: 0, query: "Foo" })).toEqual([
+      { y: 0, startX: 0, endX: 2 },
+    ]);
+  });
+
+  test("大文字を含むクエリは大文字小文字を区別する（smartcase）", () => {
+    expect(findCopyModeMatches({ lines: ["foo"], firstLineRow: 0, query: "Foo" })).toEqual([]);
+  });
+
+  test("空のクエリは何にも一致しない", () => {
+    expect(findCopyModeMatches({ lines: ["foo"], firstLineRow: 0, query: "" })).toEqual([]);
+  });
+});
+
+describe("findCopyModeMatch", () => {
+  const lines = ["foo one", "bar foo", "foo two"];
+
+  test("前方検索は起点より後の最初の一致を返す（起点そのものは含まない）", () => {
+    expect(
+      findCopyModeMatch({
+        lines,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "forward",
+        from: { x: 0, y: 0 },
+      }),
+    ).toEqual({ y: 1, startX: 4, endX: 6 });
+  });
+
+  test("後方検索は起点より前の最も近い一致を返す", () => {
+    expect(
+      findCopyModeMatch({
+        lines,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "backward",
+        from: { x: 0, y: 2 },
+      }),
+    ).toEqual({ y: 1, startX: 4, endX: 6 });
+  });
+
+  test("起点がnullなら前方検索は先頭から、後方検索は末尾から探す", () => {
+    expect(
+      findCopyModeMatch({ lines, firstLineRow: 0, query: "foo", direction: "forward", from: null }),
+    ).toEqual({ y: 0, startX: 0, endX: 2 });
+    expect(
+      findCopyModeMatch({
+        lines,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "backward",
+        from: null,
+      }),
+    ).toEqual({ y: 2, startX: 0, endX: 2 });
+  });
+
+  test("同じ行の中でも起点の桁より後・前で絞り込む", () => {
+    const same = ["foo foo foo"];
+    expect(
+      findCopyModeMatch({
+        lines: same,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "forward",
+        from: { x: 4, y: 0 },
+      }),
+    ).toEqual({ y: 0, startX: 8, endX: 10 });
+    expect(
+      findCopyModeMatch({
+        lines: same,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "backward",
+        from: { x: 4, y: 0 },
+      }),
+    ).toEqual({ y: 0, startX: 0, endX: 2 });
+  });
+
+  test("一致が無ければnull（折り返しは呼び出し側の責務）", () => {
+    expect(
+      findCopyModeMatch({
+        lines,
+        firstLineRow: 0,
+        query: "foo",
+        direction: "forward",
+        from: { x: 0, y: 2 },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("検索キー（/ ? n N）", () => {
+  const ctx = ctxOf(["foo one", "bar foo", "foo two"]);
+
+  test("/で入力状態に入り、打った文字が検索文字列へ溜まる", () => {
+    const state = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o", "o");
+    expect(state.searchInput).toEqual({ direction: "forward", query: "foo" });
+  });
+
+  test("入力中は移動キーとして解釈しない（jでカーソルが動かない）", () => {
+    const state = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "j");
+    expect(state.cursor).toEqual({ x: 0, y: 0 });
+    expect(state.searchInput?.query).toBe("j");
+  });
+
+  test("Backspaceで1文字消し、空でのBackspaceは入力自体を取りやめる", () => {
+    const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o");
+    expect(press(typed, ctx, "Backspace").searchInput?.query).toBe("f");
+    expect(press(typed, ctx, "Backspace", "Backspace", "Backspace").searchInput).toBeNull();
+  });
+
+  test("Escapeで入力を取りやめてもコピーモードは抜けない", () => {
+    const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f");
+    const result = applyCopyModeKey(typed, key("Escape"), ctx);
+    expect(result.effect).toEqual({ type: "none" });
+    expect(result.state.searchInput).toBeNull();
+  });
+
+  test("Ctrl+uで入力中の文字列を全部消す・Ctrl+cで取りやめる", () => {
+    const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o");
+    expect(applyCopyModeKey(typed, key("u", true), ctx).state.searchInput?.query).toBe("");
+    expect(applyCopyModeKey(typed, key("c", true), ctx).state.searchInput).toBeNull();
+  });
+
+  test("Enterで検索エフェクトを返し、直前の検索として覚える", () => {
+    const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "?", "f", "o", "o");
+    const result = applyCopyModeKey(typed, key("Enter"), ctx);
+    expect(result.effect).toEqual({
+      type: "search",
+      search: { direction: "backward", query: "foo" },
+    });
+    expect(result.state.searchInput).toBeNull();
+    expect(result.state.lastSearch).toEqual({ direction: "backward", query: "foo" });
+  });
+
+  test("空のままEnterは直前の検索文字列を使い回す", () => {
+    const searched = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o", "o", "Enter");
+    const result = applyCopyModeKey(press(searched, ctx, "/"), key("Enter"), ctx);
+    expect(result.effect).toEqual({
+      type: "search",
+      search: { direction: "forward", query: "foo" },
+    });
+  });
+
+  test("検索していない状態でのEnterは入力を取りやめるだけ", () => {
+    const result = applyCopyModeKey(
+      press(createCopyModeState({ x: 0, y: 0 }), ctx, "/"),
+      key("Enter"),
+      ctx,
+    );
+    expect(result.effect).toEqual({ type: "none" });
+    expect(result.state.searchInput).toBeNull();
+  });
+
+  test("nは直前の検索と同じ向き、Nは逆向きで検索する", () => {
+    const searched = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o", "o", "Enter");
+    expect(applyCopyModeKey(searched, key("n"), ctx).effect).toEqual({
+      type: "search",
+      search: { direction: "forward", query: "foo" },
+    });
+    const reversed = applyCopyModeKey(searched, key("N"), ctx);
+    expect(reversed.effect).toEqual({
+      type: "search",
+      search: { direction: "backward", query: "foo" },
+    });
+    // Nを打っても「直前の検索」の向き自体は変わらない
+    expect(reversed.state.lastSearch).toEqual({ direction: "forward", query: "foo" });
+  });
+
+  test("まだ検索していない状態のn/Nは何もしない", () => {
+    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("n"), ctx);
+    expect(result.handled).toBe(true);
+    expect(result.effect).toEqual({ type: "none" });
+  });
+
+  test("yankと違い検索ではコピーモードを抜けない（選択は保ったまま）", () => {
+    const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "v", "/", "f", "o", "o");
+    const result = applyCopyModeKey(selecting, key("Enter"), ctx);
+    expect(result.state.selectionMode).toBe("char");
+    expect(result.state.anchor).toEqual({ x: 0, y: 0 });
   });
 });
