@@ -243,13 +243,14 @@ keybindings: {
 | `shift+n` | new-workspace |
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
+| `v` | copy-mode |
 | `` ` `` | toggle-popup |
 | `:` | command-palette |
 | `=` / `-` / `0` | increase-font-size / decrease-font-size / reset-font-size |
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（34種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（35種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -268,12 +269,35 @@ keybindings: {
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
 | `toggle-popup` | ポップアップの表示/非表示切替 |
 | `copy-selection` | 選択範囲をクリップボードへコピー（既定は`direct`にWindowsのみ`ctrl+shift+c`が割り当て済み。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
+| `copy-mode` | vi風コピーモードに入る（既定は prefix + `v`。キーボードだけでスクロールバックを移動・選択・コピーできる。操作キーは下記「コピーモード」参照） |
 | `paste-clipboard` | クリップボードの内容をペースト（既定は`direct`にWindowsのみ`ctrl+shift+v`が割り当て済み。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
 | `scroll-page-up` / `scroll-page-down` | スクロールバックを1ページ分スクロール |
 | `scroll-to-top` / `scroll-to-bottom` | スクロールバックの先頭/最新行へジャンプ |
 | `command-palette` | コマンドパレットを開く |
 | `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
 | `reload-config` | 設定ファイルを手動で再読み込みする（ファイル保存時の自動リロードと同じ処理。既定キーは無いため使うには自分で割り当てる必要がある） |
+
+### コピーモード（vi風のキーボード選択）
+
+prefix + `v`（`copy-mode`アクション）でコピーモードに入る。マウスを使わずにスクロールバックを移動し、範囲を選択してクリップボードへコピーできる。コピーモード中はビューポートがその時点の位置で固定されるため、新しい出力が来ても画面が流れない。
+
+コピーモード中のキーはniwatermが受け取り、ターミナルへは送られない（prefixキーは通常どおり効くため、prefix経由のタイル操作はコピーモード中もできる）。
+
+| キー | 動作 |
+|---|---|
+| `h` / `j` / `k` / `l`、矢印キー | カーソル移動 |
+| `w` / `b` / `e` | 単語単位の移動（次の単語の先頭 / 前の単語の先頭 / 単語の末尾） |
+| `0` / `^` / `$` | 行頭 / 行の最初の非空白 / 行の最後の非空白 |
+| `gg` / `G` | スクロールバックの先頭 / 最新行 |
+| `ctrl+u` / `ctrl+d` | 半画面ずつ上下へ |
+| `ctrl+b` / `ctrl+f`、`pageup` / `pagedown` | 1画面ずつ上下へ（`ctrl+b`はprefixが優先されるため、実際にはprefixとして解釈される点に注意） |
+| `H` / `M` / `L` | 画面の上端 / 中央 / 下端へ |
+| `v` / `V` | 文字選択 / 行選択の開始・解除（選択中に押すと切り替え） |
+| `y`、`Enter` | 選択範囲をクリップボードへコピーしてコピーモードを抜ける（選択していなければカーソル行をコピー） |
+| `Escape` | 選択中なら選択解除、選択していなければコピーモードを抜ける |
+| `q` / `ctrl+c` | コピーモードを抜ける |
+
+コピー時は折り返された行を1行に連結し（unwrap）、行末の空白を落とす（trim）。全角文字は2桁として扱うため、日本語を含む行でも桁がずれない。
 
 不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`/`ctrl`/`alt`のいずれも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`bun run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 

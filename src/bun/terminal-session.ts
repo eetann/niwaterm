@@ -2,6 +2,18 @@
 // index.tsはPTY/FFIの詳細を知らずにこのモジュールだけを使う。
 // 将来のタブ実装は createTerminalSession() 1呼び出し = タブ1つに対応させる想定。
 import { writeClipboardText } from "./clipboard";
+import {
+  applyCopyModeKey,
+  clampCopyModeCursor,
+  copyModeRange,
+  copyModeSelectionRows,
+  createCopyModeState,
+  type CopyModeContext,
+  type CopyModeKey,
+  type CopyModeSelectionMode,
+  type CopyModeState,
+  viewportOffsetForCursor,
+} from "./copy-mode";
 import { type CursorShape, createGhosttyTerminal, type MouseEventInput } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
@@ -17,6 +29,15 @@ export type TerminalSessionCallbacks = {
 export type TerminalSessionOptions = PtyOptions &
   TerminalSessionCallbacks & { maxScrollback?: number };
 
+/** コピーモードの描画に必要な情報。座標はすべてビューポート座標（webviewがそのまま桁×セル幅で置ける） */
+export interface CopyModeRenderState {
+  /** コピーモードのカーソル位置。スクロールでビューポート外へ出ている場合はnull */
+  cursor: { x: number; y: number } | null;
+  selectionMode: CopyModeSelectionMode;
+  /** 選択範囲を行ごとの桁区間へ落としたもの（両端とも含む） */
+  selectionRows: Array<{ y: number; startX: number; endX: number }>;
+}
+
 export interface TerminalRenderState {
   kind: "terminal";
   html: string;
@@ -30,6 +51,8 @@ export interface TerminalRenderState {
   mouseTracking: boolean;
   /** ボタン非押下時の移動も報告が要るモード（DECSET 1003）か */
   mouseAnyMotion: boolean;
+  /** vi風コピーモード中の状態。コピーモードでなければnull */
+  copyMode: CopyModeRenderState | null;
 }
 
 export function createTerminalSession(opts: TerminalSessionOptions) {
@@ -45,6 +68,14 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   });
   const term = createGhosttyTerminal(opts.cols, opts.rows, opts.maxScrollback);
 
+  // vi風コピーモードの状態（実際の操作はこのファイル下部の「vi風コピーモード」節）。
+  // PTY出力のコールバックより前に初期化しておく必要があるためここで宣言する
+  let copyMode: CopyModeState | null = null;
+  /**
+   * コピーモード中に維持するビューポート先頭の画面座標行。カーソル移動で意図的に
+   * スクロールしたときだけ更新し、出力による追従はこの値へ引き戻す
+   */
+  let copyModeOffset = 0;
   let currentCols = opts.cols;
   let currentRows = opts.rows;
   let disposed = false;
@@ -79,6 +110,10 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   pty.onData((data) => {
     if (disposed) return;
     term.write(data);
+    // コピーモード中はビューポートを固定する（新しい出力が来ても閲覧位置が流れないように）。
+    // ビューポートが最新行に張り付いている状態では出力のたびに勝手に追従するため、
+    // 書き込み直後に固定位置へ戻し続ける必要がある（tmuxのcopy-modeと同じ体験）
+    if (copyMode) term.scrollToRow(copyModeOffset);
     callbacks.onOutput?.();
   });
 
@@ -97,13 +132,16 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   }
 
   // 他の主要ターミナル（xterm系/iTerm2/Ghostty等）と同様、スクロールバック閲覧中に
-  // 何か入力すると自動で最新行へ戻る（tmuxのcopy-mode離脱に相当する挙動）
+  // 何か入力すると自動で最新行へ戻る（tmuxのcopy-mode離脱に相当する挙動）。
+  // コピーモード中もCLIのsend-keys等でここへ来ることがあるため、その場合は先に抜ける
   function write(data: string | Uint8Array): void {
+    exitCopyMode();
     term.scrollToBottom();
     pty.write(data);
   }
 
   function paste(text: string): void {
+    exitCopyMode();
     term.scrollToBottom();
     pty.write(term.encodePaste(text));
   }
@@ -128,6 +166,130 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   function scrollToBottom(): void {
     term.scrollToBottom();
+  }
+
+  // ---- vi風コピーモード（TASK-0012） ----
+  // 状態と移動ロジックはcopy-mode.tsの純粋関数が持ち、ここは
+  // 「行テキストのスナップショットを用意する」「ビューポートを追従させる」
+  // 「選択範囲をlibghostty-vtに渡してテキスト化する」という副作用側だけを担う
+
+  /**
+   * copy-mode.tsに渡す画面のスナップショットを作る。行テキストはビューポートの上下1行分を
+   * 余分に含める（j/kで端を越えた直後や、行を跨ぐ単語移動でその行のテキストが要るため）
+   */
+  function copyModeContext(): CopyModeContext {
+    const bar = term.scrollbar();
+    const viewportRows = Math.max(bar.len, 1);
+    const totalRows = Math.max(bar.total, viewportRows);
+    const firstLineRow = Math.max(bar.offset - 1, 0);
+    const lastLineRow = Math.min(bar.offset + viewportRows, totalRows - 1);
+    const expected = lastLineRow - firstLineRow + 1;
+    const dumped = term.dumpScreenRange({
+      startX: 0,
+      startY: firstLineRow,
+      endX: Math.max(currentCols - 1, 0),
+      endY: lastLineRow,
+    });
+    // フォーマッタは末尾に改行を付けないが、行数が足りない場合に備えて空行で埋める
+    // （行が取れないと桁のクランプが効かず、カーソルが行の外へ残ってしまう）
+    const lines = dumped === "" ? [] : dumped.split("\n");
+    while (lines.length < expected) lines.push("");
+    return {
+      cols: currentCols,
+      viewportRows,
+      viewportOffset: bar.offset,
+      totalRows,
+      firstLineRow,
+      lines: lines.slice(0, expected),
+    };
+  }
+
+  /** カーソルがビューポートから出ていたらスクロールし、新しい行テキストで桁を揃え直す */
+  function syncCopyModeViewport(state: CopyModeState): CopyModeState {
+    const ctx = copyModeContext();
+    const offset = viewportOffsetForCursor(state, ctx);
+    if (offset === ctx.viewportOffset) {
+      copyModeOffset = ctx.viewportOffset;
+      return clampCopyModeCursor(state, ctx);
+    }
+    term.scrollToRow(offset);
+    const next = copyModeContext();
+    copyModeOffset = next.viewportOffset;
+    return clampCopyModeCursor(state, next);
+  }
+
+  function isCopyMode(): boolean {
+    return copyMode !== null;
+  }
+
+  /**
+   * コピーモードへ入る。ターミナルのカーソル位置から開始し、その時点のビューポートを
+   * 絶対行で固定する（固定しないと、閲覧中に新しい出力が来るたび画面が流れてしまう）
+   */
+  function enterCopyMode(): void {
+    if (copyMode) return;
+    const bar = term.scrollbar();
+    const cursor = term.cursor();
+    copyModeOffset = bar.offset;
+    term.scrollToRow(copyModeOffset);
+    copyMode = syncCopyModeViewport(createCopyModeState({ x: cursor.x, y: bar.offset + cursor.y }));
+  }
+
+  /** コピーモードを抜けて最新行へ戻る */
+  function exitCopyMode(): void {
+    if (!copyMode) return;
+    copyMode = null;
+    term.scrollToBottom();
+  }
+
+  /**
+   * コピーモード中の1キーを処理する。コピーモードでない・未割当のキーならfalseを返す
+   * （呼び出し側が通常の入力として扱えるようにするため）
+   */
+  function handleCopyModeKey(key: CopyModeKey): boolean {
+    if (!copyMode) return false;
+    const result = applyCopyModeKey(copyMode, key, copyModeContext());
+    if (!result.handled) return false;
+    switch (result.effect.type) {
+      case "yank": {
+        const { start, end, mode } = result.effect.range;
+        // 折り返された長いコマンド行を1行として取り出したいのでunwrap、
+        // グリッドの行末を埋める空白は要らないのでtrimを有効にする
+        const text = term.dumpScreenRange({
+          startX: start.x,
+          startY: start.y,
+          endX: mode === "line" ? Math.max(currentCols - 1, 0) : end.x,
+          endY: end.y,
+          unwrap: true,
+          trim: true,
+        });
+        const trimmed = text.replace(/\n+$/u, "");
+        if (trimmed !== "") writeClipboardText(trimmed);
+        exitCopyMode();
+        return true;
+      }
+      case "exit":
+        exitCopyMode();
+        return true;
+      default:
+        copyMode = syncCopyModeViewport(result.state);
+        return true;
+    }
+  }
+
+  function copyModeRenderState(): CopyModeRenderState | null {
+    if (!copyMode) return null;
+    const ctx = copyModeContext();
+    const viewportY = copyMode.cursor.y - ctx.viewportOffset;
+    const range = copyModeRange(copyMode, ctx.cols);
+    return {
+      cursor:
+        viewportY >= 0 && viewportY < ctx.viewportRows
+          ? { x: copyMode.cursor.x, y: viewportY }
+          : null,
+      selectionMode: copyMode.selectionMode,
+      selectionRows: range ? copyModeSelectionRows(range, ctx) : [],
+    };
   }
 
   /**
@@ -163,6 +325,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       viewportPinned: term.viewportPinned(),
       mouseTracking: term.mouseTracking(),
       mouseAnyMotion: term.mouseAnyMotion(),
+      copyMode: copyModeRenderState(),
     };
   }
 
@@ -184,6 +347,10 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     write,
     paste,
     mouseEvent,
+    isCopyMode,
+    enterCopyMode,
+    exitCopyMode,
+    handleCopyModeKey,
     resize,
     setCellSize,
     scroll,

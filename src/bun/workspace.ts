@@ -3,6 +3,7 @@
 // tile/tabのid採番は既存方針どおりworkspace-manager.tsに一元化されたままで、このファイルはBoardId採番のみ担う。
 // ポップアップ（ADR 0005）はBoardをまたいでも同じものを使えるよう、Board単位ではなくこの層で
 // popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
+import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { RestoredTreeMeta } from "./persistence";
 import { toPersistedTileNode, type PersistedTileNode } from "./persistence";
@@ -402,6 +403,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
     findBoardOwnerByTabId(tabId)?.handleMouseEvent(tabId, ev);
   }
 
+  function enterCopyMode(tabId: TabId): void {
+    if (popup.hasTab(tabId)) {
+      popup.enterCopyMode();
+      return;
+    }
+    findBoardOwnerByTabId(tabId)?.enterCopyMode(tabId);
+  }
+
+  function handleCopyModeKey(tabId: TabId, key: CopyModeKey): boolean {
+    if (popup.hasTab(tabId)) return popup.handleCopyModeKey(key);
+    return findBoardOwnerByTabId(tabId)?.handleCopyModeKey(tabId, key) ?? false;
+  }
+
   function handleScroll(tabId: TabId, deltaLines: number): void {
     if (popup.hasTab(tabId)) {
       popup.handleScroll(deltaLines);
@@ -593,6 +607,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handleInput,
     handleMouseEvent,
     handlePaste,
+    enterCopyMode,
+    handleCopyModeKey,
     handleResize,
     handleScroll,
     handleScrollToTop,

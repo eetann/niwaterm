@@ -68,6 +68,10 @@ export type NiwaRPC = {
       paste: { tabId: TabId; data: string };
       /** マウスレポート有効時（TUIアプリ等）にwebviewから転送されるマウス操作 */
       mouseEvent: { tabId: TabId; event: MouseEventInput };
+      /** vi風コピーモードへ入る（キーバインド・コマンドパレットから） */
+      enterCopyMode: { tabId: TabId };
+      /** コピーモード中のキー入力。未割当キーはbun側で無視する */
+      copyModeKey: { tabId: TabId; key: string; ctrl: boolean };
       scroll: { tabId: TabId; deltaLines: number };
       scrollToTop: { tabId: TabId };
       scrollToBottom: { tabId: TabId };
@@ -384,6 +388,12 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       mouseEvent: ({ tabId, event }: { tabId: TabId; event: MouseEventInput }) => {
         workspaceManager.handleMouseEvent(tabId, event);
+      },
+      enterCopyMode: ({ tabId }: { tabId: TabId }) => {
+        workspaceManager.enterCopyMode(tabId);
+      },
+      copyModeKey: ({ tabId, key, ctrl }: { tabId: TabId; key: string; ctrl: boolean }) => {
+        workspaceManager.handleCopyModeKey(tabId, { key, ctrl });
       },
       scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
         workspaceManager.handleScroll(tabId, deltaLines);

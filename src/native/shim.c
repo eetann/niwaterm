@@ -12,29 +12,42 @@
 // でダンプする。selectionはterminalの状態に対するスナップショット参照であり
 // フォーマッタオブジェクトのように使い回せないため、呼び出しごとに作り直す。
 //
-// emit: 0=plain, 1=vt, 2=html (GhosttyFormatterFormat)
-// use_viewport: 0=アクティブエリア（スクロールバック無視・常に最新）,
-//               1=ビューポート（ghostty_terminal_scroll_viewportでスクロールした位置に追従）
-int niwa_dump_screen(GhosttyTerminal term, int emit, int use_viewport, uint8_t *buf,
-                      size_t buf_len, size_t *out_written) {
-  uint16_t cols = 0;
-  uint16_t rows = 0;
-  ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_COLS, &cols);
-  ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_ROWS, &rows);
+// bun:ffiはmacOS(arm64)で引数が10個以上ある関数を正しく呼べない（9個までは正常。
+// 10個目以降がゴミ値になったりセグフォで落ちる。詳細:
+// docs/known-issues/bun-ffi-breaks-with-ten-or-more-args.md）。
+// niwa_dump_selectionは指定項目が多いため、引数を並べるのではなく
+// int32を並べただけの構造体をポインタで受け取る。
+// JS側はInt32Arrayをそのまま渡せばよく、パディングも生じない
+typedef struct {
+  /** GhosttyFormatterFormat (0=plain, 1=vt, 2=html) */
+  int32_t emit;
+  /** GhosttyPointTag (0=ACTIVE, 1=VIEWPORT, 2=SCREEN, 3=HISTORY) */
+  int32_t tag;
+  int32_t start_x;
+  int32_t start_y;
+  int32_t end_x;
+  int32_t end_y;
+  /** 矩形選択にするか */
+  int32_t rectangle;
+  /** 折り返された行を1行に連結するか */
+  int32_t unwrap;
+  /** 行末の空白を落とすか */
+  int32_t trim;
+} NiwaDumpSelectionOptions;
 
-  GhosttyPointTag tag = use_viewport ? GHOSTTY_POINT_TAG_VIEWPORT : GHOSTTY_POINT_TAG_ACTIVE;
-
+int niwa_dump_selection(GhosttyTerminal term, const NiwaDumpSelectionOptions *o, uint8_t *buf,
+                        size_t buf_len, size_t *out_written) {
   GhosttyPoint p_start;
   memset(&p_start, 0, sizeof(p_start));
-  p_start.tag = tag;
-  p_start.value.coordinate.x = 0;
-  p_start.value.coordinate.y = 0;
+  p_start.tag = (GhosttyPointTag)o->tag;
+  p_start.value.coordinate.x = (uint16_t)o->start_x;
+  p_start.value.coordinate.y = (uint32_t)o->start_y;
 
   GhosttyPoint p_end;
   memset(&p_end, 0, sizeof(p_end));
-  p_end.tag = tag;
-  p_end.value.coordinate.x = cols > 0 ? cols - 1 : 0;
-  p_end.value.coordinate.y = rows > 0 ? rows - 1 : 0;
+  p_end.tag = (GhosttyPointTag)o->tag;
+  p_end.value.coordinate.x = (uint16_t)o->end_x;
+  p_end.value.coordinate.y = (uint32_t)o->end_y;
 
   GhosttyGridRef start;
   memset(&start, 0, sizeof(start));
@@ -53,17 +66,36 @@ int niwa_dump_screen(GhosttyTerminal term, int emit, int use_viewport, uint8_t *
   sel.size = sizeof(sel);
   sel.start = start;
   sel.end = end;
-  sel.rectangle = false;
+  sel.rectangle = o->rectangle != 0;
 
   GhosttyTerminalSelectionFormatOptions opts;
   memset(&opts, 0, sizeof(opts));
   opts.size = sizeof(opts);
-  opts.emit = (GhosttyFormatterFormat)emit;
-  opts.unwrap = false;
-  opts.trim = false;
+  opts.emit = (GhosttyFormatterFormat)o->emit;
+  opts.unwrap = o->unwrap != 0;
+  opts.trim = o->trim != 0;
   opts.selection = &sel;
 
   return ghostty_terminal_selection_format_buf(term, opts, buf, buf_len, out_written);
+}
+
+// 画面（アクティブエリアまたはビューポート）全体をダンプする。
+// use_viewport: 0=アクティブエリア（スクロールバック無視・常に最新）,
+//               1=ビューポート（ghostty_terminal_scroll_viewportでスクロールした位置に追従）
+int niwa_dump_screen(GhosttyTerminal term, int emit, int use_viewport, uint8_t *buf,
+                      size_t buf_len, size_t *out_written) {
+  uint16_t cols = 0;
+  uint16_t rows = 0;
+  ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_COLS, &cols);
+  ghostty_terminal_get(term, GHOSTTY_TERMINAL_DATA_ROWS, &rows);
+
+  NiwaDumpSelectionOptions opts;
+  memset(&opts, 0, sizeof(opts));
+  opts.emit = emit;
+  opts.tag = use_viewport ? GHOSTTY_POINT_TAG_VIEWPORT : GHOSTTY_POINT_TAG_ACTIVE;
+  opts.end_x = cols > 0 ? cols - 1 : 0;
+  opts.end_y = rows > 0 ? rows - 1 : 0;
+  return niwa_dump_selection(term, &opts, buf, buf_len, out_written);
 }
 
 // ghostty_terminal_scroll_viewportもGhosttyTerminalScrollViewportを値渡しするため、

@@ -2,6 +2,7 @@
 // 1つのBoardが1本のTileツリーを保持する（ADR 0006）。workspace.tsがBoardを複数束ね、
 // bun/index.tsはworkspace-manager.ts経由でのみタイル・タブ・PTYを操作する。
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
+import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import type {
@@ -503,6 +504,22 @@ export function createBoard(opts: BoardOptions) {
     sessions.get(tabId)?.mouseEvent(ev);
   }
 
+  // コピーモードはPTYを経由しないため、handleScrollと同じくonDirty()で再描画を促す必要がある
+  function enterCopyMode(tabId: TabId): void {
+    const session = sessions.get(tabId);
+    if (!session) return;
+    session.enterCopyMode();
+    opts.onDirty();
+  }
+
+  /** コピーモード中のキー。コピーモードでない・未割当のキーならfalseを返す */
+  function handleCopyModeKey(tabId: TabId, key: CopyModeKey): boolean {
+    const session = sessions.get(tabId);
+    if (!session?.handleCopyModeKey(key)) return false;
+    opts.onDirty();
+    return true;
+  }
+
   // スクロールはPTYを経由しないため、input/pasteと違いonOutput→onDirtyの連鎖が起きない。
   // 呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
   function handleScroll(tabId: TabId, deltaLines: number): void {
@@ -565,6 +582,7 @@ export function createBoard(opts: BoardOptions) {
         viewportPinned: true,
         mouseTracking: false,
         mouseAnyMotion: false,
+        copyMode: null,
       };
     }
     for (const [tabId, state] of browserTabs) {
@@ -727,6 +745,8 @@ export function createBoard(opts: BoardOptions) {
     respawnTab,
     handleInput,
     handleMouseEvent,
+    enterCopyMode,
+    handleCopyModeKey,
     handlePaste,
     handleResize,
     handleScroll,

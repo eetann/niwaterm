@@ -33,6 +33,7 @@ import {
   RotateCcw,
   RotateCw,
   Rows2,
+  TextCursorInput,
   X,
   ZoomIn,
   ZoomOut,
@@ -231,6 +232,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "選択範囲をコピー",
     category: "編集",
     icon: Copy,
+  },
+  {
+    action: "copy-mode",
+    labelEn: "Copy Mode",
+    label: "vi風コピーモードに入る",
+    category: "編集",
+    icon: TextCursorInput,
+    keywords: ["vi", "vim", "select", "keyboard", "選択"],
   },
   {
     action: "paste-clipboard",

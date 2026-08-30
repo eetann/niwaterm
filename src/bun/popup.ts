@@ -5,6 +5,7 @@
 import { readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import {
@@ -260,6 +261,20 @@ export function createPopup(opts: PopupOptions) {
   }
 
   // スクロールはPTYを経由しないため、呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
+  // コピーモードはPTYを経由しないため、handleScrollと同じくonDirty()で再描画を促す
+  function enterCopyMode(): void {
+    if (!session) return;
+    session.enterCopyMode();
+    opts.onDirty();
+  }
+
+  /** コピーモード中のキー。コピーモードでない・未割当のキーならfalseを返す */
+  function handleCopyModeKey(key: CopyModeKey): boolean {
+    if (!session?.handleCopyModeKey(key)) return false;
+    opts.onDirty();
+    return true;
+  }
+
   function handleScroll(deltaLines: number): void {
     if (!session) return;
     session.scroll(deltaLines);
@@ -329,6 +344,8 @@ export function createPopup(opts: PopupOptions) {
     handleInput,
     handleMouseEvent,
     handlePaste,
+    enterCopyMode,
+    handleCopyModeKey,
     handleScroll,
     handleScrollToTop,
     handleScrollToBottom,

@@ -13,6 +13,7 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
+import type { CopyModeRenderState } from "../bun/terminal-session";
 import type { TabRenderState } from "../bun/workspace";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type {
@@ -35,7 +36,7 @@ import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
-import { isWideChar } from "./wide-char";
+import { isWideChar } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
@@ -53,6 +54,7 @@ const popupEl = document.getElementById("popup") as HTMLDivElement;
 const popupBoxEl = document.getElementById("popup-box") as HTMLDivElement;
 const popupTermEl = popupBoxEl.querySelector(".term") as HTMLDivElement;
 const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
+const popupCopyOverlayEl = popupBoxEl.querySelector(".copy-overlay") as HTMLDivElement;
 const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
 const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
@@ -65,6 +67,9 @@ const tabBarReactRootByTileId = new Map<TileId, Root>();
 const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
+const copyOverlayElByTabId = new Map<TabId, HTMLDivElement>();
+/** コピーモード中のタブ（キー入力をPTYではなくbunのコピーモードへ回すかの判定に使う） */
+const copyModeTabIds = new Set<TabId>();
 const browserElByTabId = new Map<TabId, WebviewTagElement>();
 const browserToolbarRootByTabId = new Map<TabId, Root>();
 // webviewId確定・初回dom-ready発火済みか（execBrowserJs/browserNavigateの前提条件判定に使う）
@@ -373,18 +378,23 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
           // 加えて、フォーカスしていないタイルのタブではカーソルを表示しない（tmux同様の挙動）
+          // コピーモード中は専用カーソル（オーバーレイ）だけを見せる
           updateCursorForTab(
             tabId,
             renderState.cursorX,
             renderState.cursorY,
-            renderState.cursorVisible && renderState.viewportPinned && tabId === currentTabId,
+            renderState.cursorVisible &&
+              renderState.viewportPinned &&
+              tabId === currentTabId &&
+              renderState.copyMode === null,
             renderState.cursorShape,
           );
+          updateCopyModeForTab(tabId, renderState.copyMode);
           mouseTrackingByTabId.set(tabId, {
             tracking: renderState.mouseTracking,
             anyMotion: renderState.mouseAnyMotion,
           });
-          updateScrollIndicator(tabId, renderState.viewportPinned);
+          updateScrollIndicator(tabId, renderState.viewportPinned || renderState.copyMode !== null);
           if (tabId === currentTabId && renderState.viewportPinned) {
             updateImePosition(renderState.cursorX, renderState.cursorY);
           }
@@ -633,9 +643,11 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
   const tabContentEl = frag.querySelector(".tab-content") as HTMLDivElement;
   const termEl = tabContentEl.querySelector(".term") as HTMLDivElement;
   const cursorEl = tabContentEl.querySelector(".cursor") as HTMLDivElement;
+  const copyOverlayEl = tabContentEl.querySelector(".copy-overlay") as HTMLDivElement;
   tabContentElByTabId.set(tabId, tabContentEl);
   termElByTabId.set(tabId, termEl);
   cursorElByTabId.set(tabId, cursorEl);
+  copyOverlayElByTabId.set(tabId, copyOverlayEl);
   tileContentEl.appendChild(tabContentEl);
   const ro = new ResizeObserver(() => {
     // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はスキップ。
@@ -815,6 +827,7 @@ function setupPopupContent(tabId: TabId): void {
   currentPopupTabId = tabId;
   termElByTabId.set(tabId, popupTermEl);
   cursorElByTabId.set(tabId, popupCursorEl);
+  copyOverlayElByTabId.set(tabId, popupCopyOverlayEl);
   popupResizeObserver = new ResizeObserver(() => {
     if (!popupVisible || !currentPopupTabId) return;
     sendResize(currentPopupTabId);
@@ -835,6 +848,10 @@ function teardownPopupContent(): void {
   }
   if (cursorElByTabId.get(currentPopupTabId) === popupCursorEl) {
     cursorElByTabId.delete(currentPopupTabId);
+  }
+  if (copyOverlayElByTabId.get(currentPopupTabId) === popupCopyOverlayEl) {
+    copyOverlayElByTabId.delete(currentPopupTabId);
+    copyModeTabIds.delete(currentPopupTabId);
   }
   // 昇格後（tabContentElByTabIdへ通常タブとして登録済み）はスクロール状態をリセットすべきでない
   if (!tabContentElByTabId.has(currentPopupTabId)) {
@@ -958,6 +975,8 @@ function gcStale(
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
+    copyOverlayElByTabId.delete(tabId);
+    copyModeTabIds.delete(tabId);
     wheelAccumPxByTabId.delete(tabId);
     wheelAccumPxXByTabId.delete(tabId);
     mouseTrackingByTabId.delete(tabId);
@@ -1166,6 +1185,45 @@ function updateCursorForTab(
       cursorEl.style.height = `${cellHeight}px`;
       break;
   }
+}
+
+/**
+ * コピーモードの選択ハイライトとカーソルを、ターミナル描画の上に重ねるオーバーレイとして描く。
+ * bun側が桁・行（ビューポート座標）まで確定させて送ってくるので、ここは実測セルサイズを
+ * 掛けてピクセルへ直すだけにする（DOMのSelectionは使わない。描画のたびにinnerHTMLを
+ * 差し替える方式では選択が消えてしまうため）
+ */
+function updateCopyModeForTab(tabId: TabId, copyMode: CopyModeRenderState | null): void {
+  const overlayEl = copyOverlayElByTabId.get(tabId);
+  if (!overlayEl) return;
+  if (!copyMode) {
+    copyModeTabIds.delete(tabId);
+    if (overlayEl.childElementCount > 0) overlayEl.replaceChildren();
+    overlayEl.classList.remove("active");
+    return;
+  }
+  copyModeTabIds.add(tabId);
+  overlayEl.classList.add("active");
+  const frag = document.createDocumentFragment();
+  for (const row of copyMode.selectionRows) {
+    const el = document.createElement("div");
+    el.className = "sel";
+    el.style.left = `${row.startX * cellWidth}px`;
+    el.style.top = `${row.y * cellHeight}px`;
+    el.style.width = `${(row.endX - row.startX + 1) * cellWidth}px`;
+    el.style.height = `${cellHeight}px`;
+    frag.appendChild(el);
+  }
+  if (copyMode.cursor) {
+    const el = document.createElement("div");
+    el.className = "copy-cursor";
+    el.style.left = `${copyMode.cursor.x * cellWidth}px`;
+    el.style.top = `${copyMode.cursor.y * cellHeight}px`;
+    el.style.width = `${cellWidth}px`;
+    el.style.height = `${cellHeight}px`;
+    frag.appendChild(el);
+  }
+  overlayEl.replaceChildren(frag);
 }
 
 /** スクロールバック閲覧中であることを示すバッジの表示切替（CSSの::afterで描画） */
@@ -1535,12 +1593,26 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (!currentTabId) return;
+
+  // コピーモード中は、キーバインドに該当しなかったキーをPTYではなくbun側のコピーモードへ回す。
+  // 修飾キー単体は無視する（Shiftを押した瞬間にコピーモードが反応してしまわないように）
+  if (copyModeTabIds.has(currentTabId)) {
+    e.preventDefault();
+    if (!MODIFIER_ONLY_KEYS.has(e.key)) {
+      sendMessage("copyModeKey", { tabId: currentTabId, key: e.key, ctrl: e.ctrlKey });
+    }
+    return;
+  }
+
   const bytes = keyToBytes(e);
   if (bytes !== null) {
     e.preventDefault();
     sendMessage("input", { tabId: currentTabId, data: bytes });
   }
 });
+
+// 修飾キー単体のkeydown（Shiftを押しただけでもe.key === "Shift"で発火する）
+const MODIFIER_ONLY_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
 // キーバインド1回分のフォントサイズ増減量（px）。上下限のクランプ・実際の適用はbun側が担う
 const FONT_SIZE_STEP = 1;
@@ -1642,6 +1714,10 @@ function handleTileCommand(cmd: TileCommand): void {
       if (text) sendMessage("copySelection", { text });
       break;
     }
+    case "copyMode":
+      if (!currentTabId) return;
+      sendMessage("enterCopyMode", { tabId: currentTabId });
+      break;
     case "pasteClipboard":
       if (!currentTabId) return;
       sendMessage("pasteFromClipboard", { tabId: currentTabId });

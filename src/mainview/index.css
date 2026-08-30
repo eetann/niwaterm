@@ -442,6 +442,48 @@ body {
   box-sizing: border-box;
 }
 
+/*
+ * vi風コピーモード（TASK-0012）の選択ハイライトとカーソル。
+ * .termのinnerHTMLは出力のたびに丸ごと差し替わるため、選択の表現をHTML側へ埋め込まず
+ * 独立したオーバーレイ層として重ねる（DOMのSelectionが再描画で消える問題も同時に避けられる）
+ */
+.tile .copy-overlay,
+#popup .copy-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.copy-overlay .sel {
+  position: absolute;
+  background: #89b4fa;
+  opacity: 0.3;
+}
+
+.copy-overlay .copy-cursor {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #f9e2af;
+  background: rgba(249, 226, 175, 0.25);
+}
+
+/* コピーモード中であることを示すバッジ（スクロールバックのバッジと同じ位置・体裁） */
+.copy-overlay.active::after {
+  content: "COPY MODE · hjkl/w/b 移動 · v/V 選択 · y コピー · q 終了";
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  color: #1e1e2e;
+  background: #89b4fa;
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
 /* スクロールバック閲覧中であることを示すバッジ（マウスホイール/Cmd+Up等で表示） */
 .tab-content.scrolled-history::after {
   content: "SCROLLBACK · キー入力で最新行へ戻る";

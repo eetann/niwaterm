@@ -50,6 +50,7 @@ export const KEYBIND_ACTIONS = [
   "toggle-sidebar",
   "toggle-popup",
   "copy-selection",
+  "copy-mode",
   "paste-clipboard",
   "scroll-page-up",
   "scroll-page-down",
@@ -99,6 +100,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   "]": "next-workspace",
   "[": "prev-workspace",
   b: "toggle-sidebar",
+  // tmuxのprefix + [ に相当する入り口。[はワークスペース切替に使っているため、
+  // viのvisualモードを連想できるvを既定にする
+  v: "copy-mode",
   "`": "toggle-popup",
   ":": "command-palette",
   "=": "increase-font-size",

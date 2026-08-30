@@ -126,6 +126,12 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
     args: [FFIType.ptr, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
+  // 引数はNiwaDumpSelectionOptions（int32が9個）のポインタで渡す。
+  // bun:ffiは引数10個以上の関数を正しく呼べないため（docs/known-issues参照）
+  niwa_dump_selection: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
+    returns: FFIType.i32,
+  },
   niwa_scroll_viewport: {
     args: [FFIType.ptr, FFIType.i32, FFIType.i64],
     returns: FFIType.void,
@@ -159,6 +165,8 @@ const DATA_CURSOR_VISIBLE = 7;
 const DATA_VIEWPORT_ACTIVE = 32;
 const DATA_MODE = 37;
 const DATA_PWD = 13;
+/** GhosttyTerminalScrollbar { uint64 total; uint64 offset; uint64 len; } を書き出す */
+const DATA_SCROLLBAR = 9;
 
 // GhosttyRenderStateData
 const RENDER_DATA_CURSOR_VISUAL_STYLE = 10;
@@ -224,6 +232,10 @@ const FORMAT_HTML = 2;
 const SCROLL_VIEWPORT_TOP = 0;
 const SCROLL_VIEWPORT_BOTTOM = 1;
 const SCROLL_VIEWPORT_DELTA = 2;
+const SCROLL_VIEWPORT_ROW = 3;
+
+// GhosttyPointTag
+const POINT_TAG_SCREEN = 2;
 
 const EMPTY_BYTES = new Uint8Array(0);
 
@@ -261,6 +273,11 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   let clipboardCallback: JSCallback | null = null;
   let pwdChangedCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
+  // GhosttyTerminalScrollbar（uint64 x 3）の受け皿
+  const scrollbarBuf = new Uint8Array(24);
+  const scrollbarView = new DataView(scrollbarBuf.buffer);
+  // NiwaDumpSelectionOptions（int32 x 9）の詰め先。呼び出しごとに使い回す
+  const dumpSelectionOpts = new Int32Array(9);
   const u16Out = new Uint16Array(1);
   const u8Out = new Uint8Array(1);
   const i32Out = new Int32Array(1);
@@ -592,6 +609,75 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   /** 現在の画面をプレーンテキストとして取り出す（CLIの`tab capture`相当）。常に最新のアクティブエリア */
   const dumpText = createFormatterDumper(FORMAT_PLAIN, false);
 
+  /**
+   * 画面座標（スクロールバックを含む絶対行）の矩形範囲を文字列として取り出す。
+   * コピーモードのように「ビューポートの外まで含む任意の範囲」を扱う用途向けで、
+   * unwrap（折り返し行の連結）・trim（行末空白の除去）はヤンク時のみ有効にする
+   */
+  function dumpScreenRange(opts: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    emit?: number;
+    rectangle?: boolean;
+    unwrap?: boolean;
+    trim?: boolean;
+  }): string {
+    // NiwaDumpSelectionOptions（src/native/shim.c）と同じ並び順
+    dumpSelectionOpts[0] = opts.emit ?? FORMAT_PLAIN;
+    dumpSelectionOpts[1] = POINT_TAG_SCREEN;
+    dumpSelectionOpts[2] = Math.max(Math.trunc(opts.startX), 0);
+    dumpSelectionOpts[3] = Math.max(Math.trunc(opts.startY), 0);
+    dumpSelectionOpts[4] = Math.max(Math.trunc(opts.endX), 0);
+    dumpSelectionOpts[5] = Math.max(Math.trunc(opts.endY), 0);
+    dumpSelectionOpts[6] = opts.rectangle ? 1 : 0;
+    dumpSelectionOpts[7] = opts.unwrap ? 1 : 0;
+    dumpSelectionOpts[8] = opts.trim ? 1 : 0;
+    let buf = new Uint8Array(64 * 1024);
+    for (;;) {
+      const rc = shim.symbols.niwa_dump_selection(
+        term,
+        ptr(dumpSelectionOpts),
+        ptr(buf),
+        BigInt(buf.length),
+        ptr(writtenBuf),
+      );
+      const written = Number(writtenBuf[0]);
+      if (rc === 0) return new TextDecoder().decode(buf.subarray(0, written));
+      if (written > buf.length) {
+        buf = new Uint8Array(written + 1024);
+        continue;
+      }
+      // 範囲外の行（スクロールバックの外へ流れた行など）はGHOSTTY_INVALID_VALUEになる。
+      // コピーモード側は「行が取れなかった」ことを空文字で判断できればよいので例外にはしない
+      return "";
+    }
+  }
+
+  /**
+   * ビューポートの位置と全体の行数（GhosttyTerminalScrollbar）。
+   * offsetはビューポート先頭の画面座標行で、scrollToRowへそのまま渡せる同じ行空間
+   */
+  function scrollbar(): { total: number; offset: number; len: number } {
+    const rc = vt.symbols.ghostty_terminal_get(term, DATA_SCROLLBAR, ptr(scrollbarBuf));
+    if (rc !== 0) return { total: rows, offset: 0, len: rows };
+    return {
+      total: Number(scrollbarView.getBigUint64(0, true)),
+      offset: Number(scrollbarView.getBigUint64(8, true)),
+      len: Number(scrollbarView.getBigUint64(16, true)),
+    };
+  }
+
+  /** ビューポート先頭をスクロールバック最上行から数えた絶対行へ合わせる（scrollbar().offsetと同じ行空間） */
+  function scrollToRow(row: number): void {
+    shim.symbols.niwa_scroll_viewport(
+      term,
+      SCROLL_VIEWPORT_ROW,
+      BigInt(Math.max(Math.trunc(row), 0)),
+    );
+  }
+
   /** ビューポートがアクティブエリア（最新行）に追従しているか。falseはスクロールバックへ入っている状態 */
   function viewportPinned(): boolean {
     const rc = vt.symbols.ghostty_terminal_get(term, DATA_VIEWPORT_ACTIVE, ptr(u8Out));
@@ -641,8 +727,11 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     cursor,
     dumpHtml,
     dumpText,
+    dumpScreenRange,
+    scrollbar,
     viewportPinned,
     scrollDelta,
+    scrollToRow,
     scrollToTop,
     scrollToBottom,
     free,

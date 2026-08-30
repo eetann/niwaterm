@@ -57,6 +57,7 @@ docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 
 - **構造体の値渡し非対応**。値渡しAPI（ghostty_formatter_terminal_new等）はsrc/native/shim.cでスカラー引数に展開する。値渡しAPIが増えたらシムに追加
   （`ghostty_terminal_new`はlibghostty-vt側がスカラー引数化したためシム不要になった。代わりにスクロールバック上限は`ghostty_terminal_set(OPT_SCROLLBACK_MAX_LINES)`で設定する）
+- **引数10個以上の関数は正しく呼べない**（9個まで。10個目以降がゴミ値になり、ポインタ引数ならセグフォで落ちる）。項目が多いAPIはint32を並べた構造体をポインタ1つで渡す（`niwa_dump_selection`がこの形）。詳細: docs/known-issues/bun-ffi-breaks-with-ten-or-more-args.md
 - コールバックはJSCallbackで渡せる（ghostty_terminal_setのWRITE_PTYで使用中）
 - libghostty-vtのAPIは未安定。シンボルが消えることがある（例: `ghostty_terminal_mode_get`は廃止され、`ghostty_terminal_get(DATA_MODE)`に`GhosttyTerminalModeConfig`を渡す形になった）。
   dlopen時に存在しないシンボルを要求すると起動時に落ちるため、vendor更新後は`nm -D --defined-only`でエクスポートを確認する

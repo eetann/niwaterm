@@ -7,6 +7,7 @@ import {
   type RestoredTreeMeta,
 } from "./persistence";
 import type { BoardId } from "./board";
+import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import {
@@ -395,6 +396,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handleMouseEvent(tabId, ev);
   }
 
+  function enterCopyMode(tabId: TabId): void {
+    findOwnerByTabId(tabId)?.enterCopyMode(tabId);
+  }
+
+  function handleCopyModeKey(tabId: TabId, key: CopyModeKey): boolean {
+    return findOwnerByTabId(tabId)?.handleCopyModeKey(tabId, key) ?? false;
+  }
+
   function handleScroll(tabId: TabId, deltaLines: number): void {
     findOwnerByTabId(tabId)?.handleScroll(tabId, deltaLines);
   }
@@ -573,6 +582,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     swapWorkspaces,
     handleInput,
     handleMouseEvent,
+    enterCopyMode,
+    handleCopyModeKey,
     handlePaste,
     handleResize,
     handleScroll,

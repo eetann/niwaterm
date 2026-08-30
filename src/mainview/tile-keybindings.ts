@@ -38,6 +38,7 @@ export type TileCommand =
   | { type: "toggleSidebar" }
   | { type: "togglePopup" }
   | { type: "copySelection" }
+  | { type: "copyMode" }
   | { type: "pasteClipboard" }
   | { type: "scrollPage"; direction: "up" | "down" }
   | { type: "scrollToEdge"; edge: "top" | "bottom" }
@@ -166,6 +167,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "togglePopup" };
     case "copy-selection":
       return { type: "copySelection" };
+    case "copy-mode":
+      return { type: "copyMode" };
     case "paste-clipboard":
       return { type: "pasteClipboard" };
     case "scroll-page-up":
