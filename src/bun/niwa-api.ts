@@ -1,6 +1,6 @@
 // niwa.keybindに渡す関数ハンドラの実行基盤（@niwaterm/configのNiwaインターフェースの実装）。
 // niwa.keybind/niwa.prefix/niwa.unbindは「登録」のみ行い、実際の操作はしない
-// （configファイル実行時に1回だけ呼ばれる）。niwa.tile/tab/popup/workspace/clipboardは
+// （configファイル実行時に1回だけ呼ばれる）。niwa.tile/tab/popup/board/workspace/clipboardは
 // 「実行」で、呼ばれた時点のworkspaceManagerの実際の状態を操作・参照する
 // （キーバインドの関数ハンドラが実際に押された時に呼ばれるため、登録時とは別タイミング）。
 
@@ -204,6 +204,11 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         // このメソッドはasyncにしない。待機中にアクティブワークスペースが切り替わっても
         // 開いた時点のポップアップを見続けるための約束（詳細: workspace-manager.ts）
         return workspaceManager.waitForPopupClose().then((output) => output ?? "");
+      },
+    },
+    board: {
+      create(cwd) {
+        return workspaceManager.newBoard(workspaceManager.getActiveWorkspaceId(), cwd);
       },
     },
     workspace: {

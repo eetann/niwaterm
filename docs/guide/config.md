@@ -102,6 +102,7 @@ export default defineConfig({
 | `niwa.tab.var.find(key, value)` | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当） |
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
 | `niwa.popup.run(command, opts?)` | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列 |
+| `niwa.board.create(cwd?)` | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない） |
 | `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
 | `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
 | `niwa.workspace.swap(workspaceIdA, workspaceIdB)` | 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える（tmuxの`swap-window`相当）。中身は変更しない |
@@ -133,7 +134,7 @@ niwa.keybind("e", () => {
 `niwa.popup.run`を使うと、ポップアップ内のfzf等でユーザーに選ばせた結果をキーバインドのハンドラ側で受け取って処理できる（tmuxの「`display-popup`内のスクリプトからtmuxコマンドを叩く」構成に対して、niwatermでは「popupは選択結果を標準出力へ返すだけ、実際の操作はハンドラ側」と分担できる）。
 
 ```ts
-// ghqのリポジトリ一覧をfzfで選び、Enterなら新規タブ、ctrl-oなら現在のタブでcdする
+// ghqのリポジトリ一覧をfzfで選び、Enterなら新規Board、ctrl-oなら現在のタブでcdする
 niwa.keybind("w", async () => {
   const tab = niwa.tab.current();
   const tile = niwa.tile.current();
@@ -147,7 +148,7 @@ niwa.keybind("w", async () => {
     if (tab) niwa.tab.sendKeys(tab.tabId, `cd "${targetPath}"`, "Enter");
     return;
   }
-  niwa.tab.create({ cwd: targetPath });
+  niwa.board.create(targetPath);
 });
 ```
 

@@ -383,6 +383,28 @@ describe("niwa.popup", () => {
   });
 });
 
+describe("niwa.board", () => {
+  test("createでアクティブなワークスペースにBoardが増え、そのBoardがアクティブになる", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const before = workspaceManager.snapshot().workspace.boards.length;
+    const boardId = niwa.board.create();
+    expect(boardId).not.toBeNull();
+    const snapshot = workspaceManager.snapshot();
+    expect(snapshot.workspace.boards.length).toBe(before + 1);
+    expect(snapshot.workspace.activeBoardId).toBe(boardId as string);
+  });
+
+  test("createのcwdは新しいBoardの最初のタブへ渡される", () => {
+    const { niwa, workspaceManager, sessionOpts } = createTestSetup();
+    niwa.board.create("/Users/me/ghq/github.com/eetann/niwaterm");
+    // PTY起動はwebview側の実測サイズが届くまで保留されるため、ここで確定させる
+    resolvePending(workspaceManager);
+    expect(sessionOpts[sessionOpts.length - 1]?.cwd).toBe(
+      "/Users/me/ghq/github.com/eetann/niwaterm",
+    );
+  });
+});
+
 describe("niwa.workspace", () => {
   test("createで新しいワークスペースが増える", () => {
     const { niwa, workspaceManager } = createTestSetup();

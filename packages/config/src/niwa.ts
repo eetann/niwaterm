@@ -1,7 +1,7 @@
 // キーバインドの値に関数ハンドラを取れるようにするための実行時API。
 // ADR等の議論の要点: tmuxのif-shell/run-shell/{}束ねのような専用DSLは増やさず、
 // 素のTSのif文・Bun.spawn・関数呼び出しの並びに任せる。niwaterm固有の状態・操作にアクセスする
-// 部分（タイル・タブ・ポップアップ・ワークスペース・クリップボード）だけをAPIとして提供する。
+// 部分（タイル・タブ・ポップアップ・Board・ワークスペース・クリップボード）だけをAPIとして提供する。
 //
 // 実装（createNiwaApi相当）はsrc/bun側が持つ。このファイルは型のみで、bun側実装への依存を持たない
 // （このパッケージはmainview側からもimportされるため）。
@@ -131,6 +131,16 @@ export interface NiwaPopupApi {
   run(command: string, opts?: NiwaPopupRunOptions): Promise<string | null>;
 }
 
+export interface NiwaBoardApi {
+  /**
+   * アクティブなワークスペースに新規Boardを作成し、アクティブにする（tmuxの`new-window`相当。
+   * Boardは1ワークスペース内の複数タイルレイアウトで、tmuxのWindowに対応する。ADR 0006）。
+   * cwdは最初のタブの作業ディレクトリで、省略時はOS標準（tab.create等と違いフォーカス中タブの
+   * cwdは引き継がない）。作成できなかった場合はnull
+   */
+  create(cwd?: string): string | null;
+}
+
 export interface NiwaWorkspaceInfo {
   id: string;
   /** ユーザーがサイドバーから設定した名前。未設定はnull（表示側で連番にフォールバック） */
@@ -247,6 +257,7 @@ export interface Niwa {
   tile: NiwaTileApi;
   tab: NiwaTabApi;
   popup: NiwaPopupApi;
+  board: NiwaBoardApi;
   workspace: NiwaWorkspaceApi;
   clipboard: NiwaClipboardApi;
   shell: NiwaShellApi;
