@@ -14,6 +14,7 @@ import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, writeClipboardText } from "./clipboard";
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
+import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
@@ -65,6 +66,8 @@ export type NiwaRPC = {
       ready: {};
       input: { tabId: TabId; data: string };
       paste: { tabId: TabId; data: string };
+      /** マウスレポート有効時（TUIアプリ等）にwebviewから転送されるマウス操作 */
+      mouseEvent: { tabId: TabId; event: MouseEventInput };
       scroll: { tabId: TabId; deltaLines: number };
       scrollToTop: { tabId: TabId };
       scrollToBottom: { tabId: TabId };
@@ -378,6 +381,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
         workspaceManager.handlePaste(tabId, data);
+      },
+      mouseEvent: ({ tabId, event }: { tabId: TabId; event: MouseEventInput }) => {
+        workspaceManager.handleMouseEvent(tabId, event);
       },
       scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
         workspaceManager.handleScroll(tabId, deltaLines);

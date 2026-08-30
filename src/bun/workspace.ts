@@ -3,6 +3,7 @@
 // tile/tabのid採番は既存方針どおりworkspace-manager.tsに一元化されたままで、このファイルはBoardId採番のみ担う。
 // ポップアップ（ADR 0005）はBoardをまたいでも同じものを使えるよう、Board単位ではなくこの層で
 // popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
+import type { MouseEventInput } from "./ghostty";
 import type { RestoredTreeMeta } from "./persistence";
 import { toPersistedTileNode, type PersistedTileNode } from "./persistence";
 import {
@@ -393,6 +394,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     findBoardOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
 
+  function handleMouseEvent(tabId: TabId, ev: MouseEventInput): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleMouseEvent(ev);
+      return;
+    }
+    findBoardOwnerByTabId(tabId)?.handleMouseEvent(tabId, ev);
+  }
+
   function handleScroll(tabId: TabId, deltaLines: number): void {
     if (popup.hasTab(tabId)) {
       popup.handleScroll(deltaLines);
@@ -582,6 +591,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     resizeTileInDirection,
     respawnTab,
     handleInput,
+    handleMouseEvent,
     handlePaste,
     handleResize,
     handleScroll,

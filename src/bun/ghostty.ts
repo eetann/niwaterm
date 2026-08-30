@@ -58,6 +58,51 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
     args: [FFIType.ptr],
     returns: FFIType.void,
   },
+  // マウスレポート（DECSET 1000系）のエンコーダ。イベント1件ごとにoptionを詰めてencodeする
+  ghostty_mouse_encoder_new: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_mouse_encoder_free: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_encoder_setopt: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_encoder_setopt_from_terminal: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_encoder_encode: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_mouse_event_new: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_mouse_event_free: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_event_set_action: {
+    args: [FFIType.ptr, FFIType.i32],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_event_set_button: {
+    args: [FFIType.ptr, FFIType.i32],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_event_clear_button: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_mouse_event_set_mods: {
+    args: [FFIType.ptr, FFIType.u16],
+    returns: FFIType.void,
+  },
   ghostty_paste_encode: {
     args: [FFIType.ptr, FFIType.u64, FFIType.bool, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
@@ -91,6 +136,10 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
     args: [FFIType.ptr, FFIType.i32, FFIType.i64],
     returns: FFIType.void,
   },
+  niwa_mouse_event_set_position: {
+    args: [FFIType.ptr, FFIType.f32, FFIType.f32],
+    returns: FFIType.void,
+  },
 });
 
 // GhosttyTerminalOption
@@ -99,10 +148,17 @@ const OPT_CLIPBOARD_WRITE = 26;
 const OPT_SCROLLBACK_MAX_LINES = 28;
 const OPT_PWD_CHANGED = 25;
 
-// GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。2004はDEC privateなのでフラグなし）
+// GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。DEC privateなモードはフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
+// マウスレポートの有効化モード（トラッキング種別）と報告フォーマット。
+// libghostty-vt側ではどちらも単一のenumへ畳まれるため、ここでは
+// 「エンコーダの設定を取り直す必要があるか」の判定にだけ使う
+const MOUSE_MODES = [9, 1000, 1002, 1003, 1005, 1006, 1015, 1016] as const;
+/** ボタン非押下時の移動も報告するモード（DECSET 1003） */
+const MODE_MOUSE_ANY_EVENT = 1003;
 
 // GhosttyTerminalData
+const DATA_MOUSE_TRACKING = 11;
 const DATA_CURSOR_X = 3;
 const DATA_CURSOR_Y = 4;
 const DATA_CURSOR_VISIBLE = 7;
@@ -117,6 +173,55 @@ const RENDER_DATA_CURSOR_VISUAL_STYLE = 10;
 const CURSOR_SHAPES = ["bar", "block", "underline", "block_hollow"] as const;
 export type CursorShape = (typeof CURSOR_SHAPES)[number];
 
+// GhosttyMouseEncoderOption
+const MOUSE_OPT_SIZE = 2;
+const MOUSE_OPT_ANY_BUTTON_PRESSED = 3;
+const MOUSE_OPT_TRACK_LAST_CELL = 4;
+
+// GhosttyMouseAction
+const MOUSE_ACTIONS = { press: 0, release: 1, motion: 2 } as const;
+
+// GhosttyMouseButton。four以降はX11由来のホイール割り当て（4=上, 5=下, 6=左, 7=右）で、
+// libghostty-vt側がSGR等のボタンコード（64〜67）へ変換する
+const MOUSE_BUTTONS = {
+  left: 1,
+  right: 2,
+  middle: 3,
+  wheelUp: 4,
+  wheelDown: 5,
+  wheelLeft: 6,
+  wheelRight: 7,
+} as const;
+
+// GhosttyMods
+const MODS_SHIFT = 1 << 0;
+const MODS_CTRL = 1 << 1;
+const MODS_ALT = 1 << 2;
+const MODS_SUPER = 1 << 3;
+
+export type MouseAction = keyof typeof MOUSE_ACTIONS;
+export type MouseButton = keyof typeof MOUSE_BUTTONS;
+
+export interface MouseMods {
+  shift?: boolean;
+  ctrl?: boolean;
+  alt?: boolean;
+  super?: boolean;
+}
+
+/** webview側で観測したマウス操作。RPCでそのまま運ぶためプリミティブのみで構成する */
+export interface MouseEventInput {
+  action: MouseAction;
+  /** 押されている（または離された）ボタン。ボタンを伴わない移動はnull */
+  button: MouseButton | null;
+  /** ターミナル描画領域(.term)の左上を原点とするピクセル座標。領域外の負値・超過値も許容する */
+  x: number;
+  y: number;
+  mods: MouseMods;
+  /** このイベント時点でいずれかのボタンが押されているか（領域外へのドラッグ継続判定に使う） */
+  anyButtonPressed: boolean;
+}
+
 // GhosttyFormatterFormat
 const FORMAT_PLAIN = 0;
 const FORMAT_HTML = 2;
@@ -125,6 +230,8 @@ const FORMAT_HTML = 2;
 const SCROLL_VIEWPORT_TOP = 0;
 const SCROLL_VIEWPORT_BOTTOM = 1;
 const SCROLL_VIEWPORT_DELTA = 2;
+
+const EMPTY_BYTES = new Uint8Array(0);
 
 export interface CursorState {
   x: number;
@@ -150,6 +257,12 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   if (rc !== 0) throw new Error(`ghostty_render_state_new failed: ${rc}`);
   const renderState = read.ptr(ptr(renderStateHandle)) as Pointer;
 
+  // マウスレポートのエンコードにはグリッドサイズとセルサイズが要るため、resizeの値を控えておく。
+  // セルサイズはwebview側の実測が届く（resize）まで不明なので0始まりにする
+  let currentCols = cols;
+  let currentRows = rows;
+  let currentCellWidthPx = 0;
+  let currentCellHeightPx = 0;
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
   let pwdChangedCallback: JSCallback | null = null;
@@ -243,11 +356,15 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   const modeConfig = new Uint8Array(4);
   const modeConfigView = new DataView(modeConfig.buffer);
 
-  /** bracketed pasteモード（DEC 2004）が有効か */
-  function bracketedPaste(): boolean {
-    modeConfigView.setUint16(0, MODE_BRACKETED_PASTE, true);
+  function modeEnabled(mode: number): boolean {
+    modeConfigView.setUint16(0, mode, true);
     const rc = vt.symbols.ghostty_terminal_get(term, DATA_MODE, ptr(modeConfig));
     return rc === 0 && modeConfig[2] !== 0;
+  }
+
+  /** bracketed pasteモード（DEC 2004）が有効か */
+  function bracketedPaste(): boolean {
+    return modeEnabled(MODE_BRACKETED_PASTE);
   }
 
   /** ペースト文字列をPTY書き込み用に整形する（危険バイト除去 + bracketed paste包み） */
@@ -282,7 +399,19 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     vt.symbols.ghostty_terminal_vt_write(term, ptr(data), BigInt(data.length));
   }
 
+  /**
+   * セルの実寸（webview側の実測値）を控える。マウス座標のピクセル→グリッド変換に使う。
+   * グリッド（cols/rows）が変わらないリサイズでも呼ばれるためresizeとは別入口にしている
+   */
+  function setCellSize(cellWidthPx: number, cellHeightPx: number): void {
+    currentCellWidthPx = cellWidthPx;
+    currentCellHeightPx = cellHeightPx;
+  }
+
   function resize(cols: number, rows: number, cellWidthPx: number, cellHeightPx: number): void {
+    currentCols = cols;
+    currentRows = rows;
+    setCellSize(cellWidthPx, cellHeightPx);
     vt.symbols.ghostty_terminal_resize(
       term,
       cols,
@@ -290,6 +419,132 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
       Math.round(cellWidthPx),
       Math.round(cellHeightPx),
     );
+  }
+
+  // ---- マウスレポート（TUIアプリ向けのマウス操作転送）----
+  // エンコーダとイベントは使うタブでだけ確保し、以降は使い回す
+  let mouseEncoder: Pointer | null = null;
+  let mouseEvent: Pointer | null = null;
+  let lastMouseModeSig = -1;
+  let lastMouseSizeSig = "";
+  // GhosttyMouseEncoderSize { size_t size; uint32 screen_w/h, cell_w/h, padding x4 }
+  const mouseSizeBuf = new Uint8Array(40);
+  const mouseSizeView = new DataView(mouseSizeBuf.buffer);
+  const mouseFlagBuf = new Uint8Array(1);
+  // SGR形式でも `ESC [ < 65;220;60 M` 程度。out_of_spaceになったら伸ばす
+  let mouseOutBuf = new Uint8Array(64);
+
+  /** アプリがマウスレポート（DECSET 9/1000/1002/1003のいずれか）を有効にしているか */
+  function mouseTracking(): boolean {
+    const rc = vt.symbols.ghostty_terminal_get(term, DATA_MOUSE_TRACKING, ptr(u8Out));
+    return rc === 0 && u8Out[0] !== 0;
+  }
+
+  /** ボタンを押していない間の移動も報告する必要があるモード（DECSET 1003）か */
+  function mouseAnyMotion(): boolean {
+    return modeEnabled(MODE_MOUSE_ANY_EVENT);
+  }
+
+  function ensureMouseEncoder(): boolean {
+    if (mouseEncoder && mouseEvent) return true;
+    const encoderHandle = new BigUint64Array(1);
+    if (vt.symbols.ghostty_mouse_encoder_new(null, ptr(encoderHandle)) !== 0) return false;
+    mouseEncoder = read.ptr(ptr(encoderHandle)) as Pointer;
+    const eventHandle = new BigUint64Array(1);
+    if (vt.symbols.ghostty_mouse_event_new(null, ptr(eventHandle)) !== 0) {
+      vt.symbols.ghostty_mouse_encoder_free(mouseEncoder);
+      mouseEncoder = null;
+      return false;
+    }
+    mouseEvent = read.ptr(ptr(eventHandle)) as Pointer;
+    // 同一セル内での移動イベントを間引かせる（SGR-Pixels時はライブラリ側が間引かない）
+    mouseFlagBuf[0] = 1;
+    vt.symbols.ghostty_mouse_encoder_setopt(
+      mouseEncoder,
+      MOUSE_OPT_TRACK_LAST_CELL,
+      ptr(mouseFlagBuf),
+    );
+    return true;
+  }
+
+  /**
+   * トラッキングモード・フォーマット・サイズをエンコーダへ反映する。
+   * setopt系はどちらも呼ぶたびに移動イベントの重複排除状態（last_cell）を捨てるため、
+   * 実際に変わった時だけ呼ぶ
+   */
+  function syncMouseEncoderOptions(encoder: Pointer): void {
+    let modeSig = 0;
+    for (const [i, mode] of MOUSE_MODES.entries()) {
+      if (modeEnabled(mode)) modeSig |= 1 << i;
+    }
+    if (modeSig !== lastMouseModeSig) {
+      lastMouseModeSig = modeSig;
+      vt.symbols.ghostty_mouse_encoder_setopt_from_terminal(encoder, term);
+    }
+
+    const sizeSig = `${currentCols}x${currentRows}x${currentCellWidthPx}x${currentCellHeightPx}`;
+    if (sizeSig === lastMouseSizeSig) return;
+    lastMouseSizeSig = sizeSig;
+    const cellWidth = Math.max(1, Math.round(currentCellWidthPx));
+    const cellHeight = Math.max(1, Math.round(currentCellHeightPx));
+    mouseSizeView.setBigUint64(0, BigInt(mouseSizeBuf.length), true);
+    // paddingは持たない（.termの左上=グリッドの左上）ため、画面サイズはグリッド全体の実寸
+    mouseSizeView.setUint32(8, currentCols * cellWidth, true);
+    mouseSizeView.setUint32(12, currentRows * cellHeight, true);
+    mouseSizeView.setUint32(16, cellWidth, true);
+    mouseSizeView.setUint32(20, cellHeight, true);
+    for (let offset = 24; offset < 40; offset += 4) mouseSizeView.setUint32(offset, 0, true);
+    vt.symbols.ghostty_mouse_encoder_setopt(encoder, MOUSE_OPT_SIZE, ptr(mouseSizeBuf));
+  }
+
+  /**
+   * マウス操作をアプリ向けのエスケープシーケンスへ変換する。
+   * 現在のモードで報告対象外のイベント（1002でのボタン無し移動、同一セル内の移動など）は
+   * 空を返すので、呼び出し側はそのままPTYへ書けばよい
+   */
+  function encodeMouse(ev: MouseEventInput): Uint8Array {
+    // セルサイズが未確定（webview側の実測resize到達前）ならグリッド座標へ変換できない
+    if (currentCellWidthPx <= 0 || currentCellHeightPx <= 0) return EMPTY_BYTES;
+    if (!ensureMouseEncoder() || !mouseEncoder || !mouseEvent) return EMPTY_BYTES;
+    syncMouseEncoderOptions(mouseEncoder);
+
+    vt.symbols.ghostty_mouse_event_set_action(mouseEvent, MOUSE_ACTIONS[ev.action]);
+    if (ev.button === null) {
+      vt.symbols.ghostty_mouse_event_clear_button(mouseEvent);
+    } else {
+      vt.symbols.ghostty_mouse_event_set_button(mouseEvent, MOUSE_BUTTONS[ev.button]);
+    }
+    let mods = 0;
+    if (ev.mods.shift) mods |= MODS_SHIFT;
+    if (ev.mods.ctrl) mods |= MODS_CTRL;
+    if (ev.mods.alt) mods |= MODS_ALT;
+    if (ev.mods.super) mods |= MODS_SUPER;
+    vt.symbols.ghostty_mouse_event_set_mods(mouseEvent, mods);
+    shim.symbols.niwa_mouse_event_set_position(mouseEvent, ev.x, ev.y);
+
+    mouseFlagBuf[0] = ev.anyButtonPressed ? 1 : 0;
+    vt.symbols.ghostty_mouse_encoder_setopt(
+      mouseEncoder,
+      MOUSE_OPT_ANY_BUTTON_PRESSED,
+      ptr(mouseFlagBuf),
+    );
+
+    for (;;) {
+      const rc = vt.symbols.ghostty_mouse_encoder_encode(
+        mouseEncoder,
+        mouseEvent,
+        ptr(mouseOutBuf),
+        BigInt(mouseOutBuf.length),
+        ptr(writtenBuf),
+      );
+      const written = Number(writtenBuf[0]);
+      if (rc === 0) return mouseOutBuf.subarray(0, written);
+      if (written > mouseOutBuf.length) {
+        mouseOutBuf = new Uint8Array(written);
+        continue;
+      }
+      throw new Error(`ghostty_mouse_encoder_encode failed: ${rc}`);
+    }
   }
 
   function cursor(): CursorState {
@@ -366,6 +621,10 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   }
 
   function free(): void {
+    if (mouseEvent) vt.symbols.ghostty_mouse_event_free(mouseEvent);
+    if (mouseEncoder) vt.symbols.ghostty_mouse_encoder_free(mouseEncoder);
+    mouseEvent = null;
+    mouseEncoder = null;
     vt.symbols.ghostty_render_state_free(renderState);
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
@@ -379,8 +638,12 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     onPwdChanged,
     bracketedPaste,
     encodePaste,
+    mouseTracking,
+    mouseAnyMotion,
+    encodeMouse,
     write,
     resize,
+    setCellSize,
     cursor,
     dumpHtml,
     dumpText,

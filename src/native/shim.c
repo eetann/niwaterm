@@ -82,3 +82,13 @@ void niwa_scroll_viewport(GhosttyTerminal term, int32_t tag, int64_t value) {
   }
   ghostty_terminal_scroll_viewport(term, behavior);
 }
+
+// GhosttyMousePosition（float x, y）の値渡しをスカラー引数へ展開する。
+// マウスイベントの位置はターミナル描画領域の左上を原点とするピクセル座標で、
+// 負値・領域外の値も許容される（libghostty-vt側がビューポート外判定に使う）。
+void niwa_mouse_event_set_position(GhosttyMouseEvent event, float x, float y) {
+  GhosttyMousePosition pos;
+  pos.x = x;
+  pos.y = y;
+  ghostty_mouse_event_set_position(event, pos);
+}

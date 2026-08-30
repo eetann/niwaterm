@@ -2,7 +2,7 @@
 // index.tsはPTY/FFIの詳細を知らずにこのモジュールだけを使う。
 // 将来のタブ実装は createTerminalSession() 1呼び出し = タブ1つに対応させる想定。
 import { writeClipboardText } from "./clipboard";
-import { type CursorShape, createGhosttyTerminal } from "./ghostty";
+import { type CursorShape, createGhosttyTerminal, type MouseEventInput } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
@@ -26,6 +26,10 @@ export interface TerminalRenderState {
   cursorShape: CursorShape;
   /** ビューポートが最新行に追従しているか。falseはスクロールバックを閲覧中 */
   viewportPinned: boolean;
+  /** アプリがマウスレポートを有効にしているか（trueならwebview側はマウス操作を転送する） */
+  mouseTracking: boolean;
+  /** ボタン非押下時の移動も報告が要るモード（DECSET 1003）か */
+  mouseAnyMotion: boolean;
 }
 
 export function createTerminalSession(opts: TerminalSessionOptions) {
@@ -104,6 +108,16 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     pty.write(term.encodePaste(text));
   }
 
+  /**
+   * マウス操作をアプリへ転送する（マウスレポート有効時のみ意味を持つ）。
+   * キー入力（write）と違いスクロールバック閲覧位置は動かさない。マウスレポート中の
+   * アプリは代替画面にいることがほとんどで、勝手に最新行へ飛ばす必然性がないため
+   */
+  function mouseEvent(ev: MouseEventInput): void {
+    const bytes = term.encodeMouse(ev);
+    if (bytes.length > 0) pty.write(bytes);
+  }
+
   function scroll(deltaLines: number): void {
     term.scrollDelta(deltaLines);
   }
@@ -116,10 +130,20 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     term.scrollToBottom();
   }
 
+  /**
+   * セルの実寸（webview側の実測値）を伝える。マウスレポートのピクセル→グリッド変換に使う。
+   * PTY・VTのグリッドサイズには影響しないため、resizeと違い毎回そのまま反映してよい
+   */
+  function setCellSize(cellWidthPx: number, cellHeightPx: number): void {
+    term.setCellSize(cellWidthPx, cellHeightPx);
+  }
+
   /** サイズが実際に変わった場合のみ term/pty 双方へ伝え、trueを返す（無駄な再描画を避ける） */
   function resize(cols: number, rows: number, cellWidthPx: number, cellHeightPx: number): boolean {
-    if (cols === currentCols && rows === currentRows) return false;
     if (cols <= 0 || rows <= 0) return false;
+    // グリッドが同じでもセルの実寸は伝える（フォントサイズ変更等でセルだけ変わる場合がある）
+    setCellSize(cellWidthPx, cellHeightPx);
+    if (cols === currentCols && rows === currentRows) return false;
     currentCols = cols;
     currentRows = rows;
     term.resize(cols, rows, cellWidthPx, cellHeightPx);
@@ -137,6 +161,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       cursorVisible: cursor.visible,
       cursorShape: cursor.shape,
       viewportPinned: term.viewportPinned(),
+      mouseTracking: term.mouseTracking(),
+      mouseAnyMotion: term.mouseAnyMotion(),
     };
   }
 
@@ -157,7 +183,9 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   return {
     write,
     paste,
+    mouseEvent,
     resize,
+    setCellSize,
     scroll,
     scrollToTop,
     scrollToBottom,

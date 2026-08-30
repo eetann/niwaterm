@@ -59,7 +59,9 @@ function createTestWorkspaceManager(): {
     return {
       write: (data) => record.push(data),
       paste: () => {},
+      mouseEvent: () => {},
       resize: () => false,
+      setCellSize: () => {},
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
@@ -71,6 +73,8 @@ function createTestWorkspaceManager(): {
         cursorVisible: true,
         cursorShape: "block",
         viewportPinned: true,
+        mouseTracking: false,
+        mouseAnyMotion: false,
       }),
       dumpText: () => `screen-text-${index}`,
       setCallbacks: () => {},

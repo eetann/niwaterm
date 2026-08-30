@@ -7,6 +7,7 @@ import {
   type RestoredTreeMeta,
 } from "./persistence";
 import type { BoardId } from "./board";
+import type { MouseEventInput } from "./ghostty";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import {
   createWorkspace,
@@ -390,6 +391,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
 
+  function handleMouseEvent(tabId: TabId, ev: MouseEventInput): void {
+    findOwnerByTabId(tabId)?.handleMouseEvent(tabId, ev);
+  }
+
   function handleScroll(tabId: TabId, deltaLines: number): void {
     findOwnerByTabId(tabId)?.handleScroll(tabId, deltaLines);
   }
@@ -567,6 +572,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     respawnTab,
     swapWorkspaces,
     handleInput,
+    handleMouseEvent,
     handlePaste,
     handleResize,
     handleScroll,

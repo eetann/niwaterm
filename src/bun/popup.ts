@@ -5,6 +5,7 @@
 import { readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { MouseEventInput } from "./ghostty";
 import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import {
   createTerminalSession,
@@ -254,6 +255,10 @@ export function createPopup(opts: PopupOptions) {
     session?.paste(data);
   }
 
+  function handleMouseEvent(ev: MouseEventInput): void {
+    session?.mouseEvent(ev);
+  }
+
   // スクロールはPTYを経由しないため、呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
   function handleScroll(deltaLines: number): void {
     if (!session) return;
@@ -276,6 +281,8 @@ export function createPopup(opts: PopupOptions) {
   function handleResize(c: number, r: number, cellWidthPx: number, cellHeightPx: number): void {
     if (pendingOpts) {
       spawnSession(c, r);
+      // 生成時はcols/rowsしか渡らないため、セルの実寸はここで伝える（マウスレポートの座標変換に必要）
+      session?.setCellSize(cellWidthPx, cellHeightPx);
       opts.onDirty();
       return;
     }
@@ -320,6 +327,7 @@ export function createPopup(opts: PopupOptions) {
     takeForPromotion,
     hasTab,
     handleInput,
+    handleMouseEvent,
     handlePaste,
     handleScroll,
     handleScrollToTop,

@@ -2,6 +2,7 @@
 // 1つのBoardが1本のTileツリーを保持する（ADR 0006）。workspace.tsがBoardを複数束ね、
 // bun/index.tsはworkspace-manager.ts経由でのみタイル・タブ・PTYを操作する。
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
+import type { MouseEventInput } from "./ghostty";
 import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
 import type {
   PersistedBrowserTab,
@@ -498,6 +499,10 @@ export function createBoard(opts: BoardOptions) {
     sessions.get(tabId)?.paste(data);
   }
 
+  function handleMouseEvent(tabId: TabId, ev: MouseEventInput): void {
+    sessions.get(tabId)?.mouseEvent(ev);
+  }
+
   // スクロールはPTYを経由しないため、input/pasteと違いonOutput→onDirtyの連鎖が起きない。
   // 呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
   function handleScroll(tabId: TabId, deltaLines: number): void {
@@ -529,6 +534,8 @@ export function createBoard(opts: BoardOptions) {
     if (pending) {
       pendingSpawnByTabId.delete(tabId);
       spawnSession(tabId, cols, rows, pending.shellOverride, pending.cwd, pending.command);
+      // 生成時はcols/rowsしか渡らないため、セルの実寸はここで伝える（マウスレポートの座標変換に必要）
+      sessions.get(tabId)?.setCellSize(cellWidthPx, cellHeightPx);
       opts.onDirty();
       return;
     }
@@ -556,6 +563,8 @@ export function createBoard(opts: BoardOptions) {
         cursorVisible: false,
         cursorShape: "block",
         viewportPinned: true,
+        mouseTracking: false,
+        mouseAnyMotion: false,
       };
     }
     for (const [tabId, state] of browserTabs) {
@@ -717,6 +726,7 @@ export function createBoard(opts: BoardOptions) {
     resizeTileInDirection,
     respawnTab,
     handleInput,
+    handleMouseEvent,
     handlePaste,
     handleResize,
     handleScroll,

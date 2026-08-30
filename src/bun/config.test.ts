@@ -31,7 +31,9 @@ function createTestNiwaApi(): NiwaApiHandle {
   const fakeSession: TerminalSession = {
     write: () => {},
     paste: () => {},
+    mouseEvent: () => {},
     resize: () => false,
+    setCellSize: () => {},
     scroll: () => {},
     scrollToTop: () => {},
     scrollToBottom: () => {},
@@ -43,6 +45,8 @@ function createTestNiwaApi(): NiwaApiHandle {
       cursorVisible: true,
       cursorShape: "block",
       viewportPinned: true,
+      mouseTracking: false,
+      mouseAnyMotion: false,
     }),
     dumpText: () => "",
     setCallbacks: () => {},

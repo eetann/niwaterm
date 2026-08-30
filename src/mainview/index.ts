@@ -12,7 +12,7 @@ import {
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
-import type { CursorShape } from "../bun/ghostty";
+import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { TabRenderState } from "../bun/workspace";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type {
@@ -23,6 +23,7 @@ import type {
 } from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
 import { keyToBytes } from "./key-to-bytes";
+import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
 import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
@@ -379,6 +380,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             renderState.cursorVisible && renderState.viewportPinned && tabId === currentTabId,
             renderState.cursorShape,
           );
+          mouseTrackingByTabId.set(tabId, {
+            tracking: renderState.mouseTracking,
+            anyMotion: renderState.mouseAnyMotion,
+          });
           updateScrollIndicator(tabId, renderState.viewportPinned);
           if (tabId === currentTabId && renderState.viewportPinned) {
             updateImePosition(renderState.cursorX, renderState.cursorY);
@@ -834,6 +839,8 @@ function teardownPopupContent(): void {
   // 昇格後（tabContentElByTabIdへ通常タブとして登録済み）はスクロール状態をリセットすべきでない
   if (!tabContentElByTabId.has(currentPopupTabId)) {
     wheelAccumPxByTabId.delete(currentPopupTabId);
+    wheelAccumPxXByTabId.delete(currentPopupTabId);
+    mouseTrackingByTabId.delete(currentPopupTabId);
   }
   popupTermEl.innerHTML = "";
   currentPopupTabId = null;
@@ -952,6 +959,8 @@ function gcStale(
     termElByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     wheelAccumPxByTabId.delete(tabId);
+    wheelAccumPxXByTabId.delete(tabId);
+    mouseTrackingByTabId.delete(tabId);
     browserElByTabId.delete(tabId);
     browserDomReadyByTabId.delete(tabId);
     browserToolbarRootByTabId.get(tabId)?.unmount();
@@ -1197,40 +1206,214 @@ function visibleRows(tabId: TabId): number {
   return Math.max(1, Math.floor(termEl.clientHeight / cellHeight));
 }
 
-// ---- マウスホイールでのスクロールバック閲覧 ----
-// トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
-// 1行に満たない分は次回に持ち越す
-const wheelAccumPxByTabId = new Map<TabId, number>();
+// ---- マウスレポート（TUIアプリへのマウス操作転送）----
+// アプリがマウストラッキング（DECSET 9/1000/1002/1003）を有効にしている間は、クリック・
+// ドラッグ・ホイールをエスケープシーケンスに変換してPTYへ流す（変換自体はbun側のlibghostty-vt）。
+// Shift併用時は転送せず、niwaterm側のテキスト選択・スクロールバック閲覧へフォールバックする
+// （xterm系・Ghostty等と同じ慣習）
+const mouseTrackingByTabId = new Map<TabId, { tracking: boolean; anyMotion: boolean }>();
+/** 押下中のDOMボタン番号。ドラッグ中は.termの外へ出ても押し始めたタブへ送り続ける */
+const pressedMouseButtons = new Set<number>();
+let mouseDragTabId: TabId | null = null;
+let pendingMouseMotion: {
+  tabId: TabId;
+  termEl: HTMLElement;
+  button: MouseButton | null;
+  event: MouseEvent;
+} | null = null;
+let mouseMotionFrameRequested = false;
 
-function handleWheelScroll(tabId: TabId, deltaPx: number): void {
-  const accumulated = (wheelAccumPxByTabId.get(tabId) ?? 0) + deltaPx;
-  const deltaLines = Math.trunc(accumulated / cellHeight);
-  if (deltaLines === 0) {
-    wheelAccumPxByTabId.set(tabId, accumulated);
-    return;
-  }
-  wheelAccumPxByTabId.set(tabId, accumulated - deltaLines * cellHeight);
-  sendMessage("scroll", { tabId, deltaLines });
+function isMouseTracking(tabId: TabId): boolean {
+  return mouseTrackingByTabId.get(tabId)?.tracking === true;
 }
 
-tileTreeEl.addEventListener(
+/** イベント対象からターミナル(.term)とそのtabIdを引く。タイル・ポップアップの双方に効く */
+function findTerminalAt(
+  target: EventTarget | null,
+): { tabId: TabId; termEl: HTMLDivElement } | null {
+  const el = target instanceof HTMLElement ? target.closest<HTMLElement>(".term") : null;
+  if (!el) return null;
+  for (const [tabId, termEl] of termElByTabId) {
+    if (termEl === el) return { tabId, termEl };
+  }
+  return null;
+}
+
+function sendMouseReport(
+  tabId: TabId,
+  termEl: HTMLElement,
+  action: MouseAction,
+  button: MouseButton | null,
+  e: MouseEvent,
+): void {
+  const rect = termEl.getBoundingClientRect();
+  sendMessage("mouseEvent", {
+    tabId,
+    event: {
+      action,
+      button,
+      // .termの左上を原点としたピクセル座標。領域外へドラッグした場合は負値・超過値になるが、
+      // それも含めてlibghostty-vt側が判断する（ビューポート外の扱いはモード依存のため）
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      mods: mouseModsFromEvent(e),
+      anyButtonPressed: pressedMouseButtons.size > 0,
+    },
+  });
+}
+
+/** ドラッグ中に押されているボタンのうち、最初に押されたものを代表として報告する */
+function draggingMouseButton(): MouseButton | null {
+  for (const button of pressedMouseButtons) {
+    const mapped = domMouseButton(button);
+    if (mapped) return mapped;
+  }
+  return null;
+}
+
+/** 移動イベントは1フレーム1件へ間引く（同一セル内の重複はbun側でも落とされる） */
+function queueMouseMotion(
+  tabId: TabId,
+  termEl: HTMLElement,
+  button: MouseButton | null,
+  event: MouseEvent,
+): void {
+  pendingMouseMotion = { tabId, termEl, button, event };
+  if (mouseMotionFrameRequested) return;
+  mouseMotionFrameRequested = true;
+  requestAnimationFrame(() => {
+    mouseMotionFrameRequested = false;
+    flushMouseMotion();
+  });
+}
+
+/** 押下・解放より後に古い移動が届かないよう、送信前に溜まっている分を吐き出す */
+function flushMouseMotion(): void {
+  const pending = pendingMouseMotion;
+  pendingMouseMotion = null;
+  if (!pending) return;
+  sendMouseReport(pending.tabId, pending.termEl, "motion", pending.button, pending.event);
+}
+
+document.addEventListener("mousedown", (e) => {
+  if (e.shiftKey) return;
+  const hit = findTerminalAt(e.target);
+  if (!hit || !isMouseTracking(hit.tabId)) return;
+  const button = domMouseButton(e.button);
+  if (!button) return;
+  // 既定のテキスト選択開始を止める（選択したい場合はShift併用でこの分岐に入らない）。
+  // フォーカス移動は別のmousedownリスナー（tileTreeEl / popupEl）が明示的に行うため影響しない
+  e.preventDefault();
+  flushMouseMotion();
+  pressedMouseButtons.add(e.button);
+  mouseDragTabId = hit.tabId;
+  sendMouseReport(hit.tabId, hit.termEl, "press", button, e);
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (mouseDragTabId !== null) {
+    const termEl = termElByTabId.get(mouseDragTabId);
+    if (termEl) queueMouseMotion(mouseDragTabId, termEl, draggingMouseButton(), e);
+    return;
+  }
+  if (e.shiftKey) return;
+  const hit = findTerminalAt(e.target);
+  // ボタンを押していない間の移動を要求するのはDECSET 1003のみ
+  if (!hit || !mouseTrackingByTabId.get(hit.tabId)?.anyMotion) return;
+  queueMouseMotion(hit.tabId, hit.termEl, null, e);
+});
+
+document.addEventListener("mouseup", (e) => {
+  if (mouseDragTabId === null) return;
+  if (!pressedMouseButtons.delete(e.button)) return;
+  const tabId = mouseDragTabId;
+  if (pressedMouseButtons.size === 0) mouseDragTabId = null;
+  const button = domMouseButton(e.button);
+  const termEl = termElByTabId.get(tabId);
+  if (!button || !termEl) return;
+  flushMouseMotion();
+  sendMouseReport(tabId, termEl, "release", button, e);
+});
+
+// マウスレポート中の右クリックはアプリへ渡すので、webview既定のコンテキストメニューは出さない
+document.addEventListener("contextmenu", (e) => {
+  if (e.shiftKey) return;
+  const hit = findTerminalAt(e.target);
+  if (!hit || !isMouseTracking(hit.tabId)) return;
+  e.preventDefault();
+});
+
+// ---- マウスホイール（スクロールバック閲覧 / マウスレポート）----
+// トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
+// 1セルに満たない分は次回に持ち越す
+const wheelAccumPxByTabId = new Map<TabId, number>();
+const wheelAccumPxXByTabId = new Map<TabId, number>();
+
+/** 蓄積したpxから移動セル数を切り出す（端数は次回へ持ち越す） */
+function takeWheelCells(
+  accumByTabId: Map<TabId, number>,
+  tabId: TabId,
+  deltaPx: number,
+  cellPx: number,
+): number {
+  const accumulated = (accumByTabId.get(tabId) ?? 0) + deltaPx;
+  const cells = Math.trunc(accumulated / cellPx);
+  accumByTabId.set(tabId, accumulated - cells * cellPx);
+  return cells;
+}
+
+/**
+ * ホイールの送信先ターミナルを引く。.term上ならそのタブ、タイル内のターミナル外
+ * （タブバー等）ならそのタイルのアクティブタブへ送る
+ */
+function findWheelTarget(
+  target: EventTarget | null,
+): { tabId: TabId; termEl: HTMLDivElement } | null {
+  const hit = findTerminalAt(target);
+  if (hit) return hit;
+  const tileEl = target instanceof HTMLElement ? target.closest<HTMLElement>(".tile") : null;
+  const tileId = tileEl?.dataset["tileId"];
+  const tabId = tileId ? activeTabByTile.get(tileId) : undefined;
+  const termEl = tabId ? termElByTabId.get(tabId) : undefined;
+  // ターミナルタブのみ対象（ブラウザタブはOOPIF自身のネイティブスクロールに任せる）
+  if (!tabId || !termEl) return null;
+  return { tabId, termEl };
+}
+
+// タイル内のターミナルとポップアップの双方に効かせるため、documentレベルで委譲する
+document.addEventListener(
   "wheel",
   (e) => {
-    const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
-    const tileId = tileEl?.dataset["tileId"];
-    if (!tileId) return;
-    const tabId = activeTabByTile.get(tileId);
-    // ターミナルタブのみ対象（ブラウザタブはOOPIF自身のネイティブスクロールに任せる）
-    if (!tabId || !termElByTabId.has(tabId)) return;
+    const hit = findWheelTarget(e.target);
+    if (!hit) return;
+    const { tabId, termEl } = hit;
     e.preventDefault();
     // deltaMode: 0=pixel, 1=line, 2=page（DOM_DELTA_*）。line/pageは行高/表示行数で近似する
-    const deltaPx =
+    const deltaPxY =
       e.deltaMode === 1
         ? e.deltaY * cellHeight
         : e.deltaMode === 2
           ? e.deltaY * visibleRows(tabId) * cellHeight
           : e.deltaY;
-    handleWheelScroll(tabId, deltaPx);
+    const lines = takeWheelCells(wheelAccumPxByTabId, tabId, deltaPxY, cellHeight);
+
+    if (isMouseTracking(tabId) && !e.shiftKey) {
+      // マウスレポート中はスクロールバックを動かさず、ホイールをボタン押下としてアプリへ送る
+      const deltaPxX = e.deltaMode === 0 ? e.deltaX : e.deltaX * cellWidth;
+      const cols = takeWheelCells(wheelAccumPxXByTabId, tabId, deltaPxX, cellWidth);
+      for (const [cells, axis] of [
+        [lines, "vertical"],
+        [cols, "horizontal"],
+      ] as const) {
+        const report = wheelReport(cells, axis);
+        if (!report) continue;
+        for (let i = 0; i < report.count; i++) {
+          sendMouseReport(tabId, termEl, "press", report.button, e);
+        }
+      }
+      return;
+    }
+    if (lines !== 0) sendMessage("scroll", { tabId, deltaLines: lines });
   },
   { passive: false },
 );

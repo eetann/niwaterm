@@ -38,7 +38,9 @@ function createFakeSessionFactory() {
     return {
       write: () => {},
       paste: () => {},
+      mouseEvent: () => {},
       resize: () => false,
+      setCellSize: () => {},
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
@@ -50,6 +52,8 @@ function createFakeSessionFactory() {
         cursorVisible: true,
         cursorShape: "block",
         viewportPinned: true,
+        mouseTracking: false,
+        mouseAnyMotion: false,
       }),
       dumpText: () => "",
       setCallbacks: () => {},
