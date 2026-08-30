@@ -15,3 +15,6 @@ vendor/
 
 # mise: 環境依存の値（Windows側ユーザー名等）を上書きするローカル設定
 mise.local.toml
+
+# Hutch/cottontailがビルド時に作る一時ディレクトリ
+.cottontail-tmp/

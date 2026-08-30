@@ -32,7 +32,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/pty.ts — Bun.Terminal（Bun 1.3.5+）ベースのPTY（createPtyファクトリ関数）
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
-- src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはmacOSが`~/Library/Application Support/niwaterm/niwaterm.sock`、Windowsが`%APPDATA%\niwaterm\niwaterm.sock`（src/bun/app-paths.tsで解決）。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
+- src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはアプリ名(APP_VARIANT)別に分かれ、macOSが`~/Library/Application Support/<APP_VARIANT>/niwaterm.sock`、Windowsが`%APPDATA%\<APP_VARIANT>\niwaterm.sock`（src/bun/app-paths.tsで解決）。**APP_VARIANTはappフォルダ名(`niwaterm-wip-dev`)ではなくelectrobun.config.tsのapp.nameそのもの(`niwaterm-wip`/`niwaterm-daily`)で、"-dev"は付かない**。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること（過去にWSLブリッジポートとソケットパスの両方で"-dev"付きの取り違えが起きている）
 - packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.claude/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.claude/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）

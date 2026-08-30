@@ -12,7 +12,12 @@
 // ソケットパス・ブリッジポートがアプリ名別に分かれる（src/bun/app-paths.ts・ipc-server.ts参照）。
 // niwatermが起動するPTY内では自インスタンスのNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
 // 環境変数として渡るため、それを最優先で使う。未設定（niwatermのタブ外から叩いた場合等）は
-// 普段遣い(niwaterm-daily-dev)相当の固定値にフォールバックする。
+// 普段遣い相当の固定値にフォールバックする。
+//
+// ディレクトリ名に使うのはappフォルダ名（"-dev"サフィックス付き）ではなくAPP_VARIANT、つまり
+// electrobun.config.tsのapp.nameそのもの（"niwaterm-daily"）である点に注意。ここが
+// "niwaterm-daily-dev"だった頃は実在しないパスを見ていたため、NIWATERM_SOCKET未設定の
+// 呼び出しが常に接続失敗していた（ipc-server.tsのWSLブリッジポートでも同じ取り違えがあった）。
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,9 +26,9 @@ import { join } from "node:path";
 function appSupportDir(): string {
   if (process.platform === "win32") {
     const appData = process.env["APPDATA"] ?? join(homedir(), "AppData", "Roaming");
-    return join(appData, "niwaterm-daily-dev");
+    return join(appData, "niwaterm-daily");
   }
-  return join(homedir(), "Library", "Application Support", "niwaterm-daily-dev");
+  return join(homedir(), "Library", "Application Support", "niwaterm-daily");
 }
 
 /** NIWATERM_SOCKET未設定時のフォールバック（普段遣いインスタンス相当の固定パス） */

@@ -1,11 +1,12 @@
 // preBuildフックで実行され、実際に使われたアプリ名(ELECTROBUN_APP_NAME、
-// 例: "niwaterm-wip-dev" / "niwaterm-daily-dev")をアプリの実行時コードから参照できるよう
+// 例: "niwaterm-wip" / "niwaterm-daily"。appフォルダ名と違い"-dev"サフィックスは付かず、
+// electrobun.config.tsのapp.nameそのものが入る)をアプリの実行時コードから参照できるよう
 // src/bun/app-variant.generated.tsへ焼き込む。
 // appSupportDir()（設定・永続化・IPCソケットの置き場所）はこの値でビルド間を分岐する。
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const appVariant = process.env.ELECTROBUN_APP_NAME || "niwaterm-wip-dev";
+const appVariant = process.env.ELECTROBUN_APP_NAME || "niwaterm-wip";
 const outPath = join(import.meta.dir, "..", "src", "bun", "app-variant.generated.ts");
 
 writeFileSync(
