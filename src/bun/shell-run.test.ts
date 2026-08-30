@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { runShellCommand } from "./shell-run";
 
@@ -29,7 +30,10 @@ describe("runShellCommand", () => {
   });
 
   test("cwdオプションで指定したディレクトリで実行される", async () => {
-    const result = await runShellCommand("pwd", { shell: "bash", cwd: "/tmp" });
-    expect(result.stdout.trim()).toBe("/tmp");
+    // macOSの/tmpは/private/tmpへのシンボリックリンクで、chdir後のpwdは実体側のパスを
+    // 返すため、期待値もrealpathで解決してから比較する
+    const cwd = "/tmp";
+    const result = await runShellCommand("pwd", { shell: "bash", cwd });
+    expect(result.stdout.trim()).toBe(realpathSync(cwd));
   });
 });

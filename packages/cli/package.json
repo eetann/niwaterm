@@ -4,8 +4,8 @@
   "private": true,
   "description": "niwatermをCLIから操作するコマンド",
   "bin": {
-    "niwaterm": "./src/index.ts",
-    "fzf-niwaterm": "./bin/fzf-niwaterm"
+    "fzf-niwaterm": "./bin/fzf-niwaterm",
+    "niwaterm": "./src/index.ts"
   },
   "type": "module",
   "dependencies": {
