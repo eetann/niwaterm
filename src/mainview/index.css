@@ -24,6 +24,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Tailwindのfont-monoユーティリティ（サイドバーのステータスライン等）も、
+     ターミナル本体と同じユーザー指定フォント（appearance.fontFamily）に揃える */
+  --font-mono: var(--term-font);
 }
 
 :root {
@@ -119,6 +122,11 @@ body {
      CommandInput（コマンドパレットの検索欄）等で入力文字が黒く見づらくなるのを防ぐため、
      ダークテーマ固定であることをブラウザに伝える（スクロールバーの既定配色にも影響する） */
   color-scheme: dark;
+  /* Tailwind preflightを除外している（ADR 0003）ためhtmlにfont-familyが一切設定されず、
+     サイドバー等のUIクロームがWebKit既定のserif（Times系）で描画されてしまう。
+     ターミナル用途のアプリなので、UI側もappearance.fontFamilyの等幅フォントに揃える
+     （.term等はさらに!importantで同じ値を上書きしているため影響しない） */
+  font-family: var(--term-font);
 }
 
 body {
