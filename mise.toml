@@ -31,6 +31,18 @@ run = '''
 if [ "$(git branch --show-current)" = "main" ]; then
   export NIWATERM_APP_NAME=niwaterm-daily
 fi
+# TASK-0067: Hutchはelectrobun本体が導入済みかの確認だけでも
+# `~/.hutch/releases/electrobun/<version>/<platform>.lock`を排他ロックで取りに行く一方、
+# 起動中のelectrobun devプロセスは同じファイルを共有ロックで掴み続ける。ホーム配下の
+# ユーザー単位のパスなのでproject_rootを分けても競合し、後発の起動が無期限にブロックされる。
+# HUTCH_HOME自体をアプリ名別に分けて回避する
+# （詳細: docs/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md）
+APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
+export HUTCH_HOME="$HOME/.hutch-${APP_NAME#niwaterm-}"
+if [ ! -d "$HUTCH_HOME" ]; then
+  echo "HUTCH_HOME ($HUTCH_HOME) がまだありません。このまま進めるとelectrobun/cottontail/bunの再ダウンロードが走ります。"
+  echo "既存のストアをコピーすれば再ダウンロードを省けます: cp -R ~/.hutch $HUTCH_HOME"
+fi
 if grep -qi microsoft /proc/version 2>/dev/null; then
   mise run win:sync
   mise run win:start
@@ -75,7 +87,10 @@ run = '''
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
 LOG_FILE="/tmp/niwaterm-win-${APP_NAME#niwaterm-}.log"
-nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
+# HUTCH_HOMEはWSL側のexportではWindows側のプロセスに伝わらないため、ここで明示的に渡す
+# （分離する理由はstartタスクのコメント・TASK-0067参照）
+HUTCH_SUFFIX="${APP_NAME#niwaterm-}"
+nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
 echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LOG_FILE"
 echo "停止するには: mise run win:stop:mine"

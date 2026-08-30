@@ -23,12 +23,12 @@ electrobun dev  ← アプリ起動
 
 ## 1. 前提を整える
 
-| ツール                       | 用途                                   | 確認コマンド    |
-| ----------------------------- | -------------------------------------- | --------------- |
-| Bun                            | ランタイム                             | `bun --version` |
-| Xcode Command Line Tools（`cc`） | shim（`src/native/shim.c`）のビルド    | `cc --version`  |
-| mise                           | Zigのバージョン管理                    | `mise --version`|
-| Zig 0.16.0以上                 | libghostty-vtのビルド（`build.zig` が `minimum_zig_version = 0.16.0` を要求する） | `mise exec zig@0.16.0 -- zig version` |
+| ツール                           | 用途                                                                              | 確認コマンド                          |
+| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------- |
+| Bun                              | ランタイム                                                                        | `bun --version`                       |
+| Xcode Command Line Tools（`cc`） | shim（`src/native/shim.c`）のビルド                                               | `cc --version`                        |
+| mise                             | Zigのバージョン管理                                                               | `mise --version`                      |
+| Zig 0.16.0以上                   | libghostty-vtのビルド（`build.zig` が `minimum_zig_version = 0.16.0` を要求する） | `mise exec zig@0.16.0 -- zig version` |
 
 Zigはmiseがオンデマンドでインストールしてくれるので、事前に個別インストールする必要はない
 （`mise exec zig@0.16.0 -- ...` の初回実行時に自動で入る）。
@@ -90,8 +90,17 @@ cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c \
 ## 3. 起動する
 
 ```bash
-bun run start
+mise run start
 ```
+
+`start`タスクは現在のブランチからアプリ名を決め（`main`なら`niwaterm-daily`、それ以外は
+`niwaterm-wip`）、あわせて`HUTCH_HOME`を`$HOME/.hutch-daily` / `$HOME/.hutch-wip`へ分ける。
+Hutchのelectrobunリリースロックがユーザーのホーム配下でグローバルなため、これを分けないと
+**wipとdailyの同時起動ができない**（後発のビルドが無期限にスタックする）。
+機序と一次証拠: docs/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md
+
+新しい`HUTCH_HOME`は初回にelectrobun・cottontail・bunツールチェーンのダウンロードが走る
+（約171MB）。`cp -R ~/.hutch ~/.hutch-wip`のように既存ストアをコピーすれば省ける。
 
 GUIアプリなのでフォアグラウンドで実行するとブロックする。バックグラウンド実行や
 別ターミナルからの起動が扱いやすい。終了は `pkill -f 'niwaterm-dev.app'`。
@@ -137,13 +146,13 @@ grep -n -A3 "ghostty_terminal_new" vendor/libghostty/include/ghostty/vt/terminal
 
 ## トラブルシューティング
 
-| 症状                                                              | 原因・対処                                                                                                       |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う                                                          |
-| `cc: command not found`                                            | Xcode Command Line Toolsが未導入。`xcode-select --install`                                                        |
-| `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー） | `build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                                                  |
-| 起動はするがターミナル入出力がおかしい・即クラッシュする           | vendorがコードより古い可能性が高い。上記「vendorの更新が必要かどうかの見分け方」で確認する                        |
-| `opensrc path` が古いバージョンのソースを返しているように見える    | キャッシュ済みで最新化されていない。`opensrc remove ghostty-org/ghostty` してから取り直す                         |
+| 症状                                                                        | 原因・対処                                                                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う                                   |
+| `cc: command not found`                                                     | Xcode Command Line Toolsが未導入。`xcode-select --install`                                 |
+| `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー）       | `build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                           |
+| 起動はするがターミナル入出力がおかしい・即クラッシュする                    | vendorがコードより古い可能性が高い。上記「vendorの更新が必要かどうかの見分け方」で確認する |
+| `opensrc path` が古いバージョンのソースを返しているように見える             | キャッシュ済みで最新化されていない。`opensrc remove ghostty-org/ghostty` してから取り直す  |
 
 ## 参考
 

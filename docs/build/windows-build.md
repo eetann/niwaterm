@@ -259,16 +259,25 @@ WSLから同期・起動する場合は、mainブランチ側のディレクト�
 `mise run daily:merge-dev`（`main`ブランチであることを確認した上でff-onlyマージ + `bun install`）。
 
 > **project_root分離だけでは`electrobun dev`（`mise run start`）の同時起動はできない
-> （[[TASK-0058]]）。** Hutchは`~/.hutch/state/locks/graph.lock`という**ユーザー単位で
-> グローバルな**ロックも持っており、project_rootを分けていても、Hutchプロセス
-> （`electrobun dev`・`electrobun build`いずれも）が1つでも生きている間は、別のHutch
-> プロセスの起動処理そのものが完全にブロックされる（実機で確認済み。`--watch`の有無は
-> 無関係）。先発側を止めた瞬間に後発側は即座に前進するため、デッドロックではなく
-> 「先発が生きている間だけ後発を待たせる」直列化。wip・dailyを同時に動かして見比べたい
-> 場合は、両方を**順番に**`mise run start`でビルド完了させてから`mise run win:stop:mine`
-> で止め（同時にビルドさせないこと）、それぞれで`mise run win:start:built`を使って
-> ビルド済みの`launcher.exe`を`electrobun dev`を経由せず直接起動する。Hutchを経由しないため
-> グローバルロックの影響を受けず、真の同時起動ができる（ホットリロードは失われる）。
+> （[[TASK-0058]] / [[TASK-0067]]）。** Hutchは
+> `<hutch_home>/releases/electrobun/<version>/<platform>.lock`という**ユーザーのホーム配下で
+> グローバルな**ロックを持っており、起動中の`electrobun dev`がこれを共有ロックで掴み続ける一方、
+> 新しく起動する側は同じファイルを排他ロックで取りに行く。そのため、project_rootを分けていても、
+> Hutchプロセス（`electrobun dev`・`electrobun build`いずれも）が1つでも生きている間は
+> 別のHutchプロセスの起動処理が完全にブロックされる（実機で確認済み。`--watch`の有無は無関係）。
+> 先発側を止めた瞬間に後発側は即座に前進するため、デッドロックではなく
+> 「先発が生きている間だけ後発を待たせる」直列化。
+> 機序と一次証拠: docs/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md
+>
+> **対策**: `mise run start` / `win:start`は`HUTCH_HOME`を`$HOME/.hutch-wip` /
+> `$HOME/.hutch-daily`へ自動的に分けるため、通常はそのまま同時起動できる（ホットリロードも
+> 維持される）。新しい`HUTCH_HOME`は初回にダウンロードが走るので、
+> `cp -R ~/.hutch ~/.hutch-wip`のように既存ストアをコピーしておくと省ける。
+> **なおこの対策はmacOS実機で検証済み、Windows実機では未検証**（[[TASK-0067]]）。
+> Windowsで通らない場合や、`HUTCH_HOME`を分けたくない場合は、両方を**順番に**
+> `mise run start`でビルド完了させてから`mise run win:stop:mine`で止め（同時にビルドさせないこと）、
+> それぞれで`mise run win:start:built`を使ってビルド済みの`launcher.exe`を`electrobun dev`を
+> 経由せず直接起動する。Hutchを経由しないためこのロックの影響を受けない（ホットリロードは失われる）。
 
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
