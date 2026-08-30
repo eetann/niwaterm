@@ -891,6 +891,9 @@ function browserNavigate(
  * タブの表示/非表示を切り替える。ブラウザタブはdisplay:noneだけでは
  * ネイティブOOPIFが隠れない（位置同期が0x0でスキップされ直前の位置に居座る）ため、
  * toggleHiddenも併せて呼ぶ必要がある。
+ * さらにtoggleHiddenだけでは描画が消えてもマウスイベントは奪われたままで、背面に来た
+ * ターミナルがクリック・ホバーに反応しなくなるため、togglePassthroughも併せて呼ぶ
+ * （docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）。
  */
 function setTabVisible(tabId: TabId, visible: boolean): void {
   const tabContentEl = tabContentElByTabId.get(tabId);
@@ -904,7 +907,9 @@ function setTabVisible(tabId: TabId, visible: boolean): void {
     // 拾えないため、背面にいたタブはここで拾う必要がある）
     if (visible && wasHidden) sendResize(tabId);
   }
-  browserElByTabId.get(tabId)?.toggleHidden(!visible);
+  const browserEl = browserElByTabId.get(tabId);
+  browserEl?.toggleHidden(!visible);
+  browserEl?.togglePassthrough(!visible);
 }
 
 // ---- ポップアップ（タイルに所属しない一時的な画面。ADR 0005）----
@@ -1175,13 +1180,22 @@ function renderSidebarSwitcher(): void {
  * #sidebar-listはhidden属性で、#sidebar-custom-view内のOOPIFはtoggleHiddenで隠す
  * （OOPIFはdisplay:noneだけでは隠れないため）。#sidebar-custom-view自体は常にレイアウトを
  * 持たせたままにする必要があるため、非アクティブ時の見た目上の無効化はpointer-events経由で行う。
+ * ただしOOPIFはネイティブのオーバーレイなのでCSSのpointer-eventsが効かず、toggleHiddenで
+ * 見えなくしてもマウスイベントだけは奪い続ける（＝#sidebar-listのクリックが死ぬ）。
+ * togglePassthroughを併用してネイティブ側でもイベントを素通りさせる必要がある。
  */
 function setSidebarShowingCustom(showing: boolean): void {
   sidebarShowingCustom = showing;
   sidebarListEl.hidden = showing;
   sidebarCustomViewEl.classList.toggle("active", showing);
-  customViewWebviewEl?.toggleHidden(!showing);
+  setCustomViewWebviewActive(showing);
   renderSidebarSwitcher();
+}
+
+/** customViewのOOPIFの表示・マウスイベント受け取りをまとめて切り替える */
+function setCustomViewWebviewActive(active: boolean): void {
+  customViewWebviewEl?.toggleHidden(!active);
+  customViewWebviewEl?.togglePassthrough(!active);
 }
 
 /** customView設定に合わせてサイドバーパネル用の<electrobun-webview>を作成/更新/破棄する */
@@ -1201,14 +1215,15 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
 
   if (!customViewWebviewEl) {
     // #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
-    // 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenだけで正しく隠せる。
-    // ただしtoggleHidden()はwebviewId確定後でないと送信先が無く無視されるため、
-    // 初回のみdom-readyを待ってから呼ぶ
+    // 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenで正しく隠せる。
+    // ただしtoggleHidden()/togglePassthrough()はwebviewId確定後でないと送信先が無く
+    // 無視されるため、初回のみdom-readyを待ってから呼ぶ
     const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
     webviewEl.setAttribute("sandbox", "");
     webviewEl.src = customView.url;
     webviewEl.on("dom-ready", () => {
       webviewEl.toggleHidden(!sidebarShowingCustom);
+      webviewEl.togglePassthrough(!sidebarShowingCustom);
     });
     sidebarCustomViewEl.appendChild(webviewEl);
     customViewWebviewEl = webviewEl;

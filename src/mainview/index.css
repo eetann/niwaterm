@@ -153,7 +153,11 @@ body {
  * サイズで同期されないまま非表示状態で生成すると、ネイティブ側が不正なサイズ
  * （幅/高さNaN→100x100にフォールバック）のまま表示され続けるバグがあるため
  * （表示中は#sidebar-listより後にDOM上へ来るため上に重なるので、非アクティブ時は
- * pointer-events:noneでクリックを#sidebar-listへ通す）
+ * pointer-events:noneでクリックを#sidebar-listへ通す）。
+ * ただしこのpointer-events:noneが効くのは<electrobun-webview>という軽量DOM要素まで。
+ * 実体のネイティブオーバーレイ(OOPIF)はCSSの管轄外で、toggleHidden()で見えなくしても
+ * マウスイベントだけは奪い続けるため、JS側でtogglePassthrough()も併用する必要がある
+ * （docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
  */
 #sidebar-body {
   position: relative;
