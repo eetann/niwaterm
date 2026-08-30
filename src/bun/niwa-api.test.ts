@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { isCustomBindingRef, type KeybindingsConfig, type ShellProfile } from "@niwaterm/config";
 import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
@@ -35,31 +37,35 @@ function customHandlerId(config: KeybindingsConfig, key: string): string {
   return target.id;
 }
 
-function createFakeSessionFactory() {
-  const factory = (_opts: TerminalSessionOptions): TerminalSession => ({
-    write: () => {},
-    paste: () => {},
-    mouseEvent: () => {},
-    resize: () => false,
-    setCellSize: () => {},
-    scroll: () => {},
-    scrollToTop: () => {},
-    scrollToBottom: () => {},
-    renderState: () => ({
-      kind: "terminal",
-      html: "",
-      cursorX: 0,
-      cursorY: 0,
-      cursorVisible: true,
-      cursorShape: "block",
-      viewportPinned: true,
-      mouseTracking: false,
-      mouseAnyMotion: false,
-    }),
-    dumpText: () => "",
-    setCallbacks: () => {},
-    dispose: () => {},
-  });
+/** 生成された全セッションのoptsをsessionOptsへ記録する（popupのcaptureStdoutTo・onExitの検証用） */
+function createFakeSessionFactory(sessionOpts: TerminalSessionOptions[] = []) {
+  const factory = (opts: TerminalSessionOptions): TerminalSession => {
+    sessionOpts.push(opts);
+    return {
+      write: () => {},
+      paste: () => {},
+      mouseEvent: () => {},
+      resize: () => false,
+      setCellSize: () => {},
+      scroll: () => {},
+      scrollToTop: () => {},
+      scrollToBottom: () => {},
+      renderState: () => ({
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: true,
+        cursorShape: "block",
+        viewportPinned: true,
+        mouseTracking: false,
+        mouseAnyMotion: false,
+      }),
+      dumpText: () => "",
+      setCallbacks: () => {},
+      dispose: () => {},
+    };
+  };
   return factory;
 }
 
@@ -70,12 +76,13 @@ function createTestSetup(
     Pick<Parameters<typeof createNiwaApi>[0], "sendNotification" | "reloadConfig">
   > = {},
 ) {
+  const sessionOpts: TerminalSessionOptions[] = [];
   const workspaceManager = createWorkspaceManager({
     initialCols: 80,
     initialRows: 24,
     onDirty: () => {},
     onAllWorkspacesClosed: () => {},
-    createSession: createFakeSessionFactory(),
+    createSession: createFakeSessionFactory(sessionOpts),
     ...overrides,
   });
   const api = createNiwaApi({
@@ -87,7 +94,7 @@ function createTestSetup(
     reloadConfig: async () => {},
     ...depsOverrides,
   });
-  return { workspaceManager, ...api };
+  return { workspaceManager, sessionOpts, ...api };
 }
 
 describe("niwa.keybind / niwa.prefix / niwa.unbind（登録フェーズ）", () => {
@@ -323,6 +330,56 @@ describe("niwa.tab", () => {
   test("respawnは存在しないtabIdならfalse", () => {
     const { niwa } = createTestSetup();
     expect(niwa.tab.respawn("no-such-tab")).toBe(false);
+  });
+});
+
+describe("niwa.popup", () => {
+  /**
+   * PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで起動する
+   * （TASK-0045）。実際のwebviewの代わりにテスト側から送り、起動したセッションのoptsを返す
+   */
+  function spawnPopupSession(
+    workspaceManager: WorkspaceManager,
+    sessionOpts: TerminalSessionOptions[],
+  ): TerminalSessionOptions {
+    const tabId = workspaceManager.snapshot().workspace.popup?.tabId;
+    expect(tabId).toBeDefined();
+    workspaceManager.handleResize(tabId as string, 80, 24, 8, 16);
+    const opts = sessionOpts[sessionOpts.length - 1];
+    expect(opts).toBeDefined();
+    return opts as TerminalSessionOptions;
+  }
+
+  test("popup.runはcaptureStdout付きでポップアップを開き、閉じた時点で標準出力を返す", async () => {
+    const { niwa, workspaceManager, sessionOpts } = createTestSetup();
+    const pending = niwa.popup.run("ghq-select", { width: 80, height: 80, cwd: "/tmp" });
+
+    const popupOpts = spawnPopupSession(workspaceManager, sessionOpts);
+    expect(popupOpts.command).toBe("ghq-select");
+    expect(popupOpts.cwd).toBe("/tmp");
+    const captureFile = popupOpts.captureStdoutTo;
+    expect(typeof captureFile).toBe("string");
+
+    // PTY内のコマンドがcaptureStdoutToへ書き込む挙動を模擬する（実際のリダイレクトはpty.ts側）
+    await writeFile(captureFile as string, "ctrl-o\n/Users/me/ghq/github.com/eetann/niwaterm\n");
+    popupOpts.onExit?.(0);
+
+    expect(await pending).toBe("ctrl-o\n/Users/me/ghq/github.com/eetann/niwaterm\n");
+    expect(existsSync(captureFile as string)).toBe(false);
+  });
+
+  test("popup.runはコマンドが何も出力しなかった場合、空文字列を返す", async () => {
+    const { niwa, workspaceManager, sessionOpts } = createTestSetup();
+    const pending = niwa.popup.run("ghq-select");
+    const popupOpts = spawnPopupSession(workspaceManager, sessionOpts);
+    popupOpts.onExit?.(0);
+    expect(await pending).toBe("");
+  });
+
+  test("popup.runは既にポップアップが開いている場合nullを返す", async () => {
+    const { niwa } = createTestSetup();
+    expect(niwa.popup.open({ command: "lazygit" })).not.toBeNull();
+    expect(await niwa.popup.run("ghq-select")).toBeNull();
   });
 });
 

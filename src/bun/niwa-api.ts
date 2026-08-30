@@ -197,6 +197,14 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         const tabId = workspaceManager.openPopup(opts);
         return tabId ? { tabId } : null;
       },
+      run(command, opts) {
+        const tabId = workspaceManager.openPopup({ ...opts, command, captureStdout: true });
+        if (!tabId) return Promise.resolve(null);
+        // openPopupと同期的に（間にawaitを挟まず）waitForPopupCloseを呼ぶ必要があるため、
+        // このメソッドはasyncにしない。待機中にアクティブワークスペースが切り替わっても
+        // 開いた時点のポップアップを見続けるための約束（詳細: workspace-manager.ts）
+        return workspaceManager.waitForPopupClose().then((output) => output ?? "");
+      },
     },
     workspace: {
       create(cwd) {

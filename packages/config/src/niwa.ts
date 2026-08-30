@@ -111,8 +111,24 @@ export interface NiwaPopupOpenOptions {
   height?: number;
 }
 
+export interface NiwaPopupRunOptions {
+  /** 省略時はフォーカス中タイルのアクティブタブのcwdを引き継ぐ */
+  cwd?: string;
+  /** 表示サイズ（1〜100のパーセント）。省略時はCSS側の既定値に従う */
+  width?: number;
+  height?: number;
+}
+
 export interface NiwaPopupApi {
   open(opts?: NiwaPopupOpenOptions): { tabId: string } | null;
+  /**
+   * ポップアップでcommandを実行し、閉じるまで待って標準出力を返す
+   * （CLIの`popup open --capture-stdout`相当。fzf-tmuxの結果受け渡し方式と同じ発想で、
+   * UIの描画はポップアップ内に残したままcommandの標準出力だけを分離して受け取る）。
+   * fzf等でユーザーに選ばせた結果をキーバインドのハンドラ側で使いたい場合に用いる。
+   * 既にポップアップが開いている場合はnull、commandが何も出力しなかった場合は空文字列
+   */
+  run(command: string, opts?: NiwaPopupRunOptions): Promise<string | null>;
 }
 
 export interface NiwaWorkspaceInfo {
