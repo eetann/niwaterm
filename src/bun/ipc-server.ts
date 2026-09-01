@@ -51,20 +51,37 @@ export function ipcSocketPath(): string {
  * 登録していたためマッチせず、常に47831へフォールバックしていた）。
  * CLI側（packages/cli/src/ipc-client.ts）はPTY起動時に注入されるNIWATERM_BRIDGE_PORT
  * 環境変数からこの値を受け取るため、このマッピング自体を重複させる必要はない
- * （niwaterm-wip以外は普段遣い相当の47831にフォールバックする）。
+ * （niwaterm-wip以外は普段遣い相当の17831にフォールバックする）。
+ *
+ * ポート番号はWSL側のエフェメラルポート範囲（/proc/sys/net/ipv4/ip_local_port_range）と
+ * 重ならない値を選ぶこと。ミラーモード（networkingMode=mirrored）ではWSL VM側の
+ * エフェメラルポート範囲がWindowsホスト側でも予約され、その範囲のポートはWindows側で
+ * bindするとEADDRINUSEになる。netstatにもnetshのexcludedportrangeにも現れないため
+ * 原因が非常に分かりにくい（実機確認済み。旧ポートの47831/47832はこの範囲に入っており、
+ * ブリッジのlistenが丸ごと失敗してWSLからCLIが一切繋がらなくなっていた）。
+ * Linux既定のエフェメラル範囲は32768-60999、Windowsの動的ポート範囲は49152-65535なので、
+ * どちらにも掛からない32768未満の値にしている。
  */
 const WSL_BRIDGE_PORT_BY_VARIANT: Record<string, number> = {
-  "niwaterm-wip": 47832,
+  "niwaterm-wip": 17832,
 };
-export const WSL_BRIDGE_PORT = WSL_BRIDGE_PORT_BY_VARIANT[APP_VARIANT] ?? 47831;
+export const WSL_BRIDGE_PORT = WSL_BRIDGE_PORT_BY_VARIANT[APP_VARIANT] ?? 17831;
 
 /**
- * WSL用のHyper-V仮想アダプタ（"vEthernet (WSL)"等、名前に"wsl"を含むもの）のIPv4アドレスを返す。
- * このアダプタはWindowsホスト⇔WSL VM間の内部NATに閉じており、LAN上の他端末からは到達できない。
- * 0.0.0.0にbindするとLAN全体に露出してしまうため、必ずこのアダプタのIPだけにbindする。
+ * TCPブリッジをlistenするアドレスを返す。WSL2のネットワークモードによってWSL側から
+ * Windowsホストへ届く経路が変わるため、両モード分をまとめてlistenする。
+ *
+ * - `127.0.0.1`: ミラーモード（`.wslconfig`の`networkingMode=mirrored`）用。
+ *   このモードではWSL用仮想アダプタのIPへは到達できず（アダプタ自体はWindows側に
+ *   残るがWSL VMとの通信には使われない）、WSLからの接続はWindowsホストの
+ *   ループバックに届く（実機確認済み）
+ * - WSL用のHyper-V仮想アダプタ（"vEthernet (WSL)"等、名前に"wsl"を含むもの）のIPv4:
+ *   NATモード（WSL2の既定）用。Windowsホスト⇔WSL VM間の内部NATに閉じている
+ *
+ * どちらもLAN上の他端末からは到達できない。0.0.0.0にbindするとLAN全体へ露出するため使わない。
  */
-function findWslAdapterAddresses(): string[] {
-  const addresses: string[] = [];
+function bridgeBindAddresses(): string[] {
+  const addresses: string[] = ["127.0.0.1"];
   for (const [name, entries] of Object.entries(networkInterfaces())) {
     if (!/wsl/i.test(name) || !entries) continue;
     for (const entry of entries) {
@@ -1185,14 +1202,22 @@ export async function createIpcServer(
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で
-  // WSL用仮想アダプタのIPにだけ追加でTCP listenする。bind失敗はbest effortで無視する
-  // （WSLが無効/未使用の環境や、まれなポート競合でIPCサーバー自体を落とさないため）
+  // ループバックとWSL用仮想アダプタのIPにだけ追加でTCP listenする（bridgeBindAddresses参照）。
+  // bind失敗はbest effortで無視する（WSLが無効/未使用の環境や、まれなポート競合で
+  // IPCサーバー自体を落とさないため）
   const tcpServers =
     process.platform === "win32"
-      ? findWslAdapterAddresses().flatMap((hostname) => {
+      ? bridgeBindAddresses().flatMap((hostname) => {
           try {
-            return [Bun.serve({ hostname, port: WSL_BRIDGE_PORT, fetch: app.fetch })];
-          } catch {
+            const tcpServer = Bun.serve({ hostname, port: WSL_BRIDGE_PORT, fetch: app.fetch });
+            console.log(`[bun] wsl bridge listening on ${hostname}:${WSL_BRIDGE_PORT}`);
+            return [tcpServer];
+          } catch (err) {
+            // 握り潰すとWSLからCLIが繋がらない原因が分からなくなる（過去にエフェメラルポート
+            // 範囲との衝突で全アドレスのbindが失敗し、無言でブリッジが機能しなくなっていた）
+            console.log(
+              `[bun] failed to listen wsl bridge on ${hostname}:${WSL_BRIDGE_PORT}: ${String(err)}`,
+            );
             return [];
           }
         })

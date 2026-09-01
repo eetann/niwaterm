@@ -358,19 +358,23 @@ niwaterm固有の問題ではない。
 この制約を回避するため、`src/bun/ipc-server.ts`はWindows限定で、Unix domain socketに加えて
 **WSL用のTCPブリッジ**も追加でlistenする:
 
-- **待受先**: `0.0.0.0`ではなく、`os.networkInterfaces()`で見つけた
+- **待受先**: `0.0.0.0`ではなく、ループバック(`127.0.0.1`)と、`os.networkInterfaces()`で見つけた
   WSL用Hyper-V仮想アダプタ（`vEthernet (WSL)`等、名前に`wsl`を含むもの）のIPv4アドレスに限定する。
-  このアダプタはWindowsホスト⇔WSL VM間の内部NATに閉じており、LANの他端末からは到達できない
+  WSLからどちらに届くかはWSL2のネットワークモード次第で、ミラーモード
+  （`.wslconfig`の`networkingMode=mirrored`）ならループバック、NATモード（既定）なら
+  仮想アダプタのIPになるため、両方でlistenする。どちらもLANの他端末からは到達できない
   （`0.0.0.0`だと同一LAN上の他端末からも到達しうるため、意図的に避けている）
-- **ポート**: ビルドチャンネル別の固定ポート（`src/bun/ipc-server.ts`の
-  `WSL_BRIDGE_PORT_BY_CHANNEL`で管理。stable=`47831`、dev=`47832`、canary=`47833`）。
-  devビルドと普段遣い(stable)ビルドを同時にWindows実機で動かしてもポートが衝突しないようにするため
+- **ポート**: アプリ名(`APP_VARIANT`)別の固定ポート（`src/bun/ipc-server.ts`の
+  `WSL_BRIDGE_PORT_BY_VARIANT`で管理。niwaterm-daily=`17831`、niwaterm-wip=`17832`）。
+  wipビルドとdailyビルドを同時にWindows実機で動かしてもポートが衝突しないようにするため。
+  ポート番号を変える場合は**WSL側のエフェメラルポート範囲と重ならない値**を選ぶこと
+  （[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照）
 - **接続元(WSL側)の判定**: `packages/cli/src/ipc-client.ts`が`/proc/version`の内容で
-  WSL上かどうかを判定し、WSL上であれば`/proc/net/route`からデフォルトゲートウェイ
-  （＝Windowsホスト側の上記アダプタのIP）を読み取ってTCP接続する。ゲートウェイIPは
+  WSL上かどうかを判定し、WSL上であればループバック→`/proc/net/route`のデフォルトゲートウェイ
+  （＝NATモードでのWindowsホスト側アダプタのIP）の順にTCP接続を試す。ゲートウェイIPは
   WSL VM再起動のたびに変わりうるため、実行のたびに動的に読み直す（キャッシュしない）。
   ポート番号自体は、niwatermが起動したPTY内であれば`NIWATERM_BRIDGE_PORT`環境変数
-  （自インスタンスの値）を優先し、未設定時のみ`47831`（stable相当）にフォールバックする
+  （自インスタンスの値）を優先し、未設定時のみ`17831`（daily相当）にフォールバックする
 
 対応済みのため、WSLディストロのタブ内でも他プラットフォーム同様にCLIが使える:
 
@@ -401,7 +405,7 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 | `browser-screenshot` が `unexpected status 500` で失敗する                  | Bun本体のWindows版`Bun.WebView`の既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)）。`BUN_CHROME_PATH`を設定しても直らない。niwaterm側の回避策は無く、Bun側の修正待ち                                                                                                                                                                                    |
 | `niwaterm ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
 | WSLディストロのタブ内で`niwaterm`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
-| WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、WSL用仮想アダプタが見つからない、ポート`47831`が別プロセスに使われている、のいずれか                                                                                                                                                                                                    |
+| WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」「接続できませんでした」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、ブリッジのポートがbindできずlistenしていない、のいずれか。アプリ起動ログの`[bun] wsl bridge listening on ...`の有無で切り分ける（[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照） |
 | `send-keys`等でPTYへ書き込んだ直後にniwatermアプリ自体が`Segmentation fault`でクラッシュする | [Windows実機: PTY終了直後のdispose()でuse-after-freeクラッシュ](/known-issues/windows-pty-dispose-use-after-free.md)参照                                                                                                                                                                                                                                          |
 | タスクバーにピン留めしたアイコンから起動できない（ウィンドウが一瞬見えて消える） | ピン留め対象が`launcher.exe`ではなく`bun.exe`になっている。[タスクバーからdev/dailyビルドを起動するとWindows Terminalが開き、閉じるとniwatermごと終了する](/known-issues/windows-taskbar-launch-opens-windows-terminal.md)参照 |
 | Explorerから起動するとWindows Terminalも開き、閉じるとniwatermも終了する | devビルドのlauncherが`bun.exe`をコンソール付きで起動するため。postBuildフック(`scripts/patch-win-bun-subsystem.ts`)適用後のビルドで解消する。[同上](/known-issues/windows-taskbar-launch-opens-windows-terminal.md) |

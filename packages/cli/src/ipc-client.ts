@@ -36,8 +36,12 @@ export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
 }
 
-/** NIWATERM_BRIDGE_PORT未設定時のフォールバック（普段遣いインスタンス相当の固定ポート） */
-const DEFAULT_WSL_BRIDGE_PORT = 47831;
+/**
+ * NIWATERM_BRIDGE_PORT未設定時のフォールバック（普段遣いインスタンス相当の固定ポート）。
+ * 値の選定理由はsrc/bun/ipc-server.tsのWSL_BRIDGE_PORT_BY_VARIANTのコメント参照
+ * （WSLのエフェメラルポート範囲と重なるポートはWindows側でbindできない）
+ */
+const DEFAULT_WSL_BRIDGE_PORT = 17831;
 
 /** /proc/versionに"microsoft"を含むかどうかでWSL上かを判定する（is-wsl等でも使われる標準的な手法） */
 function isWsl(): boolean {
@@ -77,20 +81,35 @@ function wslDefaultGateway(): string | null {
 
 export type IpcEndpoint =
   | { kind: "unix"; path: string }
-  | { kind: "tcp"; host: string; port: number };
+  | { kind: "tcp"; hosts: string[]; port: number };
 
 /**
- * 接続先を解決する。WSL上ではUnix domain socketへ接続できないため、
- * デフォルトゲートウェイが解決できればTCPブリッジを使う。それ以外（macOS・Windows実機）は
- * 従来通りUnix domain socketを使う。
+ * WSLからWindowsホスト側のTCPブリッジへ届くアドレスの候補を、試す順に返す。
+ * WSL2のネットワークモードによって到達経路が変わるが、どちらのモードかを
+ * 同期的に確実に判定する手段がないため、両方を候補にして順に試す
+ * （繋がらない側は即座に接続拒否になるので、実用上の遅延はない）。
+ *
+ * - `127.0.0.1`: ミラーモード（`.wslconfig`の`networkingMode=mirrored`）用。
+ *   このモードではWSL用仮想アダプタのIP（=NATモードのゲートウェイ）へは到達できず、
+ *   ループバック経由でWindowsホストのlistenに届く（実機確認済み）
+ * - デフォルトゲートウェイ: NATモード（WSL2の既定）用。Windowsホスト側の
+ *   WSL用仮想アダプタのIPにあたる
+ */
+function wslBridgeHosts(): string[] {
+  const gateway = wslDefaultGateway();
+  return gateway ? ["127.0.0.1", gateway] : ["127.0.0.1"];
+}
+
+/**
+ * 接続先を解決する。WSL上ではUnix domain socketへ接続できないためTCPブリッジを使い、
+ * それ以外（macOS・Windows実機）は従来通りUnix domain socketを使う。
  * niwatermのタブ内シェルから叩く場合はNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
  * 自インスタンスの値に設定されているため、それを優先する（未設定時は普段遣い相当にフォールバック）
  */
 export function resolveIpcEndpoint(): IpcEndpoint {
   if (isWsl()) {
-    const gateway = wslDefaultGateway();
     const port = Number(process.env["NIWATERM_BRIDGE_PORT"]) || DEFAULT_WSL_BRIDGE_PORT;
-    if (gateway) return { kind: "tcp", host: gateway, port };
+    return { kind: "tcp", hosts: wslBridgeHosts(), port };
   }
   return { kind: "unix", path: process.env["NIWATERM_SOCKET"] || ipcSocketPath() };
 }
@@ -111,7 +130,7 @@ function toWindowsAccessibleCwd(endpoint: IpcEndpoint, cwd: string): string {
 }
 
 function ipcUrl(endpoint: IpcEndpoint, path: string): string {
-  if (endpoint.kind === "tcp") return `http://${endpoint.host}:${endpoint.port}${path}`;
+  if (endpoint.kind === "tcp") return `http://${endpoint.hosts[0]}:${endpoint.port}${path}`;
   return `http://localhost${path}`;
 }
 
@@ -122,6 +141,31 @@ function ipcFetchInit(
 ): RequestInit & { unix?: string } {
   if (endpoint.kind === "unix") return { ...init, unix: endpoint.path };
   return init;
+}
+
+/**
+ * ipcUrl()が組み立てたURLへ接続する。TCPブリッジは接続先ホストの候補が複数あり
+ * （wslBridgeHosts参照）、どれが有効かは実際に繋いでみないと分からないため、
+ * 接続に失敗したらURLのホスト部分だけ差し替えて順に試す。
+ * 全候補で失敗したら最後のエラーをそのまま投げ、呼び出し側のcatchでdescribeError()に渡す
+ */
+async function ipcFetch(
+  endpoint: IpcEndpoint,
+  url: string,
+  init: RequestInit & { unix?: string },
+): Promise<Response> {
+  if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) return await fetch(url, init);
+  let lastError: unknown;
+  for (const host of endpoint.hosts) {
+    const target = new URL(url);
+    target.hostname = host;
+    try {
+      return await fetch(target.toString(), init);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -140,14 +184,15 @@ function describeError(endpoint: IpcEndpoint, err: unknown): string {
     }
     return String(err);
   }
-  return `WSLからWindows側niwatermアプリ(${endpoint.host}:${endpoint.port})へ接続できませんでした。Windows側でアプリが起動しているか確認してください（${String(err)}）`;
+  const targets = endpoint.hosts.map((host) => `${host}:${endpoint.port}`).join(" / ");
+  return `WSLからWindows側niwatermアプリ(${targets})へ接続できませんでした。Windows側でアプリが起動しているか確認してください（${String(err)}）`;
 }
 
 export type PingResult = { ok: true; pid: number } | { ok: false; error: string };
 
 export async function pingNiwaterm(endpoint: IpcEndpoint): Promise<PingResult> {
   try {
-    const res = await fetch(ipcUrl(endpoint, "/ping"), ipcFetchInit(endpoint));
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/ping"), ipcFetchInit(endpoint));
     if (!res.ok) return { ok: false, error: `unexpected status ${res.status}` };
     const body = (await res.json()) as { pid?: unknown };
     if (typeof body.pid !== "number") return { ok: false, error: "malformed response" };
@@ -203,7 +248,7 @@ export type ListResult =
 
 export async function listWorkspaces(endpoint: IpcEndpoint): Promise<ListResult> {
   try {
-    const res = await fetch(ipcUrl(endpoint, "/list"), ipcFetchInit(endpoint));
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/list"), ipcFetchInit(endpoint));
     if (!res.ok) return { ok: false, error: `unexpected status ${res.status}` };
     const body = (await res.json()) as { workspaces?: unknown };
     if (!Array.isArray(body.workspaces)) return { ok: false, error: "malformed response" };
@@ -221,7 +266,8 @@ export async function sendKeys(
   keys: string[],
 ): Promise<SendKeysResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, "/send-keys"),
       ipcFetchInit(endpoint, {
         method: "POST",
@@ -247,7 +293,8 @@ async function postJson<T extends { ok: true }>(
   body: unknown,
 ): Promise<T | { ok: false; error: string }> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, path),
       ipcFetchInit(endpoint, {
         method: "POST",
@@ -390,7 +437,11 @@ export type ListShellProfilesResult =
 
 export async function listShellProfiles(endpoint: IpcEndpoint): Promise<ListShellProfilesResult> {
   try {
-    const res = await fetch(ipcUrl(endpoint, "/shell-profiles"), ipcFetchInit(endpoint));
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, "/shell-profiles"),
+      ipcFetchInit(endpoint),
+    );
     const body = (await res.json().catch(() => null)) as {
       profiles?: unknown;
       error?: unknown;
@@ -416,7 +467,7 @@ export type ListLayoutsResult =
 
 export async function listLayouts(endpoint: IpcEndpoint): Promise<ListLayoutsResult> {
   try {
-    const res = await fetch(ipcUrl(endpoint, "/layouts"), ipcFetchInit(endpoint));
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/layouts"), ipcFetchInit(endpoint));
     const body = (await res.json().catch(() => null)) as {
       layouts?: unknown;
       error?: unknown;
@@ -611,7 +662,8 @@ export type CaptureTabResult = { ok: true; text: string } | { ok: false; error: 
 
 export async function captureTab(endpoint: IpcEndpoint, tabId: TabId): Promise<CaptureTabResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, `/capture-tab?tabId=${encodeURIComponent(tabId)}`),
       ipcFetchInit(endpoint),
     );
@@ -643,7 +695,8 @@ export async function browserGetText(
   tabId: TabId,
 ): Promise<BrowserGetTextResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, `/browser-get-text?tabId=${encodeURIComponent(tabId)}`),
       ipcFetchInit(endpoint),
     );
@@ -664,7 +717,8 @@ export async function browserGetHtml(
   tabId: TabId,
 ): Promise<BrowserGetHtmlResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, `/browser-get-html?tabId=${encodeURIComponent(tabId)}`),
       ipcFetchInit(endpoint),
     );
@@ -689,7 +743,8 @@ export async function browserScreenshot(
   tabId: TabId,
 ): Promise<BrowserScreenshotResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, `/browser-screenshot?tabId=${encodeURIComponent(tabId)}`),
       ipcFetchInit(endpoint),
     );
@@ -737,7 +792,8 @@ export async function getTabVar(
   key: string,
 ): Promise<GetTabVarResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(
         endpoint,
         `/get-var?tabId=${encodeURIComponent(tabId)}&key=${encodeURIComponent(key)}`,
@@ -762,7 +818,8 @@ export type ListTabVarsResult =
 
 export async function listTabVars(endpoint: IpcEndpoint, tabId: TabId): Promise<ListTabVarsResult> {
   try {
-    const res = await fetch(
+    const res = await ipcFetch(
+      endpoint,
       ipcUrl(endpoint, `/list-vars?tabId=${encodeURIComponent(tabId)}`),
       ipcFetchInit(endpoint),
     );
@@ -788,7 +845,11 @@ export async function findTabsByVar(
   try {
     const query = new URLSearchParams({ key, value });
     if (scopeTabId) query.set("scopeTabId", scopeTabId);
-    const res = await fetch(ipcUrl(endpoint, `/find-vars?${query}`), ipcFetchInit(endpoint));
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, `/find-vars?${query}`),
+      ipcFetchInit(endpoint),
+    );
     const body = (await res.json().catch(() => null)) as {
       tabIds?: unknown;
       error?: unknown;
