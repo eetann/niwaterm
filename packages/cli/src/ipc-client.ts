@@ -204,19 +204,34 @@ function ipcFetchInit(
  * 接続に失敗したらURLのホスト部分だけ差し替えて順に試す。
  * 全候補で失敗したら最後のエラーをそのまま投げ、呼び出し側のcatchでdescribeError()に渡す
  */
+/**
+ * IPCリクエストのタイムアウト。アプリが起動していない・終了後の古い接続先情報が残っている
+ * 場合に無限に待たないための保険。WSLのミラーモードでは、誰もlistenしていないポートへの接続が
+ * 接続拒否ではなく無応答になることがあり、これが無いとCLIがハングする（実機で遭遇）。
+ * IPCの操作はいずれも短時間で終わる想定なのでこの長さで足りる
+ */
+const IPC_TIMEOUT_MS = 10_000;
+
 async function ipcFetch(
   endpoint: IpcEndpoint,
   url: string,
   init: RequestInit & { unix?: string },
 ): Promise<Response> {
   if (endpoint.kind === "unavailable") throw new Error(endpoint.reason);
-  if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) return await fetch(url, init);
+  // 候補を順に試すため、AbortSignalはホストごとに作り直す（使い回すと2つ目に渡る時点で
+  // 1つ目の待ち時間を消化済みになる）
+  if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(IPC_TIMEOUT_MS) });
+  }
   let lastError: unknown;
   for (const host of endpoint.hosts) {
     const target = new URL(url);
     target.hostname = host;
     try {
-      return await fetch(target.toString(), init);
+      return await fetch(target.toString(), {
+        ...init,
+        signal: AbortSignal.timeout(IPC_TIMEOUT_MS),
+      });
     } catch (err) {
       lastError = err;
     }
@@ -242,6 +257,11 @@ function describeError(endpoint: IpcEndpoint, err: unknown): string {
     return String(err);
   }
   const targets = endpoint.hosts.map((host) => `${host}:${endpoint.port}`).join(" / ");
+  if (err instanceof Error && err.name === "TimeoutError") {
+    // アプリを閉じてもポートファイルは残る（ソケットと同様、掃除は次回起動時）。
+    // 誰もlistenしていないポートへの接続がミラーモードでは無応答になるため、ここに来る
+    return `WSLからWindows側niwatermアプリ(${targets})が応答しませんでした。アプリが終了している可能性があります（${defaultAppVariant()}を起動し直してください）`;
+  }
   return `WSLからWindows側niwatermアプリ(${targets})へ接続できませんでした。Windows側でアプリが起動しているか確認してください（${String(err)}）`;
 }
 
