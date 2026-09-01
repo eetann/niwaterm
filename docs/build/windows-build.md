@@ -279,6 +279,31 @@ WSLから同期・起動する場合は、mainブランチ側のディレクト�
 > それぞれで`mise run win:start:built`を使ってビルド済みの`launcher.exe`を`electrobun dev`を
 > 経由せず直接起動する。Hutchを経由しないためこのロックの影響を受けない（ホットリロードは失われる）。
 
+### タスクバーから起動する
+
+普段遣いビルドはWSL側から`mise run start`せずに、Windows側のタスクバーやスタートメニューから
+直接起動したいことが多い。その場合は`bin\launcher.exe`を指すショートカットを作ってピン留めする。
+
+```powershell
+$sh = New-Object -ComObject WScript.Shell
+$lnk = $sh.CreateShortcut($env:APPDATA + '\Microsoft\Windows\Start Menu\Programs\niwaterm-daily.lnk')
+$lnk.TargetPath = $env:USERPROFILE + '\niwaterm-worktrees\niwaterm\build\niwaterm-daily\dev-win-x64\niwaterm-daily-dev\bin\launcher.exe'
+$lnk.WorkingDirectory = $env:USERPROFILE + '\niwaterm-worktrees\niwaterm'
+$lnk.IconLocation = $lnk.TargetPath + ',0'
+$lnk.Save()
+```
+
+`launcher.exe`はcwd・環境変数なしで起動できる（`APP_VARIANT`はビルド時に焼き込まれ、初期タブのcwdは
+`homedir()`へフォールバックし、`HUTCH_HOME`は`electrobun dev`専用のため）。ビルドし直しても
+パスは変わらないのでショートカットの作り直しも不要。
+
+> **起動中のウィンドウを右クリックしてピン留めしてはいけない。** アプリのウィンドウを所有しているのは
+> `launcher.exe`ではなく子の`bun.exe`のため、引数なしの`bun.exe`がピン留めされ、起動しても
+> 一瞬ウィンドウが見えて消えるだけになる。また、`bun.exe`のPE Subsystemを書き換えていないビルドは
+> Explorerから起動するとWindows Terminalのウィンドウが一緒に開き、それを閉じるとniwatermごと終了する
+> （`scripts/patch-win-bun-subsystem.ts`をpostBuildフックで適用済み。詳細:
+> [タスクバーからdev/dailyビルドを起動するとWindows Terminalが開き、閉じるとniwatermごと終了する](/known-issues/windows-taskbar-launch-opens-windows-terminal.md)）。
+
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
 `niwaterm browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
@@ -378,6 +403,8 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 | WSLディストロのタブ内で`niwaterm`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
 | WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、WSL用仮想アダプタが見つからない、ポート`47831`が別プロセスに使われている、のいずれか                                                                                                                                                                                                    |
 | `send-keys`等でPTYへ書き込んだ直後にniwatermアプリ自体が`Segmentation fault`でクラッシュする | [Windows実機: PTY終了直後のdispose()でuse-after-freeクラッシュ](/known-issues/windows-pty-dispose-use-after-free.md)参照                                                                                                                                                                                                                                          |
+| タスクバーにピン留めしたアイコンから起動できない（ウィンドウが一瞬見えて消える） | ピン留め対象が`launcher.exe`ではなく`bun.exe`になっている。[タスクバーからdev/dailyビルドを起動するとWindows Terminalが開き、閉じるとniwatermごと終了する](/known-issues/windows-taskbar-launch-opens-windows-terminal.md)参照 |
+| Explorerから起動するとWindows Terminalも開き、閉じるとniwatermも終了する | devビルドのlauncherが`bun.exe`をコンソール付きで起動するため。postBuildフック(`scripts/patch-win-bun-subsystem.ts`)適用後のビルドで解消する。[同上](/known-issues/windows-taskbar-launch-opens-windows-terminal.md) |
 
 ## 既知の差異・制約
 

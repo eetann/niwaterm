@@ -69,5 +69,10 @@ export default {
 		// 中身は実際に使われたアプリ名の焼き込み(scripts/write-app-variant.ts)とTailwind CSSの
 		// ビルド(scripts/build-tailwind.ts)
 		preBuild: "scripts/pre-build.ts",
+		// Windowsのdevビルドはlauncherが子のbun.exeをコンソール付きで起動するため、
+		// Explorer(タスクバーのショートカット等)から起動するとWindows Terminalのウィンドウが開き、
+		// それを閉じるとniwatermごと終了してしまう。bun.exeをGUI subsystemへ書き換えて抑止する
+		// (詳細: docs/known-issues/windows-taskbar-launch-opens-windows-terminal.md)
+		postBuild: "scripts/patch-win-bun-subsystem.ts",
 	},
 } satisfies ElectrobunConfig;
