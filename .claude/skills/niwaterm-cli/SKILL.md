@@ -4,7 +4,7 @@ description: |
   niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示、OSデスクトップ通知の送信）。
   トリガー: "niwaterm", "niwatermを操作", "niwaterm CLI", "タイルを分割して", "タブにキー送信", "niwatermのブラウザタブを操作", "niwatermで確認したい"
 user-invocable: true
-allowed-tools: Bash(niwaterm:*)
+allowed-tools: Bash(niwaterm:*), Bash(niwaterm-dev:*)
 ---
 
 # niwaterm CLI
@@ -13,7 +13,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## 前提確認
 
-- `niwaterm --version` でコマンドが使えるか確認する。使えない場合は`packages/cli/README.md`の手順（`cd packages/cli && bun link`）でセットアップする。
+- **どのコマンドを使うかはワークツリーで決まる**。`main`（daily側）なら`niwaterm`、それ以外のワークツリー（devなど、開発中ビルドniwaterm-wip向け）なら`niwaterm-dev`。`niwaterm`はdaily側のソースを指すため、devブランチでCLIを直しても`niwaterm`には反映されない。
+- `niwaterm --version`（または`niwaterm-dev --version`）でコマンドが使えるか確認する。使えない場合は対象ワークツリーのルートで`mise run cli:link`を実行する。
 - niwatermアプリ本体が起動している必要がある。`niwaterm ping` で疎通確認し、pongが返らなければ`mise run start`でアプリを起動する（バックグラウンド起動を推奨）。
 
 ## できること（概要）

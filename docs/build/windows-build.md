@@ -340,12 +340,25 @@ CLI本体はWindows側リポジトリで`bun link`しても、WSLディストロ
 そちらには反映されない。**WSLディストロの中でも別途セットアップする**:
 
 ```bash
-# WSLディストロ内で実行
-cd /mnt/c/Users/<ユーザー名>/niwaterm-worktrees/<worktree名>/packages/cli
-bun link
+# WSLディストロ内で、対象のワークツリーのルートで実行
+mise run cli:link
 ```
 
-`niwaterm --version`で疎通確認する。
+コマンド名はワークツリーによって変わる。
+
+| ワークツリー          | コマンド        | 接続先の既定    |
+| --------------------- | --------------- | --------------- |
+| `main`（daily側）     | `niwaterm`      | niwaterm-daily  |
+| それ以外（devなど）   | `niwaterm-dev`  | niwaterm-wip    |
+
+**wipの動作確認では`niwaterm-dev`を使う**。`bun link`はパッケージ名(`@niwaterm/cli`)で登録するため、
+複数のワークツリーから実行すると後勝ちで`niwaterm`を奪い合い、devで作業していても`niwaterm`が
+daily側のソースを指したままになる（CLI側の変更が反映されていないことに気づきにくい）。
+これを避けるため、wip側は`bun link`を使わず`niwaterm-dev`という別名の薄いラッパーにしている。
+
+WSL側のソースを直接指すので、`niwaterm-dev`はワークツリーを更新すれば即座に反映される
+（`niwaterm`側は`mise run daily:merge-dev`でmainへ取り込んだ時点で反映される）。
+`niwaterm --version` / `niwaterm-dev --version`で疎通確認する。
 
 ### 6-2. WSL→WindowsはTCPブリッジ経由で接続する
 

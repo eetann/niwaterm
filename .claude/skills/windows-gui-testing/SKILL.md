@@ -20,10 +20,9 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 （`main`ブランチ＝このリポジトリ本体のメインワークツリーならdaily、それ以外
 （gtrで追加したdevブランチのworktree）ならwip）ため、**必ずdevブランチのworktree内にいることを
 確認してから実行する**。dailyはユーザーが普段使いしているインスタンスで、
-起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際も
-`niwaterm ping`等が意図せずdaily側（アプリ名未指定時のCLIのデフォルト接続先はdaily相当、
-packages/cli/src/ipc-client.ts参照）に繋がらないよう、接続先インスタンスを明示する:
-`NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping`。
+起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際は**`niwaterm`ではなく`niwaterm-dev`を使う**
+（`niwaterm`はdaily側のソースを指すうえ、接続先もdailyが既定。`niwaterm-dev`はこのワークツリーの
+ソースを直接指し、接続先もniwaterm-wipが既定になる）。未セットアップなら`mise run cli:link`。
 WSLブリッジのポートは動的割り当てなので番号を調べる必要はない（CLIがwipの`bridge-port`
 ファイルから読む）。
 

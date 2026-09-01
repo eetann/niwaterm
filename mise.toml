@@ -196,3 +196,34 @@ elif [ -d "$DEV_WORKTREE/vendor" ]; then
   echo "vendorを$DEV_WORKTREEから同期しました"
 fi
 '''
+
+# niwaterm CLIのリンク。ワークツリーごとに別名で共存させる。
+# `bun link`はパッケージ名(@niwaterm/cli)で登録するため、複数のワークツリーから実行すると
+# 後勝ちで`niwaterm`を奪い合う。実際、devワークツリーで作業していても`niwaterm`は
+# daily側のソースを指したままになり、CLI側の変更が反映されていないことに気づきにくかった
+# （さらにグローバルリンクがwin:sync対象外の古いコピーを指していたこともある）。
+# そのため、wip側は`niwaterm-dev`という別名の薄いラッパーにして棲み分ける。
+[tasks."cli:link"]
+description = "現在のワークツリーのniwaterm CLIをリンクする（mainなら`niwaterm`、それ以外なら開発用の`niwaterm-dev`）"
+run = '''
+ROOT="$(git rev-parse --show-toplevel)"
+if [ "$(git branch --show-current)" = "main" ]; then
+  # daily(普段遣い)向け。bun linkでパッケージごと登録する（fzf-niwatermも一緒に張られる）
+  cd "$ROOT/packages/cli" && bun link
+  echo "niwaterm をリンクしました: $ROOT/packages/cli"
+else
+  # wip(開発中ビルド)向け。上記の理由でbun linkは使わず、別名のラッパーを置いて共存させる
+  ENTRY="$ROOT/packages/cli/src/index.ts"
+  BIN="$HOME/.bun/bin/niwaterm-dev"
+  mkdir -p "$HOME/.bun/bin"
+  cat > "$BIN" <<EOF
+#!/bin/sh
+# mise run cli:link が生成。直接編集しない。
+# 接続先はniwaterm-wipを既定にする。niwatermのタブ内から叩いた場合はアプリが注入した
+# 自インスタンスのNIWATERM_APP_VARIANTが優先されるため、他インスタンスを奪うことはない
+exec env NIWATERM_APP_VARIANT="\${NIWATERM_APP_VARIANT:-niwaterm-wip}" bun "$ENTRY" "\$@"
+EOF
+  chmod +x "$BIN"
+  echo "niwaterm-dev をリンクしました: $ENTRY"
+fi
+'''
