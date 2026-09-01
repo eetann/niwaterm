@@ -22,9 +22,10 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 確認してから実行する**。dailyはユーザーが普段使いしているインスタンスで、
 起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際も
 `niwaterm ping`等が意図せずdaily側（アプリ名未指定時のCLIのデフォルト接続先はdaily相当、
-packages/cli/src/ipc-client.ts参照）に繋がらないよう、wipビルドが使うソケット/ポートを
-明示する（`NIWATERM_SOCKET`・`NIWATERM_BRIDGE_PORT`。値はwipビルド起動ログの
-`ipc server listening on ...`行で確認できる）。
+packages/cli/src/ipc-client.ts参照）に繋がらないよう、接続先インスタンスを明示する:
+`NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping`。
+WSLブリッジのポートは動的割り当てなので番号を調べる必要はない（CLIがwipの`bridge-port`
+ファイルから読む）。
 
 ## 前提: WSL→Windows同期
 

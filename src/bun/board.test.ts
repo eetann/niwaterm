@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
+import { APP_VARIANT } from "./app-variant.generated";
+import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import type { PersistedTab, RestoredTreeMeta } from "./persistence";
 import type {
   TerminalSession,
@@ -267,7 +268,8 @@ describe("NIWATERM_TAB_ID環境変数の注入", () => {
     return {
       NIWATERM_TAB_ID: tabId,
       NIWATERM_SOCKET: ipcSocketPath(),
-      NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+      NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
+      NIWATERM_APP_VARIANT: APP_VARIANT,
     };
   }
 
@@ -308,7 +310,7 @@ describe("NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT環境変数の注入", () => {
     const ws = createBoard(baseOpts({ createSession: factory }));
     resolvePending(ws);
     expect(created[0]?.opts.env?.["NIWATERM_SOCKET"]).toBe(ipcSocketPath());
-    expect(created[0]?.opts.env?.["NIWATERM_BRIDGE_PORT"]).toBe(String(WSL_BRIDGE_PORT));
+    expect(created[0]?.opts.env?.["NIWATERM_BRIDGE_PORT"]).toBe(String(getWslBridgePort() ?? ""));
   });
 });
 

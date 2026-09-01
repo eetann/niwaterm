@@ -25,7 +25,8 @@ import {
   type ResolvedCustomViewConfig,
   type ShellProfile,
 } from "@niwaterm/config";
-import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
+import { APP_VARIANT } from "./app-variant.generated";
+import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import type { WorkspaceManager } from "./workspace-manager";
 
@@ -478,7 +479,8 @@ export async function loadAndResolveConfig(
     getShellProfiles: () => shellProfiles,
     getShellRunEnv: () => ({
       NIWATERM_SOCKET: ipcSocketPath(),
-      NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+      NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
+      NIWATERM_APP_VARIANT: APP_VARIANT,
     }),
     getDefaultShell: () => resolveShell(userConfig),
     sendNotification,

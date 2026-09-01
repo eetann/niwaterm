@@ -364,17 +364,24 @@ niwaterm固有の問題ではない。
   （`.wslconfig`の`networkingMode=mirrored`）ならループバック、NATモード（既定）なら
   仮想アダプタのIPになるため、両方でlistenする。どちらもLANの他端末からは到達できない
   （`0.0.0.0`だと同一LAN上の他端末からも到達しうるため、意図的に避けている）
-- **ポート**: アプリ名(`APP_VARIANT`)別の固定ポート（`src/bun/ipc-server.ts`の
-  `WSL_BRIDGE_PORT_BY_VARIANT`で管理。niwaterm-daily=`17831`、niwaterm-wip=`17832`）。
-  wipビルドとdailyビルドを同時にWindows実機で動かしてもポートが衝突しないようにするため。
-  ポート番号を変える場合は**WSL側のエフェメラルポート範囲と重ならない値**を選ぶこと
-  （[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照）
+- **ポート**: 固定せずOSに割り当てさせる（`Bun.serve`の`port: 0`）。固定ポートは他アプリと
+  衝突しうるうえ、WSL2のミラーモードではWSL側のエフェメラルポート範囲と重なるとbindすらできない
+  （[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照）。
+  割り当てられた実ポートは、Unix domain socketと同じディレクトリの`bridge-port`ファイルへ書き出す。
+  複数アドレスでlistenする場合も番号は揃える（CLIが1つのポートだけ見れば済むようにするため）
 - **接続元(WSL側)の判定**: `packages/cli/src/ipc-client.ts`が`/proc/version`の内容で
   WSL上かどうかを判定し、WSL上であればループバック→`/proc/net/route`のデフォルトゲートウェイ
   （＝NATモードでのWindowsホスト側アダプタのIP）の順にTCP接続を試す。ゲートウェイIPは
   WSL VM再起動のたびに変わりうるため、実行のたびに動的に読み直す（キャッシュしない）。
-  ポート番号自体は、niwatermが起動したPTY内であれば`NIWATERM_BRIDGE_PORT`環境変数
-  （自インスタンスの値）を優先し、未設定時のみ`17831`（daily相当）にフォールバックする
+  ポート番号は、niwatermが起動したPTY内であれば`NIWATERM_BRIDGE_PORT`環境変数
+  （自インスタンスの値）を優先し、未設定なら上記の`bridge-port`ファイルを読む
+  （ソケットと違いただのregular fileなので、DrvFs越しでもWSLから読める）。
+  ファイルの場所はcmd.exeで`%APPDATA%`を解決してから`wslpath`でLinuxパスへ変換して求める
+- **接続先インスタンスの切り替え**: `bridge-port`ファイル（およびUnix domain socket）を
+  どのインスタンスから読むかは`NIWATERM_APP_VARIANT`で指定する（既定は`niwaterm-daily`）。
+  ポートが動的になったため、タブ外から開発中ビルドへ繋ぎたい場合はポート番号ではなくこちらを使う:
+  `NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping`。
+  この変数はniwaterm自身がPTYへも注入するので、タブ内から叩く分には指定不要
 
 対応済みのため、WSLディストロのタブ内でも他プラットフォーム同様にCLIが使える:
 

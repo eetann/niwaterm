@@ -29,11 +29,12 @@ Windows側でbindしようとするとEADDRINUSEで失敗する**。誰もlisten
 「ポートは空いているのにbindだけできない」という状態になり原因を掴みにくい。
 
 エフェメラルポート範囲はディストロ・カーネル設定によって変わる（Linux既定は32768-60999だが、
-WSLでは44620-48715のような別の範囲になることがある）。**特定のポート番号を避けるのではなく、
-起こりうる範囲全体を避ける**必要がある。
+WSLでは44620-48715のような別の範囲になることがある）。**特定のポート番号を選び直しても
+根本解決にはならない**——範囲自体が環境によって動くため。
 
-niwatermのブリッジポートを32768未満にしているのはこのため（`WSL_BRIDGE_PORT_BY_VARIANT`）。
-Windowsの動的ポート範囲（既定49152-65535）とも重ならない。
+niwatermがブリッジのポートを固定していないのはこのためでもある。OSに割り当てさせれば
+予約済みの範囲は最初から選ばれないので、この問題も他アプリとのポート衝突も原理的に起きない。
+実際のポート番号はUnix domain socketと同じディレクトリの`bridge-port`ファイルでCLIに伝える。
 
 なお、ブリッジのbind失敗はIPCサーバー本体を巻き込まないようbest effortで無視する設計だが、
 無言で握り潰すとこの状況をアプリ側から観測できないため、成否をアプリのログに出している。
@@ -62,7 +63,7 @@ WSL側から、Windows側のbunで実際にbindを試すのが最も速い。
 # Windows側でbindできるポート範囲を調べる（WSLから実行）
 cat > /mnt/c/Users/<user>/bindtest.js <<'EOF'
 const net = require("node:net");
-for (const p of [17831, 17832, 47831]) {
+for (const p of [40000, 45000, 47000, 49000]) {  // 調べたい範囲に置き換える
   const s = net.createServer();
   s.once("error", (e) => console.log("FAIL", p, e.code));
   s.listen(p, "127.0.0.1", () => { console.log("OK", p); s.close(); });

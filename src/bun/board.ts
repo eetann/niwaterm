@@ -4,7 +4,8 @@
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
-import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
+import { APP_VARIANT } from "./app-variant.generated";
+import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import type {
   PersistedBrowserTab,
   PersistedTab,
@@ -156,7 +157,8 @@ export function createBoard(opts: BoardOptions) {
       env: {
         NIWATERM_TAB_ID: tabId,
         NIWATERM_SOCKET: ipcSocketPath(),
-        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+        NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
+        NIWATERM_APP_VARIANT: APP_VARIANT,
       },
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),

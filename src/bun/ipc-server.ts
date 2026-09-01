@@ -3,7 +3,7 @@
 // Bun.serveのunixオプションがWorker内でも動作することはsmoke testで実機確認済み。
 
 import { unlinkSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
@@ -14,7 +14,6 @@ import type {
   ShellProfile,
 } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
-import { APP_VARIANT } from "./app-variant.generated";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
@@ -38,34 +37,37 @@ export function ipcSocketPath(): string {
 }
 
 /**
- * WSL(NixOS等)からniwatermアプリ本体へ接続するためのTCPブリッジのポート。
+ * WSL(NixOS等)からniwatermアプリ本体へ接続するためのTCPブリッジ。
  * WSLディストロ内からはWindows側のUnix domain socketへ接続できない
  * （9p/drvfs越しにソケットファイルとして扱えず、Linux側から見るとただの空の
- * regular fileになるため。実機検証済み）ため、Windows限定でこのポートも追加でlistenする。
+ * regular fileになるため。実機検証済み）ため、Windows限定でTCPも追加でlistenする。
  *
- * 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時にWindows実機で
- * 動かすとポートが衝突するため、アプリ名(APP_VARIANT)別に固定ポートを割り当てる。
- * APP_VARIANTの実際の値はappフォルダ名（"-dev"サフィックス付き）ではなく
- * electrobun.config.tsのapp.nameそのもの（"niwaterm-wip"）である点に注意
- * （src/bun/app-variant.generated.ts参照。以前"niwaterm-wip-dev"というキーで
- * 登録していたためマッチせず、常に47831へフォールバックしていた）。
- * CLI側（packages/cli/src/ipc-client.ts）はPTY起動時に注入されるNIWATERM_BRIDGE_PORT
- * 環境変数からこの値を受け取るため、このマッピング自体を重複させる必要はない
- * （niwaterm-wip以外は普段遣い相当の17831にフォールバックする）。
- *
- * ポート番号はWSL側のエフェメラルポート範囲（/proc/sys/net/ipv4/ip_local_port_range）と
- * 重ならない値を選ぶこと。ミラーモード（networkingMode=mirrored）ではWSL VM側の
- * エフェメラルポート範囲がWindowsホスト側でも予約され、その範囲のポートはWindows側で
- * bindするとEADDRINUSEになる。netstatにもnetshのexcludedportrangeにも現れないため
- * 原因が非常に分かりにくい（実機確認済み。旧ポートの47831/47832はこの範囲に入っており、
- * ブリッジのlistenが丸ごと失敗してWSLからCLIが一切繋がらなくなっていた）。
- * Linux既定のエフェメラル範囲は32768-60999、Windowsの動的ポート範囲は49152-65535なので、
- * どちらにも掛からない32768未満の値にしている。
+ * ポート番号は固定せずOSに割り当てさせる。固定ポートは他アプリと衝突しうるうえ、
+ * WSL2のミラーモードではWSL側のエフェメラルポート範囲と重なるとbindすらできず、
+ * しかもその予約はnetstatにもnetshにも現れない
+ * （docs/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md参照）。
+ * 割り当てられた実ポートはbridgePortFilePath()のファイルへ書き出し、CLIはそれを読む。
  */
-const WSL_BRIDGE_PORT_BY_VARIANT: Record<string, number> = {
-  "niwaterm-wip": 17832,
-};
-export const WSL_BRIDGE_PORT = WSL_BRIDGE_PORT_BY_VARIANT[APP_VARIANT] ?? 17831;
+let wslBridgePort: number | null = null;
+
+/**
+ * 実際にlistenしているWSLブリッジのポート。listenするまで、およびブリッジを立てない
+ * プラットフォーム（macOS等）ではnull。
+ * PTY起動時のNIWATERM_BRIDGE_PORT注入（board.ts・config.ts・popup.ts）で使う
+ */
+export function getWslBridgePort(): number | null {
+  return wslBridgePort;
+}
+
+/**
+ * ブリッジの実ポートを書き出すファイル。Unix domain socketと同じディレクトリに置く。
+ * WSLからはソケットそのものは使えない（DrvFsがソケットを表現できない）が、
+ * ただのregular fileなら/mnt/c越しに読めるため、CLIはこれで接続先ポートを知る
+ * （packages/cli/src/ipc-client.tsのreadBridgePortFile参照）
+ */
+function bridgePortFilePath(socketPath: string): string {
+  return join(dirname(socketPath), "bridge-port");
+}
 
 /**
  * TCPブリッジをlistenするアドレスを返す。WSL2のネットワークモードによってWSL側から
@@ -1169,6 +1171,36 @@ async function removeStaleSocket(path: string): Promise<void> {
   }
 }
 
+function removeFileIfExists(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // すでに消えている等は無視
+  }
+}
+
+/**
+ * WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で
+ * ループバックとWSL用仮想アダプタのIPに追加でTCP listenする（bridgeBindAddresses参照）。
+ * ポート番号は1つ目のlistenでOSに割り当てさせ、2つ目以降は同じ番号を別アドレスで使う
+ * （CLIが1つのポート番号だけを見れば済むようにするため）。
+ * bind失敗はbest effortで無視する（IPCサーバー本体を巻き込まないため）が、無言で
+ * 握り潰すとWSLからCLIが繋がらない原因が分からなくなるため、成否は必ずログに出す
+ */
+function startWslBridge(app: ReturnType<typeof buildApp>): ReturnType<typeof Bun.serve>[] {
+  const servers: ReturnType<typeof Bun.serve>[] = [];
+  for (const hostname of bridgeBindAddresses()) {
+    try {
+      const server = Bun.serve({ hostname, port: servers[0]?.port ?? 0, fetch: app.fetch });
+      servers.push(server);
+      console.log(`[bun] wsl bridge listening on ${hostname}:${server.port}`);
+    } catch (err) {
+      console.log(`[bun] failed to listen wsl bridge on ${hostname}: ${String(err)}`);
+    }
+  }
+  return servers;
+}
+
 export async function createIpcServer(
   path: string,
   workspaceManager: WorkspaceManager,
@@ -1187,6 +1219,10 @@ export async function createIpcServer(
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
   await mkdir(dirname(path), { recursive: true });
   await removeStaleSocket(path);
+  // 前回のポートが残っているとCLIが古い（あるいは別プロセスが掴んだ）ポートへ繋ぎにいくため、
+  // listenして書き直す前に必ず消す
+  const portFile = bridgePortFilePath(path);
+  removeFileIfExists(portFile);
   const app = buildApp(
     workspaceManager,
     getCustomView,
@@ -1201,39 +1237,19 @@ export async function createIpcServer(
     sendNotification,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
-  // WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で
-  // ループバックとWSL用仮想アダプタのIPにだけ追加でTCP listenする（bridgeBindAddresses参照）。
-  // bind失敗はbest effortで無視する（WSLが無効/未使用の環境や、まれなポート競合で
-  // IPCサーバー自体を落とさないため）
-  const tcpServers =
-    process.platform === "win32"
-      ? bridgeBindAddresses().flatMap((hostname) => {
-          try {
-            const tcpServer = Bun.serve({ hostname, port: WSL_BRIDGE_PORT, fetch: app.fetch });
-            console.log(`[bun] wsl bridge listening on ${hostname}:${WSL_BRIDGE_PORT}`);
-            return [tcpServer];
-          } catch (err) {
-            // 握り潰すとWSLからCLIが繋がらない原因が分からなくなる（過去にエフェメラルポート
-            // 範囲との衝突で全アドレスのbindが失敗し、無言でブリッジが機能しなくなっていた）
-            console.log(
-              `[bun] failed to listen wsl bridge on ${hostname}:${WSL_BRIDGE_PORT}: ${String(err)}`,
-            );
-            return [];
-          }
-        })
-      : [];
+  const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];
+  wslBridgePort = tcpServers[0]?.port ?? null;
+  if (wslBridgePort !== null) await writeFile(portFile, String(wslBridgePort));
   let closed = false;
   return {
     close() {
       if (closed) return;
       closed = true;
+      wslBridgePort = null;
       server.stop();
       for (const tcpServer of tcpServers) tcpServer.stop();
-      try {
-        unlinkSync(path);
-      } catch {
-        // すでに消えている等は無視
-      }
+      removeFileIfExists(portFile);
+      removeFileIfExists(path);
     },
   };
 }

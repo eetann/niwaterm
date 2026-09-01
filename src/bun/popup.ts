@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
-import { ipcSocketPath, WSL_BRIDGE_PORT } from "./ipc-server";
+import { APP_VARIANT } from "./app-variant.generated";
+import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import {
   createTerminalSession,
   type TerminalRenderState,
@@ -128,7 +129,8 @@ export function createPopup(opts: PopupOptions) {
       env: {
         NIWATERM_TAB_ID: tabId,
         NIWATERM_SOCKET: ipcSocketPath(),
-        NIWATERM_BRIDGE_PORT: String(WSL_BRIDGE_PORT),
+        NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
+        NIWATERM_APP_VARIANT: APP_VARIANT,
       },
       onOutput: () => opts.onDirty(),
       onExit: () => close(),

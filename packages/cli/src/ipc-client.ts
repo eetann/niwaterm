@@ -12,7 +12,8 @@
 // ソケットパス・ブリッジポートがアプリ名別に分かれる（src/bun/app-paths.ts・ipc-server.ts参照）。
 // niwatermが起動するPTY内では自インスタンスのNIWATERM_SOCKET/NIWATERM_BRIDGE_PORTが
 // 環境変数として渡るため、それを最優先で使う。未設定（niwatermのタブ外から叩いた場合等）は
-// 普段遣い相当の固定値にフォールバックする。
+// 普段遣いインスタンスを見に行く。ソケットパスはアプリ名から決まるが、TCPブリッジのポートは
+// OS任せの動的割り当てなので、アプリが書き出したポートファイルを読んで解決する。
 //
 // ディレクトリ名に使うのはappフォルダ名（"-dev"サフィックス付き）ではなくAPP_VARIANT、つまり
 // electrobun.config.tsのapp.nameそのもの（"niwaterm-daily"）である点に注意。ここが
@@ -23,12 +24,24 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+/**
+ * NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT未設定時に見に行くインスタンス。既定は普段遣いのビルド。
+ * ブリッジのポートが動的割り当てになったことで、タブ外から開発中ビルドへ繋ぎたいときに
+ * ポート番号を調べて渡す手が使えないため、NIWATERM_APP_VARIANTで切り替えられるようにしている
+ * （例: NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping）。
+ * この変数はniwaterm自身がPTYへも注入するため、タブ内から叩けば自インスタンスを指す
+ * （NIWATERM_BRIDGE_PORTが何らかの理由で空でも、ポートファイル経由で正しい接続先に届く）
+ */
+function defaultAppVariant(): string {
+  return process.env["NIWATERM_APP_VARIANT"] || "niwaterm-daily";
+}
+
 function appSupportDir(): string {
   if (process.platform === "win32") {
     const appData = process.env["APPDATA"] ?? join(homedir(), "AppData", "Roaming");
-    return join(appData, "niwaterm-daily");
+    return join(appData, defaultAppVariant());
   }
-  return join(homedir(), "Library", "Application Support", "niwaterm-daily");
+  return join(homedir(), "Library", "Application Support", defaultAppVariant());
 }
 
 /** NIWATERM_SOCKET未設定時のフォールバック（普段遣いインスタンス相当の固定パス） */
@@ -37,11 +50,45 @@ export function ipcSocketPath(): string {
 }
 
 /**
- * NIWATERM_BRIDGE_PORT未設定時のフォールバック（普段遣いインスタンス相当の固定ポート）。
- * 値の選定理由はsrc/bun/ipc-server.tsのWSL_BRIDGE_PORT_BY_VARIANTのコメント参照
- * （WSLのエフェメラルポート範囲と重なるポートはWindows側でbindできない）
+ * WSLからWindows側の`%APPDATA%`に対応するLinuxパスを解決する。
+ * cmd.exeで実際の値を取り、wslpathでLinuxパスへ変換する（`/mnt/c`のマウント位置は
+ * /etc/wsl.confのautomount.rootで変えられるため、自前で組み立てず変換コマンドに任せる）。
+ * interopが無効な環境などで解決できなければnullを返す
  */
-const DEFAULT_WSL_BRIDGE_PORT = 17831;
+function windowsAppDataFromWsl(): string | null {
+  try {
+    // cwdがWSL側のパスのままだとcmd.exeがUNCパス警告をstderrへ出すが、stdoutの値は正しい
+    const echo = Bun.spawnSync(["cmd.exe", "/c", "echo %APPDATA%"], { stderr: "ignore" });
+    const appData = echo.stdout.toString().trim();
+    // 未定義の環境変数はcmd.exeが"%APPDATA%"のまま出力する
+    if (!echo.success || !appData || appData.startsWith("%")) return null;
+    const converted = Bun.spawnSync(["wslpath", "-u", appData], { stderr: "ignore" });
+    const path = converted.stdout.toString().trim();
+    return converted.success && path ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * niwatermアプリが書き出したTCPブリッジのポートファイルを読む
+ * （src/bun/ipc-server.tsのbridgePortFilePath参照）。
+ * ブリッジのポートは他アプリとの衝突を避けるためOSに割り当てさせており固定値がないため、
+ * NIWATERM_BRIDGE_PORTが渡っていない場合（niwatermのタブ外から叩いた場合）はこれで解決する。
+ * ソケットと違いただのregular fileなので、DrvFs越しでもWSLから読める。
+ * どのインスタンスを見るかはdefaultAppVariant()に従う
+ */
+function readBridgePortFile(): number | null {
+  const appData = windowsAppDataFromWsl();
+  if (!appData) return null;
+  try {
+    const raw = readFileSync(join(appData, defaultAppVariant(), "bridge-port"), "utf8");
+    const port = Number(raw.trim());
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
 
 /** /proc/versionに"microsoft"を含むかどうかでWSL上かを判定する（is-wsl等でも使われる標準的な手法） */
 function isWsl(): boolean {
@@ -81,7 +128,9 @@ function wslDefaultGateway(): string | null {
 
 export type IpcEndpoint =
   | { kind: "unix"; path: string }
-  | { kind: "tcp"; hosts: string[]; port: number };
+  | { kind: "tcp"; hosts: string[]; port: number }
+  /** 接続先が特定できなかった場合。実際に繋ぎにいく前にreasonをそのままエラーとして返す */
+  | { kind: "unavailable"; reason: string };
 
 /**
  * WSLからWindowsホスト側のTCPブリッジへ届くアドレスの候補を、試す順に返す。
@@ -108,7 +157,13 @@ function wslBridgeHosts(): string[] {
  */
 export function resolveIpcEndpoint(): IpcEndpoint {
   if (isWsl()) {
-    const port = Number(process.env["NIWATERM_BRIDGE_PORT"]) || DEFAULT_WSL_BRIDGE_PORT;
+    const port = Number(process.env["NIWATERM_BRIDGE_PORT"]) || readBridgePortFile();
+    if (!port) {
+      return {
+        kind: "unavailable",
+        reason: `WSLからWindows側niwatermアプリ(${defaultAppVariant()})への接続先ポートが分かりませんでした。Windows側でアプリが起動しているか確認してください（起動していれば%APPDATA%\\${defaultAppVariant()}\\bridge-portが作られます）`,
+      };
+    }
     return { kind: "tcp", hosts: wslBridgeHosts(), port };
   }
   return { kind: "unix", path: process.env["NIWATERM_SOCKET"] || ipcSocketPath() };
@@ -154,6 +209,7 @@ async function ipcFetch(
   url: string,
   init: RequestInit & { unix?: string },
 ): Promise<Response> {
+  if (endpoint.kind === "unavailable") throw new Error(endpoint.reason);
   if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) return await fetch(url, init);
   let lastError: unknown;
   for (const host of endpoint.hosts) {
@@ -178,6 +234,7 @@ async function ipcFetch(
  * 古いバージョンでTCPブリッジ自体が存在しない可能性を示す文言にする。
  */
 function describeError(endpoint: IpcEndpoint, err: unknown): string {
+  if (endpoint.kind === "unavailable") return endpoint.reason;
   if (endpoint.kind === "unix") {
     if (err instanceof Error && (err as { code?: string }).code === "FailedToOpenSocket") {
       return "アプリが起動していない可能性があります。`mise run start`で起動してから再実行してください";
