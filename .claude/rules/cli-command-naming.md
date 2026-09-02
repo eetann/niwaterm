@@ -18,8 +18,6 @@ niwaterm popup open
 
 新しいverbを追加する場合、まず「どのリソースに属するか」を考える。既存リソース: `tab` / `workspace` / `tile` / `popup` / `browser`。
 
-**なぜこの形にしたか**: `close-tab`/`new-tab`のような動詞-名詞のフラット命名と、`popup-close`/`browser-navigate`のような名詞-動詞のフラット命名が同じCLI内に混在していた時期があり、ユーザーが「タブを閉じたい」と思ったときにどちらの語順で引くべきか一目で分からなかった。`niwaterm tab --help`でリソース単位に絞り込め、`niwaterm tab <Tab補完>`でも候補がリソース内に閉じるネスト形式へ統一した。
-
 ## リソースに属さないコマンドはトップレベルに残す
 
 `list`（ワークスペース・タイル・タブ横断の俯瞰表示）、`ping`、`layout`、`font-size`、`shell-profiles`、`docs`は単一リソースの操作ではないため、`<resource> <verb>`に押し込めずトップレベルの`niwaterm <command>`のままにする。迷ったら「これは単一のリソースIDを主語に取る操作か？」で判断する（取るなら`<resource> <verb>`、取らないならトップレベル）。

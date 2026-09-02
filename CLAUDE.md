@@ -41,8 +41,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 
 ## Electrobunのハマりどころ
 
-- **アプリコードはBun Workerで実行される**。node-ptyはWorker内でonDataが発火しないため使えない → `Bun.Terminal`はWorker内でも`data`/`exit`コールバックが正常発火する（src/bun/pty.ts）。ネイティブモジュール全般はWorkerでの動作確認が必要
-- **`index.html` に `<script type="module" src="index.js"></script>` を自分で書く**。electrobun.config.tsのviews設定だけではJSが実行されない（hello-worldテンプレはこれが抜けている）
+- **アプリコードはBun Workerで実行される**。ネイティブモジュールはWorker内でコールバックが無言で発火しないことがあるため、採用前に動作確認する
 - **キーボード入力には明示的なフォーカスが必要**（ウィンドウのフォアグラウンド化とwebview内DOM要素への`focus()`は別物）
 - electrobun.config.ts の `copy` の出力先は `Resources/app/` 基準の相対パス
 - bundlerは依存の `__dirname` をリポジトリ絶対パス（node_modules内）に焼き込む。実行時のファイル解決に注意
@@ -57,7 +56,6 @@ docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 ## bun:ffiのハマりどころ
 
 - **構造体の値渡し非対応**。値渡しAPI（ghostty_formatter_terminal_new等）はsrc/native/shim.cでスカラー引数に展開する。値渡しAPIが増えたらシムに追加
-  （スクロールバック上限は`ghostty_terminal_set(OPT_SCROLLBACK_MAX_LINES)`で設定する）
 - **引数10個以上の関数は正しく呼べない**（9個まで。10個目以降がゴミ値になり、ポインタ引数ならセグフォで落ちる）。項目が多いAPIはint32を並べた構造体をポインタ1つで渡す（`niwa_dump_selection`がこの形）。詳細: docs/known-issues/bun-ffi-breaks-with-ten-or-more-args.md
 - コールバックはJSCallbackで渡せる（ghostty_terminal_setのWRITE_PTYで使用中）
 - libghostty-vtのAPIは未安定でシンボルが消えることがある。dlopen時に存在しないシンボルを要求すると
