@@ -2254,14 +2254,15 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
     expect(await res.json()).toEqual({ ok: true, vars: {} });
   });
 
-  test("find-vars: scopeTabIdを指定すると同じワークスペース内のみ検索する", async () => {
+  test("find-vars: scopeTabIdの所属Board内のみ検索し、同じワークスペースの別Boardは含まない", async () => {
     const { mgr } = createTestWorkspaceManager();
-    const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
     const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
-    const splitResult = mgr.splitTile(tileA, "vertical");
-    const tabB = splitResult?.tabId as string;
-    mgr.newWorkspace();
-    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    // 同じワークスペースへ2枚目のBoardを作る（同じレイアウトプリセットを2回適用した状況）
+    mgr.newBoard(workspaceId);
+    const tileB = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabB = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const tabB2 = mgr.splitTile(tileB, "vertical")?.tabId as string;
     server = await createIpcServer(socketPath, mgr);
 
     await fetch("http://localhost/set-var", {
@@ -2274,22 +2275,24 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tabId: tabC, key: "role", value: "claude" }),
+      body: JSON.stringify({ tabId: tabB2, key: "role", value: "claude" }),
     });
 
-    // tabB（tabAと同じワークスペース）を起点にすると、別ワークスペースのtabCは見つからない
+    // tabB（2枚目のBoard）を起点にすると、1枚目のBoardのtabAは見つからない
     const res = await fetch(`http://localhost/find-vars?key=role&value=claude&scopeTabId=${tabB}`, {
       unix: socketPath,
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, tabIds: [tabA] });
+    expect(await res.json()).toEqual({ ok: true, tabIds: [tabB2] });
   });
 
-  test("find-vars: scopeTabId未指定は全ワークスペースを横断して検索する", async () => {
+  test("find-vars: boardIdを明示するとscopeTabIdの所属Boardより優先される", async () => {
     const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const boardA = mgr.listWorkspaces()[0]?.activeBoardId as string;
     const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
-    mgr.newWorkspace();
-    const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    mgr.newBoard(workspaceId);
+    const tabB = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
     server = await createIpcServer(socketPath, mgr);
 
     await fetch("http://localhost/set-var", {
@@ -2302,17 +2305,44 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tabId: tabC, key: "role", value: "claude" }),
+      body: JSON.stringify({ tabId: tabB, key: "role", value: "claude" }),
+    });
+
+    const res = await fetch(
+      `http://localhost/find-vars?key=role&value=claude&boardId=${boardA}&scopeTabId=${tabB}`,
+      { unix: socketPath },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, tabIds: [tabA] });
+  });
+
+  test("find-vars: boardId・scopeTabId未指定はアクティブBoardを検索する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    // newBoardで2枚目がアクティブになる
+    mgr.newBoard(workspaceId);
+    const tabB = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabA, key: "role", value: "claude" }),
+    });
+    await fetch("http://localhost/set-var", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tabId: tabB, key: "role", value: "claude" }),
     });
 
     const res = await fetch("http://localhost/find-vars?key=role&value=claude", {
       unix: socketPath,
     });
     expect(res.status).toBe(200);
-    expect((await res.json()) as { tabIds: string[] }).toEqual({
-      ok: true,
-      tabIds: expect.arrayContaining([tabA, tabC]),
-    });
+    expect(await res.json()).toEqual({ ok: true, tabIds: [tabB] });
   });
 
   test("find-vars: 存在しないscopeTabIdは404を返す", async () => {
@@ -2325,6 +2355,16 @@ describe("POST /set-var, GET /get-var, GET /list-vars", () => {
         unix: socketPath,
       },
     );
+    expect(res.status).toBe(404);
+  });
+
+  test("find-vars: 存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/find-vars?key=role&value=claude&boardId=not-found", {
+      unix: socketPath,
+    });
     expect(res.status).toBe(404);
   });
 

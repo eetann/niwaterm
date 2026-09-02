@@ -932,21 +932,35 @@ function buildApp(
     return c.json({ ok: true, vars });
   });
 
+  // 検索スコープはBoard単位（ADR 0006で`layout apply`の適用先がBoard単位になったため、
+  // 「同じレイアウトプリセット内のタブ」= 同じBoard内のタブ）。boardIdは
+  // 明示指定 > scopeTabId（呼び出し元タブ）の所属Board > アクティブBoard の順に解決する。
+  // scopeTabIdを挟むのは、プリセットのcommandが実際に走るのはPTY起動・シェル初期化を待った後で
+  // （layout-apply.tsのsendInitialInput・delay、TASK-0047）、その時点でアクティブBoardが
+  // 切り替わっていても呼び出し元自身のBoardを正しく指せるようにするため
   app.get("/find-vars", (c) => {
     const key = c.req.query("key");
     const value = c.req.query("value");
-    const scopeTabId = c.req.query("scopeTabId");
     if (!key || !value) {
       return c.json(
-        { ok: false, error: "expected ?key=<key>&value=<value>[&scopeTabId=<tabId>]" },
+        {
+          ok: false,
+          error: "expected ?key=<key>&value=<value>[&boardId=<boardId>][&scopeTabId=<tabId>]",
+        },
         400,
       );
     }
-    if (!scopeTabId) {
-      return c.json({ ok: true, tabIds: workspaceManager.findTabsByVar(key, value) });
+    let boardId = c.req.query("boardId");
+    const scopeTabId = c.req.query("scopeTabId");
+    if (!boardId && scopeTabId) {
+      const location = workspaceManager.locateTab(scopeTabId);
+      if (!location) return c.json({ ok: false, error: `tab not found: ${scopeTabId}` }, 404);
+      boardId = location.boardId;
     }
-    const tabIds = workspaceManager.findTabsByVarInWorkspace(scopeTabId, key, value);
-    if (tabIds === null) return c.json({ ok: false, error: `tab not found: ${scopeTabId}` }, 404);
+    boardId ??= workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    if (!boardId) return c.json({ ok: false, error: "active board not found" }, 404);
+    const tabIds = workspaceManager.findTabsByVarInBoard(boardId, key, value);
+    if (tabIds === null) return c.json({ ok: false, error: `board not found: ${boardId}` }, 404);
     return c.json({ ok: true, tabIds });
   });
 

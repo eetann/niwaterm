@@ -478,13 +478,13 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return result;
   }
 
-  // CLIの`tab var find`向け。scopeTabIdと同じワークスペース内だけで検索する（複数ワークスペースで
-  // 同じrole名を使い回すレイアウトプリセットが並行稼働していても、自分と同じレイアウトインスタンス内の
-  // タブだけを見つけられる）。scopeTabIdが存在しない場合はnull
-  function findTabsByVarInWorkspace(scopeTabId: TabId, key: string, value: string): TabId[] | null {
-    const owner = findOwnerByTabId(scopeTabId);
+  // CLIの`tab var find`向け。指定Board内だけで検索する。ADR 0006で`layout apply`の適用先がBoard単位に
+  // なったため、「同じレイアウトプリセット内のタブ」= 同じBoard内のタブ。1つのWorkspaceへ同じプリセットを
+  // 複数回適用してもrole名が別Boardのタブと混線しない。boardIdが存在しない場合はnull
+  function findTabsByVarInBoard(boardId: BoardId, key: string, value: string): TabId[] | null {
+    const owner = findOwnerByBoardId(boardId);
     if (!owner) return null;
-    return owner.findTabsByVar(key, value);
+    return owner.findTabsByVarInBoard(boardId, key, value);
   }
 
   // niwa.tab.show向け（tmuxのselect-pane、CLIの`tab show`相当）。所属ワークスペース・boardへの切替・
@@ -607,7 +607,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     getTabVar,
     listTabVars,
     findTabsByVar,
-    findTabsByVarInWorkspace,
+    findTabsByVarInBoard,
     showTab,
     setTabName,
     setTileName,

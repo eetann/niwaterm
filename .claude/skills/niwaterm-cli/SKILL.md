@@ -24,7 +24,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）
 - `tab new` / `switch` / `close` / `respawn` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
-- `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを起点タブと同じワークスペース内から検索する）
+- `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `workspace new` / `switch` / `close` / `rename` — ワークスペースの作成・切替・削除・名前変更
 - `board new` / `switch` / `close` / `rename` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成・切替・削除・名前変更
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）

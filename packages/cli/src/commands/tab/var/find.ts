@@ -1,18 +1,16 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../../cli-error";
 import { findTabsByVar, resolveIpcEndpoint } from "../../../ipc-client";
-import { resolveTabId } from "../../../resolve-tab";
 
 export default define({
   name: "find",
-  description:
-    "key=valueと一致する変数を持つタブをtabId一覧で表示する（--tabで指定した起点タブと同じワークスペース内のみを検索）",
+  description: "key=valueと一致する変数を持つタブをtabId一覧で表示する（1つのBoard内のみを検索）",
   args: {
-    tab: {
+    board: {
       type: "string",
-      short: "t",
+      short: "b",
       description:
-        "起点タブのtabId。省略時はNIWATERM_TAB_ID環境変数を使う。このタブと同じワークスペース内から検索する",
+        "検索対象のboardId。省略時はNIWATERM_TAB_ID環境変数のタブが属するBoard、それも無ければアクティブなBoardを検索する",
     },
     key: {
       type: "positional",
@@ -24,13 +22,10 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const scopeTabId = resolveTabId(ctx.values.tab);
-    const result = await findTabsByVar(
-      resolveIpcEndpoint(),
-      ctx.values.key,
-      ctx.values.value,
-      scopeTabId,
-    );
+    const result = await findTabsByVar(resolveIpcEndpoint(), ctx.values.key, ctx.values.value, {
+      boardId: ctx.values.board,
+      scopeTabId: process.env["NIWATERM_TAB_ID"],
+    });
     if (!result.ok) {
       failAndExit(`tab var findに失敗しました: ${result.error}`);
     }

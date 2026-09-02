@@ -506,18 +506,31 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTabId(tabId)?.listTabVars(tabId) ?? null;
   }
 
+  function collectTabsByVar(board: Board, key: string, value: string): TabId[] {
+    const result: TabId[] = [];
+    for (const leaf of listLeaves(board.getLayout())) {
+      for (const tabId of leaf.tabIds) {
+        const found = board.getTabVar(tabId, key);
+        if (found.found && found.value === value) result.push(tabId);
+      }
+    }
+    return result;
+  }
+
   // niwa.tab.var.find向け。Workspace内の全Board・タイル・タブを横断して探す
   function findTabsByVar(key: string, value: string): TabId[] {
     const result: TabId[] = [];
     for (const board of boards.values()) {
-      for (const leaf of listLeaves(board.getLayout())) {
-        for (const tabId of leaf.tabIds) {
-          const found = board.getTabVar(tabId, key);
-          if (found.found && found.value === value) result.push(tabId);
-        }
-      }
+      result.push(...collectTabsByVar(board, key, value));
     }
     return result;
+  }
+
+  // CLIの`tab var find`向け。指定Board内だけを探す。boardIdが存在しない場合はnull
+  function findTabsByVarInBoard(boardId: BoardId, key: string, value: string): TabId[] | null {
+    const board = boards.get(boardId);
+    if (!board) return null;
+    return collectTabsByVar(board, key, value);
   }
 
   function setTabName(tabId: TabId, name: string): boolean {
@@ -634,6 +647,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getTabVar,
     listTabVars,
     findTabsByVar,
+    findTabsByVarInBoard,
     setTabName,
     setTileName,
     getPersistableBoards,

@@ -913,15 +913,22 @@ export async function listTabVars(endpoint: IpcEndpoint, tabId: TabId): Promise<
 
 export type FindTabsByVarResult = { ok: true; tabIds: TabId[] } | { ok: false; error: string };
 
+/**
+ * 検索スコープの指定。`boardId`があればそのBoard、無ければ`scopeTabId`の所属Board、
+ * どちらも無ければniwaterm側がアクティブBoardを使う
+ */
+export type FindTabsByVarScope = { boardId?: BoardId; scopeTabId?: TabId };
+
 export async function findTabsByVar(
   endpoint: IpcEndpoint,
   key: string,
   value: string,
-  scopeTabId?: TabId,
+  scope: FindTabsByVarScope = {},
 ): Promise<FindTabsByVarResult> {
   try {
     const query = new URLSearchParams({ key, value });
-    if (scopeTabId) query.set("scopeTabId", scopeTabId);
+    if (scope.boardId) query.set("boardId", scope.boardId);
+    else if (scope.scopeTabId) query.set("scopeTabId", scope.scopeTabId);
     const res = await ipcFetch(
       endpoint,
       ipcUrl(endpoint, `/find-vars?${query}`),

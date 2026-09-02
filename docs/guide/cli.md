@@ -185,14 +185,16 @@ niwaterm tab capture --tab <tabId>
 niwaterm tab var set --tab <tabId> <key> <value>
 niwaterm tab var get --tab <tabId> <key>
 niwaterm tab var list --tab <tabId>
-niwaterm tab var find --tab <tabId> <key> <value>
+niwaterm tab var find --board <boardId> <key> <value>
 ```
 
 タブごとのkey-value変数を設定・取得・一覧・検索する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される。**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`tab var set`で書き、別タブがその値を`tab var get`で参照しつつ`tab send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`tab var get`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
-`tab var find`は`key=value`と一致する変数を持つタブのtabIdを1行ずつ表示する（tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当）。`--tab`で指定した起点タブと**同じワークスペース内だけ**を検索するため、複数のワークスペースで同じrole名（例: `role=claude`）を使い回すレイアウトプリセットが並行稼働していても、自分と同じレイアウトインスタンス内のタブだけを見つけられる。一致するタブが無ければ何も出力せず終了コード0を返す。役割名でタブを探して`tab send-keys`や`--target-pane`のようなオプションへ渡す、といったレイアウト内タブ間連携の起点として使う（レイアウトプリセットの`command`から使う例は`docs/guide/config.md`「レイアウト」節参照）。
+`tab var find`は`key=value`と一致する変数を持つタブのtabIdを1行ずつ表示する（tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当）。検索範囲は**1つのBoard内だけ**で、他のBoard・他のワークスペースの一致は含まない。`layout apply`の適用先がBoard単位（ADR 0006）であるため、Boardが「同じレイアウトプリセットのインスタンス」の単位になる。同じプリセットを複数回適用して同じrole名（例: `role=claude`）のタブが何枚も並んでも、自分と同じBoardのタブだけを見つけられる。一致するタブが無ければ何も出力せず終了コード0を返す。役割名でタブを探して`tab send-keys`や`--target-pane`のようなオプションへ渡す、といったレイアウト内タブ間連携の起点として使う（レイアウトプリセットの`command`から使う例は`docs/guide/config.md`「レイアウト」節参照）。
 
-`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+検索対象のBoardは`--board <boardId>`で明示できる。省略時は`NIWATERM_TAB_ID`環境変数のタブが属するBoard、それも無ければ（niwaterm外のシェルから実行した等）アクティブなBoardを検索する。**「アクティブなBoard」ではなく「実行しているタブの所属Board」を先に見るのが重要**で、レイアウトプリセットの`command`が実際に走るのはPTY起動・シェル初期化を待った後のため、その時点でユーザーが別のBoardへ切り替えていても自分のBoardを正しく指せる。`--board`は`tab var get/set/list`の`--tab`（操作対象のタブ）とは意味が異なり、検索範囲の指定である点に注意する。存在しないboardId・tabIdを指定した場合はエラーメッセージと共に終了コード1を返す。
+
+`tab var set/get/list`の`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
 ## シェル統合
 

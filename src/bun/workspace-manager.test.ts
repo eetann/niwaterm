@@ -546,27 +546,44 @@ describe("findTabsByVar", () => {
   });
 });
 
-describe("findTabsByVarInWorkspace", () => {
-  test("scopeTabIdと同じワークスペース内のみを検索し、別ワークスペースの一致は含まない", () => {
+describe("findTabsByVarInBoard", () => {
+  test("同じワークスペース内でも別Boardの一致は含まない（同じレイアウトプリセットの複数適用で混線しない）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const boardA = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const boardB = mgr.newBoard(workspaceId) as string;
+    const tabB = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    mgr.setTabVar(tabA, "role", "claude");
+    mgr.setTabVar(tabB, "role", "claude");
+
+    expect(mgr.findTabsByVarInBoard(boardA, "role", "claude")).toEqual([tabA]);
+    expect(mgr.findTabsByVarInBoard(boardB, "role", "claude")).toEqual([tabB]);
+  });
+
+  test("同一Board内は分割した全タイル・タブを横断し、別ワークスペースの一致は含まない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardA = mgr.listWorkspaces()[0]?.activeBoardId as string;
     const tileA = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
     const tabA = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
-    const splitResult = mgr.splitTile(tileA, "vertical");
-    const tabB = splitResult?.tabId as string;
+    const tabB = mgr.splitTile(tileA, "vertical")?.tabId as string;
     mgr.newWorkspace();
     const tabC = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
     mgr.setTabVar(tabA, "role", "claude");
+    mgr.setTabVar(tabB, "role", "claude");
     mgr.setTabVar(tabC, "role", "claude");
 
-    expect(mgr.findTabsByVarInWorkspace(tabB, "role", "claude")).toEqual([tabA]);
+    expect(mgr.findTabsByVarInBoard(boardA, "role", "claude")?.sort()).toEqual([tabA, tabB].sort());
   });
 
-  test("存在しないscopeTabIdはnull", () => {
+  test("存在しないboardIdはnull", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
-    expect(mgr.findTabsByVarInWorkspace("not-found", "role", "claude")).toBeNull();
+    expect(mgr.findTabsByVarInBoard("not-found", "role", "claude")).toBeNull();
   });
 });
 
