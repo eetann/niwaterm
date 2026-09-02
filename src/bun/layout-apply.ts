@@ -146,10 +146,12 @@ function configureTab(
   if (tabConfig.command) {
     const bytes = tmuxKeysToBytes([tabConfig.command, "Enter"]);
     const delay = tabConfig.delay ?? 0;
+    // handleInputではなくsendInitialInputを使う: 分割で作ったタイルのタブはPTY起動が
+    // 実測cols/rows到達まで保留されており（TASK-0047）、handleInputだと黙って捨てられる
     if (delay > 0) {
-      setTimeout(() => ctx.workspaceManager.handleInput(tabId, bytes), delay);
+      setTimeout(() => ctx.workspaceManager.sendInitialInput(tabId, bytes), delay);
     } else {
-      ctx.workspaceManager.handleInput(tabId, bytes);
+      ctx.workspaceManager.sendInitialInput(tabId, bytes);
     }
   }
 

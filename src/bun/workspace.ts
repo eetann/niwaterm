@@ -387,6 +387,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     findBoardOwnerByTabId(tabId)?.handleInput(tabId, data);
   }
 
+  /** board.tsのsendInitialInput参照。popupタブは対象外（レイアウト適用専用の経路のため） */
+  function sendInitialInput(tabId: TabId, data: string): boolean {
+    return findBoardOwnerByTabId(tabId)?.sendInitialInput(tabId, data) ?? false;
+  }
+
   function handlePaste(tabId: TabId, data: string): void {
     if (popup.hasTab(tabId)) {
       popup.handlePaste(data);
@@ -605,6 +610,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     resizeTileInDirection,
     respawnTab,
     handleInput,
+    sendInitialInput,
     handleMouseEvent,
     handlePaste,
     enterCopyMode,

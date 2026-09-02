@@ -37,6 +37,7 @@ function createFakeSessionFactory() {
     created.push(record);
     return {
       write: () => {},
+      writeWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,

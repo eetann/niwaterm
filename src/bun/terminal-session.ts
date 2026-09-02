@@ -66,6 +66,17 @@ export interface TerminalRenderState {
   copyMode: CopyModeRenderState | null;
 }
 
+/**
+ * writeWhenReadyで積んだ入力を流すまでの、PTY出力が途切れてからの静穏時間。
+ * シェルの初期化出力は数回に分かれて届くため、最初の1回ではなく「出力が落ち着いた」時点を待つ
+ */
+const INITIAL_INPUT_QUIET_MS = 150;
+/**
+ * 出力が全く来ない・出力が続き続けるシェルでも必ず流すための上限。
+ * WSLディストロの起動は数秒かかることがあるため、短くしすぎるとプロンプト表示前に流してしまう
+ */
+const INITIAL_INPUT_TIMEOUT_MS = 5000;
+
 export function createTerminalSession(opts: TerminalSessionOptions) {
   const pty = createPty({
     shell: opts.shell,
@@ -92,6 +103,12 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   let currentCols = opts.cols;
   let currentRows = opts.rows;
   let disposed = false;
+  // writeWhenReadyで積んだ、シェルの起動待ち中の入力（layoutsプリセットのcommand等）
+  let pendingInitialInput: string | null = null;
+  /** 初期入力を一度流した後か。以降のwriteWhenReadyは通常のwriteと同じ即時送信になる */
+  let initialInputFlushed = false;
+  let initialInputQuietTimer: ReturnType<typeof setTimeout> | null = null;
+  let initialInputDeadline: ReturnType<typeof setTimeout> | null = null;
   // popupからタブへの昇格（ADR 0006）時に呼び出し側がsetCallbacksで差し替えるため、
   // optsを直接参照せずmutableな変数へ切り出す
   let callbacks: TerminalSessionCallbacks = {
@@ -123,6 +140,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   pty.onData((data) => {
     if (disposed) return;
     term.write(data);
+    // シェルがまだ出力中＝初期化の途中とみなし、積んである初期入力の送出を先送りする
+    if (pendingInitialInput !== null) scheduleInitialInputFlush();
     // コピーモード中はビューポートを固定する（新しい出力が来ても閲覧位置が流れないように）。
     // ビューポートが最新行に張り付いている状態では出力のたびに勝手に追従するため、
     // 書き込み直後に固定位置へ戻し続ける必要がある（tmuxのcopy-modeと同じ体験）
@@ -151,6 +170,47 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     exitCopyMode();
     term.scrollToBottom();
     pty.write(data);
+  }
+
+  /**
+   * PTY起動直後は、シェル（と.zshrc等の初期化）がまだ端末を読み始めておらず、この時点で
+   * 書き込んだ入力は取りこぼされる。zshの場合、起動途中に流し込んだ入力は先頭側が欠け、
+   * 残りだけがコマンドラインへ入る（layoutsプリセットのcommandが途中から実行される症状で確認）。
+   * niwaterm側にシェルの準備完了を知る手段は無いため、「最初の出力が来て、そこから
+   * INITIAL_INPUT_QUIET_MSのあいだ出力が止まった」＝プロンプトを出し終えた合図とみなして流す。
+   * 一度流した後は通常のwriteと同じ即時送信になる
+   */
+  function writeWhenReady(data: string): void {
+    if (initialInputFlushed) {
+      write(data);
+      return;
+    }
+    pendingInitialInput = (pendingInitialInput ?? "") + data;
+    // 静穏タイマーはここでは張らない。PTYからの最初の出力（pty.onData）が来て初めて
+    // 起動が進み始めたと分かるため、それまではタイムアウトの保険だけで待つ
+    if (initialInputDeadline === null) {
+      initialInputDeadline = setTimeout(flushInitialInput, INITIAL_INPUT_TIMEOUT_MS);
+    }
+  }
+
+  function scheduleInitialInputFlush(): void {
+    if (initialInputQuietTimer !== null) clearTimeout(initialInputQuietTimer);
+    initialInputQuietTimer = setTimeout(flushInitialInput, INITIAL_INPUT_QUIET_MS);
+  }
+
+  function flushInitialInput(): void {
+    clearInitialInputTimers();
+    initialInputFlushed = true;
+    const data = pendingInitialInput;
+    pendingInitialInput = null;
+    if (data !== null && !disposed) write(data);
+  }
+
+  function clearInitialInputTimers(): void {
+    if (initialInputQuietTimer !== null) clearTimeout(initialInputQuietTimer);
+    if (initialInputDeadline !== null) clearTimeout(initialInputDeadline);
+    initialInputQuietTimer = null;
+    initialInputDeadline = null;
   }
 
   function paste(text: string): void {
@@ -450,6 +510,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   function dispose(): void {
     if (disposed) return;
     disposed = true;
+    clearInitialInputTimers();
+    pendingInitialInput = null;
     try {
       pty.kill();
     } catch {}
@@ -458,6 +520,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   return {
     write,
+    writeWhenReady,
     paste,
     mouseEvent,
     isCopyMode,

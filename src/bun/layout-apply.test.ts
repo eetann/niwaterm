@@ -38,6 +38,7 @@ function createTestWorkspaceManager(): {
     const index = sessionCount++;
     return {
       write: (data) => record.push(data),
+      writeWhenReady: (data) => record.push(data),
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,
@@ -189,6 +190,29 @@ describe("applyLayoutPreset (target: new-board)", () => {
     expect(tree.ratio).toBe(0.7);
     expect((tree.first as TileLeaf).tabIds.length).toBe(1);
     expect((tree.second as TileLeaf).tabIds.length).toBe(1);
+  });
+
+  test("分割で作った各タイルのタブへもcommandが届く", () => {
+    // 分割で作るタイルのプレースホルダーはPTY起動が実測cols/rows到達まで保留される（TASK-0047）。
+    // handleInputはsessions未登録のタブで黙って捨てるため、保留中は取りこぼしていた
+    const { mgr, writes } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "left", command: "echo left" }] },
+        second: { kind: "tile", tabs: [{ name: "right", command: "echo right" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
+    expect(result.ok).toBe(true);
+    resolvePending(mgr);
+
+    const flat = writes.flat();
+    expect(flat).toContain("echo left\r");
+    expect(flat).toContain("echo right\r");
   });
 
   test("1タイルに複数タブを作り、activeTabで指定したタブがアクティブになる", () => {

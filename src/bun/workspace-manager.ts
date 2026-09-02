@@ -388,6 +388,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handleInput(tabId, data);
   }
 
+  /** board.tsのsendInitialInput参照。PTY起動待ちのタブにも届く入力送信 */
+  function sendInitialInput(tabId: TabId, data: string): boolean {
+    return findOwnerByTabId(tabId)?.sendInitialInput(tabId, data) ?? false;
+  }
+
   function handlePaste(tabId: TabId, data: string): void {
     findOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
@@ -581,6 +586,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     respawnTab,
     swapWorkspaces,
     handleInput,
+    sendInitialInput,
     handleMouseEvent,
     enterCopyMode,
     handleCopyModeKey,

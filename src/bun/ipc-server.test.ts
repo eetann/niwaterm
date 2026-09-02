@@ -58,6 +58,7 @@ function createTestWorkspaceManager(): {
     const index = sessionCount++;
     return {
       write: (data) => record.push(data),
+      writeWhenReady: (data) => record.push(data),
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,
