@@ -349,6 +349,11 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
 }
 
 // ---- RPC ----
+
+// bunからの最初の応答(config/render)を受け取ったか。Electrobunのwebview→bun RPCソケットが
+// 別インスタンスへ誤接続していないかの判定に使う（このファイル末尾の起動処理を参照）
+let hostRpcReplyReceived = false;
+
 const rpc = Electroview.defineRPC<NiwaRPC>({
   maxRequestTime: 5000,
   handlers: {
@@ -360,6 +365,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
     },
     messages: {
       render: (p: AppRenderState) => {
+        hostRpcReplyReceived = true;
         activeWorkspaceId = p.activeWorkspaceId;
         workspaceIds = p.workspaceIds;
         activeBoardId = p.workspace.activeBoardId;
@@ -428,6 +434,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
       }) => {
+        hostRpcReplyReceived = true;
         keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
         lastKeybindingsConfig = keybindings;
         applyAppearance(appearance);
@@ -443,7 +450,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
   },
 });
 
-new Electrobun.Electroview({ rpc });
+const electroview = new Electrobun.Electroview({ rpc });
 
 function sendMessage(name: string, payload?: unknown) {
   (rpc as any)?.send?.[name]?.(payload ?? {});
@@ -2080,6 +2087,28 @@ applySidebarVisibility();
 measureCell();
 renderCommandPalette();
 sendMessage("ready");
+
+// Electrobunのwebview→bun RPCは`ws://127.0.0.1:<port>/socket`のWebSocketで飛び、そのポートは
+// ネイティブ層(ElectrobunCore.dll)が50000から上へ空きを探して決める。ところがWindowsは既に
+// listen中のポートへの重複bindが成功してしまうため、niwaterm-wipとniwaterm-dailyを同時に
+// 起動すると、後発側は「誰も接続してこない死んだlistener」を掴み、そのwebviewは先発側の
+// アプリのbunプロセスへ繋がってしまう。readyもresizeも別インスタンスに吸われて消えるため、
+// 初回renderが来ない→.term要素が生成されない→ResizeObserverが発火しない→board.tsの
+// pendingSpawnが永久に消化されず、ターミナルが1文字も描画されない状態になる。
+// ポート番号をずらす方向は原理的に効かない（何番へ押し出しても同じ重複bindが起きる）ので、
+// 一定時間bunからの応答が無ければソケットを閉じ、Electroviewが持つプロセス内の
+// フォールバック経路(__electrobunHostBridge = WebView2のhostObject)へ逃がす。単独起動なら
+// 応答が即座に来てこのタイマーは空振りするため、通常経路の性能には影響しない。
+// 詳細: docs/known-issues/electrobun-rpc-socket-port-collision-on-windows.md
+const HOST_RPC_FALLBACK_TIMEOUT_MS = 1500;
+setTimeout(() => {
+  if (hostRpcReplyReceived) return;
+  // close()した時点でreadyStateがOPENでもCONNECTINGでもなくなり、以降のsendは
+  // Electroview側で自動的にネイティブブリッジ経由になる
+  electroview.hostSocket?.close();
+  sendMessage("log", { msg: "host rpc socket had no reply; fell back to the native bridge" });
+  sendMessage("ready");
+}, HOST_RPC_FALLBACK_TIMEOUT_MS);
 window.addEventListener("error", (e) => {
   sendMessage("log", { msg: `error: ${e.message}` });
 });
