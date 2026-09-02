@@ -5,8 +5,15 @@
 // 行間（lineHeight > フォントのセル高）があっても上下に隙間ができない。niwatermは
 // フォントのグリフをそのまま描くので、fontSize=13/lineHeight=18のような設定だと
 // █ が縦に並んだとき行間の分だけ隙間が見える。
-// そこで「フォントがセルとして想定している矩形」＝█のインク矩形を行ボックス全体へ写す
-// 相似変換（縦方向のみ）を求め、CSSのtransformで引き伸ばして隙間を無くす。
+// そこで「フォントがセルとして想定している矩形」＝█のインク矩形が行ボックス全体を覆うような
+// 縦方向の変換を求め、CSSのtransformで引き伸ばして隙間を無くす。
+//
+// 倍率は理論値では決められない。Windows(Chromium/DirectWrite)はグリフのラスタライズ解像度(ppem)を
+// 整数へ丸めるため、たとえばfont-size 13pxに1.03倍のscaleYをかけてもppemは13のままで、
+// 描かれるグリフの大きさは1ミリも変わらない（macOS/WebKitは小数のまま拡大されるので効く）。
+// このため倍率は「実際にラスタライズして測る」以外に決めようがなく、インクの実測は呼び出し側
+// (src/mainview/index.ts)がcanvasへ描いて走査する。ここはその実測値から変換を組み立てる係。
+// ppemの丸めの詳細: docs/known-issues/windows-chromium-quantizes-glyph-raster-size.md
 
 /**
  * セル矩形いっぱいに描かれる前提の文字かどうか。
@@ -29,9 +36,11 @@ export interface CellGlyphMetrics {
   lineHeight: number;
   /** 行ボックス上端からベースラインまでの距離（px） */
   baseline: number;
-  /** ベースラインから█のインク上端まで（px, 上向きが正） */
+  /** 採用する拡大率（実測で行の高さを埋められると分かっている値） */
+  scaleY: number;
+  /** scaleYをかけたときに実際に描かれる、ベースラインから█のインク上端まで（px, 上向きが正） */
   inkAscent: number;
-  /** ベースラインから█のインク下端まで（px, 下向きが正） */
+  /** scaleYをかけたときに実際に描かれる、ベースラインから█のインク下端まで（px, 下向きが正） */
   inkDescent: number;
 }
 
@@ -45,8 +54,9 @@ export interface CellGlyphTransform {
 export const identityCellGlyphTransform: CellGlyphTransform = { scaleY: 1, shiftY: 0 };
 
 /**
- * █のインク矩形 [baseline-inkAscent, baseline+inkDescent] を
- * 行ボックス [0, lineHeight] へ写す縦方向の変換を求める。
+ * scaleY倍したときのインク矩形が行ボックス [0, lineHeight] を覆うように、縦方向の平行移動量を求める。
+ * インクが行の高さより大きい場合（ppemの丸めで1段階大きいグリフを使う場合など）は
+ * はみ出す分を上下へ均等に振り、行の中心とインクの中心を合わせる。
  * 測定値が異常（0以下、極端な倍率）なら変換なしを返して素のグリフ描画へフォールバックする。
  */
 export function computeCellGlyphTransform(m: CellGlyphMetrics): CellGlyphTransform {
@@ -54,11 +64,45 @@ export function computeCellGlyphTransform(m: CellGlyphMetrics): CellGlyphTransfo
   if (!(inkHeight > 0) || !(m.lineHeight > 0) || !Number.isFinite(m.baseline)) {
     return identityCellGlyphTransform;
   }
-  const scaleY = m.lineHeight / inkHeight;
   // フォント測定が壊れている場合の暴走よけ。等倍付近の妥当な範囲だけ受け付ける
-  if (scaleY < 0.5 || scaleY > 2) return identityCellGlyphTransform;
-  const inkTop = m.baseline - m.inkAscent;
-  return { scaleY, shiftY: -scaleY * inkTop };
+  if (!(m.scaleY >= 0.5) || !(m.scaleY <= 2)) return identityCellGlyphTransform;
+  // scaleYはtransform-origin: 0 0 で効くので、インクの位置もscaleY倍された座標で考える
+  const inkTop = m.scaleY * m.baseline - m.inkAscent;
+  const wantInkTop = -(inkHeight - m.lineHeight) / 2;
+  return { scaleY: m.scaleY, shiftY: wantInkTop - inkTop };
+}
+
+/**
+ * ラスタライズした█の行ごとのインク被覆率から、インク矩形の上下端を求める。
+ *
+ * measureTextのactualBoundingBoxAscent/Descentを使わないのは、Windows(Chromium/DirectWrite)だと
+ * これがピクセルグリッドへ丸めた整数で返り、実際のインクより最大1pxほど大きく出るため。
+ * インク高を過大評価すると拡大率が足りず、行の上端に隙間が残る（macOS/WebKitは小数で返るので
+ * 顕在化しなかった）。端の行は部分被覆なので、被覆率から小数の端を復元する。
+ *
+ * @param coverage 各デバイスピクセル行のインク被覆率（0-1）
+ * @param baselineY coverage内でのベースライン位置（デバイスピクセル）
+ * @returns ベースライン基準のインク上下端（デバイスピクセル）。インクが無ければnull
+ */
+export function measureInkExtent(
+  coverage: readonly number[],
+  baselineY: number,
+): { inkAscent: number; inkDescent: number } | null {
+  // アンチエイリアスの裾やノイズを拾わない程度の下限
+  const threshold = 0.03;
+  let first = -1;
+  let last = -1;
+  for (let y = 0; y < coverage.length; y++) {
+    if ((coverage[y] ?? 0) > threshold) {
+      if (first < 0) first = y;
+      last = y;
+    }
+  }
+  if (first < 0) return null;
+  // 端の行は内側から被覆率の分だけ埋まっているとみなす
+  const top = first + (1 - Math.min(1, coverage[first] ?? 1));
+  const bottom = last + Math.min(1, coverage[last] ?? 1);
+  return { inkAscent: baselineY - top, inkDescent: bottom - baselineY };
 }
 
 /** 変換が実質恒等（＝DOMをラップする意味が無い）か */

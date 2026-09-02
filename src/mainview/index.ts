@@ -42,6 +42,7 @@ import {
   identityCellGlyphTransform,
   isCellGlyphChar,
   isIdentityCellGlyphTransform,
+  measureInkExtent,
 } from "./cell-glyph";
 import { isWideChar } from "../shared/wide-char";
 
@@ -472,7 +473,7 @@ function measureCell() {
 // フォントの█のインク矩形を行ボックス全体へ写す変換をCSS変数として持ち、
 // .cell-glyph（fixGlyphsが付ける）へtransformで適用する。詳細はcell-glyph.ts参照
 let cellGlyphTransform: CellGlyphTransform = identityCellGlyphTransform;
-let cellGlyphMeasureCtx: CanvasRenderingContext2D | null = null;
+let cellGlyphMeasureCanvas: HTMLCanvasElement | null = null;
 
 /**
  * 行ボックス上端からベースラインまでの距離を実測する。
@@ -494,6 +495,90 @@ function measureBaselineOffset(style: CSSStyleDeclaration): number {
   return baseline;
 }
 
+/**
+ * █を実際にラスタライズして、インク矩形（グリフが実際に描かれる範囲）をCSSピクセルで実測する。
+ * measureTextのactualBoundingBoxではなく走査で測る理由はcell-glyph.tsのmeasureInkExtent参照。
+ */
+function measureCellGlyphInk(
+  fontSize: number,
+  fontFamily: string,
+): { inkAscent: number; inkDescent: number } | null {
+  const dpr = window.devicePixelRatio || 1;
+  // インクはfont-sizeより大きくなりうるので余裕を持った画布に描く
+  const width = Math.ceil(fontSize * 3);
+  const height = Math.ceil(fontSize * 4);
+  const baselineY = Math.round(height * 0.75);
+  const canvas = (cellGlyphMeasureCanvas ??= document.createElement("canvas"));
+  canvas.width = Math.ceil(width * dpr);
+  canvas.height = Math.ceil(height * dpr);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "alphabetic";
+  // 同じフォント指定を渡せばフォールバックの解決結果も描画側と揃う
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.fillText("█", fontSize, baselineY);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  } catch {
+    return null;
+  }
+  // 黒地に白で描いたので、行内の最大輝度がその行のインク被覆率になる
+  // （サブピクセルアンチエイリアスでチャンネルがばらつくため3チャンネルの平均で見る）
+  const coverage: number[] = [];
+  for (let y = 0; y < canvas.height; y++) {
+    let max = 0;
+    for (let x = 0; x < canvas.width; x++) {
+      const i = (y * canvas.width + x) * 4;
+      const v = ((data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0)) / 3;
+      if (v > max) max = v;
+    }
+    coverage.push(max / 255);
+  }
+  const ink = measureInkExtent(coverage, baselineY * dpr);
+  if (!ink) return null;
+  return { inkAscent: ink.inkAscent / dpr, inkDescent: ink.inkDescent / dpr };
+}
+
+/**
+ * 行の高さを埋められる拡大率を、実際にラスタライズしながら探す。
+ *
+ * 理論値（行の高さ ÷ 等倍のインク高）で決め打ちできないのは、Windows(Chromium/DirectWrite)が
+ * グリフのラスタライズ解像度(ppem)を整数へ丸めるため。font-size 13pxに1.03倍をかけても
+ * ppemは13のままで、グリフの大きさが変わらず隙間が残る（実機で確認済み）。
+ * canvasのラスタライズもDOMと同じ丸めをするので、実測しながら上げていけば丸めの有無に
+ * 関わらず「行の高さを埋められる最小の倍率」へ収束する。
+ *
+ * @returns 採用する倍率と、その倍率で実際に描かれるインクの上下端。埋められないならnull
+ */
+function findCellGlyphFill(
+  fontSize: number,
+  fontFamily: string,
+  lineHeight: number,
+): { scaleY: number; inkAscent: number; inkDescent: number } | null {
+  const base = measureCellGlyphInk(fontSize, fontFamily);
+  if (!base) return null;
+  const baseHeight = base.inkAscent + base.inkDescent;
+  if (!(baseHeight > 0)) return null;
+  // 等倍で既に行の高さ以上なら拡大しない（縮小するとppemの丸めで逆に足りなくなりうる）
+  if (baseHeight >= lineHeight) return { scaleY: 1, ...base };
+  // 理論値から始め、足りなければフォントサイズを少しずつ上げて実測し直す
+  const step = 0.25;
+  const maxSize = fontSize * 2;
+  for (let size = fontSize * (lineHeight / baseHeight); size <= maxSize; size += step) {
+    const ink = measureCellGlyphInk(size, fontFamily);
+    if (!ink) return null;
+    if (ink.inkAscent + ink.inkDescent >= lineHeight) {
+      return { scaleY: size / fontSize, inkAscent: ink.inkAscent, inkDescent: ink.inkDescent };
+    }
+  }
+  return null;
+}
+
 /** フォント・フォントサイズ・行の高さが変わったときに変換を測り直す */
 function updateCellGlyphTransform() {
   const style = getComputedStyle(measureEl);
@@ -501,19 +586,15 @@ function updateCellGlyphTransform() {
   const lineHeight = Number.parseFloat(style.lineHeight);
   cellGlyphTransform = identityCellGlyphTransform;
   if (Number.isFinite(fontSize) && Number.isFinite(lineHeight)) {
-    // インク矩形（グリフの実際の描画範囲）はDOMからは取れないのでcanvasで測る。
-    // 同じフォント指定を渡せばフォールバックの解決結果も描画側と揃う
-    cellGlyphMeasureCtx ??= document.createElement("canvas").getContext("2d");
-    const ctx = cellGlyphMeasureCtx;
-    if (ctx) {
-      ctx.font = `${fontSize}px ${style.fontFamily}`;
-      ctx.textBaseline = "alphabetic";
-      const m = ctx.measureText("█");
+    // インク矩形（グリフの実際の描画範囲）はDOMからは取れないのでcanvasで測る
+    const fill = findCellGlyphFill(fontSize, style.fontFamily, lineHeight);
+    if (fill) {
       cellGlyphTransform = computeCellGlyphTransform({
         lineHeight,
         baseline: measureBaselineOffset(style),
-        inkAscent: m.actualBoundingBoxAscent,
-        inkDescent: m.actualBoundingBoxDescent,
+        scaleY: fill.scaleY,
+        inkAscent: fill.inkAscent,
+        inkDescent: fill.inkDescent,
       });
     }
   }
