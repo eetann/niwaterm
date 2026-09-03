@@ -181,7 +181,15 @@ echo "build.lockがLOCKEDのまま進まない場合は、上のhutch関連プ�
 description = "Windows実機でniwatermのdevビルドのみ行う（起動はしない。要win:sync済み。タスクバーのショートカットから起動する側を最新にする用途）"
 run = '''
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
-APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
+# 単体で叩かれても対象を取り違えないよう、win:stop:mineと同じくブランチから判定する
+# （daily:merge-dev等から呼ばれた場合はそちらが解決したNIWATERM_APP_NAMEを優先する）
+if [ -n "$NIWATERM_APP_NAME" ]; then
+  APP_NAME="$NIWATERM_APP_NAME"
+elif [ "$(git branch --show-current)" = "main" ]; then
+  APP_NAME=niwaterm-daily
+else
+  APP_NAME=niwaterm-wip
+fi
 HUTCH_SUFFIX="${APP_NAME#niwaterm-}"
 # electrobunはbuildFolder配下をビルドの度にrmSyncで丸ごと作り直すため、対象アプリが起動中だと
 # ファイルロックでEACCESになる（electrobun.config.tsのbuildFolderのコメント参照）。
