@@ -1,6 +1,6 @@
 # niwatermシェル統合（zsh）
 # タブ内のシェルが自分のgitブランチ・カレントディレクトリをniwatermのサイドバーへ通知する。
-# プロンプト表示のたびに`niwaterm set-var branch <branch>`相当を呼ぶ（値が変わった時のみ）。
+# プロンプト表示のたびに`niwaterm tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: ~/.zshrcに以下を追記する
 #   [ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.zsh
 #
@@ -16,7 +16,7 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && (( $+commands[niwaterm] )); then
     if [[ "$branch" != "$_NIWATERM_LAST_BRANCH" ]]; then
       _NIWATERM_LAST_BRANCH="$branch"
       # &! でバックグラウンド実行かつ即disown。プロンプト表示をniwaterm CLI起動でブロックしない
-      niwaterm set-var branch "$branch" >/dev/null 2>&1 &!
+      niwaterm tab var set branch "$branch" >/dev/null 2>&1 &!
     fi
   }
 

@@ -428,8 +428,8 @@ niwaterm固有の問題ではない。
 niwaterm ping
 # pong (pid ...)
 
-niwaterm set-var mykey myvalue
-niwaterm get-var mykey
+niwaterm tab var set mykey myvalue
+niwaterm tab var get mykey
 # myvalue
 ```
 

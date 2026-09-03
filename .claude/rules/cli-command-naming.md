@@ -78,3 +78,11 @@ packages/cli/src/commands/
 
 - `docs/guide/cli.md` — コマンドの正式なリファレンス
 - `.claude/skills/niwaterm-cli/SKILL.md` — AIエージェント向けの概要（詳細は書き写さず`docs/guide/cli.md`への導線に留める）
+- `contrib/shell-integration/*` — シェル統合スクリプト（`niwaterm tab var set branch`を呼ぶ）
+- `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwaterm tab var set agent_status`を呼ぶ）
+
+`contrib/`配下は`>/dev/null 2>&1`で出力を捨てるため、コマンド名がずれても`Command not found`が握り潰され、
+「サイドバーに何も表示されない」という症状だけが残る（TASK-0075の原因）。改名時は必ず
+`grep -rn "niwaterm <旧コマンド名>" contrib/ docs/`で呼び出し側を洗い出すこと。
+さらに`contrib/agent-integration/`のhooksは利用者が`~/.claude/settings.json`へコピーして使うため、
+**リポジトリを直しても導入済みのコピーは追従しない**。破壊的な改名をしたらリリースノート等で周知する。

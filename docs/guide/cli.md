@@ -228,6 +228,8 @@ if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwa
 
 `contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する。内部では`niwaterm tab var set agent_status working`相当を呼んでいる。サイドバーのBoard行に状態ドットが表示されるようになる。Board行はTile/Tabを畳んだ1行なので、Board内の全タブ（フォーカスしていないタイル・非アクティブタブを含む）を走査し、`blocked` > `working` > `idle`の順で最も目立つ状態を1つ表示する。
 
+なお、**hooksは`~/.claude/settings.json`等へコピーして使う仕組みのため、niwaterm側のCLIコマンド名が変わってもインストール済みの設定は自動追従しない**。hookコマンドは`>/dev/null 2>&1`で出力を捨てるので、コマンド名がずれると`Command not found`が握り潰され「サイドバーに何も出ない」という症状だけが残る。表示されなくなったら、まず`contrib/agent-integration/claude-code/hooks.json`との差分を確認する。
+
 ```sh
 # ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
 # contrib/agent-integration/claude-code/hooks.jsonの中身をマージする

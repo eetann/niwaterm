@@ -1,6 +1,6 @@
 # niwatermシェル統合（PowerShell）
 # タブ内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
-# プロンプト表示のたびに`niwaterm set-var branch <branch>`相当を呼ぶ（値が変わった時のみ）。
+# プロンプト表示のたびに`niwaterm tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: $PROFILEに以下を追記する
 #   if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwaterm.ps1 }
 #
@@ -17,7 +17,7 @@ if ($env:NIWATERM_TAB_ID -and (Get-Command niwaterm -ErrorAction SilentlyContinu
         if ($branch -ne $script:NiwatermLastBranch) {
             $script:NiwatermLastBranch = $branch
             # Start-Processで非同期起動。プロンプト表示をniwaterm CLI起動でブロックしない
-            Start-Process -FilePath "niwaterm" -ArgumentList @("set-var", "branch", "$branch") `
+            Start-Process -FilePath "niwaterm" -ArgumentList @("tab", "var", "set", "branch", "$branch") `
                 -WindowStyle Hidden -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
         }
 
