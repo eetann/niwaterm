@@ -72,6 +72,12 @@ const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HT
 const tileElByTileId = new Map<TileId, HTMLElement>();
 const tabBarElByTileId = new Map<TileId, HTMLDivElement>();
 const tabBarReactRootByTileId = new Map<TileId, Root>();
+// タブバー・サイドバーのReact rootへ直近渡したpropsのキー。同じなら再renderを丸ごと省く
+// （理由と実測値はrenderTileTabBarのコメント参照）
+const lastTabBarKeyByTileId = new Map<TileId, string>();
+let lastSidebarKey = "";
+// shellProfilesは設定リロードのたびに配列ごと作り直されるため、参照比較の代わりに世代番号で見る
+let shellProfilesVersion = 0;
 const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
 const termElByTabId = new Map<TabId, HTMLDivElement>();
 const cursorElByTabId = new Map<TabId, HTMLDivElement>();
@@ -441,6 +447,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         applyAppearance(appearance);
         applyCustomView(customView);
         shellProfiles = profiles;
+        shellProfilesVersion++;
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
         // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
@@ -780,8 +787,14 @@ function reconcile(
     }
   }
 
-  for (const child of [firstEl, dividerEl, secondEl]) {
-    splitEl.appendChild(child);
+  // 既に同じ並びで入っているならappendChildしない。appendChildは「既に子である要素」に対しても
+  // 一度外して入れ直す扱いになり、毎フレーム走らせるとBlinkがその都度レイアウトを作り直す
+  const children = [firstEl, dividerEl, secondEl];
+  const alreadyInOrder =
+    splitEl.childElementCount === children.length &&
+    children.every((child, index) => splitEl.children[index] === child);
+  if (!alreadyInOrder) {
+    for (const child of children) splitEl.appendChild(child);
   }
 
   return splitEl;
@@ -1108,19 +1121,33 @@ function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
   renderTileTabBar(tileId);
 }
 
-/** tileIdのタブバーReact rootへ最新propsで再renderする。lastLayoutから対象leafを都度引く */
+/**
+ * tileIdのタブバーReact rootへ最新propsで再renderする。lastLayoutから対象leafを都度引く。
+ *
+ * **propsが前回と同じなら`root.render()`自体を呼ばない。** reconcile()がこれをrenderメッセージの
+ * たびに（＝ターミナルが出力するたび、最大60fps × タイル数）呼ぶため、無条件にrenderすると
+ * rendererプロセスのメモリがJSヒープ外（Blink側）へ積み上がって解放されない。Windows実機の計測で
+ * 約5MB/秒増え続け、数時間でWebView2 rendererがOOMクラッシュしてウィンドウが真っ白になっていた
+ * （DOMノード数もJSヒープも横ばいのまま増えるので、JS側からは見えないリークだった）。
+ * タブバーの内容はタブの増減・改名・切替でしか変わらないので、その変化だけをキーで見る。
+ */
 function renderTileTabBar(tileId: TileId): void {
   const root = tabBarReactRootByTileId.get(tileId);
   if (!root || !lastLayout) return;
   const leaf = findNode(lastLayout, tileId);
   if (!leaf || leaf.kind !== "leaf") return;
+  const tabs = leaf.tabIds.map((tabId, index) => ({
+    tabId,
+    label: lastTabNames[tabId] || String(index + 1),
+  }));
+  let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}`;
+  for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}`;
+  if (lastTabBarKeyByTileId.get(tileId) === key) return;
+  lastTabBarKeyByTileId.set(tileId, key);
   root.render(
     createElement(TileTabBar, {
       tileId,
-      tabs: leaf.tabIds.map((tabId, index) => ({
-        tabId,
-        label: lastTabNames[tabId] || String(index + 1),
-      })),
+      tabs,
       activeTabId: leaf.activeTabId,
       shellProfiles,
       onSelectTab: (tabId) => {
@@ -1186,6 +1213,7 @@ function gcStale(
     if (seenTileIds.has(tileId)) continue;
     tabBarReactRootByTileId.get(tileId)?.unmount();
     tabBarReactRootByTileId.delete(tileId);
+    lastTabBarKeyByTileId.delete(tileId);
     tileEl.remove();
     tileElByTileId.delete(tileId);
     tabBarElByTileId.delete(tileId);
@@ -1208,6 +1236,11 @@ function renderSidebar(
   workspaces: WorkspaceListEntry[],
   currentActiveWorkspaceId: WorkspaceId | null,
 ): void {
+  // renderTileTabBarと同じ理由で、内容が変わらないrenderは省く。
+  // buildSidebarWorkspaceItemsは引数だけで決まる純関数なので、入力側をキーにすれば足りる
+  const key = `${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
+  if (lastSidebarKey === key) return;
+  lastSidebarKey = key;
   sidebarWorkspaceListRoot.render(
     createElement(SidebarWorkspaceList, {
       workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
