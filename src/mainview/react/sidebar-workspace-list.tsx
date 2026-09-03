@@ -141,20 +141,21 @@ export function SidebarWorkspaceList({
     return (
       <ContextMenu key={board.boardId}>
         <ContextMenuTrigger asChild>
-          <div
-            className={cn("flex flex-col rounded-md", board.active && "bg-accent")}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => onSelectBoard(workspaceId, board.boardId)}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              startEditing({ kind: "board", id: board.boardId }, board.label);
+            }}
+            className={cn(
+              "flex w-full flex-col rounded-md text-left hover:bg-accent",
+              board.active && "bg-accent",
+            )}
             title={titleParts.length > 0 ? titleParts.join(" / ") : undefined}
           >
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => onSelectBoard(workspaceId, board.boardId)}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                startEditing({ kind: "board", id: board.boardId }, board.label);
-              }}
-              className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-accent"
-            >
+            <div className="flex w-full items-center gap-1.5 px-1.5 py-1">
               <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
               <span className="min-w-0 flex-1 truncate text-xs font-semibold">{board.label}</span>
               {board.zoomed && (
@@ -163,9 +164,9 @@ export function SidebarWorkspaceList({
                   className="size-3 shrink-0 text-muted-foreground"
                 />
               )}
-            </button>
+            </div>
             {hasStatusLine && (
-              <div className="flex gap-1.5 px-1.5 pb-1.5">
+              <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
                 <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
                 <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
                   {board.branch && (
@@ -196,7 +197,7 @@ export function SidebarWorkspaceList({
                 </div>
               </div>
             )}
-          </div>
+          </button>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem
