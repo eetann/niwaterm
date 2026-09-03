@@ -94,6 +94,9 @@ export async function detectShellProfiles(): Promise<ShellProfile[]> {
     const proc = Bun.spawn(["wsl.exe", "--list", "--quiet"], {
       stdout: "pipe",
       stderr: "ignore",
+      // 検出のたびにコンソールウィンドウが一瞬開くのを防ぐ
+      // （詳細: docs/known-issues/windows-spawn-console-window-steals-focus.md）
+      windowsHide: true,
     });
     const bytes = new Uint8Array(await new Response(proc.stdout).arrayBuffer());
     const exitCode = await proc.exited;

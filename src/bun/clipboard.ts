@@ -2,6 +2,11 @@
 // Windows用のCtrl+Shift+C/V操作(index.ts)の両方から使う。
 // WindowsはPowerShellの標準入出力エンコーディングが実行環境依存で文字化けしやすいため、
 // [Console]::OpenStandardInput/Output経由でUTF-8バイト列を明示的に読み書きする
+//
+// PowerShellはコンソールアプリなので、windowsHideを付けないとniwaterm本体（コンソールを持たない
+// GUI subsystemのbun.exe）から起動した際にコンソールウィンドウが割り当てられ、コピー・ペーストの
+// たびにウィンドウが一瞬開いてフォーカスを奪う
+// （詳細: docs/known-issues/windows-spawn-console-window-steals-focus.md）
 
 const isWindows = process.platform === "win32";
 
@@ -17,7 +22,7 @@ export function writeClipboardText(text: string): void {
           "$stdin.CopyTo($ms);$text=[System.Text.Encoding]::UTF8.GetString($ms.ToArray());" +
           "Set-Clipboard -Value $text",
       ],
-      { stdin: "pipe", stderr: "ignore" },
+      { stdin: "pipe", stderr: "ignore", windowsHide: true },
     );
     proc.stdin.write(text);
     proc.stdin.end();
@@ -41,7 +46,7 @@ export async function readClipboardText(): Promise<string> {
             "$bytes=[System.Text.Encoding]::UTF8.GetBytes($text);$stdout=[Console]::OpenStandardOutput();" +
             "$stdout.Write($bytes,0,$bytes.Length);$stdout.Flush()",
         ],
-        { stdout: "pipe", stderr: "ignore" },
+        { stdout: "pipe", stderr: "ignore", windowsHide: true },
       );
       const text = await new Response(proc.stdout).text();
       await proc.exited;

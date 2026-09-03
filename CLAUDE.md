@@ -53,6 +53,8 @@ macOSとWindows（x64）に対応する。`browser screenshot`のみBun本体側
 OS差分（ネイティブ成果物の配置、DLL依存解決順、キーバインドテーブル等）の詳細は
 docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 
+- **PTYを経由しない`Bun.spawn`には必ず`windowsHide: true`を付ける**。付け忘れるとWindowsで子プロセスにコンソールウィンドウが割り当てられ、一瞬ウィンドウが開いてniwatermがフォーカスを失う（docs/known-issues/windows-spawn-console-window-steals-focus.md）
+
 ## bun:ffiのハマりどころ
 
 - **構造体の値渡し非対応**。値渡しAPI（ghostty_formatter_terminal_new等）はsrc/native/shim.cでスカラー引数に展開する。値渡しAPIが増えたらシムに追加

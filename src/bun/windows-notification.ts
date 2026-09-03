@@ -64,7 +64,9 @@ export function sendWindowsNotification(opts: NiwaNotifyOptions): void {
   try {
     const proc = Bun.spawn(
       ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-      { stdout: "ignore", stderr: "pipe" },
+      // 通知のたびにコンソールウィンドウが一瞬開くのを防ぐ
+      // （詳細: docs/known-issues/windows-spawn-console-window-steals-focus.md）
+      { stdout: "ignore", stderr: "pipe", windowsHide: true },
     );
     void (async () => {
       const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);

@@ -34,6 +34,10 @@ export async function runShellCommand(
     env: buildEnv(cmd, term, opts.env),
     stdout: "pipe",
     stderr: "pipe",
+    // PTYを経由しないため、Windowsでは子（wsl.exe/powershell.exe）へコンソールウィンドウが
+    // 割り当てられ、実行のたびに一瞬ウィンドウが開いてniwatermからフォーカスが奪われる
+    // （詳細: docs/known-issues/windows-spawn-console-window-steals-focus.md）
+    windowsHide: true,
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
