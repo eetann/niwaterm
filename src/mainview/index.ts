@@ -9,8 +9,8 @@ import {
   type ResolvedCustomViewConfig,
   type ShellProfile,
 } from "@niwaterm/config";
-import { createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createElement, type ReactElement } from "react";
+import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
@@ -71,11 +71,7 @@ const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HT
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
 const tabBarElByTileId = new Map<TileId, HTMLDivElement>();
-const tabBarReactRootByTileId = new Map<TileId, Root>();
-// タブバー・サイドバーのReact rootへ直近渡したpropsのキー。同じなら再renderを丸ごと省く
-// （理由と実測値はrenderTileTabBarのコメント参照）
-const lastTabBarKeyByTileId = new Map<TileId, string>();
-let lastSidebarKey = "";
+const tabBarReactRootByTileId = new Map<TileId, MemoRoot>();
 // shellProfilesは設定リロードのたびに配列ごと作り直されるため、参照比較の代わりに世代番号で見る
 let shellProfilesVersion = 0;
 const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
@@ -87,7 +83,7 @@ const copyModeTabIds = new Set<TabId>();
 /** コピーモードの検索文字列を入力中のタブ（IME確定・ペーストを検索文字列へ回すかの判定に使う） */
 const copyModeSearchTabIds = new Set<TabId>();
 const browserElByTabId = new Map<TabId, WebviewTagElement>();
-const browserToolbarRootByTabId = new Map<TabId, Root>();
+const browserToolbarRootByTabId = new Map<TabId, MemoRoot>();
 // webviewId確定・初回dom-ready発火済みか（execBrowserJs/browserNavigateの前提条件判定に使う）
 const browserDomReadyByTabId = new Map<TabId, boolean>();
 // execBrowserJsの結果待ちPromiseの相関ID管理。host-message受信 or タイムアウトで解決・削除する
@@ -107,13 +103,84 @@ const activeTabByTile = new Map<TileId, TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
 const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 
+// ---- React root ----
+/**
+ * React rootの薄いラッパー。**このファイルでは生の`Root`を直接持たず、必ずこれを経由する。**
+ *
+ * 理由: `reconcile()`がタイルごとに毎フレーム`root.render()`を無条件で呼んでいたことがあり、
+ * rendererプロセスのメモリがJSヒープ外（Blink側）へ約5MB/秒積み上がって解放されず、
+ * 数時間でWebView2 rendererがOOMクラッシュしてウィンドウが真っ白になっていた。
+ * DOMノード数もJSヒープも横ばいのまま増えるため、JS側からは見えないリークだった。
+ *
+ * そこで`render(element)`という「いつでも呼べる入口」を無くし、呼び出し側に
+ * どちらの性質のrenderなのかを選ばせる:
+ * - `renderIfChanged` … renderメッセージのたびに呼ばれる箇所。propsのキーが変わった時だけrenderする
+ * - `renderOnEvent` … 呼ばれる回数が入力量に比例しない箇所（初期化・ユーザー操作起点）
+ *
+ * さらに、`renderOnEvent`が将来ホットパスへ紛れ込んだ場合に気づけるよう、
+ * 1秒あたりのrender回数が閾値を超えたら一度だけ警告する。
+ */
+type MemoRoot = {
+  /** keyが前回と同じならrenderしない（elementの構築自体も行わない） */
+  renderIfChanged(key: string, build: () => ReactElement): void;
+  /** 入力量に比例して呼ばれない箇所のrender */
+  renderOnEvent(element: ReactElement): void;
+  unmount(): void;
+};
+
+/** これを超える頻度でrenderされたら、ホットパスからのrenderを疑って警告する（1秒あたり） */
+const RENDER_CANARY_PER_SECOND = 30;
+
+function createMemoRoot(container: Element, name: string): MemoRoot {
+  const root = createRoot(container);
+  let lastKey: string | null = null;
+  let windowStartMs = 0;
+  let countInWindow = 0;
+  let warned = false;
+
+  const commit = (element: ReactElement) => {
+    const now = performance.now();
+    if (now - windowStartMs >= 1000) {
+      windowStartMs = now;
+      countInWindow = 0;
+    }
+    countInWindow++;
+    if (!warned && countInWindow > RENDER_CANARY_PER_SECOND) {
+      warned = true;
+      sendMessage("log", {
+        msg:
+          `[warn] React root "${name}" が1秒間に${countInWindow}回renderされた。` +
+          `renderIfChangedのキーが毎回変わっていないか、renderOnEventがホットパスに居ないか確認する` +
+          `（rendererプロセスのメモリリークの原因になる）`,
+      });
+    }
+    root.render(element);
+  };
+
+  return {
+    renderIfChanged(key, build) {
+      if (lastKey === key) return;
+      lastKey = key;
+      commit(build());
+    },
+    renderOnEvent(element) {
+      // 次のrenderIfChangedが同じkeyでも確実にrenderし直せるよう、キャッシュは捨てる
+      lastKey = null;
+      commit(element);
+    },
+    unmount() {
+      root.unmount();
+    },
+  };
+}
+
 // ---- サイドバー: 起動時に固定のReact root（closeやopen等に応じて中身だけ差し替える）----
-const sidebarSwitcherRoot = createRoot(sidebarSwitcherEl);
-const sidebarWorkspaceListRoot = createRoot(sidebarListEl);
+const sidebarSwitcherRoot = createMemoRoot(sidebarSwitcherEl, "sidebar-switcher");
+const sidebarWorkspaceListRoot = createMemoRoot(sidebarListEl, "sidebar-workspace-list");
 
 // ---- ポップアップツールバー: 起動時に固定のReact root（propsは不変のため一度だけrenderする）----
-const popupToolbarRoot = createRoot(popupToolbarEl);
-popupToolbarRoot.render(
+const popupToolbarRoot = createMemoRoot(popupToolbarEl, "popup-toolbar");
+popupToolbarRoot.renderOnEvent(
   createElement(PopupToolbar, {
     onPromote: () => sendMessage("promotePopup"),
     onMinimize: () => sendMessage("togglePopupVisibility"),
@@ -122,15 +189,15 @@ popupToolbarRoot.render(
 );
 
 // ---- サイドバーツールバー: 起動時に固定のReact root（propsは不変のため一度だけrenderする）----
-const sidebarToolbarRoot = createRoot(sidebarToolbarEl);
-sidebarToolbarRoot.render(
+const sidebarToolbarRoot = createMemoRoot(sidebarToolbarEl, "sidebar-toolbar");
+sidebarToolbarRoot.renderOnEvent(
   createElement(SidebarToolbar, {
     onOpenCommandPalette: () => openCommandPalette(),
   }),
 );
 
 // ---- コマンドパレット: open状態が変わるたびrenderし直す ----
-const commandPaletteRoot = createRoot(commandPaletteRootEl);
+const commandPaletteRoot = createMemoRoot(commandPaletteRootEl, "command-palette");
 let commandPaletteOpen = false;
 // bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドで表示する（keybindResolverと同様）
 let lastKeybindingsConfig: KeybindingsConfig = defaultKeybindings;
@@ -153,7 +220,7 @@ function shortcutLabelForAction(action: NonPaletteKeybindAction): string | undef
 }
 
 function renderCommandPalette(): void {
-  commandPaletteRoot.render(
+  commandPaletteRoot.renderOnEvent(
     createElement(CommandPalette, {
       open: commandPaletteOpen,
       onOpenChange: (open: boolean) => {
@@ -175,14 +242,14 @@ function openCommandPalette(): void {
 }
 
 // ---- 確認ダイアログ: キーバインドから起動する破壊的操作向け（y/n・Escでキーボード操作完結）----
-const confirmDialogRoot = createRoot(confirmDialogRootEl);
+const confirmDialogRoot = createMemoRoot(confirmDialogRootEl, "confirm-dialog");
 let confirmDialogOpen = false;
 let confirmDialogTitle = "";
 let confirmDialogDescription: string | undefined;
 let confirmDialogOnConfirm: (() => void) | null = null;
 
 function renderConfirmDialog(): void {
-  confirmDialogRoot.render(
+  confirmDialogRoot.renderOnEvent(
     createElement(ConfirmDialog, {
       open: confirmDialogOpen,
       title: confirmDialogTitle,
@@ -716,7 +783,7 @@ function reconcile(
       tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
       tileElByTileId.set(node.id, tileEl);
       tabBarElByTileId.set(node.id, tabBarEl);
-      tabBarReactRootByTileId.set(node.id, createRoot(tabBarEl));
+      tabBarReactRootByTileId.set(node.id, createMemoRoot(tabBarEl, `tab-bar:${node.id}`));
     } else {
       tabBarEl = tabBarElByTileId.get(node.id) as HTMLDivElement;
       tileContentEl = tileEl.querySelector(".tile-content") as HTMLDivElement;
@@ -876,9 +943,9 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
   webviewEl.setAttribute("sandbox", "");
   webviewEl.src = url;
 
-  const toolbarRoot = createRoot(toolbarEl);
+  const toolbarRoot = createMemoRoot(toolbarEl, `browser-toolbar:${tabId}`);
   browserToolbarRootByTabId.set(tabId, toolbarRoot);
-  toolbarRoot.render(
+  toolbarRoot.renderOnEvent(
     createElement(BrowserToolbar, {
       webviewEl,
       initialUrl: url,
@@ -1142,9 +1209,7 @@ function renderTileTabBar(tileId: TileId): void {
   }));
   let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}`;
   for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}`;
-  if (lastTabBarKeyByTileId.get(tileId) === key) return;
-  lastTabBarKeyByTileId.set(tileId, key);
-  root.render(
+  root.renderIfChanged(key, () =>
     createElement(TileTabBar, {
       tileId,
       tabs,
@@ -1213,7 +1278,6 @@ function gcStale(
     if (seenTileIds.has(tileId)) continue;
     tabBarReactRootByTileId.get(tileId)?.unmount();
     tabBarReactRootByTileId.delete(tileId);
-    lastTabBarKeyByTileId.delete(tileId);
     tileEl.remove();
     tileElByTileId.delete(tileId);
     tabBarElByTileId.delete(tileId);
@@ -1239,9 +1303,7 @@ function renderSidebar(
   // renderTileTabBarと同じ理由で、内容が変わらないrenderは省く。
   // buildSidebarWorkspaceItemsは引数だけで決まる純関数なので、入力側をキーにすれば足りる
   const key = `${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
-  if (lastSidebarKey === key) return;
-  lastSidebarKey = key;
-  sidebarWorkspaceListRoot.render(
+  sidebarWorkspaceListRoot.renderIfChanged(key, () =>
     createElement(SidebarWorkspaceList, {
       workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
       onSelectWorkspaceHeader: activateSidebarWorkspace,
@@ -1292,7 +1354,7 @@ function renameSidebarWorkspace(workspaceId: WorkspaceId, name: string): void {
 }
 
 function renderSidebarSwitcher(): void {
-  sidebarSwitcherRoot.render(
+  sidebarSwitcherRoot.renderOnEvent(
     createElement(SidebarSwitcher, {
       customViewName: customViewName ?? "",
       showingCustom: sidebarShowingCustom,
