@@ -406,7 +406,20 @@ niwaterm固有の問題ではない。
   どのインスタンスから読むかは`NIWATERM_APP_VARIANT`で指定する（既定は`niwaterm-daily`）。
   ポートが動的になったため、タブ外から開発中ビルドへ繋ぎたい場合はポート番号ではなくこちらを使う:
   `NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping`。
-  この変数はniwaterm自身がPTYへも注入するので、タブ内から叩く分には指定不要
+  この変数はniwaterm自身がPTYへも注入するので、タブ内から叩く分には指定不要。
+  **ただしタブ内では`NIWATERM_BRIDGE_PORT`（自インスタンスのポート）も注入済みで、
+  そちらがAPP_VARIANTによる解決より先に使われる**。そのため普段遣いビルドのタブ内から
+  `NIWATERM_APP_VARIANT=niwaterm-wip`だけ付けても、接続先はそのタブのインスタンスのまま
+  変わらない。別インスタンスへ繋ぐときは注入された変数をunsetする（タブ変数を扱うなら
+  自タブ扱いを避けるため`NIWATERM_TAB_ID`も外す）:
+
+  ```bash
+  env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID \
+    NIWATERM_APP_VARIANT=niwaterm-wip niwaterm-dev ping
+  ```
+
+  実際にどちらへ繋がったかは、`ping`が返すpidをWindows側のプロセス一覧
+  （`Get-Process`の`MainWindowTitle`が`niwaterm-wip`/`niwaterm-daily`）と突き合わせて確認する
 
 対応済みのため、WSLディストロのタブ内でも他プラットフォーム同様にCLIが使える:
 

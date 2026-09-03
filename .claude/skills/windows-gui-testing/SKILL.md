@@ -110,6 +110,12 @@ powershell.exe -NoProfile -Command "$PS_PREFIX Stop-Process -Id <上で確認し
 - `tab switch`は`--tile`必須: `niwaterm tab switch --tile tile-4 --tab tab-6`
 - WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profiles`で確認してから
   `niwaterm tab new -t <tileId> -s <shellProfileId>`で作成する
+- **daily（普段遣い）のタブ内で作業している場合、`niwaterm-dev`でもdailyに繋がる**。
+  タブへ注入された`NIWATERM_BRIDGE_PORT`が接続先の解決で先に使われるため、
+  `NIWATERM_APP_VARIANT=niwaterm-wip`を付けても効かない。wipを触るときは注入分をunsetする:
+  `env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID NIWATERM_APP_VARIANT=niwaterm-wip niwaterm-dev ping`。
+  返ってきたpidがwipのプロセス（`MainWindowTitle`が`niwaterm-wip`）か必ず確認すること。
+  仕組みはdocs/build/windows-build.md「6. WSLディストロからniwaterm CLIを使う」参照
 
 ## 目視確認・スクリーンショット
 
