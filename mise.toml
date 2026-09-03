@@ -172,13 +172,41 @@ powershell.exe -NoProfile -Command "\$lockDir = \$env:USERPROFILE + '\niwaterm-w
 echo "build.lockがLOCKEDのまま進まない場合は、上のhutch関連プロセスを確認しStop-Processで手動終了する"
 '''
 
+# タスクバー・スタートメニューのショートカット（`launcher.exe`）が実行するのは、ビルド成果物
+# （build/<アプリ名>/dev-win-x64/<アプリ名>-dev/Resources/app）へ焼き込まれたアプリコードであり、
+# 同期しただけのソースではない。そのためwin:syncだけではショートカット起動側に変更が反映されず、
+# かといってwin:start（electrobun dev）まで行くとアプリが起動してしまう。ビルドだけを行う
+# hutchのサブコマンド（electrobun build）で「起動せずに反映する」ための口を用意する。
+[tasks."win:build"]
+description = "Windows実機でniwatermのdevビルドのみ行う（起動はしない。要win:sync済み。タスクバーのショートカットから起動する側を最新にする用途）"
+run = '''
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
+HUTCH_SUFFIX="${APP_NAME#niwaterm-}"
+# electrobunはbuildFolder配下をビルドの度にrmSyncで丸ごと作り直すため、対象アプリが起動中だと
+# ファイルロックでEACCESになる（electrobun.config.tsのbuildFolderのコメント参照）。
+# 常用中のdailyを黙って落とすと作業を巻き込むので、検出したら停止はユーザーの判断に委ねて中断する。
+RUNNING=$(powershell.exe -NoProfile -Command "@(Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*$APP_NAME-dev\*' }).Count" | tr -d '\r')
+if [ "${RUNNING:-0}" != "0" ]; then
+  echo "$APP_NAME が起動中のためビルドできません（成果物フォルダを作り直す際にファイルがロックされる）。終了してから再実行してください: mise run win:stop:mine" >&2
+  echo "なお、このタスクを$APP_NAMEのタブ内から実行していると自分ごと巻き込むので、別インスタンス（wip側のタブ等）かWindows Terminalから実行すること。daily:merge-dev経由なら再実行しても安全（マージ・同期は冪等）" >&2
+  exit 1
+fi
+# HUTCH_HOMEを分ける理由はstartタスクのコメント・TASK-0067参照（WSL側のexportは伝わらないため明示的に渡す）
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun build --env=dev"
+echo "ビルドしました（$APP_NAME、起動はしていない）。タスクバー等のショートカットから起動すると反映されています"
+'''
+
 # mainブランチ（メインワークツリー、daily側）でdevブランチ（gtrで追加したworktree、wip側）の
 # 変更を取り込むためのタスク。ビルドロックが同一project_root配下だと競合するため、
 # 実体自体を分けている（詳細は本ファイル冒頭のコメント参照）。
 # vendor/はgitignore対象（worktree作成時は.gtrconfigのpostCreateフックでmainからコピーされる）
 # なので、devで検証済みのビルド成果物をここでmain側にもコピーして反映する。
+# 取り込みだけではタスクバーのショートカットから起動するdailyに反映されない（ショートカットが
+# 起動するのはビルド成果物に焼き込まれたコードのため）ので、同期とビルドまでこのタスクで行う。
+# 起動は含めない（タスクバーから起動する運用を前提にしているため。win:buildのコメントも参照）。
 [tasks."daily:merge-dev"]
-description = "daily側(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係とvendorを入れ直す"
+description = "daily側(mainブランチ)でdevブランチの変更をff-onlyで取り込み、依存関係とvendorを入れ直し、ビルドまで済ませる（起動はしない）"
 run = '''
 current_branch=$(git branch --show-current)
 if [ "$current_branch" != "main" ]; then
@@ -194,6 +222,15 @@ elif [ -d "$DEV_WORKTREE/vendor" ]; then
   rm -rf vendor
   cp -r "$DEV_WORKTREE/vendor" vendor
   echo "vendorを$DEV_WORKTREEから同期しました"
+fi
+# ここから先はstartタスクから起動（win:start / electrobun dev）だけを除いた内容
+export NIWATERM_APP_NAME=niwaterm-daily
+export HUTCH_HOME="$HOME/.hutch-daily"
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  mise run win:sync
+  mise run win:build
+else
+  bun x electrobun build --env=dev
 fi
 '''
 

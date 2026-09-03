@@ -256,7 +256,9 @@ WSLから同期・起動する場合は、mainブランチ側のディレクト�
 （内部で自動的に`NIWATERM_APP_NAME=niwaterm-daily`をセットしてから`win:sync` → `win:start`。
 ディレクトリ名は自動解決する）、停止は現在のブランチに対応する方だけなら`mise run win:stop:mine`、
 両方まとめてなら`win:stop`。dev側の変更をdaily側へ取り込むには、mainブランチ側で
-`mise run daily:merge-dev`（`main`ブランチであることを確認した上でff-onlyマージ + `bun install`）。
+`mise run daily:merge-dev`（`main`ブランチであることを確認した上でff-onlyマージ + `bun install` +
+vendorの同期に続けて、`win:sync` → `win:build`でWindows側の同期とビルドまで行う。起動は含めないので、
+そのままタスクバーのショートカットから起動すれば反映されている）。
 
 > **project_root分離だけでは`electrobun dev`（`mise run start`）の同時起動はできない
 > （[[TASK-0058]] / [[TASK-0067]]）。** Hutchは
@@ -296,6 +298,16 @@ $lnk.Save()
 `launcher.exe`はcwd・環境変数なしで起動できる（`APP_VARIANT`はビルド時に焼き込まれ、初期タブのcwdは
 `homedir()`へフォールバックし、`HUTCH_HOME`は`electrobun dev`専用のため）。ビルドし直しても
 パスは変わらないのでショートカットの作り直しも不要。
+
+ショートカットが実行するのは`Resources/app`へ焼き込まれたアプリコードなので、WSL側のソースを
+`win:sync`しただけでは反映されない。**タスクバー起動側を最新にするにはビルドが必要**。dev側の変更を
+取り込むなら`mise run daily:merge-dev`（マージから同期・ビルドまで行い、起動はしない）、main側で
+直接いじった場合は`mise run win:sync` → `mise run win:build`（`electrobun build --env=dev`を起動なしで実行する）。
+electrobunはビルドの度に`buildFolder`配下を丸ごと作り直すため、**対象アプリの起動中はビルドできない**
+（ファイルがロックされEACCESになる）。`win:build`は起動中を検出したら中断するので、先にウィンドウを
+閉じるか`mise run win:stop:mine`してから実行する。daily自身のタブから実行すると自分ごと止めることに
+なるので、wip側のタブやWindows Terminalから実行するのが楽（`daily:merge-dev`はマージ・同期とも冪等なので
+やり直しても安全）。
 
 > **起動中のウィンドウを右クリックしてピン留めしてはいけない。** アプリのウィンドウを所有しているのは
 > `launcher.exe`ではなく子の`bun.exe`のため、引数なしの`bun.exe`がピン留めされ、起動しても
