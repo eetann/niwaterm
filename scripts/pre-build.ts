@@ -2,3 +2,4 @@
 // 複数のpreBuild処理をこのエントリ経由でまとめて実行する。
 import "./write-app-variant";
 import "./build-tailwind";
+import "./patch-electrobun-win-socket";
