@@ -1311,6 +1311,7 @@ function renderSidebar(
       onSelectPopup: activateSidebarPopup,
       onRenameBoard: renameSidebarBoard,
       onRenameWorkspace: renameSidebarWorkspace,
+      onCloseBoard: closeSidebarBoard,
     }),
   );
 }
@@ -1339,6 +1340,21 @@ function activateSidebarBoard(workspaceId: WorkspaceId, boardId: BoardId): void 
 function renameSidebarBoard(boardId: BoardId, name: string): void {
   sendMessage("renameBoard", { boardId, name });
   imeEl.focus({ preventScroll: true });
+}
+
+/**
+ * サイドバーからのBoard削除。Board内の全タイル・全タブのPTYがまとめて落ちる破壊的操作なので、
+ * タブ再起動と同じ確認ダイアログを挟む。ワークスペース内最後の1つはbun側が閉じない
+ * （SidebarWorkspaceList側でもメニュー項目を無効化しているので、ここには来ない想定）
+ */
+function closeSidebarBoard(boardId: BoardId, name: string): void {
+  openConfirmDialog(
+    `Board「${name}」を削除しますか？`,
+    "実行中のプロセスは強制終了されます。",
+    () => {
+      sendMessage("closeBoard", { boardId });
+    },
+  );
 }
 
 /** タイルのタブバーからのタブ名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */

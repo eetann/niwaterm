@@ -18,6 +18,7 @@ export interface SidebarWorkspaceListProps {
   onSelectPopup: (workspaceId: WorkspaceId) => void;
   onRenameBoard: (boardId: BoardId, name: string) => void;
   onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
+  onCloseBoard: (boardId: BoardId, name: string) => void;
 }
 
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
@@ -48,6 +49,7 @@ export function SidebarWorkspaceList({
   onSelectPopup,
   onRenameBoard,
   onRenameWorkspace,
+  onCloseBoard,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -118,7 +120,7 @@ export function SidebarWorkspaceList({
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
    * 「❯/⚠ <statusText>」を表示する）
    */
-  function renderBoardRow(workspaceId: WorkspaceId, board: SidebarBoardItem) {
+  function renderBoardRow(workspaceId: WorkspaceId, board: SidebarBoardItem, canClose: boolean) {
     if (editingTarget?.kind === "board" && editingTarget.id === board.boardId) {
       return (
         <div key={board.boardId} className="px-1.5 py-1">
@@ -201,6 +203,13 @@ export function SidebarWorkspaceList({
             onSelect={() => startEditing({ kind: "board", id: board.boardId }, board.label)}
           >
             名前を変更
+          </ContextMenuItem>
+          <ContextMenuItem
+            variant="destructive"
+            disabled={!canClose}
+            onSelect={() => onCloseBoard(board.boardId, board.label)}
+          >
+            削除
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -304,7 +313,9 @@ export function SidebarWorkspaceList({
             </div>
             {!isWorkspaceCollapsed && (
               <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
-                {workspace.boards.map((board) => renderBoardRow(workspace.workspaceId, board))}
+                {workspace.boards.map((board) =>
+                  renderBoardRow(workspace.workspaceId, board, workspace.boards.length > 1),
+                )}
                 {workspace.popup && renderPopupCard(workspace.workspaceId, workspace.popup)}
               </div>
             )}
