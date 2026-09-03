@@ -557,7 +557,9 @@ body {
   z-index: 2;
 }
 
-/* IME入力を受けるための不可視textarea。候補ウィンドウ位置のためカーソルに追従する */
+/* IME入力を受けるための不可視textarea。候補ウィンドウ位置のためカーソルに追従する。
+   変換中は未確定文字列の幅まで広がる（src/mainview/index.ts の syncImeWidth）ので、
+   ターミナルのマウス操作を吸わないようpointer-eventsを切る */
 #ime-input {
   position: absolute;
   left: 0;
@@ -571,12 +573,15 @@ body {
   padding: 0;
   background: transparent;
   overflow: hidden;
+  pointer-events: none;
 }
 
-/* IME変換中の未確定文字列をカーソル位置に表示する。#popup（z-index:10）表示中でも隠れないようそれより上に置く */
+/* IME変換中の未確定文字列をカーソル位置に表示する。#popup（z-index:10）表示中でも隠れないようそれより上に置く。
+   max-widthはsyncImeWidthがタイルの右端に合わせて設定するので、超えた分はここで切り落とす */
 #composition {
   position: absolute;
   display: none;
+  overflow: hidden;
   white-space: pre;
   color: var(--term-fg);
   background: var(--term-bg);

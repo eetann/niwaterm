@@ -1981,20 +1981,53 @@ function handleTileCommand(cmd: TileCommand): void {
 // ---- IME（composition）----
 let composing = false;
 
+/**
+ * 未確定文字列の表示とimeElに許す幅の上限（カーソル位置からタイルの右端まで）。
+ *
+ * タイルをはみ出して広げると、はみ出したキャレットを見せようとしたブラウザがbodyごと
+ * 横スクロールし、サイドバーやタイル全体が左へずれる（Chromium実測で、画面外へ741px
+ * 広げるとbody.scrollLeftが741になる）。代わりにタイル幅を超えた分の未確定文字列は
+ * 表示されず、候補ウィンドウの位置もずれる（タイルを広げるか早めに確定するしかない）。
+ */
+function imeMaxWidth(): number {
+  const termEl = currentTabId ? termElByTabId.get(currentTabId) : undefined;
+  const rightEdge = (termEl ?? screenEl).getBoundingClientRect().right;
+  return Math.max(cellWidth, Math.floor(rightEdge - imeEl.getBoundingClientRect().left));
+}
+
+/**
+ * imeElの幅を未確定文字列に合わせる。
+ *
+ * imeElが未確定文字列より狭いままだとtextareaの中身が横スクロールし、ブラウザがOSのIMEへ
+ * 通知する未確定文字の矩形が1文字ぶんずつ左へずれていく（Chromium実測で13px/文字。表示は
+ * 自前のcompositionElなのでずれるのは候補ウィンドウだけ）。幅を実際の未確定文字列に合わせて
+ * 横スクロールを起こさせないことで、候補ウィンドウをカーソル位置へ留める。
+ */
+function syncImeWidth(): void {
+  const maxWidth = imeMaxWidth();
+  compositionEl.style.maxWidth = `${maxWidth}px`;
+  const width = Math.ceil(compositionEl.getBoundingClientRect().width) + cellWidth;
+  imeEl.style.width = `${Math.max(2, Math.min(width, maxWidth))}px`;
+}
+
 imeEl.addEventListener("compositionstart", () => {
   composing = true;
   compositionEl.textContent = "";
   compositionEl.style.display = "block";
+  syncImeWidth();
 });
 
 imeEl.addEventListener("compositionupdate", (e) => {
   compositionEl.textContent = e.data;
+  syncImeWidth();
 });
 
 imeEl.addEventListener("compositionend", (e) => {
   composing = false;
   compositionEl.style.display = "none";
   compositionEl.textContent = "";
+  compositionEl.style.maxWidth = "";
+  imeEl.style.width = "";
   imeEl.value = "";
   if (e.data && currentTabId) {
     if (sendTextToCopyModeSearch(currentTabId, e.data)) return;
