@@ -1,4 +1,4 @@
-import { findNode, type TabId } from "../../bun/tile-layout";
+import { findNode, listLeaves, type TabId } from "../../bun/tile-layout";
 import type { BoardId, BoardListEntry } from "../../bun/workspace";
 import type { WorkspaceId, WorkspaceListEntry } from "../../bun/workspace-manager";
 
@@ -77,12 +77,59 @@ function findRepresentativeTabId(board: BoardListEntry): TabId | null {
   return node && node.kind === "leaf" ? node.activeTabId : null;
 }
 
+/** 目立つ状態ほど大きい。同一Board内に複数エージェントがいる場合の採用順に使う */
+const AGENT_STATUS_PRIORITY: Record<AgentStatus, number> = {
+  blocked: 2,
+  working: 1,
+  idle: 0,
+};
+
+function toAgentInfo(vars: Record<string, string> | undefined): SidebarBoardAgentInfo | null {
+  const agentName = vars?.["agent"] || null;
+  if (!agentName) return null;
+  return {
+    agent: agentName,
+    status: normalizeAgentStatus(vars?.["agent_status"]),
+    statusText: vars?.["agent_status_text"] || null,
+  };
+}
+
+/**
+ * Board行に出すエージェント状態。Board内の全タブ（全タイル・非アクティブタブを含む）を走査し、
+ * blocked > working > idle の順で最も目立つものを1つ選ぶ。
+ * Board行は1行という設計（ADR 0006後の再設計）を保ったまま、フォーカスしていないタイル・タブで
+ * 動くエージェントの「応答待ち」を取りこぼさないようにするため
+ * （Board階層の導入前はタブごとに行があり、全エージェントの状態が個別に見えていた）。
+ * 同順位なら代表タブを優先し、それも無ければレイアウト上の出現順で先勝ちにする（表示のちらつき防止）。
+ */
+function findBoardAgent(
+  board: BoardListEntry,
+  representativeTabId: TabId | null,
+): SidebarBoardAgentInfo | null {
+  let best: SidebarBoardAgentInfo | null = null;
+  let bestPriority = -1;
+  for (const leaf of listLeaves(board.layout)) {
+    for (const tabId of leaf.tabIds) {
+      const agent = toAgentInfo(board.tabVars[tabId]);
+      if (!agent) continue;
+      const priority = AGENT_STATUS_PRIORITY[agent.status];
+      // 同順位で代表タブが後から出てきた場合のみ入れ替える（それ以外の同順位は先勝ち）
+      if (priority > bestPriority || (priority === bestPriority && tabId === representativeTabId)) {
+        best = agent;
+        bestPriority = priority;
+      }
+    }
+  }
+  return best;
+}
+
 /**
  * renderSidebar()旧実装のラベル整形・active判定ロジックを、DOM非依存の純粋関数として抽出したもの。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
  * Tile/Tabはサイドバーに表示しない（ADR 0006後の再設計。「1つのBoard=1つの独立した作業」という
- * 単位で捉え、Tile分割はBoard内部の詳細として畳む）。ブランチ・エージェント状態は代表タブの変数を
- * Boardの状態表示として流用し、Board専用の変数ストアは新設しない。
+ * 単位で捉え、Tile分割はBoard内部の詳細として畳む）。ブランチ・エージェント状態はタブ変数を
+ * Boardの状態表示として流用し、Board専用の変数ストアは新設しない
+ * （ブランチは代表タブのみ、エージェント状態はBoard内の全タブから選ぶ。findBoardAgent参照）。
  * ポップアップはWorkspace直下の状態（ADR 0005・ADR 0006）でBoardをまたいでも共有されるため、
  * entry.popupを直接参照する（専用のリネームUIも無いためラベルは固定文言）
  */
@@ -104,15 +151,10 @@ export function buildSidebarWorkspaceItems(
     boards: entry.boards.map((board, boardIndex) => {
       const representativeTabId = findRepresentativeTabId(board);
       const vars = representativeTabId ? board.tabVars[representativeTabId] : undefined;
+      // branchは「今そのBoardで見ているタブ」の値が自然なので代表タブのみを見る。
+      // エージェント状態はBoard内の全タブから拾う（findBoardAgentのコメント参照）
       const branch = vars?.["branch"] || null;
-      const agentName = vars?.["agent"] || null;
-      const agent: SidebarBoardAgentInfo | null = agentName
-        ? {
-            agent: agentName,
-            status: normalizeAgentStatus(vars?.["agent_status"]),
-            statusText: vars?.["agent_status_text"] || null,
-          }
-        : null;
+      const agent = findBoardAgent(board, representativeTabId);
       return {
         boardId: board.boardId,
         label: board.name || `Board ${boardIndex + 1}`,

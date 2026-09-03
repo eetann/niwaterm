@@ -387,3 +387,137 @@ describe("agentStatusBadgeClass", () => {
     expect(agentStatusBadgeClass("blocked")).toBe("text-amber-500 bg-amber-500/15");
   });
 });
+
+describe("Board内の全タブからのagent集約", () => {
+  test("フォーカスしていないタイルのエージェント状態も拾う", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board(
+          "board-1",
+          split("root", leaf("tile-1", ["tab-1"], "tab-1"), leaf("tile-2", ["tab-2"], "tab-2")),
+          {
+            focusedTileId: "tile-1",
+            tabVars: { "tab-2": { agent: "claude-code", agent_status: "blocked" } },
+          },
+        ),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent).toEqual({
+      agent: "claude-code",
+      status: "blocked",
+      statusText: null,
+    });
+  });
+
+  test("同じタイル内の非アクティブタブのエージェント状態も拾う", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1", "tab-2"], "tab-1"), {
+          focusedTileId: "tile-1",
+          tabVars: { "tab-2": { agent: "claude-code", agent_status: "working" } },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent?.status).toBe("working");
+  });
+
+  test("複数エージェントがいる場合はblocked > working > idleの順で最も目立つものを選ぶ", () => {
+    const layout = split(
+      "root",
+      leaf("tile-1", ["tab-1"], "tab-1"),
+      split("inner", leaf("tile-2", ["tab-2"], "tab-2"), leaf("tile-3", ["tab-3"], "tab-3")),
+    );
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", layout, {
+          focusedTileId: "tile-1",
+          tabVars: {
+            "tab-1": { agent: "a-idle", agent_status: "idle" },
+            "tab-2": { agent: "b-working", agent_status: "working" },
+            "tab-3": { agent: "c-blocked", agent_status: "blocked" },
+          },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent?.agent).toBe("c-blocked");
+  });
+
+  test("同順位が複数ある場合は代表タブ（フォーカス中タイルのアクティブタブ）を優先する", () => {
+    const layout = split(
+      "root",
+      leaf("tile-1", ["tab-1"], "tab-1"),
+      leaf("tile-2", ["tab-2"], "tab-2"),
+    );
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", layout, {
+          focusedTileId: "tile-2",
+          tabVars: {
+            "tab-1": { agent: "first-in-layout", agent_status: "working" },
+            "tab-2": { agent: "representative", agent_status: "working" },
+          },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent?.agent).toBe("representative");
+  });
+
+  test("代表タブが同順位に含まれない場合はレイアウト上の出現順で先勝ちする", () => {
+    const layout = split(
+      "root",
+      leaf("tile-1", ["tab-1"], "tab-1"),
+      leaf("tile-2", ["tab-2"], "tab-2"),
+    );
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", layout, {
+          focusedTileId: "tile-1",
+          tabVars: {
+            "tab-1": { agent: "focused-idle", agent_status: "idle" },
+            "tab-2": { agent: "other-working", agent_status: "working" },
+          },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.agent?.agent).toBe("other-working");
+  });
+
+  test("branchは集約せず代表タブの値のみを使う", () => {
+    const layout = split(
+      "root",
+      leaf("tile-1", ["tab-1"], "tab-1"),
+      leaf("tile-2", ["tab-2"], "tab-2"),
+    );
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", layout, {
+          focusedTileId: "tile-1",
+          tabVars: {
+            "tab-1": { branch: "main" },
+            "tab-2": { branch: "other", agent: "claude-code", agent_status: "working" },
+          },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.branch).toBe("main");
+    expect(items[0]?.boards[0]?.agent?.agent).toBe("claude-code");
+  });
+});
