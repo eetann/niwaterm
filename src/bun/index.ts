@@ -379,6 +379,7 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       ready: () => {
         scheduleRender();
         sendConfig();
+        focusWebviewOnce();
       },
       input: ({ tabId, data }: { tabId: TabId; data: string }) => {
         workspaceManager.handleInput(tabId, data);
@@ -569,7 +570,24 @@ const mainWindow = new BrowserWindow({
   rpc,
 });
 
-mainWindow.activate();
+// WindowsではmainWindow.activate()（ネイティブのactivateWindow）がwebviewのOSキーボードフォーカスを
+// 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
+// 加えてウィンドウ生成時点ではWebView2のコントローラがまだ無く、生成時のactivateではweb contentへ
+// フォーカスが渡らない。showWindow(activate:true)ならネイティブ側がFocusActiveView()＝
+// MoveFocus(PROGRAMMATIC)まで行うため、webviewの準備ができたready受信時に一度だけ呼ぶ（TASK-0064）
+if (process.platform !== "win32") {
+  mainWindow.activate();
+}
+
+let webviewFocused = false;
+
+/** 起動直後に一度だけ、webviewの中身へOSキーボードフォーカスを渡す（TASK-0064。readyは再送されうるので1回だけ） */
+function focusWebviewOnce(): void {
+  if (webviewFocused) return;
+  webviewFocused = true;
+  if (process.platform !== "win32") return;
+  mainWindow.show();
+}
 
 const configWatcher = watchConfigFile(configFilePath(), () => {
   void handleConfigFileChanged();

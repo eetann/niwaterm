@@ -22,7 +22,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 
 | 検証 | 結果 |
 | --- | --- |
-| `document.activeElement`と`document.hasFocus()`をpopup表示前後で確認 | `activeElement`は`ime-input`になるが`hasFocus()`は常に`false`（起動直後・通常操作時も含め常にfalseだったため、この指標自体は無意味と判明） |
+| `document.activeElement`と`document.hasFocus()`をpopup表示前後で確認 | `activeElement`は`ime-input`になるが`hasFocus()`は常に`false`。当時は「常にfalseなので無意味な指標」と判断したが、これは誤り（後述の関連調査で、`hasFocus()`がfalseの間はChromiumがOSのIMEを無効化していると判明した。起動直後にfalseだったのは別の不具合） |
 | `imeEl`に`focus`/`blur`イベントリスナー、`document`に`focusin`/`focusout`リスナーを追加 | popup表示時、`focus()`を呼んでも`focus`/`focusin`イベントが一切発火しない（＝プログラム的なactiveElement更新はされるが実効的なフォーカス移動が起きていない） |
 | `document`の`keydown`ハンドラに`currentTabId`等をログ出力 | popup表示後にSendKeysで送ったキーで`keydown`自体が発火しない。クリック後は正しく発火する |
 | CLIから`tab new`（`activateWindow()`を呼ばない操作）を同条件で実行 | 正常にkeydownが発火し入力が届く。popup固有の問題と確定 |
@@ -44,6 +44,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 
 ## 関連
 
+- [起動直後にキー入力が届かない・クリック後も日本語入力だけできない](/known-issues/windows-startup-webview-focus-and-ime.md) — 同根の調査。`activate()`の代わりに`show()`（`showWindow(activate: true)`）を使うとネイティブ側が`FocusActiveView()`まで実行するため、web contentへフォーカスが渡ることが分かった
 - [Windowsでのビルド・実行手順](/build/windows-build.md) — 実機セットアップ手順
 - [CLIリファレンス](/guide/cli.md) — `niwaterm popup`
 - `src/bun/ipc-server.ts` — `/popup`エンドポイント、`activateWindow`引数

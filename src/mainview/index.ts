@@ -2118,6 +2118,18 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   imeEl.focus({ preventScroll: true });
 });
 
+// Chromiumはmousedownの既定動作で「クリック先の最も近いフォーカス可能な祖先」へフォーカスを移し、
+// 見つからなければフォーカスを外す。.termはフォーカス不能なため、mousedownリスナー内で
+// imeEl.focus()しても既定動作に上書きされ、document.activeElementはbodyになる。
+// documentレベルのkeydownは動くのでASCIIは打てるが、編集可能要素にフォーカスが無いと
+// ChromiumはOSのIMEを無効にするため日本語入力だけができなくなる（TASK-0064）。
+// 既定動作が終わったmouseupで入れ直す。ドラッグ選択中（選択が残っている）は選択を壊すため触らない
+tileTreeEl.addEventListener("mouseup", () => {
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) return;
+  imeEl.focus({ preventScroll: true });
+});
+
 // ---- OSC 8ハイパーリンク（フォーマッタがHTML出力時に <a href> として埋め込む）----
 // documentレベルで委譲し、タイル・popup両方のターミナル出力内リンクをまとめて扱う
 document.addEventListener("click", (e) => {
