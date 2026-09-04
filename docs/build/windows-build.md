@@ -260,8 +260,7 @@ WSLから同期・起動する場合は、mainブランチ側のディレクト�
 vendorの同期に続けて、`win:sync` → `win:build`でWindows側の同期とビルドまで行う。起動は含めないので、
 そのままタスクバーのショートカットから起動すれば反映されている）。
 
-> **project_root分離だけでは`electrobun dev`（`mise run start`）の同時起動はできない
-> （[[TASK-0058]] / [[TASK-0067]]）。** Hutchは
+> **project_root分離だけでは`electrobun dev`（`mise run start`）の同時起動はできない。** Hutchは
 > `<hutch_home>/releases/electrobun/<version>/<platform>.lock`という**ユーザーのホーム配下で
 > グローバルな**ロックを持っており、起動中の`electrobun dev`がこれを共有ロックで掴み続ける一方、
 > 新しく起動する側は同じファイルを排他ロックで取りに行く。そのため、project_rootを分けていても、
@@ -275,7 +274,7 @@ vendorの同期に続けて、`win:sync` → `win:build`でWindows側の同期�
 > `$HOME/.hutch-daily`へ自動的に分けるため、通常はそのまま同時起動できる（ホットリロードも
 > 維持される）。新しい`HUTCH_HOME`は初回にダウンロードが走るので、
 > `cp -R ~/.hutch ~/.hutch-wip`のように既存ストアをコピーしておくと省ける。
-> **なおこの対策はmacOS実機で検証済み、Windows実機では未検証**（[[TASK-0067]]）。
+> **なおこの対策はmacOS実機で検証済み、Windows実機では未検証**。
 > Windowsで通らない場合や、`HUTCH_HOME`を分けたくない場合は、両方を**順番に**
 > `mise run start`でビルド完了させてから`mise run win:stop:mine`で止め（同時にビルドさせないこと）、
 > それぞれで`mise run win:start:built`を使ってビルド済みの`launcher.exe`を`electrobun dev`を

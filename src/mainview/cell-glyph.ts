@@ -78,7 +78,7 @@ export function computeCellGlyphTransform(m: CellGlyphMetrics): CellGlyphTransfo
  * measureTextのactualBoundingBoxAscent/Descentを使わないのは、Windows(Chromium/DirectWrite)だと
  * これがピクセルグリッドへ丸めた整数で返り、実際のインクより最大1pxほど大きく出るため。
  * インク高を過大評価すると拡大率が足りず、行の上端に隙間が残る（macOS/WebKitは小数で返るので
- * 顕在化しなかった）。端の行は部分被覆なので、被覆率から小数の端を復元する。
+ * 影響しない）。端の行は部分被覆なので、被覆率から小数の端を復元する。
  *
  * @param coverage 各デバイスピクセル行のインク被覆率（0-1）
  * @param baselineY coverage内でのベースライン位置（デバイスピクセル）

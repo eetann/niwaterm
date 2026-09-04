@@ -16,9 +16,9 @@
 // OS任せの動的割り当てなので、アプリが書き出したポートファイルを読んで解決する。
 //
 // ディレクトリ名に使うのはappフォルダ名（"-dev"サフィックス付き）ではなくAPP_VARIANT、つまり
-// electrobun.config.tsのapp.nameそのもの（"niwaterm-daily"）である点に注意。ここが
-// "niwaterm-daily-dev"だった頃は実在しないパスを見ていたため、NIWATERM_SOCKET未設定の
-// 呼び出しが常に接続失敗していた（ipc-server.tsのWSLブリッジポートでも同じ取り違えがあった）。
+// electrobun.config.tsのapp.nameそのもの（"niwaterm-daily"）である点に注意。"-dev"を付けると
+// 実在しないパスを見に行き、NIWATERM_SOCKET未設定の呼び出しが常に接続失敗する
+// （ipc-server.tsのWSLブリッジポート側も同じ）。
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -26,7 +26,7 @@ import { join } from "node:path";
 
 /**
  * NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT未設定時に見に行くインスタンス。既定は普段遣いのビルド。
- * ブリッジのポートが動的割り当てになったことで、タブ外から開発中ビルドへ繋ぎたいときに
+ * ブリッジのポートは動的割り当てなので、タブ外から開発中ビルドへ繋ぎたいときに
  * ポート番号を調べて渡す手が使えないため、NIWATERM_APP_VARIANTで切り替えられるようにしている
  * （例: NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping）。
  * この変数はniwaterm自身がPTYへも注入するため、タブ内から叩けば自インスタンスを指す
@@ -540,7 +540,7 @@ export interface LayoutSummary {
   description?: string;
   /**
    * プロジェクトローカル（<projectRoot>/.niwaterm/config.ts）由来ならその解決元、
-   * グローバル設定由来ならnull（TASK-0069）
+   * グローバル設定由来ならnull
    */
   projectRoot: string | null;
 }
@@ -550,7 +550,7 @@ export type ListLayoutsResult =
   | { ok: false; error: string };
 
 /**
- * cwdを渡すと、そこから解決できるプロジェクトローカルのプリセットも併せて一覧する（TASK-0069）。
+ * cwdを渡すと、そこから解決できるプロジェクトローカルのプリセットも併せて一覧する。
  * 同名はプロジェクト側だけが返る（実際にapplyされる方に揃えるため）
  */
 export async function listLayouts(endpoint: IpcEndpoint, cwd?: string): Promise<ListLayoutsResult> {
@@ -580,7 +580,7 @@ export type ApplyLayoutTarget = "new-board" | "replace";
 
 /**
  * プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけようとしたが、まだtrustされていない。
- * CLIはこの内容でtrust promptを出し、同意が得られたらtrust: trueを付けて再送する（TASK-0069）
+ * CLIはこの内容でtrust promptを出し、同意が得られたらtrust: trueを付けて再送する
  */
 export interface LayoutTrustRequest {
   projectRoot: string;
@@ -597,9 +597,9 @@ export interface ApplyLayoutOptions {
   cwd?: string;
   workspaceId?: string;
   boardId?: string;
-  /** trueなら次回起動時もこのプリセットでBoardを組み直す（TASK-0077） */
+  /** trueなら次回起動時もこのプリセットでBoardを組み直す */
   startup?: boolean;
-  /** trust promptに同意済み。プロジェクトローカル由来プリセット×startup時のみ必要（TASK-0069） */
+  /** trust promptに同意済み。プロジェクトローカル由来プリセット×startup時のみ必要 */
   trust?: boolean;
 }
 
@@ -625,7 +625,7 @@ export function applyLayout(
   return postJson<ApplyLayoutResult>(endpoint, "/apply-layout", body);
 }
 
-/** 起動時にBoardをどう組み直すか（TASK-0077） */
+/** 起動時にBoardをどう組み直すか */
 export type BoardStartupMode = "layout" | "restore" | "clear";
 
 export type BoardStartupResult =
@@ -635,7 +635,7 @@ export type BoardStartupResult =
       startup: {
         preset: string;
         restoreMode: "layout" | "restore";
-        /** プロジェクトローカル由来ならその解決元（TASK-0069） */
+        /** プロジェクトローカル由来ならその解決元 */
         projectRoot?: string;
       } | null;
     }
@@ -645,9 +645,9 @@ export type BoardStartupResult =
 export interface SetBoardStartupOptions {
   boardId?: string;
   preset?: string;
-  /** presetを明示指定したときの解決元を決めるCLIのcwd（TASK-0069） */
+  /** presetを明示指定したときの解決元を決めるCLIのcwd */
   cwd?: string;
-  /** trust promptに同意済み（TASK-0069） */
+  /** trust promptに同意済み */
   trust?: boolean;
 }
 

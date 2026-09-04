@@ -75,7 +75,7 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
 // 前回importFreshConfigで使った一時ディレクトリを、コピー元ディレクトリごとに1つ覚えておき、
 // 次回そのディレクトリの読み込みへ成功したときに削除する
 // （importが失敗する可能性があるファイルを即座には消さず、常に「最後にimportへ成功した」ものを1世代分だけ残す）。
-// グローバル設定とプロジェクトローカル設定（TASK-0069、複数リポジトリぶん）を並行して読むため、
+// グローバル設定とプロジェクトローカル設定（複数リポジトリぶん）を並行して読むため、
 // 単一スロットではなくコピー元パスをキーにしたMapで管理する（互いの世代を消し合わないようにする）
 const previousImportDirs = new Map<string, string>();
 
@@ -439,7 +439,7 @@ export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig
 }
 
 /**
- * resolveLayoutsの実体。プロジェクトローカル設定（TASK-0069、project-config.ts）からも
+ * resolveLayoutsの実体。プロジェクトローカル設定（project-config.ts）からも
  * 同じ検証を使えるよう、NiwatermConfigではなくlayoutsの生値を受け取る形で切り出している。
  * sourceは警告ログに出す出所（"layouts" / "<projectRoot>/.niwaterm/config.ts layouts"）
  */

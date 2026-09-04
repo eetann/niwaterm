@@ -208,7 +208,7 @@ export interface KeybindOptions {
   /**
    * trueなら、このバインドの発火後repeatTimeoutMs以内はprefix無しで同じ2打目キーテーブルの
    * repeatableなキーを連打できる（tmuxのbind-key -r相当）。noPrefix:trueのdirect側にも型上は指定できるが、
-   * directは元々prefix無しの即時発火でOSのキーリピートがそのまま連続入力を生むため実効果を持たない
+   * directはprefix無しの即時発火でOSのキーリピートがそのまま連続入力を生むため実効果を持たない
    */
   repeat?: boolean;
 }

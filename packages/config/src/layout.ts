@@ -1,7 +1,7 @@
 // レイアウトプリセット設定。vde-layout(https://github.com/yuki-yano/vde-layout)のように、
 // あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにする。
-// `--startup`で紐づけたBoardはアプリ起動時にもこのプリセットで組み直される（TASK-0077、
-// 保持先はworkspaces.jsonのPersistedBoard.startup）。
+// `--startup`で紐づけたBoardはアプリ起動時にもこのプリセットで組み直される
+// （保持先はworkspaces.jsonのPersistedBoard.startup）。
 // タイル分割は既存のワークスペース内部表現（TileSplit）と同じ「2分割・ratio(0.1〜0.9)のネスト」で表現する
 // （ADR 0001で決めた二分木構造をそのまま踏襲。vde-layoutのようなN分割配列は採用しない）。
 

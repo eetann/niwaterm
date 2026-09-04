@@ -60,7 +60,7 @@ export interface BoardListEntry {
   name: string | null;
   /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。ズームしていなければnull */
   zoomedTileId: TileId | null;
-  /** 紐づくレイアウトプリセットと起動時の組み直し方（TASK-0077）。未設定はnull */
+  /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
   startup: PersistedBoardStartup | null;
 }
 
@@ -107,7 +107,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   let activeBoardId: BoardId;
   // Board名。getPersistableBoards経由で永続化対象になる
   const boardNames = new Map<BoardId, string>();
-  // Boardに紐づくレイアウトプリセットと起動時の組み直し方（TASK-0077）。boardNamesと同じく
+  // Boardに紐づくレイアウトプリセットと起動時の組み直し方。boardNamesと同じく
   // getPersistableBoards経由で永続化対象になる
   const boardStartups = new Map<BoardId, PersistedBoardStartup>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）

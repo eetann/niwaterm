@@ -97,9 +97,8 @@ function toAgentInfo(vars: Record<string, string> | undefined): SidebarBoardAgen
 /**
  * Board行に出すエージェント状態。Board内の全タブ（全タイル・非アクティブタブを含む）を走査し、
  * blocked > working > idle の順で最も目立つものを1つ選ぶ。
- * Board行は1行という設計（ADR 0006後の再設計）を保ったまま、フォーカスしていないタイル・タブで
- * 動くエージェントの「応答待ち」を取りこぼさないようにするため
- * （Board階層の導入前はタブごとに行があり、全エージェントの状態が個別に見えていた）。
+ * Board行は1行という設計（ADR 0006）を保ったまま、フォーカスしていないタイル・タブで
+ * 動くエージェントの「応答待ち」を取りこぼさないようにするため。
  * 同順位なら代表タブを優先し、それも無ければレイアウト上の出現順で先勝ちにする（表示のちらつき防止）。
  */
 function findBoardAgent(
@@ -132,9 +131,9 @@ export function boardLabel(board: BoardListEntry, index: number): string {
 }
 
 /**
- * renderSidebar()旧実装のラベル整形・active判定ロジックを、DOM非依存の純粋関数として抽出したもの。
+ * サイドバーへ渡すワークスペース一覧を、ラベル整形とactive判定まで済ませた形で組み立てる（DOM非依存）。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
- * Tile/Tabはサイドバーに表示しない（ADR 0006後の再設計。「1つのBoard=1つの独立した作業」という
+ * Tile/Tabはサイドバーに表示しない（ADR 0006。「1つのBoard=1つの独立した作業」という
  * 単位で捉え、Tile分割はBoard内部の詳細として畳む）。ブランチ・エージェント状態はタブ変数を
  * Boardの状態表示として流用し、Board専用の変数ストアは新設しない
  * （ブランチは代表タブのみ、エージェント状態はBoard内の全タブから選ぶ。findBoardAgent参照）。

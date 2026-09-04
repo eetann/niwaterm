@@ -385,9 +385,9 @@ interface ApplyLayoutRequestBody {
   workspaceId?: string;
   /** target: "replace"時、対象boardId（省略時はアクティブworkspaceのアクティブboard） */
   boardId?: string;
-  /** trueなら次回起動時もこのプリセットで組み直す（TASK-0077）。省略時はrestoreMode: "restore" */
+  /** trueなら次回起動時もこのプリセットで組み直す。省略時はrestoreMode: "restore" */
   startup?: boolean;
-  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか（TASK-0069） */
+  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか */
   trust?: boolean;
 }
 
@@ -439,9 +439,9 @@ interface BoardStartupRequestBody {
   mode: "layout" | "restore" | "clear";
   /** modeが"clear"以外のときのプリセット名。省略時は現在紐づいているプリセットを引き継ぐ */
   preset?: string;
-  /** プリセットの解決元を決めるCLIのcwd（TASK-0069）。presetを明示指定したときのみ使う */
+  /** プリセットの解決元を決めるCLIのcwd。presetを明示指定したときのみ使う */
   cwd?: string;
-  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか（TASK-0069） */
+  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか */
   trust?: boolean;
 }
 
@@ -690,7 +690,7 @@ function buildApp(
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
 
   // cwdを渡すと、そこから解決できるプロジェクトローカルのプリセット（<projectRoot>/.niwaterm/config.ts）も
-  // 併せて一覧する（TASK-0069）。同名はプロジェクト側だけを返し、実際にapplyされる方に揃える
+  // 併せて一覧する。同名はプロジェクト側だけを返し、実際にapplyされる方に揃える
   app.get("/layouts", async (c) => {
     const layouts = await listResolvedLayouts(c.req.query("cwd"), getLayouts());
     return c.json({ ok: true, layouts });
@@ -714,7 +714,7 @@ function buildApp(
     if (!resolved) return c.json({ ok: false, error: `layout not found: ${parsed.name}` }, 404);
     // プロジェクトローカル由来のプリセットを起動時レイアウトに紐づける操作は、以後アプリ起動のたびに
     // そのリポジトリのコードとcommandが自動実行されることを意味する。CLI側でtrust promptを出させ、
-    // 同意（trust: true）を得てから再送してもらう（TASK-0069）
+    // 同意（trust: true）を得てから再送してもらう
     if (parsed.startup && resolved.projectRoot && !parsed.trust) {
       return c.json({
         ok: false,
@@ -753,9 +753,9 @@ function buildApp(
       },
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
-    // どのプリセットから生えたBoardかを記録しておく（TASK-0077）。--startup指定時のみ
+    // どのプリセットから生えたBoardかを記録しておく。--startup指定時のみ
     // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する。
-    // プロジェクトローカル由来なら解決元も一緒に記録する（起動時にはcwdが無いため、TASK-0069）
+    // プロジェクトローカル由来なら解決元も一緒に記録する（起動時にはcwdが無いため）
     workspaceManager.setBoardStartup(result.boardId, {
       preset: parsed.name,
       restoreMode: parsed.startup ? "layout" : "restore",
@@ -802,7 +802,7 @@ function buildApp(
       );
     }
     // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元込み）を引き継ぎ、
-    // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする（TASK-0069）
+    // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする
     let projectRoot: string | null;
     if (parsed.preset !== undefined) {
       const resolved = await resolveLayoutPresetByName(parsed.preset, parsed.cwd, getLayouts());
@@ -1083,11 +1083,11 @@ function buildApp(
     return c.json({ ok: true, vars });
   });
 
-  // 検索スコープはBoard単位（ADR 0006で`layout apply`の適用先がBoard単位になったため、
+  // 検索スコープはBoard単位（ADR 0006により`layout apply`の適用先がBoard単位なので、
   // 「同じレイアウトプリセット内のタブ」= 同じBoard内のタブ）。boardIdは
   // 明示指定 > scopeTabId（呼び出し元タブ）の所属Board > アクティブBoard の順に解決する。
   // scopeTabIdを挟むのは、プリセットのcommandが実際に走るのはPTY起動・シェル初期化を待った後で
-  // （layout-apply.tsのsendInitialInput・delay、TASK-0047）、その時点でアクティブBoardが
+  // （layout-apply.tsのsendInitialInput・delay）、その時点でアクティブBoardが
   // 切り替わっていても呼び出し元自身のBoardを正しく指せるようにするため
   app.get("/find-vars", (c) => {
     const key = c.req.query("key");

@@ -12,7 +12,7 @@ import { listLeaves, type TileLeaf, type TileSplit } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
 
 /**
- * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計。
  * テストではcreateTestWorkspaceManager/split-tile/new-tab等の直後にこれを呼び、pending中の
  * 全タブへダミーのcols/rowsを送ってPTY起動を確定させる
  */
@@ -89,7 +89,7 @@ function createTestWorkspaceManager(): {
     onAllWorkspacesClosed: () => {},
     createSession,
   });
-  // 初期タブのPTY起動はwebview側の実測cols/rowsが届くまで保留される（TASK-0047）。
+  // 初期タブのPTY起動はwebview側の実測cols/rowsが届くまで保留される。
   // このテストダブルでは即座に確定させ、以降のテストがsessionOpts/writesを同期的に検証できるようにする
   resolvePending(mgr);
   return { mgr, writes, sessionOpts };
@@ -2436,7 +2436,7 @@ describe("GET /layouts, POST /apply-layout", () => {
   });
 
   // 解決元(projectRoot)を必ず載せる。プロジェクトローカルのプリセットと同名になりうるため、
-  // CLI側はこれを見てどちらが適用されるかを表示する（TASK-0069）
+  // CLI側はこれを見てどちらが適用されるかを表示する
   test("GET /layouts: 設定済みプリセットをname/description/projectRootの一覧として返す", async () => {
     const { serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;
@@ -2771,7 +2771,7 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(badMode.status).toBe(400);
   });
 
-  // --- プロジェクトローカルのプリセット（TASK-0069） ---
+  // --- プロジェクトローカルのプリセット ---
 
   /** <dir>/proj/.niwaterm/config.ts に同名の"dev"プリセットを置き、そのルートを返す */
   async function createProjectWithDevPreset(): Promise<string> {
@@ -3136,7 +3136,7 @@ describe("POST /popup", () => {
     await expectPending(fetchPromise);
     expect(mgr.snapshot().workspace.popup).not.toBeNull();
     // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで
-    // 起動する（TASK-0045）。実際のwebviewの代わりにここで送ってやる
+    // 起動する。実際のwebviewの代わりにここで送ってやる
     const tabId = mgr.snapshot().workspace.popup?.tabId as string;
     mgr.handleResize(tabId, 80, 24, 8, 16);
 
@@ -3215,7 +3215,7 @@ describe("POST /popup", () => {
     });
     await expectPending(fetchPromise);
     // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで
-    // 起動する（TASK-0045）。実際のwebviewの代わりにここで送ってやる
+    // 起動する。実際のwebviewの代わりにここで送ってやる
     const tabId = mgr.snapshot().workspace.popup?.tabId as string;
     mgr.handleResize(tabId, 80, 24, 8, 16);
 

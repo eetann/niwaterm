@@ -9,7 +9,7 @@ import {
 } from "./workspace-manager";
 
 /**
- * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計。
  * テストではcreateWorkspaceManager/newTab/splitTile等の直後にこれを呼び、pending中の
  * 全ワークスペース・全Boardの全タブへダミーのcols/rowsを送ってPTY起動を確定させる
  */
@@ -1328,7 +1328,7 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
 
     const tabId = mgr.openPopup();
     // PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで起動する
-    // （TASK-0045: SIGWINCH到達前に起動しているとresizeを取りこぼすTUIがあるため）
+    // （SIGWINCH到達前に起動しているとresizeを取りこぼすTUIがあるため）
     expect(created.length).toBe(before);
     mgr.handleResize(tabId as string, 80, 24, 8, 16);
 

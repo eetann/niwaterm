@@ -57,7 +57,7 @@ export default define({
       });
 
     let result = await setOnce(ctx.values.trust);
-    // プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけるにはtrustが要る（TASK-0069）
+    // プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけるにはtrustが要る
     if (!result.ok && "needsTrust" in result) {
       if (!(await confirmTrust(result.needsTrust))) {
         console.log("キャンセルしました");

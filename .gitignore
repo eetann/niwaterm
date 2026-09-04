@@ -19,5 +19,5 @@ mise.local.toml
 # Hutch/cottontailがビルド時に作る一時ディレクトリ
 .cottontail-tmp/
 
-# プロジェクトローカル設定（TASK-0069）。中身は各自の作業レイアウト等の個人設定
+# プロジェクトローカル設定。中身は各自の作業レイアウト等の個人設定
 .niwaterm/

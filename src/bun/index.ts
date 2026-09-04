@@ -319,18 +319,18 @@ async function refreshConfig(): Promise<void> {
 await refreshConfig();
 
 /**
- * 起動時レイアウト（TASK-0077）。restoreMode: "layout"のBoardは、保存した骨格ではなく
+ * 起動時レイアウト。restoreMode: "layout"のBoardは、保存した骨格ではなく
  * configのlayoutsプリセットで組み直す（タブのcommandも再実行される）。該当Boardは
  * workspace-manager側で骨格を復元せず単一タブの状態で作られているので、ここで組み立てる。
  *
  * 実行タイミングはconfig読み込み直後・BrowserView生成前に固定する。この時点では全タブが
- * まだPTY起動保留中（TASK-0047のspawnSessionPending）で、プリセットのcommandも
+ * まだPTY起動保留中（spawnSessionPending）で、プリセットのcommandも
  * sendInitialInputで保留キューへ積まれるため、実測cols/rowsが確定してから正しいサイズで
  * 一度だけシェルが起動する。プリセットが見つからない場合は単一タブのまま残し、
  * ユーザーが気づけるよう通知する。
  *
  * projectRootが紐づいているBoardは、グローバル設定ではなくそのプロジェクトの
- * .niwaterm/config.tsから引く（TASK-0069）。起動時にはcwdが無いため探索は一切行わず、
+ * .niwaterm/config.tsから引く。起動時にはcwdが無いため探索は一切行わず、
  * 紐づけを作った時点で記録した解決元をそのまま読む
  */
 async function applyStartupLayouts(): Promise<void> {
@@ -644,14 +644,14 @@ Electrobun.events.on("before-quit", () => cleanup());
 // 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
 // 加えてウィンドウ生成時点ではWebView2のコントローラがまだ無く、生成時のactivateではweb contentへ
 // フォーカスが渡らない。showWindow(activate:true)ならネイティブ側がFocusActiveView()＝
-// MoveFocus(PROGRAMMATIC)まで行うため、webviewの準備ができたready受信時に一度だけ呼ぶ（TASK-0064）
+// MoveFocus(PROGRAMMATIC)まで行うため、webviewの準備ができたready受信時に一度だけ呼ぶ
 if (process.platform !== "win32") {
   mainWindow.activate();
 }
 
 let webviewFocused = false;
 
-/** 起動直後に一度だけ、webviewの中身へOSキーボードフォーカスを渡す（TASK-0064。readyは再送されうるので1回だけ） */
+/** 起動直後に一度だけ、webviewの中身へOSキーボードフォーカスを渡す（readyは再送されうるので1回だけ） */
 function focusWebviewOnce(): void {
   if (webviewFocused) return;
   webviewFocused = true;

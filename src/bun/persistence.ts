@@ -1,5 +1,5 @@
 // ワークスペースの状態（レイアウト骨格・タブごとのcwd/シェル/名前/変数・ブラウザタブのURL）を永続化する。
-// PTYのスクロールバック・実行中プロセスそのものは対象外（roadmap「磨き込みと配布」で明示的にスコープ外とした）。
+// PTYのスクロールバック・実行中プロセスそのものは対象外。
 // 復元時は各タブに対して新規シェルを起動する（terminalタブのみ）か、ブラウザタブとしてURLを開き直す。
 // tabIds/tileIdの実体は保存せず新規採番するため、木構造の走査順（leafの並び・tabsの並び）で
 // 永続化データと新規採番後のidを対応付ける。
@@ -53,19 +53,19 @@ export interface PersistedTileSplit {
 export type PersistedTileNode = PersistedTileLeaf | PersistedTileSplit;
 
 /**
- * 起動時にBoardをどう組み直すか（TASK-0077）。
+ * 起動時にBoardをどう組み直すか。
  * "restore": 保存したlayout（骨格）をそのまま復元する（従来の挙動、既定）。
  * "layout": presetのレイアウトプリセットをconfigから引いて再適用する（タブのcommandも再実行される）。
  */
 export type BoardRestoreMode = "restore" | "layout";
 
-/** Boardに紐づくレイアウトプリセットと、起動時の組み直し方（TASK-0077） */
+/** Boardに紐づくレイアウトプリセットと、起動時の組み直し方 */
 export interface PersistedBoardStartup {
   /** layoutsのキー（プリセット名） */
   preset: string;
   restoreMode: BoardRestoreMode;
   /**
-   * プリセットの解決元プロジェクトルート（絶対パス、TASK-0069）。
+   * プリセットの解決元プロジェクトルート（絶対パス）。
    * 省略時はグローバル設定（~/.config/niwaterm/niwaterm.config.ts）から引く。
    *
    * 起動時にはcwdが存在しないためプリセット名だけでは解決元が決まらない。Board内のタブのcwdから
@@ -82,7 +82,7 @@ export interface PersistedBoard {
   /** ユーザーがサイドバーから設定したBoard名。未設定は省略する */
   name?: string;
   /**
-   * `layout apply`で適用したレイアウトプリセット名と起動時の扱い（TASK-0077）。
+   * `layout apply`で適用したレイアウトプリセット名と起動時の扱い。
    * プリセット由来でないBoardでは省略する。restoreMode: "layout"であってもプリセットが
    * configから消えているケースに備え、layout（骨格）は常に保存しておく
    */

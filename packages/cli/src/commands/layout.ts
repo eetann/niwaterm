@@ -26,7 +26,7 @@ const listCommand = define({
       return;
     }
     // 解決元を必ず出す: 同名プリセットはプロジェクト側が優先されるため、
-    // どちらが適用されるのかが名前だけでは分からない（TASK-0069）
+    // どちらが適用されるのかが名前だけでは分からない
     for (const layout of result.layouts) {
       const source = layout.projectRoot ? `[project: ${layout.projectRoot}]` : "[global]";
       console.log(`${layout.name}\t${source}\t${layout.description ?? ""}`);
@@ -154,7 +154,7 @@ const applyCommand = define({
 
     let result = await applyOnce(trust);
     // 事前確認をすり抜けた場合（プリセット一覧を取ってから適用するまでの間に設定が変わった等）の保険。
-    // アプリ側が同意を求めてきたら、ここでも確認を取って付け直す（TASK-0069）
+    // アプリ側が同意を求めてきたら、ここでも確認を取って付け直す
     if (!result.ok && "needsTrust" in result) {
       if (!(await confirmTrust(result.needsTrust))) {
         console.log("キャンセルしました");

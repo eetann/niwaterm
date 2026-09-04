@@ -57,7 +57,7 @@ macOSではlistenソケットの重複bindが`EADDRINUSE`で失敗するため�
 4. `.term`が無いのでResizeObserverが発火せず、`resize`メッセージがbunへ届かない
 5. `board.ts`の`handleResize`が呼ばれず`pendingSpawnByTabId`が永久に消化されない
    → **PTYセッションが一度も起動しない**（正しいcols/rowsが判明してから起動する設計のため。
-   [[TASK-0045]]・[[TASK-0047]]のSIGWINCH取りこぼし対策と同じく「サイズ確定待ち」がここでも効いている）
+   PTY起動時のSIGWINCH取りこぼし対策と同じく「サイズ確定待ち」がここでも効いている）
 6. `board.ts`の`getTabText`が`sessions.get(tabId)`を引けず`null`を返す → `tab capture`が404
 
 なお**bun→webview方向は壊れない**。こちらはネイティブ層がwebviewへスクリプト注入する

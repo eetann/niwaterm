@@ -1,10 +1,10 @@
-// プロジェクトローカル設定（<projectRoot>/.niwaterm/config.ts）の解決（TASK-0069）。
+// プロジェクトローカル設定（<projectRoot>/.niwaterm/config.ts）の解決。
 //
 // 設計の要点は「.niwaterm/を暗黙に環境から探さない」こと。解決コンテキストは2つだけで、
 //
 //   1. CLI・API実行時（layout apply、今後のworktree系） … プロセスのcwdは常に1つなので、
 //      そこから上向きに探せば解決先が一意に決まる。Board内のタブが何ディレクトリ開いていようと無関係
-//   2. 起動時（TASK-0077のrestoreMode: "layout"） … cwdが存在しないため、紐づけを作った時点の
+//   2. 起動時（restoreMode: "layout"） … cwdが存在しないため、紐づけを作った時点の
 //      解決元をPersistedBoardStartup.projectRootへ永続化しておき、それをそのまま読む
 //
 // Board内のタブのcwdから推測する方式は採らない（ユーザーがcdすれば変わるため解決キーとして不安定）。

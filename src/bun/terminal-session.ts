@@ -152,7 +152,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   // dispose()経由のpty.kill()もこのコールバックを発火させるため、明示的にdisposeした場合は
   // 「プロセスが予期せず終了した」通知を出さないようガードする（respawnTabがdispose→spawnし直す際、
   // ガード無しだとhandleTabProcessExitがtreeからタブを削除してしまい、最後の1タブなら
-  // アプリごと終了する重大バグになる。実機検証で発覚）
+  // アプリごと終了してしまう）
   pty.onExit((code) => {
     if (disposed) return;
     callbacks.onExit?.(code);
@@ -241,7 +241,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     term.scrollToBottom();
   }
 
-  // ---- vi風コピーモード（TASK-0012） ----
+  // ---- vi風コピーモード ----
   // 状態と移動ロジックはcopy-mode.tsの純粋関数が持ち、ここは
   // 「行テキストのスナップショットを用意する」「ビューポートを追従させる」
   // 「選択範囲をlibghostty-vtに渡してテキスト化する」という副作用側だけを担う

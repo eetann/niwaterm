@@ -82,7 +82,7 @@ packages/cli/src/commands/
 - `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwaterm tab var set agent_status`を呼ぶ）
 
 `contrib/`配下は`>/dev/null 2>&1`で出力を捨てるため、コマンド名がずれても`Command not found`が握り潰され、
-「サイドバーに何も表示されない」という症状だけが残る（TASK-0075の原因）。改名時は必ず
+「サイドバーに何も表示されない」という症状だけが残る。改名時は必ず
 `grep -rn "niwaterm <旧コマンド名>" contrib/ docs/`で呼び出し側を洗い出すこと。
 さらに`contrib/agent-integration/`のhooksは利用者が`~/.claude/settings.json`へコピーして使うため、
 **リポジトリを直しても導入済みのコピーは追従しない**。破壊的な改名をしたらリリースノート等で周知する。

@@ -2,11 +2,9 @@ import type { ElectrobunConfig } from "electrobun";
 
 // 開発中ビルド(niwaterm-wip)がデフォルト。普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`
 // を指定して起動する（mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
-// アプリ名だけ変えることで、開発中ビルド(niwaterm-wip-dev)と普段遣いビルド
-// (niwaterm-daily-dev)を同時に安全に動かせるようにしている。両方とも"wip"/"daily"という
-// 一目で区別できる単語にすることで、AIエージェントが指示を取り違えて普段遣いの方を
-// 操作してしまう事故を防ぐ（過去に"niwaterm"(無印)/"niwaterm-daily"というdevチャンネル
-// サフィックス頼みの命名で頻発したため改名した）。
+// アプリ名だけ変えることで、両者を同時に安全に動かせる。どちらも"wip"/"daily"という一目で
+// 区別できる単語にしてあるのは、指示を取り違えて普段遣いの方を操作する事故を防ぐため
+// （devチャンネルのサフィックス頼みの命名だと見分けがつかない）。
 const appName = process.env.NIWATERM_APP_NAME || "niwaterm-wip";
 
 export default {
@@ -17,9 +15,8 @@ export default {
 		name: appName,
 		// identifierをアプリ名ごとに分離する。Electrobunネイティブ層はWindowsのWebView2用
 		// UserDataFolderを`%LOCALAPPDATA%/<identifier>/<channel>/WebView2`という式のみで
-		// 決めており（identifier/channelのみ、nameは無関係）、以前はidentifierが
-		// wip/dailyで共通の固定文字列だったため、両方を同時起動するとWebView2の
-		// UserDataFolderが衝突し、後発側の初期化が不安定になっていた（TASK-0057）
+		// 決めており（identifier/channelのみ、nameは無関係）、共通のidentifierのままだと
+		// wip/dailyの同時起動でUserDataFolderが衝突し、後発側の初期化が不安定になる
 		identifier: `dev.eetann.${appName}`,
 		version: "0.0.1",
 	},
@@ -28,8 +25,8 @@ export default {
 		// rmSync(recursive)で丸ごと削除・作り直す（アプリ名は含まれない）。そのため
 		// 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同じ"build/"の
 		// まま同時にビルドすると、片方のビルド中にもう片方の成果物ごと削除されてしまい、
-		// 起動中のプロセスがファイルをロックしているとEACCESでビルド自体が失敗する
-		// （実機で確認済み）。アプリ名ごとにbuildFolder自体を分けることで回避する
+		// 起動中のプロセスがファイルをロックしているとEACCESでビルド自体が失敗する。
+		// アプリ名ごとにbuildFolder自体を分けることで回避する
 		buildFolder: process.env.NIWATERM_APP_NAME ? `build/${process.env.NIWATERM_APP_NAME}` : "build",
 		// Bun.Terminal（PTY）に依存しているため、メインプロセスはcottontailではなくbunのまま使う
 		mainProcess: "bun",
@@ -44,8 +41,8 @@ export default {
 		},
 		copy: {
 			"src/mainview/index.html": "views/mainview/index.html",
-			// scripts/build-tailwind.ts(preBuild)が生成する。electrobun 2.xでviews.<name>.pluginsが
-			// 廃止され、bun-plugin-tailwindによるビルド時変換ができなくなったための代替
+			// scripts/build-tailwind.ts(preBuild)が生成する。electrobun 2.xにはviews.<name>.pluginsが
+			// 無く、bun-plugin-tailwindによるビルド時変換ができないための代替
 			".tailwind-build/index.css": "views/mainview/index.css",
 		},
 		// src/mainview/index.cssはentrypoint・copyのどちらにも列挙されないため、

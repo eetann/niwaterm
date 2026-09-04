@@ -14,7 +14,7 @@ Bunプロセスごと落ちる（アプリ側のtry/catchでは捕まえられ�
 
 niwatermでは、`src/native/shim.c`の`niwa_dump_selection`を最初スカラー引数13個
 （term, emit, tag, start_x, start_y, end_x, end_y, rectangle, unwrap, trim, buf, buf_len, out_written）
-で作った時に踏んだ。TASK-0012（vi風コピーモード）の実装中に発覚。
+で作った時に踏んだ（vi風コピーモードの実装中）。
 
 ## 再現
 

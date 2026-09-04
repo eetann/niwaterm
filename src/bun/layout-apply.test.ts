@@ -7,7 +7,7 @@ import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
 
 /**
- * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計。
  * テストではapplyLayoutPreset等の直後にこれを呼び、pending中の全タブへダミーのcols/rowsを
  * 送ってPTY起動を確定させる
  */
@@ -194,7 +194,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
   });
 
   test("分割で作った各タイルのタブへもcommandが届く", () => {
-    // 分割で作るタイルのプレースホルダーはPTY起動が実測cols/rows到達まで保留される（TASK-0047）。
+    // 分割で作るタイルのプレースホルダーはPTY起動が実測cols/rows到達まで保留される。
     // handleInputはsessions未登録のタブで黙って捨てるため、保留中は取りこぼしていた
     const { mgr, writes } = createTestWorkspaceManager();
     const boardId = newBoardInActiveWorkspace(mgr);
@@ -344,7 +344,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     expect(sessionOpts.some((o) => o.cwd === "/explicit")).toBe(true);
   });
 
-  // --- プロジェクトローカル由来のプリセット（TASK-0069） ---
+  // --- プロジェクトローカル由来のプリセット ---
 
   test("projectRootはinvocationCwdより優先してcwdの基準になる", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
@@ -386,7 +386,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     resolvePending(mgr);
 
     expect(result.ok).toBe(true);
-    // 使い回したタブがホームのまま取り残されない（TASK-0069で入れたalignPlaceholderCwd）
+    // 使い回したタブがホームのまま取り残されない（alignPlaceholderCwd）
     expect(sessionOpts.filter((o) => o.cwd === "/home/me").length).toBe(1);
     expect(sessionOpts.filter((o) => o.cwd === "/proj").length).toBeGreaterThanOrEqual(2);
   });

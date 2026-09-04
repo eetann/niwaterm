@@ -104,7 +104,7 @@ const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
 const activeTabByTile = new Map<TileId, TabId>();
 /** タイル内の全タブ。背面タブへ実測サイズを配る（sendResize参照）ために保持する */
 const tabIdsByTileId = new Map<TileId, TabId[]>();
-/** 一度でもresizeを送ったタブ。bun側のPTY起動保留（TASK-0047）が解除済みかの判定に使う */
+/** 一度でもresizeを送ったタブ。bun側のPTY起動保留が解除済みかの判定に使う */
 const resizeSentTabIds = new Set<TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
 const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
@@ -113,10 +113,10 @@ const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 /**
  * React rootの薄いラッパー。**このファイルでは生の`Root`を直接持たず、必ずこれを経由する。**
  *
- * 理由: `reconcile()`がタイルごとに毎フレーム`root.render()`を無条件で呼んでいたことがあり、
- * rendererプロセスのメモリがJSヒープ外（Blink側）へ約5MB/秒積み上がって解放されず、
- * 数時間でWebView2 rendererがOOMクラッシュしてウィンドウが真っ白になっていた。
- * DOMノード数もJSヒープも横ばいのまま増えるため、JS側からは見えないリークだった。
+ * 理由: `reconcile()`がタイルごとに毎フレーム`root.render()`を無条件で呼ぶと、rendererプロセスの
+ * メモリがJSヒープ外（Blink側）へ約5MB/秒積み上がって解放されず、数時間でWebView2 rendererが
+ * OOMクラッシュしてウィンドウが真っ白になる。DOMノード数もJSヒープも横ばいのまま増えるため、
+ * JS側からは見えないリークになる。
  *
  * そこで`render(element)`という「いつでも呼べる入口」を無くし、呼び出し側に
  * どちらの性質のrenderなのかを選ばせる:
@@ -675,7 +675,7 @@ function measureCellGlyphInk(
  *
  * 理論値（行の高さ ÷ 等倍のインク高）で決め打ちできないのは、Windows(Chromium/DirectWrite)が
  * グリフのラスタライズ解像度(ppem)を整数へ丸めるため。font-size 13pxに1.03倍をかけても
- * ppemは13のままで、グリフの大きさが変わらず隙間が残る（実機で確認済み）。
+ * ppemは13のままで、グリフの大きさが変わらず隙間が残る。
  * canvasのラスタライズもDOMと同じ丸めをするので、実測しながら上げていけば丸めの有無に
  * 関わらず「行の高さを埋められる最小の倍率」へ収束する。
  *
@@ -807,8 +807,8 @@ function renderLayout(layout: TileNode, tabs: Record<TabId, TabRenderState>): vo
 /**
  * ズーム中、対象タイルを含まない枝をdisplay:noneで丸ごと隠す（`visible`を再帰の入口で最初に
  * 適用してから子を辿る）。display:noneのflex itemはレイアウト計算から除外されるため、
- * 対象を含む枝が自然に100%へ広がる（position/z-indexでの重ね合わせは行わない。以前
- * z-indexだけに頼った実装では、背後のタイルが透けて見える・カーソルが二重に見える不具合があった）。
+ * 対象を含む枝が自然に100%へ広がる（position/z-indexでの重ね合わせは行わない。z-indexだけでは
+ * 背後のタイルが透けて見える・カーソルが二重に見える）。
  * visibleを子より先に確定させる理由: setTabVisible()はhidden→visible遷移時にsendResize()で
  * 実寸を測り直すが、その時点でまだ祖先がdisplay:noneのままだと0サイズを誤って測ってしまう
  * （親から先に確定させる木構造の走査なので、これは子を処理する前に済ませる必要がある）
@@ -1212,7 +1212,7 @@ function applyPopupState(
   if (popup.visible) sendResize(popup.tabId);
   // 開く・再表示のタイミングでキー入力の受け口(imeEl)へ明示的にフォーカスを移す。
   // これが無いと、開いた直後は一度マウスでクリックするまでキー入力が届かない
-  // （popupEl.mousedownリスナーで初めてfocus()される作りだったため）
+  // （これが無いとフォーカスはpopupEl.mousedownリスナー経由でしか移らない）
   if (becameVisible) imeEl.focus({ preventScroll: true });
 }
 
@@ -1246,9 +1246,9 @@ function setActiveTabLocally(tileId: TileId, tabId: TabId): void {
  *
  * **propsが前回と同じなら`root.render()`自体を呼ばない。** reconcile()がこれをrenderメッセージの
  * たびに（＝ターミナルが出力するたび、最大60fps × タイル数）呼ぶため、無条件にrenderすると
- * rendererプロセスのメモリがJSヒープ外（Blink側）へ積み上がって解放されない。Windows実機の計測で
- * 約5MB/秒増え続け、数時間でWebView2 rendererがOOMクラッシュしてウィンドウが真っ白になっていた
- * （DOMノード数もJSヒープも横ばいのまま増えるので、JS側からは見えないリークだった）。
+ * rendererプロセスのメモリがJSヒープ外（Blink側）へ積み上がって解放されない。Windowsでは
+ * 約5MB/秒増え続け、数時間でWebView2 rendererがOOMクラッシュしてウィンドウが真っ白になる
+ * （DOMノード数もJSヒープも横ばいのまま増えるので、JS側からは見えないリーク）。
  * タブバーの内容はタブの増減・改名・切替でしか変わらないので、その変化だけをキーで見る。
  */
 function renderTileTabBar(tileId: TileId): void {
@@ -1675,7 +1675,7 @@ function sendResize(tabId: TabId): void {
  *
  * 背面タブはdisplay:noneでclientWidth/Heightが0になり、ResizeObserverのコールバックも
  * スキップされる（ensureTerminalTabContent参照）。bun側はhandleResizeでの実測cols/rows到達を
- * PTY起動の合図にしている（TASK-0047のspawnSessionPending）ため、そのままだとユーザーが
+ * PTY起動の合図にしている（spawnSessionPending）ため、そのままだとユーザーが
  * そのタブを開くまでPTYが起動せず、レイアウトプリセットのcommandも流れない
  * （背面タブでサーバーを起動するプリセットが動かない）。
  *
@@ -2354,7 +2354,7 @@ tileTreeEl.addEventListener("mousedown", (e) => {
 // 見つからなければフォーカスを外す。.termはフォーカス不能なため、mousedownリスナー内で
 // imeEl.focus()しても既定動作に上書きされ、document.activeElementはbodyになる。
 // documentレベルのkeydownは動くのでASCIIは打てるが、編集可能要素にフォーカスが無いと
-// ChromiumはOSのIMEを無効にするため日本語入力だけができなくなる（TASK-0064）。
+// ChromiumはOSのIMEを無効にするため日本語入力だけができなくなる。
 // 既定動作が終わったmouseupで入れ直す。ドラッグ選択中（選択が残っている）は選択を壊すため触らない
 tileTreeEl.addEventListener("mouseup", () => {
   const selection = window.getSelection();

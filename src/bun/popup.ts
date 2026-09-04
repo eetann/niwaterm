@@ -104,12 +104,11 @@ export function createPopup(opts: PopupOptions) {
 
   /**
    * 保留していたPTYを実際に起動する。webview側で実測したポップアップ枠のcols/rowsで
-   * 一発目から起動することで、SIGWINCHへの追従に頼らない（TASK-0045）。
-   * 起動直後にresizeでサイズを送り直す旧実装だと、fzf等「起動がSIGWINCH到達に間に合わず、
-   * かつ一度取りこぼすと再送しても二度と反映されないTUI」がポップアップ枠の半分程度の
-   * 高さのまま固着するバグがあった（起動から十分後に届いたSIGWINCHでは追従できることを
-   * 実験で確認済み。取りこぼしたSIGWINCHはOS側で再送されず、キー入力等アプリ内の
-   * 別イベントが起きるまで反映されない）
+   * 一発目から起動することで、SIGWINCHへの追従に頼らない。
+   * fzf等「起動がSIGWINCH到達に間に合わず、かつ一度取りこぼすと再送しても二度と
+   * 反映されないTUI」は、起動後にresizeでサイズを送り直す方式だと誤ったサイズのまま
+   * 固着する（取りこぼしたSIGWINCHはOS側で再送されず、キー入力等アプリ内の別イベントが
+   * 起きるまで反映されない）
    */
   function spawnSession(spawnCols: number, spawnRows: number): void {
     if (!tabId || !pendingOpts || !pendingInherited) return;

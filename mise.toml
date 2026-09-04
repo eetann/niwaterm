@@ -10,9 +10,8 @@
 #
 # niwaterm-wip（開発中ビルド）はgtrで作成した追加のgit worktree（devブランチ）で、
 # niwaterm-daily（普段遣いビルド）はこのリポジトリ本体（mainブランチ、gitの
-# メインワークツリー）で動かす運用にしている（TASK-0056: electrobun 2.0.1のプロジェクト
-# ビルドロックが同一project_root配下だと同時起動できないため、実体そのものを分離する必要が
-# あった）。Windows側もそれぞれ $NIWATERM_WIN_WORKTREES_ROOT/<ディレクトリ名>/ へ配置する。
+# メインワークツリー）で動かす運用にしている（electrobun 2.0.1のプロジェクトビルドロックは
+# 同一project_root配下だと同時起動できないため、実体そのものを分離する必要がある）。Windows側もそれぞれ $NIWATERM_WIN_WORKTREES_ROOT/<ディレクトリ名>/ へ配置する。
 # ディレクトリ名はgit管理下のディレクトリのbasenameをそのまま使うため、mainブランチ側
 # （メインワークツリー）も追加のgit worktreeも同じロジックで解決できる。値自体はどちらの
 # 作業ディレクトリでも共通なので、mise.local.tomlはそれぞれにこの1行をコピーするだけでよい。
@@ -31,7 +30,7 @@ run = '''
 if [ "$(git branch --show-current)" = "main" ]; then
   export NIWATERM_APP_NAME=niwaterm-daily
 fi
-# TASK-0067: Hutchはelectrobun本体が導入済みかの確認だけでも
+# Hutchはelectrobun本体が導入済みかの確認だけでも
 # `~/.hutch/releases/electrobun/<version>/<platform>.lock`を排他ロックで取りに行く一方、
 # 起動中のelectrobun devプロセスは同じファイルを共有ロックで掴み続ける。ホーム配下の
 # ユーザー単位のパスなのでproject_rootを分けても競合し、後発の起動が無期限にブロックされる。
@@ -88,7 +87,7 @@ WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
 LOG_FILE="/tmp/niwaterm-win-${APP_NAME#niwaterm-}.log"
 # HUTCH_HOMEはWSL側のexportではWindows側のプロセスに伝わらないため、ここで明示的に渡す
-# （分離する理由はstartタスクのコメント・TASK-0067参照）
+# （分離する理由はstartタスクのコメント参照）
 HUTCH_SUFFIX="${APP_NAME#niwaterm-}"
 nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
@@ -96,9 +95,9 @@ echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LO
 echo "停止するには: mise run win:stop:mine"
 '''
 
-# TASK-0058: electrobun 2.0.1のHutchは`~/.hutch/state/locks/graph.lock`という
+# electrobun 2.0.1のHutchは`~/.hutch/state/locks/graph.lock`という
 # プロジェクト単位ではなくユーザー単位でグローバルなロックを使っており、project_root自体を
-# 分離していても（TASK-0056対応済みでも）、Hutchプロセス（electrobun dev/build問わず）が
+# 分離していても、Hutchプロセス（electrobun dev/build問わず）が
 # 1つでも生きている間は別のHutchプロセスの起動処理そのものが完全にブロックされる（実機で
 # 再現・確認済み）。ビルド済みのlauncher.exeはHutch（hutch.exe/hutch-engine.exe）を経由せず
 # 単独で動くため、このロックの影響を受けない。wip/dailyを同時起動したい場合は、両方を順番に
@@ -106,7 +105,7 @@ echo "停止するには: mise run win:stop:mine"
 # 使ってlauncher.exeを直接起動する（同時にelectrobun devでビルドしようとすると片方がスタック
 # するため、ビルドは必ず順番に行うこと）。ホットリロードは失われる。
 [tasks."win:start:built"]
-description = "ビルド済みのlauncher.exeをelectrobun devを経由せず直接起動する（Hutchのグローバルビルドロック=TASK-0058を回避し、wip/dailyを同時起動する場合に使う。事前にmise run startでのビルド完了が必要）"
+description = "ビルド済みのlauncher.exeをelectrobun devを経由せず直接起動する（Hutchのグローバルビルドロックを回避し、wip/dailyを同時起動する場合に使う。事前にmise run startでのビルド完了が必要）"
 run = '''
 if [ "$(git branch --show-current)" = "main" ]; then
   APP_NAME=niwaterm-daily
@@ -121,11 +120,11 @@ echo "停止するには: mise run win:stop:mine"
 
 # WSL→Windows間はプロセスグループもシグナルも共有しないため、win:startをCtrl+Cで止めても
 # Windows側のbun.exe/electrobun.exeは残り続ける。停止は明示的なプロセスkillが必須。
-# hutch.exe/hutch-engine.exe（Hutchのビルドプロセス。TASK-0056参照）も対象に含める。
+# hutch.exe/hutch-engine.exe（Hutchのビルドプロセス）も対象に含める。
 # Windowsのプロセスは親をkillしても子は自動終了しないため、ビルド中に強制終了すると
 # hutch-engine.exeが孤児プロセスとして残り、.hutch/locks/electrobun-build.lockを掴んだまま
 # 後続のビルドを無期限にブロックすることがある（実機で確認済み）。
-# launcher.exe（win:start:built=TASK-0058の回避策で直接起動したプロセス自体。子のbun.exeが
+# launcher.exe（win:start:builtがelectrobun devを経由せず直接起動したプロセス自体。子のbun.exeが
 # 死んでも親のlauncher.exeは自動終了しない）も対象に含める。
 [tasks."win:stop"]
 description = "Windows実機で起動中のniwaterm（開発中/普段遣い問わず全て）を停止する"
@@ -152,9 +151,9 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 echo "停止コマンドを送りました（$APP_NAME）"
 '''
 
-# TASK-0056の調査中、reader lease（起動中インスタンスの生存確認、正常終了・クラッシュ問わず
-# OSが自動解放するはずのadvisory file lock）が実機でstaleのまま残り続け、後続のビルドが
-# `Waiting for the project build lock...`のまま無期限に止まるケースを複数回確認した。
+# reader lease（起動中インスタンスの生存確認、正常終了・クラッシュ問わずOSが自動解放するはずの
+# advisory file lock）が実機でstaleのまま残り続け、後続のビルドが
+# `Waiting for the project build lock...`のまま無期限に止まることがある。
 # 本来hutch側が自動検出・削除する設計のはずだが機能しないことがあるため、手動診断・復旧用に
 # 用意する。build.lockのロック状態を表示し、readers配下のstale lease（ロック不能=解放済み）は
 # その場で削除、生存中のものは残す。
@@ -200,7 +199,7 @@ if [ "${RUNNING:-0}" != "0" ]; then
   echo "なお、このタスクを$APP_NAMEのタブ内から実行していると自分ごと巻き込むので、別インスタンス（wip側のタブ等）かWindows Terminalから実行すること。daily:merge-dev経由なら再実行しても安全（マージ・同期は冪等）" >&2
   exit 1
 fi
-# HUTCH_HOMEを分ける理由はstartタスクのコメント・TASK-0067参照（WSL側のexportは伝わらないため明示的に渡す）
+# HUTCH_HOMEを分ける理由はstartタスクのコメント参照（WSL側のexportは伝わらないため明示的に渡す）
 powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun build --env=dev"
 echo "ビルドしました（$APP_NAME、起動はしていない）。タスクバー等のショートカットから起動すると反映されています"
 '''

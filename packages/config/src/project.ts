@@ -1,4 +1,4 @@
-// プロジェクトローカル設定（<projectRoot>/.niwaterm/config.ts）の型（TASK-0069）。
+// プロジェクトローカル設定（<projectRoot>/.niwaterm/config.ts）の型。
 //
 // グローバル設定（~/.config/niwaterm/niwaterm.config.ts、NiwatermConfig）とは別物で、
 // マージもされない。`niwaterm layout apply`のような特定のCLI・API実行時にのみ、

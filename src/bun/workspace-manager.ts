@@ -53,7 +53,7 @@ export interface WorkspaceListEntry {
   popup: { tabId: TabId; visible: boolean } | null;
 }
 
-/** listStartupLayoutBoardsの1件（TASK-0077 / TASK-0069） */
+/** listStartupLayoutBoardsの1件 */
 export interface StartupLayoutBoard {
   boardId: BoardId;
   preset: string;
@@ -147,7 +147,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         const initialBoard: InitialBoard = {};
         if (persistedBoard.name !== undefined) initialBoard.name = persistedBoard.name;
         if (persistedBoard.startup !== undefined) initialBoard.startup = persistedBoard.startup;
-        // 起動時にプリセットで組み直すBoard（TASK-0077）は骨格を復元しない。単一タブの
+        // 起動時にプリセットで組み直すBoardは骨格を復元しない。単一タブの
         // まっさらな状態で作り、bun/index.tsが設定読み込み後にapplyLayoutPresetで組み立てる。
         // 骨格を復元してから畳むと前回セッションのタブ名・vars・cwdがプリセット適用後も
         // 残ってしまうため（layout-apply.tsのプレースホルダー使い回しを参照）
@@ -281,9 +281,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   /**
    * 起動時にレイアウトプリセットで組み直すBoard（restoreMode: "layout"）の一覧。
-   * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う（TASK-0077）。
+   * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う。
    * projectRootが載っているBoardは、グローバル設定ではなくそのプロジェクトの
-   * .niwaterm/config.tsからプリセットを引く（TASK-0069）
+   * .niwaterm/config.tsからプリセットを引く
    */
   function listStartupLayoutBoards(): StartupLayoutBoard[] {
     const result: StartupLayoutBoard[] = [];

@@ -24,7 +24,7 @@ import type { WorkspaceManager } from "./workspace-manager";
 
 export type ApplyLayoutTarget = "new-board" | "replace";
 
-/** applyLayoutPresetのcwd解決に関わるオプション（TASK-0069） */
+/** applyLayoutPresetのcwd解決に関わるオプション */
 export interface ApplyLayoutOptions {
   /** `niwaterm layout apply`を実行したCLIのcwd。プロジェクトローカル由来でないときのcwd基準になる */
   invocationCwd?: string;
@@ -139,7 +139,7 @@ function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
 // プレースホルダータブは既定シェル・baseCwd（buildNode内のsplitTile呼び出しで
 // 既に渡している）で生成済みのPTYを持つ。tabConfigがshellProfile/cwdを指定していなければ
 // 結果は同一になるため、newTab+closeTabで新規PTYを作って即座に古いPTYを破棄する
-// （Windows実機でネイティブ層のクラッシュを誘発した。layout-apply-crush.log参照）代わりに、
+// （Windowsではネイティブ層のクラッシュを誘発する）代わりに、
 // プレースホルダーをそのまま最初のタブとして使い回す
 function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
   return tabConfig.shellProfile === undefined && tabConfig.cwd === undefined;
@@ -183,7 +183,7 @@ function configureTab(
     const bytes = tmuxKeysToBytes([tabConfig.command, "Enter"]);
     const delay = tabConfig.delay ?? 0;
     // handleInputではなくsendInitialInputを使う: 分割で作ったタイルのタブはPTY起動が
-    // 実測cols/rows到達まで保留されており（TASK-0047）、handleInputだと黙って捨てられる
+    // 実測cols/rows到達まで保留されており、handleInputだと黙って捨てられる
     if (delay > 0) {
       setTimeout(() => ctx.workspaceManager.sendInitialInput(tabId, bytes), delay);
     } else {
@@ -302,7 +302,7 @@ export function applyLayoutPreset(
     boardId,
     focusTarget: null,
     // プロジェクトローカル由来のプリセットはprojectRootを基準にする。リポジトリへコミットした
-    // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため（TASK-0069）
+    // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため
     baseCwd: options.projectRoot ?? options.invocationCwd,
   };
   try {

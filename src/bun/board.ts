@@ -117,12 +117,11 @@ export function createBoard(opts: BoardOptions) {
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
-  // PTY起動をwebview側の実測cols/rowsが届くまで保留中のタブ（TASK-0047）。新規タイル作成時・
+  // PTY起動をwebview側の実測cols/rowsが届くまで保留中のタブ。新規タイル作成時・
   // アプリ起動時の全タブに使う固定値/分割元の全体サイズは実際の表示領域と一致しないことが多く、
   // 「起動直後にresizeで送り直す」設計だとSIGWINCH到達が子プロセスのシグナルハンドラ登録に
-  // 間に合わず、取りこぼしたまま二度と追従しない（TASK-0045で確認済み。popup.tsの
-  // spawnSession保留パターンと同じ理由）。正しいサイズが判明するまでPTY自体を起動しないことで
-  // この競合を避ける
+  // 間に合わず、取りこぼしたまま二度と追従しない（popup.tsのspawnSession保留パターンと
+  // 同じ理由）。正しいサイズが判明するまでPTY自体を起動しないことでこの競合を避ける
   const pendingSpawnByTabId = new Map<
     TabId,
     { shellOverride?: string; cwd?: string; command?: string; initialInput?: string }
@@ -290,7 +289,7 @@ export function createBoard(opts: BoardOptions) {
     if (!result) return null;
     tree = result.tree;
     // 新タイルは分割元の分割前サイズより物理的に小さくなるため、分割元の現在サイズを
-    // そのまま渡さずwebview側の実測cols/rowsが届くまでPTY起動を保留する（TASK-0047）
+    // そのまま渡さずwebview側の実測cols/rowsが届くまでPTY起動を保留する
     spawnSessionPending(newTabId, undefined, cwd ?? actualCwdOf(target.activeTabId));
     focusedTileId = newTileId;
     // ズーム中のtileを分割した場合、新しいtileが隠れたままになってしまうため自動でズーム解除する
@@ -309,7 +308,7 @@ export function createBoard(opts: BoardOptions) {
     tree = result;
     // 同じタイルの既存タブと同じサイズで起動する。そのサイズがまだ実測できていない
     // （＝タイル自体がPTY起動保留中。アプリ起動直後や分割直後）場合は、initialColsの
-    // 固定値で起動せずこちらも保留する。固定値で起動するとSIGWINCHを取りこぼす（TASK-0047）
+    // 固定値で起動せずこちらも保留する。固定値で起動するとSIGWINCHを取りこぼす
     const size = sizeByTabId.get(target.activeTabId);
     const tabCwd = cwd ?? actualCwdOf(target.activeTabId);
     if (size) {
@@ -468,10 +467,10 @@ export function createBoard(opts: BoardOptions) {
     command?: string,
   ): boolean {
     if (browserTabs.has(tabId)) return false;
-    // PTY起動待ち（TASK-0047のspawnSessionPending）のタブへのrespawnは、保留中のパラメータを
+    // PTY起動待ち（spawnSessionPending）のタブへのrespawnは、保留中のパラメータを
     // 上書きするだけにとどめる。実際の起動はhandleResizeでの実測cols/rows到達を待つ
-    // （niwa.tile.split直後にniwa.tab.respawnでcommandを渡すconfig.tsパターンが、
-    // まだsessionsに登録されていないタブに対してno-opになっていたバグの修正）
+    // （niwa.tile.split直後にniwa.tab.respawnでcommandを渡すconfig.tsパターンでは、
+    // 対象タブがまだsessionsに登録されていない）
     const pending = pendingSpawnByTabId.get(tabId);
     if (pending) {
       pendingSpawnByTabId.set(tabId, {
@@ -499,7 +498,7 @@ export function createBoard(opts: BoardOptions) {
 
   /**
    * タブ作成直後に流し込む入力（layoutsプリセットのcommand等）を送る。PTY起動待ち
-   * （TASK-0047のspawnSessionPending）のタブでは保留キューへ積み、実測cols/rows到達時に
+   * （spawnSessionPending）のタブでは保留キューへ積み、実測cols/rows到達時に
    * 起動と続けて流す。handleInputはsessions未登録のタブでは黙って捨てるため、
    * splitTile直後のタブ（新タイルのプレースホルダーは常に起動保留中）へは届かない
    * （respawnTabで先に塞いだのと同じ穴）。tabIdが存在しない場合はfalseを返す

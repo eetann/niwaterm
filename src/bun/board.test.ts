@@ -16,7 +16,7 @@ function idGen(prefix: string): () => string {
 }
 
 /**
- * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計。
  * テストではcreateBoard/splitTile/newTab直後にこれを呼び、pending中の全タブへ
  * ダミーのcols/rowsを送ってPTY起動（createSession呼び出し）を確定させる
  */
@@ -493,7 +493,7 @@ describe("newTab", () => {
     const before = ws.snapshot().layout as TileLeaf;
     const newTabId = ws.newTab(before.id) as string;
 
-    // initialCols/initialRowsの固定値で先走って起動しない（TASK-0047）
+    // initialCols/initialRowsの固定値で先走って起動しない
     expect(created.length).toBe(0);
 
     ws.handleResize(newTabId, 120, 40, 8, 18);

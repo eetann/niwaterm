@@ -12,7 +12,7 @@ import {
 } from "./workspace-manager";
 
 /**
- * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計（TASK-0047）。
+ * PTY起動はwebview側の実測cols/rowsが届く（handleResize）まで保留される設計。
  * テストではcreateWorkspaceManager直後にこれを呼び、pending中の全タブへダミーのcols/rowsを
  * 送ってPTY起動を確定させる
  */
@@ -336,8 +336,8 @@ describe("niwa.tab", () => {
 
 describe("niwa.popup", () => {
   /**
-   * PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで起動する
-   * （TASK-0045）。実際のwebviewの代わりにテスト側から送り、起動したセッションのoptsを返す
+   * PTYはopenPopup直後ではなく、webview側の実測サイズが届く最初のhandleResizeで起動する。
+   * 実際のwebviewの代わりにテスト側から送り、起動したセッションのoptsを返す
    */
   function spawnPopupSession(
     workspaceManager: WorkspaceManager,

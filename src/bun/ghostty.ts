@@ -253,7 +253,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   const term = read.ptr(ptr(handle)) as Pointer;
 
   // スクロールバック上限は生成時オプションではなく生成後のsetで指定する
-  // （ghostty_terminal_newは構造体値渡しをやめてcols/rowsのみ受け取る形になった）
+  // （ghostty_terminal_newはcols/rowsしか受け取らない）
   const scrollbackLimit = new BigUint64Array([BigInt(maxScrollback)]);
   vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(scrollbackLimit));
 

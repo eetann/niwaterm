@@ -41,7 +41,7 @@ export function ConfirmDialog({
           // confirmDialogOpenガードはReactのstate反映と同期しているとは限らず
           // （onCancel内でconfirmDialogOpenをfalseにした直後に同じイベントが
           // documentへ到達しガードをすり抜ける）、押したキーがPTYへの入力として
-          // 漏れる（実機検証で発覚）。ここで止めて二重処理を防ぐ。
+          // 漏れる。ここで止めて二重処理を防ぐ。
           // ボタンにフォーカスがあってもkeydownはここまでbubbleしてくるので、
           // y/nはボタン追加後もそのまま効く
           e.stopPropagation();

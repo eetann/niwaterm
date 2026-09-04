@@ -8,6 +8,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - 意思決定記録: docs/adr/
 - ビルド・実行手順（macOS/Windowsのプラットフォーム差分）: docs/build/
 - 既知の問題・ハマりどころの記録: docs/known-issues/（何かに詰まったら先にここをgrepする）
+- コード内コメントの書き方: .claude/rules/code-comments.md（タスク番号・経緯を書かない。コメントを書く前に必読）
 
 ## セットアップ・コマンド
 

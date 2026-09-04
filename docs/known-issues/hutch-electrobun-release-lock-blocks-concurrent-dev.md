@@ -48,9 +48,9 @@ if (local_status == .valid) return root; // 既に導入済みなら何もせず
 
 | 既に実施済みの分離                                    | 効かない理由                                          |
 | ----------------------------------------------------- | ----------------------------------------------------- |
-| project_rootの分離（git worktree、[[TASK-0056]]）    | ロックパスにproject_rootが含まれない                  |
+| project_rootの分離（git worktree）                    | ロックパスにproject_rootが含まれない                  |
 | `buildFolder`のアプリ名別分離                         | 同上                                                  |
-| `identifier`のアプリ名別分離（[[TASK-0057]]）        | 同上                                                  |
+| `identifier`のアプリ名別分離                          | 同上                                                  |
 | `appSupportDir`・IPCソケットの分離                    | ランタイム側のリソース分離であり、ビルド側とは別レイヤー |
 
 ## 一次証拠（macOS実機、2026-08-30）
@@ -98,8 +98,8 @@ cp -R ~/.hutch ~/.hutch-daily  # 普段遣いビルド用
 
 ## 補足: 以前の「`graph.lock`が原因」という記録は誤り
 
-[[TASK-0058]]では`~/.hutch/state/locks/graph.lock`をユーザー単位のグローバルロックとして
-原因に挙げていたが、これは誤りだった。`graph.lock`は`store_locks.acquireGraph`が
+調査の初期には`~/.hutch/state/locks/graph.lock`をユーザー単位のグローバルロックとして
+原因に挙げていたが、これは誤り。`graph.lock`は`store_locks.acquireGraph`が
 **共有モード**でのみ取得しており（排他で取るのは`hutch reset`等の手動メンテナンスのみ）、
 複数プロセスが同時に保持できる。当時の観察でこれを「LOCK HELD」と判定していたのは、
 PowerShellの`[System.IO.File]::Open(..., 'None')`が**排他オープン**であり、
@@ -109,4 +109,4 @@ PowerShellの`[System.IO.File]::Open(..., 'None')`が**排他オープン**で�
 
 Hutch側で「まず共有ロックで検証し、実際に書き込みが要るときだけ排他へ昇格する」形にすれば
 根本解決するが、現状はniwaterm側から手が届かない。`blackboardsh/hutch`・`blackboardsh/electrobun`
-いずれのGitHub issueにも該当する報告は見当たらない（[[TASK-0058]]の調査時点）。
+いずれのGitHub issueにも該当する報告は見当たらない（本ドキュメント作成時点）。

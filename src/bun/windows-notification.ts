@@ -1,14 +1,14 @@
 // Windows向けデスクトップ通知。ElectrobunのUtils.showNotification（Shell_NotifyIconW実装）は
 // オーナーウィンドウとしてメッセージ専用ウィンドウ（HWND_MESSAGE）を使っており、Windowsのシェルが
 // これをタスクトレイアイコンのオーナーとして認識できず、NIM_ADDが成功を返すにもかかわらず
-// 実際には一切登録されない（「通知領域アイコン」設定に一件も現れない。Windows実機で確認済み、
-// Electrobun側のネイティブ実装のバグ）。そのためWindowsだけはPowerShell経由でWinRT
+// 実際には一切登録されない（「通知領域アイコン」設定に一件も現れない。Electrobun側の
+// ネイティブ実装のバグ）。そのためWindowsだけはPowerShell経由でWinRT
 // ToastNotificationManagerを直接呼ぶ。AUMID（Application User Model ID）はショートカット登録
 // なしで動くよう、レジストリ（HKCU\SOFTWARE\Classes\AppUserModelId\<AppId>）へ自己登録してから使う。
 // Windows標準搭載のPowerShell 5.1（powershell.exe）だけで完結し、追加インストールは不要。
 //
 // クリック時のアクティベーション（ToastActivated相当）には常駐プロセスかCOM Activator登録が必要で
-// 実装コストが大きいため、今回は表示のみ対応する（クリックしてもniwatermへのフォーカス移動は行わない）。
+// 実装コストが大きいため表示のみ対応する（クリックしてもniwatermへのフォーカス移動は行わない）。
 
 import type { NiwaNotifyOptions } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
