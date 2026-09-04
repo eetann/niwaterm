@@ -363,6 +363,34 @@ describe("applyLayoutPreset (target: new-board)", () => {
     expect(sessionOpts.some((o) => o.cwd === "/somewhere/else")).toBe(false);
   });
 
+  test('"replace"で使い回す既存タブのcwdもbaseCwdへ揃う', () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    // 適用前のBoardはホームディレクトリで作られている、という状況を作る
+    const boardId = newBoardInActiveWorkspace(mgr, "/home/me");
+    resolvePending(mgr);
+    expect(sessionOpts.some((o) => o.cwd === "/home/me")).toBe(true);
+
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        // 最初に到達するタイル＝プレースホルダーを使い回す側（cwd/shellProfile未指定）
+        first: { kind: "tile", tabs: [{ name: "other" }] },
+        second: { kind: "tile", tabs: [{ name: "server" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "replace", boardId, {
+      projectRoot: "/proj",
+    });
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    // 使い回したタブがホームのまま取り残されない（TASK-0069で入れたalignPlaceholderCwd）
+    expect(sessionOpts.filter((o) => o.cwd === "/home/me").length).toBe(1);
+    expect(sessionOpts.filter((o) => o.cwd === "/proj").length).toBeGreaterThanOrEqual(2);
+  });
+
   test("tabConfig.cwdの相対パスはprojectRoot基準で解決される", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
     const boardId = newBoardInActiveWorkspace(mgr, "/proj");

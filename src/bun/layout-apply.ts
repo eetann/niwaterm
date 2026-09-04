@@ -145,6 +145,26 @@ function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
   return tabConfig.shellProfile === undefined && tabConfig.cwd === undefined;
 }
 
+/**
+ * 使い回すプレースホルダーのcwdをbaseCwdへ揃える。
+ *
+ * "replace"時のプレースホルダーは適用前のBoardに元からあったタブそのもので、PTYは以前のcwdの
+ * まま動いている（ホームディレクトリのままになる等）。他のタブだけがbaseCwdで作られるため、
+ * 最初のタイルの最初のタブだけcwdが揃わない、という食い違いが起きる。
+ *
+ * newTab+closeTabで作り直すのはWindowsでネイティブ層のクラッシュを誘発するため採れない
+ * （canReusePlaceholderのコメント参照）。タブは維持したままPTYだけrespawnして揃える。
+ * PTY起動保留中のタブ（"new-board"時・分割で作られたタイル）なら、respawnTab側の分岐で
+ * 保留パラメータの上書きだけで済む。
+ *
+ * respawnTabは保留中タブのinitialInputを引き継がないため、必ずconfigureTab（commandの
+ * sendInitialInput）より前に呼ぶこと。
+ */
+function alignPlaceholderCwd(ctx: BuildContext, tabId: TabId): void {
+  if (ctx.baseCwd === undefined) return;
+  ctx.workspaceManager.respawnTab(tabId, undefined, ctx.baseCwd);
+}
+
 function configureTab(
   ctx: BuildContext,
   tileId: TileId,
@@ -181,6 +201,7 @@ function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): v
 
   for (const [i, tabConfig] of node.tabs.entries()) {
     if (i === 0 && canReusePlaceholder(tabConfig)) {
+      alignPlaceholderCwd(ctx, placeholderTabId);
       configureTab(ctx, tileId, placeholderTabId, tabConfig);
       tabIds.push(placeholderTabId);
       placeholderReused = true;
@@ -257,9 +278,8 @@ function getRootTileId(workspaceManager: WorkspaceManager, boardId: BoardId): Ti
  * （既存タブ・PTYは無条件でcloseする。確認プロンプト等の要否はroadmap「プロセスはどうなるのか」で別途検討）。
  * 検証エラー時はBoardに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
  * ok:falseで返すが、その時点までに行った操作はロールバックされない。
- * cwdの基準はoptionsで決まる（ApplyLayoutOptions参照）
- * （"replace"時、それ以上分割されないまま最初に到達するタイルだけは既存タブを使い回すため、
- * このデフォルトが効かず元のcwdのまま残る点に注意）
+ * cwdの基準はoptionsで決まる（ApplyLayoutOptions参照）。"replace"時に使い回す既存タブも
+ * alignPlaceholderCwdでbaseCwdへ揃えるため、タイル間でcwdが食い違うことはない
  */
 export function applyLayoutPreset(
   workspaceManager: WorkspaceManager,

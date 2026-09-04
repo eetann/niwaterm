@@ -102,6 +102,10 @@ const EXEC_JS_TIMEOUT_MS = 8000;
 const NAVIGATE_LOAD_TIMEOUT_MS = 15000;
 const resizeObserverByTabId = new Map<TabId, ResizeObserver>();
 const activeTabByTile = new Map<TileId, TabId>();
+/** タイル内の全タブ。背面タブへ実測サイズを配る（sendResize参照）ために保持する */
+const tabIdsByTileId = new Map<TileId, TabId[]>();
+/** 一度でもresizeを送ったタブ。bun側のPTY起動保留（TASK-0047）が解除済みかの判定に使う */
+const resizeSentTabIds = new Set<TabId>();
 const splitElBySplitId = new Map<TileId, HTMLDivElement>();
 const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
 
@@ -839,6 +843,7 @@ function reconcile(
     tileEl.dataset["tileId"] = node.id;
     tileEl.style.display = visible ? "" : "none";
 
+    tabIdsByTileId.set(node.id, [...node.tabIds]);
     node.tabIds.forEach((tabId) => {
       seenTabIds.add(tabId);
       const renderState = tabs[tabId];
@@ -1300,6 +1305,7 @@ function gcStale(
     if (seenTabIds.has(tabId)) continue;
     resizeObserverByTabId.get(tabId)?.disconnect();
     resizeObserverByTabId.delete(tabId);
+    resizeSentTabIds.delete(tabId);
     tabContentElByTabId.get(tabId)?.remove();
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
@@ -1339,6 +1345,9 @@ function gcStale(
   }
   for (const tileId of activeTabByTile.keys()) {
     if (!seenTileIds.has(tileId)) activeTabByTile.delete(tileId);
+  }
+  for (const tileId of tabIdsByTileId.keys()) {
+    if (!seenTileIds.has(tileId)) tabIdsByTileId.delete(tileId);
   }
 }
 
@@ -1657,6 +1666,39 @@ function sendResize(tabId: TabId): void {
   const cols = Math.max(2, Math.floor(termEl.clientWidth / cellWidth));
   const rows = Math.max(2, Math.floor(termEl.clientHeight / cellHeight));
   sendMessage("resize", { tabId, cols, rows, cellWidth, cellHeight });
+  resizeSentTabIds.add(tabId);
+  sendInitialResizeToHiddenSiblings(tabId, cols, rows);
+}
+
+/**
+ * 同じタイルの背面タブのうち、まだ一度もresizeを送っていないものへ実測サイズを配る。
+ *
+ * 背面タブはdisplay:noneでclientWidth/Heightが0になり、ResizeObserverのコールバックも
+ * スキップされる（ensureTerminalTabContent参照）。bun側はhandleResizeでの実測cols/rows到達を
+ * PTY起動の合図にしている（TASK-0047のspawnSessionPending）ため、そのままだとユーザーが
+ * そのタブを開くまでPTYが起動せず、レイアウトプリセットのcommandも流れない
+ * （背面タブでサーバーを起動するプリセットが動かない）。
+ *
+ * 同じタイルのタブはジオメトリが同一なので、表示中のタブで測れた値をそのまま使える。
+ * 2回目以降は各タブ自身のResizeObserver（再表示時）に任せ、ここでは何もしない
+ */
+function sendInitialResizeToHiddenSiblings(sourceTabId: TabId, cols: number, rows: number): void {
+  const tileId = tileIdOfTab(sourceTabId);
+  if (tileId === null) return;
+  for (const tabId of tabIdsByTileId.get(tileId) ?? []) {
+    if (tabId === sourceTabId || resizeSentTabIds.has(tabId)) continue;
+    // ブラウザタブはtermElを持たない（リサイズはElectrobun側が追従する）
+    if (!termElByTabId.has(tabId)) continue;
+    resizeSentTabIds.add(tabId);
+    sendMessage("resize", { tabId, cols, rows, cellWidth, cellHeight });
+  }
+}
+
+function tileIdOfTab(tabId: TabId): TileId | null {
+  for (const [tileId, tabIds] of tabIdsByTileId) {
+    if (tabIds.includes(tabId)) return tileId;
+  }
+  return null;
 }
 
 /** ページ単位スクロール（Cmd+Up/Down等）の1ページ分の行数。表示中の行数をそのまま使う */
