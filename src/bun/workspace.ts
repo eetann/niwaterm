@@ -5,7 +5,7 @@
 // popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
-import type { RestoredTreeMeta } from "./persistence";
+import type { PersistedBoardStartup, RestoredTreeMeta } from "./persistence";
 import { toPersistedTileNode, type PersistedTileNode } from "./persistence";
 import {
   createBoard,
@@ -60,6 +60,8 @@ export interface BoardListEntry {
   name: string | null;
   /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。ズームしていなければnull */
   zoomedTileId: TileId | null;
+  /** 紐づくレイアウトプリセットと起動時の組み直し方（TASK-0077）。未設定はnull */
+  startup: PersistedBoardStartup | null;
 }
 
 export interface BoardLocation {
@@ -68,9 +70,15 @@ export interface BoardLocation {
 }
 
 export interface InitialBoard {
-  tree: NonNullable<BoardOptions["initialTree"]>;
+  /**
+   * 復元するTileツリー。省略すると単一タイル・単一タブの新規Boardとして作る
+   * （startup.restoreMode: "layout"のBoardが該当。骨格を復元せずプリセットで組み直すため、
+   * 前回セッションのタブ名・vars・cwdを持ち込まない）
+   */
+  tree?: NonNullable<BoardOptions["initialTree"]>;
   name?: string;
   restoredMeta?: RestoredTreeMeta;
+  startup?: PersistedBoardStartup;
 }
 
 export interface WorkspaceOptions {
@@ -99,6 +107,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   let activeBoardId: BoardId;
   // Board名。getPersistableBoards経由で永続化対象になる
   const boardNames = new Map<BoardId, string>();
+  // Boardに紐づくレイアウトプリセットと起動時の組み直し方（TASK-0077）。boardNamesと同じく
+  // getPersistableBoards経由で永続化対象になる
+  const boardStartups = new Map<BoardId, PersistedBoardStartup>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
@@ -138,6 +149,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boards.get(id)?.dispose();
     boards.delete(id);
     boardNames.delete(id);
+    boardStartups.delete(id);
     order = order.filter((bid) => bid !== id);
     if (order.length === 0) {
       opts.onAllTabsClosed();
@@ -152,8 +164,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
   if (opts.initialBoards && opts.initialBoards.length > 0) {
     for (const initialBoard of opts.initialBoards) {
       const id = createAndRegisterBoard(initialBoard.tree, undefined, initialBoard.restoredMeta);
-      // setBoardNameは経由しない（onDirtyを呼ぶため。初期構築フェーズはdirty通知しない既存方針）
+      // setBoardName/setBoardStartupは経由しない（onDirtyを呼ぶため。初期構築フェーズは
+      // dirty通知しない既存方針）
       if (initialBoard.name !== undefined) boardNames.set(id, initialBoard.name);
+      if (initialBoard.startup !== undefined) boardStartups.set(id, initialBoard.startup);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
     activeBoardId = order[clampedIndex];
@@ -228,6 +242,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boards.get(boardId)?.dispose();
     boards.delete(boardId);
     boardNames.delete(boardId);
+    boardStartups.delete(boardId);
     order = order.filter((id) => id !== boardId);
     if (activeBoardId === boardId) {
       activeBoardId = order[order.length - 1];
@@ -246,6 +261,22 @@ export function createWorkspace(opts: WorkspaceOptions) {
     }
     opts.onDirty();
     return true;
+  }
+
+  /** nullを渡すとプリセットの紐づけ自体を解除する（起動時は保存済みlayoutの復元に戻る） */
+  function setBoardStartup(boardId: BoardId, startup: PersistedBoardStartup | null): boolean {
+    if (!boards.has(boardId)) return false;
+    if (startup === null) {
+      boardStartups.delete(boardId);
+    } else {
+      boardStartups.set(boardId, startup);
+    }
+    opts.onDirty();
+    return true;
+  }
+
+  function getBoardStartup(boardId: BoardId): PersistedBoardStartup | null {
+    return boardStartups.get(boardId) ?? null;
   }
 
   function splitTile(
@@ -479,6 +510,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tileNames: board.listTileNames(),
         name: boardNames.get(id) ?? null,
         zoomedTileId: board.getZoomedTileId(),
+        startup: boardStartups.get(id) ?? null,
       };
     });
   }
@@ -569,6 +601,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardId: BoardId;
     layout: PersistedTileNode;
     name?: string;
+    startup?: PersistedBoardStartup;
   }[] {
     return order.map((id) => {
       const board = boards.get(id) as Board;
@@ -578,7 +611,16 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tileNames: board.listTileNames(),
       });
       const name = boardNames.get(id);
-      return name !== undefined ? { boardId: id, layout, name } : { boardId: id, layout };
+      const startup = boardStartups.get(id);
+      const entry: {
+        boardId: BoardId;
+        layout: PersistedTileNode;
+        name?: string;
+        startup?: PersistedBoardStartup;
+      } = { boardId: id, layout };
+      if (name !== undefined) entry.name = name;
+      if (startup !== undefined) entry.startup = startup;
+      return entry;
     });
   }
 
@@ -602,6 +644,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     switchBoard,
     closeBoard,
     setBoardName,
+    setBoardStartup,
+    getBoardStartup,
     splitTile,
     newTab,
     newBrowserTab,

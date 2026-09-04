@@ -2617,6 +2617,157 @@ describe("GET /layouts, POST /apply-layout", () => {
 
     expect(res.status).toBe(400);
   });
+
+  test("POST /apply-layout: 適用したプリセット名をBoardに記録する（既定はrestoreMode: restore）", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev" }),
+    });
+
+    const body = (await res.json()) as { boardId: string };
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({ preset: "dev", restoreMode: "restore" });
+    expect(mgr.listStartupLayoutBoards()).toEqual([]);
+  });
+
+  test("POST /apply-layout: startup:trueなら起動時レイアウトの対象になる", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", startup: true }),
+    });
+
+    const body = (await res.json()) as { boardId: string };
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
+    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId: body.boardId, preset: "dev" }]);
+  });
+
+  test("POST /apply-layout: startupがboolean以外のボディは400を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", startup: "yes" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("POST /board-startup: presetを指定してmode:layoutに切り替えられる", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout", preset: "dev" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      boardId,
+      startup: { preset: "dev", restoreMode: "layout" },
+    });
+    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId, preset: "dev" }]);
+  });
+
+  test("POST /board-startup: preset省略時は既に紐づいているプリセットを引き継ぐ", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "restore" });
+
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout", boardId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mgr.getBoardStartup(boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
+  });
+
+  test("POST /board-startup: mode:clearで紐づけを解除する", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "layout" });
+
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "clear", boardId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, boardId, startup: null });
+    expect(mgr.getBoardStartup(boardId)).toBeNull();
+  });
+
+  test("POST /board-startup: プリセット未紐づけでpreset省略は400を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("POST /board-startup: 設定に存在しないpresetは404を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout", preset: "not-found" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("POST /board-startup: 存在しないboardIdは404、不正なmodeは400を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const notFound = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "clear", boardId: "board-nope" }),
+    });
+    expect(notFound.status).toBe(404);
+
+    const badMode = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "preset" }),
+    });
+    expect(badMode.status).toBe(400);
+  });
 });
 
 describe("POST /close-popup, POST /toggle-popup, POST /promote-popup", () => {

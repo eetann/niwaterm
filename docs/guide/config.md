@@ -523,9 +523,12 @@ layout: {
 niwaterm layout list
 niwaterm layout apply dev
 niwaterm layout apply dev --replace
+niwaterm layout apply dev --startup
 ```
 
 `niwaterm layout apply <name>`は既定で新規Boardとして適用する（適用先はBoard単位、ADR 0006）。`--replace`を指定すると既存Boardを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**ため、実行前にy/n確認プロンプトが表示される。確認なしで実行したい場合は`--replace-force`を使う）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはBoardに一切手を触れずエラーになる。詳細・エラー時の挙動は`docs/guide/cli.md`参照。
+
+`--startup`を付けると、そのBoardは次回以降の**起動時にもこのプリセットで組み直される**。niwatermは通常、終了時のレイアウト骨格（タイル構成・タブ名・シェル・cwd・タブ変数）を保存して復元するが、`command`は再実行しない。起動時レイアウトにしたBoardは骨格の復元ではなくプリセットの再適用になるため、`command`ごと毎回同じ状態で立ち上がる。Boardごとに別のプリセットを紐づけられるので、「開発用Boardは`dev`、メモ用Boardは`notes`」のような使い分けができる。後から切り替える・解除するには`niwaterm board startup layout|restore|clear`を使う（`docs/guide/cli.md`「起動時レイアウト」節）。
 
 ## ホットリロード
 

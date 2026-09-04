@@ -308,6 +308,8 @@ export interface BoardListEntry {
   focusedTileId: TileId;
   layout: TileSummary;
   name: string | null;
+  /** 紐づくレイアウトプリセットと起動時の組み直し方（board startup / layout apply --startup）。未設定はnull */
+  startup: { preset: string; restoreMode: "layout" | "restore" } | null;
 }
 
 export interface WorkspaceListEntry {
@@ -563,13 +565,19 @@ export type ApplyLayoutTarget = "new-board" | "replace";
 
 export type ApplyLayoutResult = { ok: true; boardId: string } | { ok: false; error: string };
 
+export interface ApplyLayoutOptions {
+  target: ApplyLayoutTarget;
+  cwd?: string;
+  workspaceId?: string;
+  boardId?: string;
+  /** trueなら次回起動時もこのプリセットでBoardを組み直す（TASK-0077） */
+  startup?: boolean;
+}
+
 export function applyLayout(
   endpoint: IpcEndpoint,
   name: string,
-  target: ApplyLayoutTarget,
-  cwd?: string,
-  workspaceId?: string,
-  boardId?: string,
+  opts: ApplyLayoutOptions,
 ): Promise<ApplyLayoutResult> {
   const body: {
     name: string;
@@ -577,11 +585,36 @@ export function applyLayout(
     cwd?: string;
     workspaceId?: string;
     boardId?: string;
-  } = { name, target };
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
-  if (workspaceId !== undefined) body.workspaceId = workspaceId;
-  if (boardId !== undefined) body.boardId = boardId;
+    startup?: boolean;
+  } = { name, target: opts.target };
+  if (opts.cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, opts.cwd);
+  if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
+  if (opts.boardId !== undefined) body.boardId = opts.boardId;
+  if (opts.startup !== undefined) body.startup = opts.startup;
   return postJson(endpoint, "/apply-layout", body);
+}
+
+/** 起動時にBoardをどう組み直すか（TASK-0077） */
+export type BoardStartupMode = "layout" | "restore" | "clear";
+
+export type BoardStartupResult =
+  | {
+      ok: true;
+      boardId: string;
+      startup: { preset: string; restoreMode: "layout" | "restore" } | null;
+    }
+  | { ok: false; error: string };
+
+export function setBoardStartup(
+  endpoint: IpcEndpoint,
+  mode: BoardStartupMode,
+  boardId?: string,
+  preset?: string,
+): Promise<BoardStartupResult> {
+  const body: { mode: BoardStartupMode; boardId?: string; preset?: string } = { mode };
+  if (boardId !== undefined) body.boardId = boardId;
+  if (preset !== undefined) body.preset = preset;
+  return postJson(endpoint, "/board-startup", body);
 }
 
 export type OpenPopupResult =

@@ -380,6 +380,8 @@ interface ApplyLayoutRequestBody {
   workspaceId?: string;
   /** target: "replace"時、対象boardId（省略時はアクティブworkspaceのアクティブboard） */
   boardId?: string;
+  /** trueなら次回起動時もこのプリセットで組み直す（TASK-0077）。省略時はrestoreMode: "restore" */
+  startup?: boolean;
 }
 
 function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
@@ -389,6 +391,7 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
     cwd?: unknown;
     workspaceId?: unknown;
     boardId?: unknown;
+    startup?: unknown;
   };
   if (typeof b.name !== "string" || b.name.length === 0) return null;
   if (b.target !== undefined && b.target !== "new-board" && b.target !== "replace") {
@@ -406,6 +409,37 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
   if (b.boardId !== undefined) {
     if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
     result.boardId = b.boardId;
+  }
+  if (b.startup !== undefined) {
+    if (typeof b.startup !== "boolean") return null;
+    result.startup = b.startup;
+  }
+  return result;
+}
+
+interface BoardStartupRequestBody {
+  /** 省略時はアクティブworkspaceのアクティブBoard */
+  boardId?: string;
+  /**
+   * "layout": 起動時にpresetのレイアウトで組み直す。"restore": 保存した骨格を復元する（既定の挙動）。
+   * "clear": プリセットの紐づけ自体を解除する
+   */
+  mode: "layout" | "restore" | "clear";
+  /** modeが"clear"以外のときのプリセット名。省略時は現在紐づいているプリセットを引き継ぐ */
+  preset?: string;
+}
+
+function parseBoardStartupBody(body: unknown): BoardStartupRequestBody | null {
+  const b = body as { boardId?: unknown; mode?: unknown; preset?: unknown };
+  if (b.mode !== "layout" && b.mode !== "restore" && b.mode !== "clear") return null;
+  const result: BoardStartupRequestBody = { mode: b.mode };
+  if (b.boardId !== undefined) {
+    if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+    result.boardId = b.boardId;
+  }
+  if (b.preset !== undefined) {
+    if (typeof b.preset !== "string" || b.preset.length === 0) return null;
+    result.preset = b.preset;
   }
   return result;
 }
@@ -677,7 +711,53 @@ function buildApp(
       parsed.cwd,
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
+    // どのプリセットから生えたBoardかを記録しておく（TASK-0077）。--startup指定時のみ
+    // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する
+    workspaceManager.setBoardStartup(result.boardId, {
+      preset: parsed.name,
+      restoreMode: parsed.startup ? "layout" : "restore",
+    });
     return c.json({ ok: true, boardId: result.boardId });
+  });
+
+  app.post("/board-startup", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardStartupBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error: 'expected { mode: "layout"|"restore"|"clear", boardId?: string, preset?: string }',
+        },
+        400,
+      );
+    }
+    const boardId =
+      parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    if (!boardId || !workspaceManager.hasBoard(boardId)) {
+      return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
+    }
+    if (parsed.mode === "clear") {
+      workspaceManager.setBoardStartup(boardId, null);
+      return c.json({ ok: true, boardId, startup: null });
+    }
+    const preset = parsed.preset ?? workspaceManager.getBoardStartup(boardId)?.preset;
+    if (!preset) {
+      return c.json(
+        {
+          ok: false,
+          error: `board ${boardId} has no layout preset; pass preset to associate one`,
+        },
+        400,
+      );
+    }
+    if (!getLayouts()[preset]) {
+      return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
+    }
+    const startup = { preset, restoreMode: parsed.mode } as const;
+    workspaceManager.setBoardStartup(boardId, startup);
+    return c.json({ ok: true, boardId, startup });
   });
 
   app.get("/capture-tab", (c) => {

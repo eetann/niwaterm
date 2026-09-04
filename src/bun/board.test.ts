@@ -485,6 +485,22 @@ describe("newTab", () => {
     expect(created[1]?.opts.cwd).toBe("/tmp/project");
     expect(created[0]?.opts.cwd).toBeUndefined();
   });
+
+  test("タイルのサイズが未確定（PTY起動保留中）なら新規タブの起動も保留し、resize到達後に実測サイズで起動する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    // resolvePendingを呼んでいないので初期タブはまだPTY起動保留中
+    const before = ws.snapshot().layout as TileLeaf;
+    const newTabId = ws.newTab(before.id) as string;
+
+    // initialCols/initialRowsの固定値で先走って起動しない（TASK-0047）
+    expect(created.length).toBe(0);
+
+    ws.handleResize(newTabId, 120, 40, 8, 18);
+    expect(created.length).toBe(1);
+    expect(created[0]?.opts.cols).toBe(120);
+    expect(created[0]?.opts.rows).toBe(40);
+  });
 });
 
 describe("resizeTileInDirection", () => {

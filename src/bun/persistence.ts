@@ -52,11 +52,31 @@ export interface PersistedTileSplit {
 
 export type PersistedTileNode = PersistedTileLeaf | PersistedTileSplit;
 
+/**
+ * 起動時にBoardをどう組み直すか（TASK-0077）。
+ * "restore": 保存したlayout（骨格）をそのまま復元する（従来の挙動、既定）。
+ * "layout": presetのレイアウトプリセットをconfigから引いて再適用する（タブのcommandも再実行される）。
+ */
+export type BoardRestoreMode = "restore" | "layout";
+
+/** Boardに紐づくレイアウトプリセットと、起動時の組み直し方（TASK-0077） */
+export interface PersistedBoardStartup {
+  /** niwaterm.config.tsのlayoutsのキー */
+  preset: string;
+  restoreMode: BoardRestoreMode;
+}
+
 /** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
 export interface PersistedBoard {
   layout: PersistedTileNode;
   /** ユーザーがサイドバーから設定したBoard名。未設定は省略する */
   name?: string;
+  /**
+   * `layout apply`で適用したレイアウトプリセット名と起動時の扱い（TASK-0077）。
+   * プリセット由来でないBoardでは省略する。restoreMode: "layout"であってもプリセットが
+   * configから消えているケースに備え、layout（骨格）は常に保存しておく
+   */
+  startup?: PersistedBoardStartup;
 }
 
 export interface PersistedWorkspace {
@@ -195,10 +215,18 @@ function isPersistedTileNode(value: unknown): value is PersistedTileNode {
   return false;
 }
 
+function isPersistedBoardStartup(value: unknown): value is PersistedBoardStartup {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v["preset"] !== "string" || v["preset"] === "") return false;
+  return v["restoreMode"] === "restore" || v["restoreMode"] === "layout";
+}
+
 function isPersistedBoard(value: unknown): value is PersistedBoard {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  if (v["startup"] !== undefined && !isPersistedBoardStartup(v["startup"])) return false;
   return isPersistedTileNode(v["layout"]);
 }
 

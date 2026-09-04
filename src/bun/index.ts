@@ -16,6 +16,7 @@ import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./
 import { watchConfigFile } from "./config-watcher";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
+import { applyLayoutPreset } from "./layout-apply";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
@@ -309,6 +310,47 @@ async function refreshConfig(): Promise<void> {
 }
 
 await refreshConfig();
+
+/**
+ * 起動時レイアウト（TASK-0077）。restoreMode: "layout"のBoardは、保存した骨格ではなく
+ * configのlayoutsプリセットで組み直す（タブのcommandも再実行される）。該当Boardは
+ * workspace-manager側で骨格を復元せず単一タブの状態で作られているので、ここで組み立てる。
+ *
+ * 実行タイミングはconfig読み込み直後・BrowserView生成前に固定する。この時点では全タブが
+ * まだPTY起動保留中（TASK-0047のspawnSessionPending）で、プリセットのcommandも
+ * sendInitialInputで保留キューへ積まれるため、実測cols/rowsが確定してから正しいサイズで
+ * 一度だけシェルが起動する。プリセットがconfigから消えている場合は単一タブのまま残し、
+ * ユーザーが気づけるよう通知する
+ */
+function applyStartupLayouts(): void {
+  for (const { boardId, preset } of workspaceManager.listStartupLayoutBoards()) {
+    const layoutPreset = layouts[preset];
+    if (!layoutPreset) {
+      const message = `Board ${boardId}に紐づくレイアウトプリセット "${preset}" が設定に見つかりません`;
+      console.log(`[bun] ${message}`);
+      sendNotification({ title: "起動時レイアウトを適用できません", body: message });
+      continue;
+    }
+    const result = applyLayoutPreset(
+      workspaceManager,
+      shellProfiles,
+      layoutPreset,
+      "replace",
+      boardId,
+    );
+    if (!result.ok) {
+      console.log(
+        `[bun] failed to apply startup layout "${preset}" to ${boardId}: ${result.error}`,
+      );
+      sendNotification({
+        title: "起動時レイアウトの適用に失敗しました",
+        body: `${preset}: ${result.error}`,
+      });
+    }
+  }
+}
+
+applyStartupLayouts();
 
 // 設定ファイル変更の検知→再読み込み→RPC送信をまとめて行う。実行中に次の変更が来たら
 // 1回だけ追いかけて再実行する（多重実行の抑制）。scheduleRenderは無条件で呼ぶ:

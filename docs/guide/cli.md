@@ -41,6 +41,8 @@ niwaterm list
 
 ワークスペース→Board→タイル→タブの階層構造を表示する。Boardが1つのみのワークスペースはBoard行を省略する（ADR 0006、サイドバー表示と同じ方針）。アクティブなワークスペース/Board/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(active)`/`(focused)`/`(active)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
 
+レイアウトプリセットが紐づいているBoardには`[startup: <name>]`（起動時にそのプリセットで組み直す）または`[preset: <name>]`（プリセット名は覚えているが起動時は骨格を復元する）が付く（「起動時レイアウト」節）。この表示を確認できるよう、紐づけのあるBoardはワークスペース内に1つしか無くてもBoard行を省略しない。
+
 ```sh
 niwaterm notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent]
 ```
@@ -140,6 +142,7 @@ niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
 niwaterm board switch --board <boardId>
 niwaterm board close --board <boardId>
 niwaterm board rename --board <boardId> <name>
+niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>]
 ```
 
 Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。対象の`boardId`は`niwaterm list`（複数Board時のみBoard行が表示される）または`board new`実行時に表示される値で確認する。
@@ -148,12 +151,13 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 - `board switch` — 指定したBoardへ切り替える
 - `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない
 - `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る
+- `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm layout list
-niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>]
+niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup]
 ```
 
 `niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
@@ -162,6 +166,30 @@ niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [
 - `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`/`--replace-force`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
 
 指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合はいずれもエラーメッセージと共に終了コード1を返す（検証失敗の主な原因は`shellProfile`の未知のid、`focus:true`の重複、ratioの範囲外指定等）。検証失敗時はBoardに一切変更を加えない。
+
+### 起動時レイアウト
+
+niwatermは終了時のレイアウト（タイル構成・タブの名前・シェル・cwd・タブ変数）を保存し、次回起動時に復元する。ただし復元されるのは骨格だけで、プリセットの`command`は再実行されない。「このBoardは毎回このレイアウトで立ち上げたい」場合は`--startup`を使う。
+
+```sh
+# このプリセットでBoardを作り、次回以降の起動時も同じ構成で立ち上げる
+niwaterm layout apply dev --startup
+
+# 既存Boardを後から起動時レイアウトへ切り替える／戻す
+niwaterm board startup layout --board board-12 --preset dev
+niwaterm board startup restore --board board-12
+niwaterm board startup clear --board board-12
+```
+
+`layout apply`は成功したBoardに適用したプリセット名を必ず記録する。`--startup`を付けた場合だけそのBoardが起動時の組み直し対象（`restoreMode: "layout"`）になり、付けなければ名前を覚えるだけで従来どおり保存した骨格を復元する。
+
+`board startup <mode>`のmodeは次の3つ。`--preset`を省略すると、そのBoardに既に記録されているプリセット名を引き継ぐ（一度も`layout apply`していないBoardでは`--preset`が必須）。
+
+- `layout` — 起動時にプリセットで組み直す。保存した骨格は使わないので、前回セッションのタブ名・タブ変数・cwdは持ち込まれず、プリセットの`command`も改めて実行される
+- `restore` — 保存した骨格を復元する（既定の挙動）。プリセット名の記録自体は残るので、あとから`layout`へ戻せる
+- `clear` — プリセットの紐づけごと解除する
+
+起動時にプリセットが`niwaterm.config.ts`から消えていた場合、そのBoardは単一タブのまま残り、デスクトップ通知でその旨を知らせる（骨格は復元されない）。プリセット名を変える際は`board startup`で追随させること。
 
 ```sh
 niwaterm font-size increase|decrease|reset

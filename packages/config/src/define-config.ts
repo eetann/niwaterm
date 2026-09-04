@@ -52,6 +52,8 @@ export interface NiwatermConfig {
   /**
    * レイアウトプリセット設定。`niwaterm layout apply <name>`で名前指定して適用できる
    * タイル構成（2分割ratioのネスト）とタブごとのcommand/cwd/vars/focus等を定義する。
+   * `layout apply <name> --startup`（または`board startup layout`）で紐づけたBoardは、
+   * アプリ起動時にも保存した骨格の復元ではなくここのプリセットで組み直される。
    * 例: { dev: { layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] } } }
    */
   layouts?: LayoutsConfig;

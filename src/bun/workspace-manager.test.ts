@@ -927,6 +927,126 @@ describe("serializeForPersistence", () => {
   });
 });
 
+describe("Boardの起動時レイアウト設定(setBoardStartup/getBoardStartup/listStartupLayoutBoards)", () => {
+  test("設定した内容がgetBoardStartupで読め、永続化にも載る", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+
+    expect(mgr.getBoardStartup(boardId)).toBeNull();
+    expect(mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "layout" })).toBe(true);
+    expect(mgr.getBoardStartup(boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.startup).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+    });
+  });
+
+  test("nullを渡すと紐づけが解除され、永続化からも消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "layout" });
+
+    expect(mgr.setBoardStartup(boardId, null)).toBe(true);
+    expect(mgr.getBoardStartup(boardId)).toBeNull();
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.startup).toBeUndefined();
+  });
+
+  test("存在しないboardIdにはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setBoardStartup("board-nope", { preset: "dev", restoreMode: "layout" })).toBe(false);
+    expect(mgr.getBoardStartup("board-nope")).toBeNull();
+  });
+
+  test('listStartupLayoutBoardsはrestoreMode: "layout"のBoardだけを全workspace横断で返す', () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstWorkspaceId = mgr.snapshot().activeWorkspaceId;
+    const layoutBoardId = mgr.snapshot().workspace.activeBoardId;
+    const restoreBoardId = mgr.newBoard(firstWorkspaceId) as string;
+    mgr.newWorkspace();
+    const otherLayoutBoardId = mgr.snapshot().workspace.activeBoardId;
+
+    mgr.setBoardStartup(layoutBoardId, { preset: "dev", restoreMode: "layout" });
+    mgr.setBoardStartup(restoreBoardId, { preset: "notes", restoreMode: "restore" });
+    mgr.setBoardStartup(otherLayoutBoardId, { preset: "docs", restoreMode: "layout" });
+
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId: layoutBoardId, preset: "dev" },
+      { boardId: otherLayoutBoardId, preset: "docs" },
+    ]);
+  });
+
+  test('restoreMode: "layout"のBoardは骨格を復元せず単一タブで復元される（applyLayoutPresetで組み直す前提）', () => {
+    const { created, factory } = createFakeSessionFactory();
+    const restoreFrom: PersistedState = {
+      version: 3,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              name: "dev",
+              startup: { preset: "dev", restoreMode: "layout" },
+              layout: {
+                kind: "split",
+                direction: "row",
+                ratio: 0.5,
+                first: {
+                  kind: "leaf",
+                  tabs: [{ kind: "terminal", name: "old", vars: { cwd: "/old" } }],
+                  activeTabIndex: 0,
+                },
+                second: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              },
+            },
+            {
+              startup: { preset: "notes", restoreMode: "restore" },
+              layout: {
+                kind: "split",
+                direction: "row",
+                ratio: 0.5,
+                first: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                second: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory, restoreFrom }));
+    resolvePending(mgr);
+
+    const [layoutBoard, restoreBoard] = mgr.listWorkspaces()[0]?.boards ?? [];
+    // "layout"側は骨格ごと捨てられ、前回セッションのタブ名も持ち込まれない
+    expect(layoutBoard?.layout.kind).toBe("leaf");
+    expect(layoutBoard?.tabNames).toEqual({});
+    expect(layoutBoard?.name).toBe("dev");
+    expect(layoutBoard?.startup).toEqual({ preset: "dev", restoreMode: "layout" });
+    // "restore"側は従来どおり骨格を復元する
+    expect(restoreBoard?.layout.kind).toBe("split");
+    // 起動したセッションは "layout"側1つ + "restore"側2つ
+    expect(created.length).toBe(3);
+  });
+
+  test("startupを含む状態がserializeForPersistence -> restoreFromでラウンドトリップする", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "layout" });
+
+    const persisted = mgr.serializeForPersistence();
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+
+    expect(restored.serializeForPersistence()).toEqual(persisted);
+  });
+});
+
 describe("setBrowserTabUrl", () => {
   test("非アクティブなワークスペースのbrowserタブへも届く", () => {
     const { factory } = createFakeSessionFactory();

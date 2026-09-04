@@ -72,6 +72,11 @@ const applyCommand = define({
       description:
         "タブのtabConfig.cwd未指定時に使う作業ディレクトリ（省略時はこのコマンドを実行したディレクトリ）",
     },
+    startup: {
+      type: "boolean",
+      description:
+        "次回以降の起動時も、このBoardをこのプリセットで組み直す（保存した骨格の復元ではなくcommandごと再実行される）",
+    },
   },
   run: async (ctx) => {
     const isReplace = ctx.values.replace || ctx.values["replace-force"];
@@ -97,14 +102,13 @@ const applyCommand = define({
 
     const target = isReplace ? "replace" : "new-board";
     const cwd = ctx.values.cwd ?? process.cwd();
-    const result = await applyLayout(
-      resolveIpcEndpoint(),
-      ctx.values.name,
+    const result = await applyLayout(resolveIpcEndpoint(), ctx.values.name, {
       target,
       cwd,
-      ctx.values.workspace,
-      ctx.values.board,
-    );
+      workspaceId: ctx.values.workspace,
+      boardId: ctx.values.board,
+      startup: ctx.values.startup,
+    });
     if (!result.ok) {
       failAndExit(`layout applyに失敗しました: ${result.error}`);
     }

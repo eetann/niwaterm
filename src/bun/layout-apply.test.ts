@@ -150,6 +150,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     };
 
     const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
+    resolvePending(mgr);
 
     expect(result).toMatchObject({ ok: true, boardId });
     if (!result.ok) throw new Error("unreachable");
@@ -160,7 +161,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     const tabId = leaf.tabIds[0] as string;
     expect(board?.tabNames[tabId]).toBe("editor");
 
-    // プレースホルダーのセッションはdispose済み、実際のタブのセッションだけが残る想定
+    // プレースホルダーはPTY起動保留中のまま閉じられるため、実際のタブのセッションだけが残る想定
     const realSessionIndex = sessionOpts.findIndex((o) => o.cwd === "/tmp/project");
     expect(realSessionIndex).toBeGreaterThanOrEqual(0);
     expect(writes[realSessionIndex]).toEqual(["nvim\r"]);
@@ -299,6 +300,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     };
 
     const result = applyLayoutPreset(mgr, PROFILES, preset, "new-board", boardId);
+    resolvePending(mgr);
     expect(result.ok).toBe(true);
 
     expect(sessionOpts.some((o) => o.shell === "wsl.exe -d Ubuntu")).toBe(true);

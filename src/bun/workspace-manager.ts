@@ -3,8 +3,8 @@
 import {
   buildTreeFromPersisted,
   type PersistedBoard,
+  type PersistedBoardStartup,
   type PersistedState,
-  type RestoredTreeMeta,
 } from "./persistence";
 import type { BoardId } from "./board";
 import type { CopyModeKey } from "./copy-mode";
@@ -136,15 +136,22 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   if (restoreFrom && restoreFrom.workspaces.length > 0) {
     for (const persistedWorkspace of restoreFrom.workspaces) {
       const initialBoards: InitialBoard[] = persistedWorkspace.boards.map((persistedBoard) => {
+        const initialBoard: InitialBoard = {};
+        if (persistedBoard.name !== undefined) initialBoard.name = persistedBoard.name;
+        if (persistedBoard.startup !== undefined) initialBoard.startup = persistedBoard.startup;
+        // 起動時にプリセットで組み直すBoard（TASK-0077）は骨格を復元しない。単一タブの
+        // まっさらな状態で作り、bun/index.tsが設定読み込み後にapplyLayoutPresetで組み立てる。
+        // 骨格を復元してから畳むと前回セッションのタブ名・vars・cwdがプリセット適用後も
+        // 残ってしまうため（layout-apply.tsのプレースホルダー使い回しを参照）
+        if (persistedBoard.startup?.restoreMode === "layout") return initialBoard;
         const restored = buildTreeFromPersisted(persistedBoard.layout, genTileId, genTabId);
-        const restoredMeta: RestoredTreeMeta = {
+        initialBoard.tree = restored.tree;
+        initialBoard.restoredMeta = {
           tabMeta: restored.tabMeta,
           tileNames: restored.tileNames,
           focusedTileId: restored.focusedTileId,
         };
-        return persistedBoard.name !== undefined
-          ? { tree: restored.tree, name: persistedBoard.name, restoredMeta }
-          : { tree: restored.tree, restoredMeta };
+        return initialBoard;
       });
       const id = createAndRegisterWorkspace(initialBoards, persistedWorkspace.activeBoardIndex);
       // setWorkspaceNameは経由しない（onDirtyを呼ぶため。初期構築フェーズはdirty通知しない既存方針）
@@ -253,6 +260,31 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   function setBoardName(boardId: BoardId, name: string): boolean {
     return findOwnerByBoardId(boardId)?.setBoardName(boardId, name) ?? false;
+  }
+
+  /** nullを渡すとプリセットの紐づけを解除する（起動時は保存済みlayoutの復元に戻る） */
+  function setBoardStartup(boardId: BoardId, startup: PersistedBoardStartup | null): boolean {
+    return findOwnerByBoardId(boardId)?.setBoardStartup(boardId, startup) ?? false;
+  }
+
+  function getBoardStartup(boardId: BoardId): PersistedBoardStartup | null {
+    return findOwnerByBoardId(boardId)?.getBoardStartup(boardId) ?? null;
+  }
+
+  /**
+   * 起動時にレイアウトプリセットで組み直すBoard（restoreMode: "layout"）の一覧。
+   * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う（TASK-0077）
+   */
+  function listStartupLayoutBoards(): { boardId: BoardId; preset: string }[] {
+    const result: { boardId: BoardId; preset: string }[] = [];
+    for (const ws of order) {
+      for (const board of (workspaces.get(ws) as Workspace).listBoards()) {
+        if (board.startup?.restoreMode === "layout") {
+          result.push({ boardId: board.boardId, preset: board.startup.preset });
+        }
+      }
+    }
+    return result;
   }
 
   function splitTile(
@@ -538,7 +570,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       workspaces: order.map((id) => {
         const ws = workspaces.get(id) as Workspace;
         const boards: PersistedBoard[] = ws.getPersistableBoards().map((b) => {
-          return b.name !== undefined ? { layout: b.layout, name: b.name } : { layout: b.layout };
+          const board: PersistedBoard = { layout: b.layout };
+          if (b.name !== undefined) board.name = b.name;
+          if (b.startup !== undefined) board.startup = b.startup;
+          return board;
         });
         const name = workspaceNames.get(id);
         const activeBoardIndex = ws.getActiveBoardIndex();
@@ -564,6 +599,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     switchBoard,
     closeBoard,
     setBoardName,
+    setBoardStartup,
+    getBoardStartup,
+    listStartupLayoutBoards,
     splitTile,
     newTab,
     newBrowserTab,

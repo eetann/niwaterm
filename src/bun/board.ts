@@ -307,17 +307,16 @@ export function createBoard(opts: BoardOptions) {
     const result = addTabToTile(tree, tileId, newTabId);
     if (!result) return null;
     tree = result;
-    const size = sizeByTabId.get(target.activeTabId) ?? {
-      cols: opts.initialCols,
-      rows: opts.initialRows,
-    };
-    spawnSession(
-      newTabId,
-      size.cols,
-      size.rows,
-      shellOverride,
-      cwd ?? actualCwdOf(target.activeTabId),
-    );
+    // 同じタイルの既存タブと同じサイズで起動する。そのサイズがまだ実測できていない
+    // （＝タイル自体がPTY起動保留中。アプリ起動直後や分割直後）場合は、initialColsの
+    // 固定値で起動せずこちらも保留する。固定値で起動するとSIGWINCHを取りこぼす（TASK-0047）
+    const size = sizeByTabId.get(target.activeTabId);
+    const tabCwd = cwd ?? actualCwdOf(target.activeTabId);
+    if (size) {
+      spawnSession(newTabId, size.cols, size.rows, shellOverride, tabCwd);
+    } else {
+      spawnSessionPending(newTabId, shellOverride, tabCwd);
+    }
     opts.onDirty();
     return newTabId;
   }

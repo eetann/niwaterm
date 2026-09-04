@@ -26,11 +26,11 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `tab new` / `switch` / `close` / `respawn` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
 - `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `workspace new` / `switch` / `close` / `rename` — ワークスペースの作成・切替・削除・名前変更
-- `board new` / `switch` / `close` / `rename` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成・切替・削除・名前変更
+- `board new` / `switch` / `close` / `rename` / `startup` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成・切替・削除・名前変更・起動時レイアウト設定
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
-- `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う
+- `layout list` / `apply <name>` — niwaterm.config.tsで定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う。`--startup`を付けるとそのBoardが次回起動時も同じプリセットで組み直される（`board startup`で後から切替・解除可）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `notify --title <title> [--body] [--subtitle] [--silent]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。クリックしてもniwatermへのフォーカス移動は行わない）
 

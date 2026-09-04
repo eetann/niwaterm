@@ -413,6 +413,78 @@ describe("loadPersistedState / savePersistedState", () => {
     expect(await loadPersistedState(path)).toBeNull();
   });
 
+  test("Boardのstartup（起動時レイアウト）がラウンドトリップする", async () => {
+    const path = join(dir, "board-startup.json");
+    const state: PersistedState = {
+      version: 3,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              name: "dev",
+              startup: { preset: "dev", restoreMode: "layout" },
+            },
+            {
+              layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              startup: { preset: "notes", restoreMode: "restore" },
+            },
+          ],
+        },
+      ],
+    };
+    await savePersistedState(path, state);
+    expect(await loadPersistedState(path)).toEqual(state);
+  });
+
+  test("startupのrestoreModeが未知の値の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-startup-mode.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 3,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            activeBoardIndex: 0,
+            boards: [
+              {
+                layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                startup: { preset: "dev", restoreMode: "preset" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await loadPersistedState(path)).toBeNull();
+  });
+
+  test("startupのpresetが空文字列の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-startup-preset.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 3,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            activeBoardIndex: 0,
+            boards: [
+              {
+                layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                startup: { preset: "", restoreMode: "layout" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await loadPersistedState(path)).toBeNull();
+  });
+
   test("varsの値が文字列でない場合はnullを返す", async () => {
     const path = join(dir, "invalid-vars.json");
     await writeFile(
