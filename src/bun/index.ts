@@ -1,4 +1,10 @@
-import { ApplicationMenu, BrowserView, BrowserWindow, type RPCSchema, Utils } from "electrobun/bun";
+import Electrobun, {
+  ApplicationMenu,
+  BrowserView,
+  BrowserWindow,
+  type RPCSchema,
+  Utils,
+} from "electrobun/bun";
 import { APP_VARIANT } from "./app-variant.generated";
 import type {
   KeybindingsConfig,
@@ -611,6 +617,19 @@ const mainWindow = new BrowserWindow({
   },
   rpc,
 });
+
+// Electrobunはアプリコードをbun Worker上で実行するため、Worker側で登録したprocess.on("exit")や
+// シグナルハンドラはアプリ終了時に発火しない（Electrobunがprocess.exitを上書きし、ネイティブ側の
+// quitGracefullyでプロセスを終わらせるため）。このためウィンドウを閉じただけではcleanup()＝
+// 全セッションのdispose()もIPCサーバーの停止も一度も走らず、Windows実機ではbridge-port・
+// niwaterm.sockが残留する（PTYの子プロセス自体はアプリのプロセス終了に伴いOSが回収するが、
+// killをOS任せにせず明示的に落とす）。そこでElectrobunのウィンドウ終了・アプリ終了イベントからも
+// cleanup()を呼ぶ。will-closeはウィンドウを閉じる直前（ネイティブのcloseWindowより前）、
+// before-quitはCmd+Q等のアプリ終了要求で発火する。cleanup()は冪等なので複数経路から
+// 呼ばれても問題ない
+mainWindow.on("will-close", () => cleanup());
+mainWindow.on("close", () => cleanup());
+Electrobun.events.on("before-quit", () => cleanup());
 
 // WindowsではmainWindow.activate()（ネイティブのactivateWindow）がwebviewのOSキーボードフォーカスを
 // 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
