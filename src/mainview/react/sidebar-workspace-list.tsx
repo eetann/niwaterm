@@ -22,7 +22,13 @@ import { cn } from "@/lib/utils";
 import type { LayoutListEntry } from "../../bun/project-config";
 import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
-import type { SidebarBoardItem, SidebarPopupItem, SidebarWorkspaceItem } from "./sidebar-props";
+import {
+  type SidebarBoardItem,
+  type SidebarPopupItem,
+  type SidebarWorkspaceItem,
+  type WorkspaceDropPosition,
+  workspaceDropIndex,
+} from "./sidebar-props";
 
 /** サイドバーから選ばれたレイアウトプリセット。適用は既存タブを閉じるため、確認は呼び出し側が取る */
 export interface SidebarApplyLayoutRequest {
@@ -45,6 +51,8 @@ export interface SidebarWorkspaceListProps {
   onRequestBoardLayouts: (boardId: BoardId) => Promise<LayoutListEntry[]>;
   onApplyBoardLayout: (request: SidebarApplyLayoutRequest) => void;
   onClearBoardStartup: (boardId: BoardId) => void;
+  /** ワークスペース見出しのD&Dによる並び替え。toIndexは0始まりの移動先（bun側のmoveWorkspaceへそのまま渡る） */
+  onMoveWorkspace: (workspaceId: WorkspaceId, toIndex: number) => void;
 }
 
 /** 起動時レイアウトのサブメニューに並べるプリセット。開くたびに取り直す（configはホットリロードされるため） */
@@ -53,6 +61,22 @@ type LayoutMenuState =
   | { boardId: BoardId; status: "ready"; entries: LayoutListEntry[] };
 
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
+
+/**
+ * ワークスペース並び替えD&D用のdataTransfer MIMEタイプ。タブD&D（TAB_DRAG_MIME）と別にすることで、
+ * タブをサイドバーへ落としても並び替えが起きず、ワークスペースをタイルへ落としてもタブ移動が起きない
+ */
+const WORKSPACE_DRAG_MIME = "application/x-niwaterm-workspace";
+
+interface WorkspaceDragPayload {
+  workspaceId: WorkspaceId;
+}
+
+/** ドロップ先ワークスペースの上半分なら手前、下半分なら後ろへ挿入する */
+function dropPositionAt(e: React.DragEvent<HTMLElement>): WorkspaceDropPosition {
+  const rect = e.currentTarget.getBoundingClientRect();
+  return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+}
 
 type EditingTarget = { kind: "board"; id: BoardId } | { kind: "workspace"; id: WorkspaceId };
 
@@ -91,6 +115,7 @@ export function SidebarWorkspaceList({
   onRequestBoardLayouts,
   onApplyBoardLayout,
   onClearBoardStartup,
+  onMoveWorkspace,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -102,6 +127,11 @@ export function SidebarWorkspaceList({
   const [layoutMenu, setLayoutMenu] = useState<LayoutMenuState | null>(null);
   // 開いた直後に閉じて別Boardを開いた場合、先行リクエストの結果が後から届いて上書きするのを防ぐ
   const layoutRequestSeq = useRef(0);
+  // D&D中に挿入位置のガイド線を出す対象。ドラッグが終わったら必ずnullへ戻す
+  const [dropTarget, setDropTarget] = useState<{
+    workspaceId: WorkspaceId;
+    position: WorkspaceDropPosition;
+  } | null>(null);
 
   function openLayoutMenu(boardId: BoardId): void {
     const seq = ++layoutRequestSeq.current;
@@ -135,6 +165,43 @@ export function SidebarWorkspaceList({
       saveCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY, next);
       return next;
     });
+  }
+
+  function handleWorkspaceDragOver(
+    e: React.DragEvent<HTMLElement>,
+    workspaceId: WorkspaceId,
+  ): void {
+    if (!e.dataTransfer.types.includes(WORKSPACE_DRAG_MIME)) return;
+    // ブラウザ既定動作（drop不可）を上書きし、この位置でのdropを許可する
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const position = dropPositionAt(e);
+    setDropTarget((prev) =>
+      prev?.workspaceId === workspaceId && prev.position === position
+        ? prev
+        : { workspaceId, position },
+    );
+  }
+
+  function handleWorkspaceDrop(e: React.DragEvent<HTMLElement>, overIndex: number): void {
+    const raw = e.dataTransfer.getData(WORKSPACE_DRAG_MIME);
+    // dropTargetのstateではなくイベントから位置を取り直す（dragoverのsetStateが
+    // 反映される前にdropが来ても、カーソル位置どおりの挿入先になるようにするため）
+    const position = dropPositionAt(e);
+    setDropTarget(null);
+    if (!raw) return;
+    e.preventDefault();
+    let payload: WorkspaceDragPayload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const fromIndex = workspaces.findIndex((w) => w.workspaceId === payload.workspaceId);
+    if (fromIndex === -1) return;
+    const toIndex = workspaceDropIndex(fromIndex, overIndex, position);
+    if (toIndex === null) return;
+    onMoveWorkspace(payload.workspaceId, toIndex);
   }
 
   function startEditing(target: EditingTarget, currentLabel: string): void {
@@ -394,12 +461,24 @@ export function SidebarWorkspaceList({
 
   return (
     <>
-      {workspaces.map((workspace) => {
+      {workspaces.map((workspace, workspaceIndex) => {
         const isWorkspaceCollapsed = collapsedWorkspaces.has(workspace.workspaceId);
         const isEditingThisWorkspace =
           editingTarget?.kind === "workspace" && editingTarget.id === workspace.workspaceId;
+        const dropPosition =
+          dropTarget?.workspaceId === workspace.workspaceId ? dropTarget.position : null;
         return (
-          <div key={workspace.workspaceId}>
+          <div
+            key={workspace.workspaceId}
+            onDragOver={(e) => handleWorkspaceDragOver(e, workspace.workspaceId)}
+            onDrop={(e) => handleWorkspaceDrop(e, workspaceIndex)}
+            // ガイド線は透明なborderの色替えで出す（要素の追加・高さの変化で行がずれないようにするため）
+            className={cn(
+              "border-y-2 border-transparent",
+              dropPosition === "before" && "border-t-sky-400",
+              dropPosition === "after" && "border-b-sky-400",
+            )}
+          >
             <div className="flex w-full items-center gap-1 py-1.5 pr-2 pl-1">
               <button
                 type="button"
@@ -422,6 +501,16 @@ export function SidebarWorkspaceList({
                     <button
                       type="button"
                       tabIndex={-1}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        const payload: WorkspaceDragPayload = {
+                          workspaceId: workspace.workspaceId,
+                        };
+                        e.dataTransfer.setData(WORKSPACE_DRAG_MIME, JSON.stringify(payload));
+                      }}
+                      // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
+                      onDragEnd={() => setDropTarget(null)}
                       onClick={() => onSelectWorkspaceHeader(workspace.workspaceId)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();

@@ -425,6 +425,30 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId)?.respawnTab(tabId, shellOverride, cwd, command) ?? false;
   }
 
+  /**
+   * 表示順（サイドバー・ウィンドウタイトルの番号）の並び替え。orderの位置だけを動かし、
+   * 各ワークスペースの中身（レイアウト・タブ）とアクティブワークスペースは変更しない。
+   * toIndexは0始まりで、範囲外はクランプする（端へのD&D・キーバインド連打が失敗扱いに
+   * ならないようにするため）。falseを返すのはworkspaceIdが無い・toIndexが数値として不正な場合のみ
+   */
+  function moveWorkspace(workspaceId: WorkspaceId, toIndex: number): boolean {
+    const fromIndex = order.indexOf(workspaceId);
+    if (fromIndex === -1 || !Number.isFinite(toIndex)) return false;
+    const clamped = Math.min(Math.max(0, Math.trunc(toIndex)), order.length - 1);
+    if (clamped === fromIndex) return true;
+    order.splice(fromIndex, 1);
+    order.splice(clamped, 0, workspaceId);
+    opts.onDirty();
+    return true;
+  }
+
+  /** moveWorkspaceの相対指定版。deltaは-1で1つ前へ、+1で1つ後ろへ（CLIの`workspace move --up/--down`向け） */
+  function moveWorkspaceBy(workspaceId: WorkspaceId, delta: number): boolean {
+    const fromIndex = order.indexOf(workspaceId);
+    if (fromIndex === -1) return false;
+    return moveWorkspace(workspaceId, fromIndex + delta);
+  }
+
   // niwa.workspace.swap向け（tmuxのswap-window相当）。orderの位置を交換するだけで
   // 各ワークスペースの中身（レイアウト・タブ）は一切変更しない
   function swapWorkspaces(workspaceIdA: WorkspaceId, workspaceIdB: WorkspaceId): boolean {
@@ -644,6 +668,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     resizeSplit,
     resizeTileInDirection,
     respawnTab,
+    moveWorkspace,
+    moveWorkspaceBy,
     swapWorkspaces,
     handleInput,
     sendInitialInput,

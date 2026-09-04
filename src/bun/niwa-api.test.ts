@@ -419,6 +419,19 @@ describe("niwa.workspace", () => {
     expect(niwa.workspace.switch("no-such-workspace")).toBe(false);
   });
 
+  test("moveで指定indexへ移動する", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const firstId = workspaceManager.snapshot().activeWorkspaceId;
+    const secondId = niwa.workspace.create();
+    expect(niwa.workspace.move(firstId, 1)).toBe(true);
+    expect(workspaceManager.snapshot().workspaceIds).toEqual([secondId, firstId]);
+  });
+
+  test("moveで存在しないidを渡すとfalse", () => {
+    const { niwa } = createTestSetup();
+    expect(niwa.workspace.move("no-such-workspace", 0)).toBe(false);
+  });
+
   test("swapで2つのworkspaceの表示順を入れ替え、trueを返す", () => {
     const { niwa, workspaceManager } = createTestSetup();
     const firstId = workspaceManager.snapshot().activeWorkspaceId;

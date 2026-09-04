@@ -1367,6 +1367,85 @@ describe("POST /new-workspace, POST /switch-workspace, POST /close-workspace", (
   });
 });
 
+describe("POST /move-workspace", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function moveWorkspace(workspaceId: string, direction: string): Promise<Response> {
+    return fetch("http://localhost/move-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId, direction }),
+    });
+  }
+
+  test("direction: downで1つ後ろへ移動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveWorkspace(firstId, "down");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspaceIds).toEqual([secondId, firstId]);
+  });
+
+  test("direction: upで1つ手前へ移動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveWorkspace(secondId, "up");
+
+    expect(res.status).toBe(200);
+    expect(mgr.snapshot().workspaceIds).toEqual([secondId, firstId]);
+  });
+
+  test("端でこれ以上動かせない場合もokを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveWorkspace(onlyId, "up");
+
+    expect(res.status).toBe(200);
+    expect(mgr.snapshot().workspaceIds).toEqual([onlyId]);
+  });
+
+  test("存在しないworkspaceIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    expect((await moveWorkspace("not-found", "up")).status).toBe(404);
+  });
+
+  test("未知のdirectionは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    expect((await moveWorkspace(onlyId, "sideways")).status).toBe(400);
+  });
+});
+
 describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-board", () => {
   let dir: string;
   let socketPath: string;

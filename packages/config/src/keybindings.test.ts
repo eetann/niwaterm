@@ -206,6 +206,10 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // directで割り当てる等、ユーザーの好みに委ねる）
   "next-board",
   "prev-board",
+  // move-workspace-up/downも既定キーを持たない（並び替えはサイドバーのD&D・コマンドパレット・
+  // CLIから行える操作で、キーを常用する人だけがconfigで割り当てる想定）
+  "move-workspace-up",
+  "move-workspace-down",
 ];
 
 describe("defaultKeybindings", () => {

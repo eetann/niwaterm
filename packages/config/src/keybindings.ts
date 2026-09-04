@@ -50,6 +50,8 @@ export const KEYBIND_ACTIONS = [
   "new-workspace",
   "next-workspace",
   "prev-workspace",
+  "move-workspace-up",
+  "move-workspace-down",
   "toggle-sidebar",
   "toggle-popup",
   "copy-selection",

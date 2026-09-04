@@ -136,6 +136,8 @@ export type NiwaRPC = {
       resizeSplit: { splitId: TileId; ratio: number };
       newWorkspace: {};
       switchWorkspace: { workspaceId: WorkspaceId };
+      /** サイドバーのD&D・move-workspace-*キーバインドからの並び替え。toIndexは0始まり（範囲外はbun側でクランプ） */
+      moveWorkspace: { workspaceId: WorkspaceId; toIndex: number };
       closeWorkspace: { workspaceId: WorkspaceId };
       newBoard: { workspaceId: WorkspaceId; cwd?: string };
       switchBoard: { boardId: BoardId };
@@ -607,6 +609,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
         workspaceManager.switchWorkspace(workspaceId);
+      },
+      moveWorkspace: ({ workspaceId, toIndex }: { workspaceId: WorkspaceId; toIndex: number }) => {
+        workspaceManager.moveWorkspace(workspaceId, toIndex);
       },
       closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
         workspaceManager.closeWorkspace(workspaceId);

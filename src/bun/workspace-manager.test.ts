@@ -321,6 +321,72 @@ describe("Board操作", () => {
   });
 });
 
+describe("moveWorkspace", () => {
+  function createThreeWorkspaces() {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const secondId = mgr.snapshot().activeWorkspaceId;
+    mgr.newWorkspace();
+    const thirdId = mgr.snapshot().activeWorkspaceId;
+    return { mgr, firstId, secondId, thirdId };
+  }
+
+  test("指定したindexへ移動する（間のワークスペースは詰められる）", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeWorkspaces();
+    expect(mgr.moveWorkspace(firstId, 2)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([secondId, thirdId, firstId]);
+  });
+
+  test("末尾から先頭へも移動できる", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeWorkspaces();
+    expect(mgr.moveWorkspace(thirdId, 0)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([thirdId, firstId, secondId]);
+  });
+
+  test("範囲外のindexは先頭・末尾へクランプする", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeWorkspaces();
+    expect(mgr.moveWorkspace(firstId, 99)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([secondId, thirdId, firstId]);
+    expect(mgr.moveWorkspace(firstId, -5)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, secondId, thirdId]);
+  });
+
+  test("アクティブなワークスペースは変わらない", () => {
+    const { mgr, firstId, thirdId } = createThreeWorkspaces();
+    mgr.moveWorkspace(firstId, 2);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(thirdId);
+  });
+
+  test("存在しないworkspaceId・数値でないindexはfalseで順序は変わらない", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeWorkspaces();
+    expect(mgr.moveWorkspace("not-found", 0)).toBe(false);
+    expect(mgr.moveWorkspace(firstId, Number.NaN)).toBe(false);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, secondId, thirdId]);
+  });
+
+  test("moveWorkspaceByは相対位置へ移動し、端では何もせずtrueを返す", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeWorkspaces();
+    expect(mgr.moveWorkspaceBy(thirdId, -1)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, thirdId, secondId]);
+    expect(mgr.moveWorkspaceBy(firstId, -1)).toBe(true);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, thirdId, secondId]);
+  });
+
+  test("moveWorkspaceByは存在しないworkspaceIdでfalse", () => {
+    const { mgr } = createThreeWorkspaces();
+    expect(mgr.moveWorkspaceBy("not-found", 1)).toBe(false);
+  });
+
+  test("並び替えた順序は永続化データへ反映される", () => {
+    const { mgr, firstId } = createThreeWorkspaces();
+    mgr.moveWorkspace(firstId, 2);
+    // activeWorkspaceIndexも移動後のorderを基準に振り直される
+    expect(mgr.serializeForPersistence().activeWorkspaceIndex).toBe(1);
+  });
+});
+
 describe("swapWorkspaces", () => {
   test("2つのworkspaceIdの表示順を入れ替え、trueを返す", () => {
     const { factory } = createFakeSessionFactory();

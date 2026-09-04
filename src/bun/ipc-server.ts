@@ -323,6 +323,18 @@ function parseRenameWorkspaceBody(body: unknown): RenameWorkspaceRequestBody | n
   return { ...workspaceIdBody, name: b.name };
 }
 
+interface MoveWorkspaceRequestBody extends WorkspaceIdRequestBody {
+  direction: "up" | "down";
+}
+
+function parseMoveWorkspaceBody(body: unknown): MoveWorkspaceRequestBody | null {
+  const workspaceIdBody = parseWorkspaceIdBody(body);
+  if (!workspaceIdBody) return null;
+  const b = body as { direction?: unknown };
+  if (b.direction !== "up" && b.direction !== "down") return null;
+  return { ...workspaceIdBody, direction: b.direction };
+}
+
 interface BoardIdRequestBody {
   boardId: string;
 }
@@ -653,6 +665,26 @@ function buildApp(
       return c.json({ ok: false, error: "expected { workspaceId: string, name: string }" }, 400);
     }
     const ok = workspaceManager.setWorkspaceName(parsed.workspaceId, parsed.name);
+    if (!ok) return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  // 相対移動のみを受け付ける（絶対位置はサイドバーのD&D・niwa.workspace.move側の関心事）。
+  // 端でこれ以上動かせない場合もokを返す（連打が失敗扱いにならないようにするため）
+  app.post("/move-workspace", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseMoveWorkspaceBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { workspaceId: string, direction: "up"|"down" }' },
+        400,
+      );
+    }
+    const ok = workspaceManager.moveWorkspaceBy(
+      parsed.workspaceId,
+      parsed.direction === "up" ? -1 : 1,
+    );
     if (!ok) return c.json({ ok: false, error: `workspace not found: ${parsed.workspaceId}` }, 404);
     return c.json({ ok: true });
   });

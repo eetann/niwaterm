@@ -126,14 +126,16 @@ niwaterm workspace new
 niwaterm workspace switch --workspace <workspaceId>
 niwaterm workspace close [--workspace <workspaceId>]
 niwaterm workspace rename [--workspace <workspaceId>] <name>
+niwaterm workspace move [--workspace <workspaceId>] --up | --down
 ```
 
-ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。`close`/`rename`は`--workspace`を省略でき、その場合は実行しているタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）が対象になる。
+ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。`close`/`rename`/`move`は`--workspace`を省略でき、その場合は実行しているタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）が対象になる。
 
 - `workspace new` — 新規ワークスペースを作成し、アクティブにする。成功時、新規`workspaceId`を表示する
 - `workspace switch` — 指定したワークスペースへ切り替える
 - `workspace close` — 指定したワークスペースを閉じる。最後の1つのワークスペースは誤操作防止のため閉じられない
 - `workspace rename` — 指定したワークスペースの名前を変更する（サイドバーの見出しラベルに反映される）。`<name>`に空文字列を指定するとデフォルトの連番ラベル（`Workspace N`）へ戻る。タブ名・タイル名同様、アプリ再起動をまたいでも復元される
+- `workspace move` — 表示順（サイドバーの並び・ウィンドウタイトルの番号）を1つ上（`--up`）または1つ下（`--down`）へ移動する。`--up`/`--down`はどちらか一方が必須。中身（Board・タイル・タブ）とアクティブなワークスペースは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.workspace.move(workspaceId, index)`を使う）
 
 いずれも対象の`workspaceId`が存在しない場合、`workspace close`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 

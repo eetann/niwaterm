@@ -46,6 +46,24 @@ export interface SidebarWorkspaceItem {
   popup: SidebarPopupItem | null;
 }
 
+/** ドラッグ中のワークスペースを、ドロップ先ワークスペースの手前へ入れるか後ろへ入れるか */
+export type WorkspaceDropPosition = "before" | "after";
+
+/**
+ * サイドバーのD&Dによるワークスペース並び替えの移動先index（0始まり、bun側のmoveWorkspaceへ渡す値）。
+ * overIndexの手前/後ろへ挿入した結果の位置を、ドラッグ元を取り除いた後のindexとして返す。
+ * 並びが変わらない組み合わせ（自分自身の手前・後ろへのドロップ）はnull
+ */
+export function workspaceDropIndex(
+  fromIndex: number,
+  overIndex: number,
+  position: WorkspaceDropPosition,
+): number | null {
+  const insertAt = position === "before" ? overIndex : overIndex + 1;
+  const toIndex = insertAt > fromIndex ? insertAt - 1 : insertAt;
+  return toIndex === fromIndex ? null : toIndex;
+}
+
 /** 未知の値・未設定はidleへフォールバックする（表示側で例外を出さないための安全側デフォルト） */
 function normalizeAgentStatus(raw: string | undefined): AgentStatus {
   return (KNOWN_AGENT_STATUSES as readonly string[]).includes(raw ?? "")

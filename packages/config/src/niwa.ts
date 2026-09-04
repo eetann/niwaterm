@@ -152,6 +152,12 @@ export interface NiwaWorkspaceApi {
   create(cwd?: string): string;
   switch(workspaceId: string): boolean;
   /**
+   * ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号）のindex番目へ移動する。
+   * indexは0始まりで、範囲外は先頭・末尾へクランプする。中身（レイアウト・タブ）と
+   * アクティブなワークスペースは変更しない。workspaceIdが存在しない場合はfalse
+   */
+  move(workspaceId: string, index: number): boolean;
+  /**
    * 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える
    * （tmuxのswap-window相当）。中身（レイアウト・タブ）は一切変更しない。
    * どちらかのidが存在しない、または同一idの場合はfalse

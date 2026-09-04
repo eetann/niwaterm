@@ -218,6 +218,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       switch(workspaceId) {
         return workspaceManager.switchWorkspace(workspaceId);
       },
+      move(workspaceId, index) {
+        return workspaceManager.moveWorkspace(workspaceId, index);
+      },
       swap(workspaceIdA, workspaceIdB) {
         return workspaceManager.swapWorkspaces(workspaceIdA, workspaceIdB);
       },

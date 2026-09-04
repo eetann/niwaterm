@@ -529,6 +529,16 @@ export function renameWorkspace(
   return postJson(endpoint, "/rename-workspace", { workspaceId, name });
 }
 
+export type MoveWorkspaceResult = { ok: true } | { ok: false; error: string };
+
+export function moveWorkspace(
+  endpoint: IpcEndpoint,
+  workspaceId: string,
+  direction: "up" | "down",
+): Promise<MoveWorkspaceResult> {
+  return postJson(endpoint, "/move-workspace", { workspaceId, direction });
+}
+
 export type NewBoardResult = { ok: true; boardId: string } | { ok: false; error: string };
 
 export function newBoard(

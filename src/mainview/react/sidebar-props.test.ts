@@ -6,6 +6,7 @@ import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
   buildSidebarWorkspaceItems,
+  workspaceDropIndex,
 } from "./sidebar-props";
 
 function leaf(id: string, tabIds: string[], activeTabId: string): TileLeaf {
@@ -559,5 +560,25 @@ describe("Board内の全タブからのagent集約", () => {
 
     expect(items[0]?.boards[0]?.branch).toBe("main");
     expect(items[0]?.boards[0]?.agent?.agent).toBe("claude-code");
+  });
+});
+
+describe("workspaceDropIndex", () => {
+  test("後ろのワークスペースの下へ落とすと、取り除いた分だけ手前のindexになる", () => {
+    // [A, B, C] のAをCの下へ → [B, C, A]
+    expect(workspaceDropIndex(0, 2, "after")).toBe(2);
+  });
+
+  test("手前のワークスペースの上へ落とすとそのindexへ入る", () => {
+    // [A, B, C] のCをAの上へ → [C, A, B]
+    expect(workspaceDropIndex(2, 0, "before")).toBe(0);
+  });
+
+  test("並びが変わらない組み合わせはnull", () => {
+    // 自分自身の上下と、隣接する相手の「自分側」への挿入は元の並びと同じになる
+    expect(workspaceDropIndex(1, 1, "before")).toBeNull();
+    expect(workspaceDropIndex(1, 1, "after")).toBeNull();
+    expect(workspaceDropIndex(0, 1, "before")).toBeNull();
+    expect(workspaceDropIndex(1, 0, "after")).toBeNull();
   });
 });
