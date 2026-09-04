@@ -31,6 +31,17 @@ export interface PersistedBrowserTab extends PersistedTabBase {
 
 export type PersistedTab = PersistedTerminalTab | PersistedBrowserTab;
 
+/**
+ * 復元時に捨てるタブ変数のキー。contrib/agent-integration/のhooksが「今そのタブで動いている
+ * エージェントプロセス」の状態を書き込むキーで、復元後のタブにそのプロセスは居ない。
+ * 残すと実在しないエージェントの状態（応答待ち等）がサイドバーに出続ける
+ */
+export const EPHEMERAL_TAB_VAR_KEYS: ReadonlySet<string> = new Set([
+  "agent",
+  "agent_status",
+  "agent_status_text",
+]);
+
 export interface PersistedTileLeaf {
   kind: "leaf";
   /** 表示順。最低1件 */

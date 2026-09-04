@@ -6,11 +6,12 @@ import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { APP_VARIANT } from "./app-variant.generated";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
-import type {
-  PersistedBrowserTab,
-  PersistedTab,
-  PersistedTerminalTab,
-  RestoredTreeMeta,
+import {
+  EPHEMERAL_TAB_VAR_KEYS,
+  type PersistedBrowserTab,
+  type PersistedTab,
+  type PersistedTerminalTab,
+  type RestoredTreeMeta,
 } from "./persistence";
 import {
   addTabToTile,
@@ -171,12 +172,13 @@ export function createBoard(opts: BoardOptions) {
    * 永続化からの復元専用。初期構築フェーズ（createBoard呼び出し中）はonDirtyを呼ばない既存方針を
    * 踏襲するため、setTabVar/setTabName等の公開セッターは経由せずtabVars/tabNames/browserTabsへ直接書き込む。
    * PTY起動はwebview側の実測cols/rowsが届く（handleResize）までspawnSessionPendingで保留する
-   * （前回終了時の保存済みサイズは今回起動時のウィンドウサイズと一致するとは限らないため）
+   * （前回終了時の保存済みサイズは今回起動時のウィンドウサイズと一致するとは限らないため）。
+   * タブ変数のうちEPHEMERAL_TAB_VAR_KEYSは復元しない
    */
   function restoreTab(tabId: TabId, meta: PersistedTab | undefined): void {
     if (meta?.name !== undefined) tabNames.set(tabId, meta.name);
     if (meta?.vars) {
-      const entries = Object.entries(meta.vars);
+      const entries = Object.entries(meta.vars).filter(([key]) => !EPHEMERAL_TAB_VAR_KEYS.has(key));
       if (entries.length > 0) tabVars.set(tabId, new Map(entries));
     }
     if (meta?.kind === "browser") {

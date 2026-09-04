@@ -318,16 +318,27 @@ if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwa
 なお、**hooksは`~/.claude/settings.json`等へコピーして使う仕組みのため、niwaterm側のCLIコマンド名が変わってもインストール済みの設定は自動追従しない**。hookコマンドは`>/dev/null 2>&1`で出力を捨てるので、コマンド名がずれると`Command not found`が握り潰され「サイドバーに何も出ない」という症状だけが残る。表示されなくなったら、まず`contrib/agent-integration/claude-code/hooks.json`との差分を確認する。
 
 ```sh
-# ~/.claude/settings.json（グローバル、全プロジェクト共通で使えるので推奨）の"hooks"キーへ
-# contrib/agent-integration/claude-code/hooks.jsonの中身をマージする
+# 既存のhooks設定を壊さずにマージする。niwaterm由来のエントリ（コマンドに$NIWATERM_TAB_IDを含むもの）
+# だけを入れ替え、同じイベントに刺さっている他ツールのhookはそのまま残す。
+# jqの `*` で丸ごとマージするとイベント単位で配列ごと置き換わり、他ツールのhookが消えるので使わない
 cp ~/.claude/settings.json ~/.claude/settings.json.bak
-jq -s '.[0] * {hooks: (.[0].hooks * .[1].hooks)}' \
-  ~/.claude/settings.json /path/to/niwaterm/contrib/agent-integration/claude-code/hooks.json \
-  > /tmp/merged-settings.json
+jq -s '
+  def isNiwa: (.hooks // []) | any((.command // "") | test("NIWATERM_TAB_ID"));
+  .[0] as $cur | .[1] as $new
+  | $cur
+  | .hooks = (
+      reduce ($new.hooks | to_entries[]) as $e (
+        ($cur.hooks // {});
+        .[$e.key] = (((.[$e.key] // []) | map(select(isNiwa | not))) + $e.value)
+      )
+    )
+' ~/.claude/settings.json /path/to/niwaterm/contrib/agent-integration/claude-code/hooks.json > /tmp/merged-settings.json
 mv /tmp/merged-settings.json ~/.claude/settings.json
 ```
 
 `branch`と同様、`agent`/`agent_status`もタブ変数の予約キーである（値は`niwaterm tab var set`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TAB_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
+
+`agent`/`agent_status`/`agent_status_text`は他のタブ変数と違い、アプリ終了時に保存されても起動時のBoard復元では読み込まれない。復元後のタブに前回のエージェントプロセスは居ないため、残すと実在しない「応答待ち」がサイドバーに出続けてしまう。
 
 ```sh
 niwaterm browser navigate --tab <tabId> --url <url>

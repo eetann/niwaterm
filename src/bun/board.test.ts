@@ -172,7 +172,7 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
     const tabMeta = new Map<string, PersistedTab>([
       [
         "tab-restored-1",
-        { kind: "terminal", shell: "wsl.exe -d NixOS", name: "work", vars: { agent: "claude" } },
+        { kind: "terminal", shell: "wsl.exe -d NixOS", name: "work", vars: { branch: "dev" } },
       ],
     ]);
     const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
@@ -181,7 +181,35 @@ describe("restoredMeta（永続化からのメタ情報復元）", () => {
 
     expect(created[0]?.opts.shell).toBe("wsl.exe -d NixOS");
     expect(ws.listTabNames()).toEqual({ "tab-restored-1": "work" });
-    expect(ws.getTabVar("tab-restored-1", "agent")).toEqual({ found: true, value: "claude" });
+    expect(ws.getTabVar("tab-restored-1", "branch")).toEqual({ found: true, value: "dev" });
+  });
+
+  test("エージェント状態のvarsは復元されない（プロセスが居ないタブに前回の状態が残らない）", () => {
+    const { factory } = createFakeSessionFactory();
+    const tabMeta = new Map<string, PersistedTab>([
+      [
+        "tab-restored-1",
+        {
+          kind: "terminal",
+          vars: {
+            agent: "claude-code",
+            agent_status: "blocked",
+            agent_status_text: "確認が必要です",
+            branch: "dev",
+          },
+        },
+      ],
+      [
+        "tab-restored-2",
+        { kind: "browser", url: "https://example.com", vars: { agent: "claude-code" } },
+      ],
+    ]);
+    const restoredMeta: RestoredTreeMeta = { tabMeta, tileNames: new Map(), focusedTileId: null };
+    const ws = createBoard(baseOpts({ createSession: factory, initialTree, restoredMeta }));
+    resolvePending(ws);
+
+    expect(ws.listTabVars("tab-restored-1")).toEqual({ branch: "dev" });
+    expect(ws.listTabVars("tab-restored-2")).toEqual({});
   });
 
   test("vars.cwdがあればresolveActualCwd適用後の値がspawnSessionのcwdに渡る", () => {
