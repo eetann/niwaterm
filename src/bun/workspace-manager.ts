@@ -279,6 +279,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByBoardId(boardId)?.getBoardStartup(boardId) ?? null;
   }
 
+  function getBoardFocusedCwd(boardId: BoardId): string | undefined {
+    return findOwnerByBoardId(boardId)?.getBoardFocusedCwd(boardId);
+  }
+
   /**
    * 起動時にレイアウトプリセットで組み直すBoard（restoreMode: "layout"）の一覧。
    * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う。
@@ -618,6 +622,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setBoardName,
     setBoardStartup,
     getBoardStartup,
+    getBoardFocusedCwd,
     listStartupLayoutBoards,
     splitTile,
     newTab,

@@ -16,12 +16,9 @@ import type {
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
+import { changeBoardStartup, checkLayoutTrust } from "./board-startup";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
-import {
-  loadProjectPreset,
-  listResolvedLayouts,
-  resolveLayoutPresetByName,
-} from "./project-config";
+import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
@@ -740,13 +737,13 @@ function buildApp(
     // プロジェクトローカル由来のプリセットを起動時レイアウトに紐づける操作は、以後アプリ起動のたびに
     // そのリポジトリのコードとcommandが自動実行されることを意味する。CLI側でtrust promptを出させ、
     // 同意（trust: true）を得てから再送してもらう
-    if (parsed.startup && resolved.projectRoot && !parsed.trust) {
-      return c.json({
-        ok: false,
-        needsTrust: { projectRoot: resolved.projectRoot, preset: parsed.name },
-        error: `layout "${parsed.name}" is defined in ${resolved.projectRoot}/.niwaterm/config.ts. Applying it at startup runs that repository's code and commands on every launch. Confirm interactively, or pass --trust if you trust it.`,
-      });
-    }
+    const denied = checkLayoutTrust(
+      parsed.startup === true,
+      resolved.projectRoot,
+      parsed.trust,
+      parsed.name,
+    );
+    if (denied) return c.json({ ok: false, ...denied });
 
     const target = parsed.target ?? "new-board";
     let boardId: string;
@@ -808,52 +805,26 @@ function buildApp(
     }
     const boardId =
       parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
-    if (!boardId || !workspaceManager.hasBoard(boardId)) {
+    if (!boardId) {
       return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
     }
-    if (parsed.mode === "clear") {
-      workspaceManager.setBoardStartup(boardId, null);
-      return c.json({ ok: true, boardId, startup: null });
+    const result = await changeBoardStartup(workspaceManager, getLayouts(), {
+      boardId,
+      mode: parsed.mode,
+      ...(parsed.preset !== undefined ? { preset: parsed.preset } : {}),
+      ...(parsed.cwd !== undefined ? { cwd: parsed.cwd } : {}),
+      ...(parsed.trust !== undefined ? { trust: parsed.trust } : {}),
+    });
+    if (!result.ok) {
+      const body = {
+        ok: false as const,
+        error: result.error,
+        ...(result.needsTrust ? { needsTrust: result.needsTrust } : {}),
+      };
+      // trust待ちは失敗ではなく「同意を取って再送してほしい」という応答なので200で返す
+      return result.status ? c.json(body, result.status) : c.json(body);
     }
-    const existing = workspaceManager.getBoardStartup(boardId);
-    const preset = parsed.preset ?? existing?.preset;
-    if (!preset) {
-      return c.json(
-        {
-          ok: false,
-          error: `board ${boardId} has no layout preset; pass preset to associate one`,
-        },
-        400,
-      );
-    }
-    // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元込み）を引き継ぎ、
-    // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする
-    let projectRoot: string | null;
-    if (parsed.preset !== undefined) {
-      const resolved = await resolveLayoutPresetByName(parsed.preset, parsed.cwd, getLayouts());
-      if (!resolved) return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
-      projectRoot = resolved.projectRoot;
-    } else {
-      projectRoot = existing?.projectRoot ?? null;
-      const stillExists = projectRoot
-        ? (await loadProjectPreset(projectRoot, preset)) !== null
-        : getLayouts()[preset] !== undefined;
-      if (!stillExists) return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
-    }
-    if (parsed.mode === "layout" && projectRoot && !parsed.trust) {
-      return c.json({
-        ok: false,
-        needsTrust: { projectRoot, preset },
-        error: `layout "${preset}" is defined in ${projectRoot}/.niwaterm/config.ts. Applying it at startup runs that repository's code and commands on every launch. Confirm interactively, or pass --trust if you trust it.`,
-      });
-    }
-    const startup = {
-      preset,
-      restoreMode: parsed.mode,
-      ...(projectRoot ? { projectRoot } : {}),
-    };
-    workspaceManager.setBoardStartup(boardId, startup);
-    return c.json({ ok: true, boardId, startup });
+    return c.json({ ok: true, boardId: result.boardId, startup: result.startup });
   });
 
   app.get("/capture-tab", (c) => {

@@ -25,6 +25,7 @@ function board(
     tabVars?: Record<string, Record<string, string>>;
     name?: string | null;
     zoomedTileId?: string | null;
+    startup?: BoardListEntry["startup"];
   } = {},
 ): BoardListEntry {
   return {
@@ -37,6 +38,7 @@ function board(
     tileNames: {},
     name: options.name ?? null,
     zoomedTileId: options.zoomedTileId ?? null,
+    startup: options.startup ?? null,
   };
 }
 
@@ -81,6 +83,7 @@ describe("buildSidebarWorkspaceItems", () => {
             branch: null,
             agent: null,
             zoomed: false,
+            startup: null,
           },
         ],
       },
@@ -97,6 +100,7 @@ describe("buildSidebarWorkspaceItems", () => {
             branch: null,
             agent: null,
             zoomed: false,
+            startup: null,
           },
         ],
       },
@@ -308,6 +312,42 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.zoomed).toBe(false);
+  });
+
+  test("グローバル設定由来の起動時レイアウトはprojectRoot:nullで返る", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          startup: { preset: "dev", restoreMode: "layout" },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.startup).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      projectRoot: null,
+    });
+  });
+
+  test("プロジェクトローカル由来の起動時レイアウトはprojectRootがそのまま載る（trust確認の要否判定に使う）", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          startup: { preset: "dev", restoreMode: "restore", projectRoot: "/repo" },
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.startup).toEqual({
+      preset: "dev",
+      restoreMode: "restore",
+      projectRoot: "/repo",
+    });
   });
 
   test("非アクティブワークスペースのBoardは常にactive:falseになる", () => {

@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
+import type { LayoutListEntry } from "../bun/project-config";
 import type { TabRenderState } from "../bun/workspace";
 import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
 import type {
@@ -34,7 +35,10 @@ import { PromptDialog } from "./react/prompt-dialog";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { boardLabel, buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
-import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
+import {
+  SidebarWorkspaceList,
+  type SidebarApplyLayoutRequest,
+} from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import {
@@ -1375,6 +1379,9 @@ function renderSidebar(
       onRenameBoard: renameSidebarBoard,
       onRenameWorkspace: renameSidebarWorkspace,
       onCloseBoard: closeSidebarBoard,
+      onRequestBoardLayouts: requestSidebarBoardLayouts,
+      onApplyBoardLayout: applySidebarBoardLayout,
+      onClearBoardStartup: clearSidebarBoardStartup,
     }),
   );
 }
@@ -1418,6 +1425,56 @@ function closeSidebarBoard(boardId: BoardId, name: string): void {
       sendMessage("closeBoard", { boardId });
     },
   );
+}
+
+/**
+ * 起動時レイアウトのサブメニューを開いたときのプリセット一覧取得。プロジェクトローカルの
+ * プリセットはbun側が対象Boardのcwdから解決するため、ここではboardIdを渡すだけでよい
+ */
+async function requestSidebarBoardLayouts(boardId: BoardId): Promise<LayoutListEntry[]> {
+  const result = await rpc.request.listBoardLayouts({ boardId });
+  return result.layouts;
+}
+
+/**
+ * サイドバーで選んだレイアウトプリセットの適用。Board内の既存タブ・PTYがすべて閉じられる
+ * 破壊的操作なので、Board削除と同じ確認ダイアログを挟む。
+ *
+ * さらにプロジェクトローカル由来のプリセットは、起動時レイアウトへの紐づけによって以後
+ * アプリを起動するたびにそのリポジトリの.niwaterm/config.tsが評価され、プリセットのcommandが
+ * 実行されることになる。CLIはtrust確認と破壊的確認を2回に分けて聞くが（layout-trust.ts）、
+ * GUIでモーダルを2枚続けるより1枚へまとめた方が読み飛ばされにくいため、文面を合わせて出す
+ */
+function applySidebarBoardLayout(request: SidebarApplyLayoutRequest): void {
+  // trustはユーザーが実際に同意したときだけ付ける。ここで一律に付けると、webview側が
+  // グローバル由来だと思ったプリセットをbun側がプロジェクトローカルと解決した場合に
+  // 確認なしで通ってしまう（その食い違いはbun側のゲートで弾かれるべきもの）
+  const send = (trust: boolean) =>
+    sendMessage("applyBoardLayout", {
+      boardId: request.boardId,
+      preset: request.preset,
+      ...(trust ? { trust } : {}),
+    });
+  const destructive = `${request.boardLabel}の既存タブ・プロセスはすべて閉じられます。次回の起動時もこのプリセットで組み直します。`;
+  if (!request.projectRoot) {
+    openConfirmDialog(`レイアウト「${request.preset}」を適用しますか？`, destructive, () =>
+      send(false),
+    );
+    return;
+  }
+  openConfirmDialog(
+    `レイアウト「${request.preset}」を適用しますか？`,
+    `${destructive}このプリセットは ${request.projectRoot}/.niwaterm/config.ts で定義されているため、起動のたびにこのファイルが評価され、プリセットのcommandが実行されます。信頼できるリポジトリでのみ許可してください。`,
+    () => send(true),
+  );
+}
+
+/**
+ * サイドバーからの起動時レイアウトの紐づけ解除。今のレイアウトはそのまま残り、次回起動時に
+ * 保存した骨格を復元する既定の挙動へ戻るだけなので確認は挟まない
+ */
+function clearSidebarBoardStartup(boardId: BoardId): void {
+  sendMessage("clearBoardStartup", { boardId });
 }
 
 /**

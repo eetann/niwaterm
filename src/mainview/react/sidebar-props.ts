@@ -1,3 +1,4 @@
+import type { BoardRestoreMode } from "../../bun/persistence";
 import { findNode, listLeaves, type TabId } from "../../bun/tile-layout";
 import type { BoardId, BoardListEntry } from "../../bun/workspace";
 import type { WorkspaceId, WorkspaceListEntry } from "../../bun/workspace-manager";
@@ -12,6 +13,13 @@ export interface SidebarBoardAgentInfo {
   statusText: string | null;
 }
 
+export interface SidebarBoardStartupInfo {
+  preset: string;
+  restoreMode: BoardRestoreMode;
+  /** プロジェクトローカル由来ならそのルート。グローバル設定由来ならnull（trust確認の要否判定に使う） */
+  projectRoot: string | null;
+}
+
 export interface SidebarBoardItem {
   boardId: BoardId;
   label: string;
@@ -20,6 +28,8 @@ export interface SidebarBoardItem {
   agent: SidebarBoardAgentInfo | null;
   /** フォーカス中タイルがズーム表示中か（toggle-zoom）。Board内のどのタイルかは問わず、見た目上は1行のBoardが対象 */
   zoomed: boolean;
+  /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
+  startup: SidebarBoardStartupInfo | null;
 }
 
 export interface SidebarPopupItem {
@@ -169,6 +179,13 @@ export function buildSidebarWorkspaceItems(
         branch,
         agent,
         zoomed: board.zoomedTileId !== null,
+        startup: board.startup
+          ? {
+              preset: board.startup.preset,
+              restoreMode: board.startup.restoreMode,
+              projectRoot: board.startup.projectRoot ?? null,
+            }
+          : null,
       };
     }),
   }));

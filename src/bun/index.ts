@@ -16,6 +16,7 @@ import type {
   ResolvedCustomViewConfig,
   ShellProfile,
 } from "@niwaterm/config";
+import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, writeClipboardText } from "./clipboard";
@@ -24,7 +25,7 @@ import { watchConfigFile } from "./config-watcher";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { applyLayoutPreset } from "./layout-apply";
-import { loadProjectPreset } from "./project-config";
+import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
@@ -78,7 +79,17 @@ if (process.platform === "darwin") {
 
 export type NiwaRPC = {
   bun: RPCSchema<{
-    requests: {};
+    requests: {
+      /**
+       * サイドバーの起動時レイアウトメニューに並べるプリセット一覧。プロジェクトローカルの
+       * プリセットは対象Boardのフォーカス中タブのcwdから解決するため、そのBoardのタブで
+       * `niwaterm layout list`を叩いたのと同じ結果になる
+       */
+      listBoardLayouts: {
+        params: { boardId: BoardId };
+        response: { layouts: LayoutListEntry[] };
+      };
+    };
     messages: {
       log: { msg: string };
       ready: {};
@@ -133,6 +144,14 @@ export type NiwaRPC = {
       renameTile: { tileId: TileId; name: string };
       renameWorkspace: { workspaceId: WorkspaceId; name: string };
       renameBoard: { boardId: BoardId; name: string };
+      /**
+       * サイドバーの右クリックからのレイアウト適用。選んだプリセットをそのBoardへ今すぐ適用し、
+       * 起動時レイアウトとしても紐づける（CLIの`layout apply --replace --startup`と同じ）。
+       * 既存タブを閉じる確認と、プロジェクトローカル由来の場合のtrust確認はwebview側で取ってから送る
+       */
+      applyBoardLayout: { boardId: BoardId; preset: string; trust?: boolean };
+      /** サイドバーの右クリックからの起動時レイアウトの紐づけ解除（CLIの`board startup clear`と同じ） */
+      clearBoardStartup: { boardId: BoardId };
       /** keybindingsのBindingTargetがkind:"custom"の場合に発火する。handlerIdはniwa-api.tsのhandlerRegistryのキー */
       runKeybindHandler: { handlerId: string };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
@@ -438,7 +457,11 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
   // これは万一ハンドラがハングした場合の最終防波堤
   maxRequestTime: 20000,
   handlers: {
-    requests: {},
+    requests: {
+      listBoardLayouts: async ({ boardId }: { boardId: BoardId }) => ({
+        layouts: await listResolvedLayouts(workspaceManager.getBoardFocusedCwd(boardId), layouts),
+      }),
+    },
     messages: {
       log: ({ msg }: { msg: string }) => {
         console.log(`[view] ${msg}`);
@@ -608,6 +631,36 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
         workspaceManager.setBoardName(boardId, name);
+      },
+      applyBoardLayout: ({
+        boardId,
+        preset,
+        trust,
+      }: {
+        boardId: BoardId;
+        preset: string;
+        trust?: boolean;
+      }) => {
+        // 解決起点はそのBoardのフォーカス中タブのcwd。そのタブで`niwaterm layout apply`を
+        // 叩いたのと同じ解決になり、プロジェクトローカルのプリセットも同じ顔ぶれで引ける
+        const cwd = workspaceManager.getBoardFocusedCwd(boardId);
+        applyAndBindStartupLayout(workspaceManager, shellProfiles, layouts, {
+          boardId,
+          preset,
+          ...(cwd !== undefined ? { cwd } : {}),
+          ...(trust !== undefined ? { trust } : {}),
+        })
+          .then((result) => {
+            if (result.ok) return;
+            console.log(`[bun] applyBoardLayout failed: ${result.error}`);
+            sendNotification({ title: "レイアウトを適用できません", body: result.error });
+          })
+          .catch((err: unknown) => {
+            console.log(`[bun] applyBoardLayout error: ${String(err)}`);
+          });
+      },
+      clearBoardStartup: ({ boardId }: { boardId: BoardId }) => {
+        workspaceManager.setBoardStartup(boardId, null);
       },
       runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
         runKeybindHandler(handlerId).catch((err: unknown) => {

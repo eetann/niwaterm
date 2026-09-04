@@ -279,6 +279,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return boardStartups.get(boardId) ?? null;
   }
 
+  /**
+   * Boardのフォーカス中タイル・アクティブタブが報告しているcwd（未報告ならundefined）。
+   * サイドバーからそのBoardを対象に操作したとき、プロジェクトローカル設定の解決起点に使う
+   * （そのBoardのタブでCLIを叩いたのと同じ解決結果になる）
+   */
+  function getBoardFocusedCwd(boardId: BoardId): string | undefined {
+    return boards.get(boardId)?.getFocusedTabSnapshot()?.cwd;
+  }
+
   function splitTile(
     tileId: TileId,
     orientation: SplitOrientation,
@@ -646,6 +655,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setBoardName,
     setBoardStartup,
     getBoardStartup,
+    getBoardFocusedCwd,
     splitTile,
     newTab,
     newBrowserTab,

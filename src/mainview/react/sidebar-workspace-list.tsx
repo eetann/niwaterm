@@ -1,15 +1,37 @@
-import { AlertTriangle, ChevronRight, Maximize2, PictureInPicture2 } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  LayoutTemplate,
+  Maximize2,
+  PictureInPicture2,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
+import type { LayoutListEntry } from "../../bun/project-config";
 import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
 import type { SidebarBoardItem, SidebarPopupItem, SidebarWorkspaceItem } from "./sidebar-props";
+
+/** サイドバーから選ばれたレイアウトプリセット。適用は既存タブを閉じるため、確認は呼び出し側が取る */
+export interface SidebarApplyLayoutRequest {
+  boardId: BoardId;
+  boardLabel: string;
+  preset: string;
+  /** 選んだプリセットの解決元。プロジェクトローカルならtrustの確認も要る */
+  projectRoot: string | null;
+}
 
 export interface SidebarWorkspaceListProps {
   workspaces: SidebarWorkspaceItem[];
@@ -19,11 +41,27 @@ export interface SidebarWorkspaceListProps {
   onRenameBoard: (boardId: BoardId, name: string) => void;
   onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
   onCloseBoard: (boardId: BoardId, name: string) => void;
+  /** 起動時レイアウトのサブメニューを開いたときに、そのBoardから見えるプリセットを取り出す */
+  onRequestBoardLayouts: (boardId: BoardId) => Promise<LayoutListEntry[]>;
+  onApplyBoardLayout: (request: SidebarApplyLayoutRequest) => void;
+  onClearBoardStartup: (boardId: BoardId) => void;
 }
+
+/** 起動時レイアウトのサブメニューに並べるプリセット。開くたびに取り直す（configはホットリロードされるため） */
+type LayoutMenuState =
+  | { boardId: BoardId; status: "loading" }
+  | { boardId: BoardId; status: "ready"; entries: LayoutListEntry[] };
 
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
 
 type EditingTarget = { kind: "board"; id: BoardId } | { kind: "workspace"; id: WorkspaceId };
+
+/** Board行のツールチップ・アイコンのaria-label。`niwaterm list`の[startup:]/[preset:]表示と対応させる */
+function startupLabel(startup: NonNullable<SidebarBoardItem["startup"]>): string {
+  return startup.restoreMode === "layout"
+    ? `起動時レイアウト: ${startup.preset}`
+    : `プリセット: ${startup.preset}（起動時は骨格を復元）`;
+}
 
 function loadCollapsedIds<T extends string>(storageKey: string): Set<T> {
   try {
@@ -50,6 +88,9 @@ export function SidebarWorkspaceList({
   onRenameBoard,
   onRenameWorkspace,
   onCloseBoard,
+  onRequestBoardLayouts,
+  onApplyBoardLayout,
+  onClearBoardStartup,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -57,6 +98,31 @@ export function SidebarWorkspaceList({
   // 名前編集中のBoard/Workspace。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  // コンテキストメニューは同時に1つしか開かないので、プリセット一覧の状態もBoard横断で1つ持てば足りる
+  const [layoutMenu, setLayoutMenu] = useState<LayoutMenuState | null>(null);
+  // 開いた直後に閉じて別Boardを開いた場合、先行リクエストの結果が後から届いて上書きするのを防ぐ
+  const layoutRequestSeq = useRef(0);
+
+  function openLayoutMenu(boardId: BoardId): void {
+    const seq = ++layoutRequestSeq.current;
+    setLayoutMenu({ boardId, status: "loading" });
+    onRequestBoardLayouts(boardId)
+      .then((entries) => {
+        if (seq === layoutRequestSeq.current) {
+          setLayoutMenu({ boardId, status: "ready", entries });
+        }
+      })
+      .catch(() => {
+        if (seq === layoutRequestSeq.current) {
+          setLayoutMenu({ boardId, status: "ready", entries: [] });
+        }
+      });
+  }
+
+  function closeLayoutMenu(): void {
+    layoutRequestSeq.current++;
+    setLayoutMenu(null);
+  }
 
   function toggleCollapsedWorkspace(workspaceId: WorkspaceId): void {
     setCollapsedWorkspaces((prev) => {
@@ -115,6 +181,69 @@ export function SidebarWorkspaceList({
   }
 
   /**
+   * 起動時レイアウトのサブメニュー。プリセットを選ぶとその場でBoardへ適用し、同時に起動時
+   * レイアウトとしても紐づける（CLIの`layout apply --replace --startup`）。次回起動を待たずに
+   * 見えた方が「思っていたレイアウトと違う」に早く気づけるため、適用と紐づけは分けない。
+   * 適用は既存タブを閉じる破壊的操作なので、確認ダイアログは呼び出し側（index.ts）が出す
+   */
+  function renderStartupLayoutMenu(board: SidebarBoardItem) {
+    const startup = board.startup;
+    const entries =
+      layoutMenu?.boardId === board.boardId && layoutMenu.status === "ready"
+        ? layoutMenu.entries
+        : null;
+    return (
+      <ContextMenuSub
+        onOpenChange={(open) => {
+          if (open) openLayoutMenu(board.boardId);
+          else closeLayoutMenu();
+        }}
+      >
+        <ContextMenuSubTrigger>起動時レイアウト</ContextMenuSubTrigger>
+        <ContextMenuSubContent className="max-w-72">
+          <ContextMenuLabel className="text-xs font-normal text-muted-foreground">
+            選ぶと今すぐ適用し、次回の起動時も同じ構成にする
+          </ContextMenuLabel>
+          {entries === null && <ContextMenuItem disabled>読み込み中...</ContextMenuItem>}
+          {entries?.length === 0 && (
+            <ContextMenuItem disabled>プリセットがありません</ContextMenuItem>
+          )}
+          {entries?.map((entry) => (
+            <ContextMenuCheckboxItem
+              key={`${entry.projectRoot ?? ""} ${entry.name}`}
+              checked={startup?.preset === entry.name}
+              title={
+                entry.projectRoot ? `${entry.projectRoot}/.niwaterm/config.ts` : entry.description
+              }
+              onSelect={() =>
+                onApplyBoardLayout({
+                  boardId: board.boardId,
+                  boardLabel: board.label,
+                  preset: entry.name,
+                  projectRoot: entry.projectRoot,
+                })
+              }
+            >
+              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+              {entry.projectRoot && (
+                <span className="shrink-0 text-[10px] text-muted-foreground">project</span>
+              )}
+            </ContextMenuCheckboxItem>
+          ))}
+          {startup && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => onClearBoardStartup(board.boardId)}>
+                紐づけを解除
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    );
+  }
+
+  /**
    * Board行はTile/Tabを表示しない1行が既定（ADR 0006後の再設計）。ブランチ・エージェント状態が
    * 何も無ければ展開せず1行のまま終わる。何かあれば縦線ガイド付きでステータスラインを展開する
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
@@ -138,6 +267,7 @@ export function SidebarWorkspaceList({
     const titleParts: string[] = [];
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
+    if (board.startup) titleParts.push(startupLabel(board.startup));
     return (
       <ContextMenu key={board.boardId}>
         <ContextMenuTrigger asChild>
@@ -158,6 +288,19 @@ export function SidebarWorkspaceList({
             <div className="flex w-full items-center gap-1.5 px-1.5 py-1">
               <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
               <span className="min-w-0 flex-1 truncate text-xs font-semibold">{board.label}</span>
+              {board.startup && (
+                <LayoutTemplate
+                  aria-label={startupLabel(board.startup)}
+                  className={cn(
+                    "size-3 shrink-0",
+                    // 起動時に組み直すBoardだけ色を付ける。プリセット名を覚えているだけの
+                    // Boardは起動時の見た目が変わらないため、区別が付く程度に落とす
+                    board.startup.restoreMode === "layout"
+                      ? "text-sky-400"
+                      : "text-muted-foreground/40",
+                  )}
+                />
+              )}
               {board.zoomed && (
                 <Maximize2
                   aria-label="ズーム中"
@@ -205,6 +348,7 @@ export function SidebarWorkspaceList({
           >
             名前を変更
           </ContextMenuItem>
+          {renderStartupLayoutMenu(board)}
           <ContextMenuItem
             variant="destructive"
             disabled={!canClose}
