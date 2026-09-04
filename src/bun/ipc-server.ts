@@ -719,7 +719,7 @@ function buildApp(
       return c.json({
         ok: false,
         needsTrust: { projectRoot: resolved.projectRoot, preset: parsed.name },
-        error: `layout "${parsed.name}" is defined in ${resolved.projectRoot} and needs trust`,
+        error: `layout "${parsed.name}" is defined in ${resolved.projectRoot}/.niwaterm/config.ts. Applying it at startup runs that repository's code and commands on every launch. Confirm interactively, or pass --trust if you trust it.`,
       });
     }
 
@@ -819,7 +819,7 @@ function buildApp(
       return c.json({
         ok: false,
         needsTrust: { projectRoot, preset },
-        error: `layout "${preset}" is defined in ${projectRoot} and needs trust`,
+        error: `layout "${preset}" is defined in ${projectRoot}/.niwaterm/config.ts. Applying it at startup runs that repository's code and commands on every launch. Confirm interactively, or pass --trust if you trust it.`,
       });
     }
     const startup = {

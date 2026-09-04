@@ -109,6 +109,30 @@ const applyCommand = define({
       );
     }
 
+    const target = isReplace ? "replace" : "new-board";
+    const cwd = ctx.values.cwd ?? process.cwd();
+    const endpoint = resolveIpcEndpoint();
+
+    // trustの確認を--replaceの破壊的確認より先に取る。逆順だと「既存タブを全部閉じますか？」に
+    // yと答えた直後に別の確認が出て、そこでnと答えると最初の確認が無駄になる。
+    // 判定には読み取り専用のlayout listを使い、解決元がプロジェクトローカルかを事前に見る
+    // （アプリ側のtrust gateは残してあるので、ここを通り抜けても最終的には弾かれる）
+    let trust = ctx.values.trust;
+    if (ctx.values.startup && !trust) {
+      const listed = await listLayouts(endpoint, cwd);
+      if (!listed.ok) {
+        failAndExit(`layout applyに失敗しました: ${listed.error}`);
+      }
+      const projectRoot = listed.layouts.find((l) => l.name === ctx.values.name)?.projectRoot;
+      if (projectRoot) {
+        if (!(await confirmTrust({ projectRoot, preset: ctx.values.name }))) {
+          console.log("キャンセルしました");
+          return;
+        }
+        trust = true;
+      }
+    }
+
     if (ctx.values.replace && !ctx.values["replace-force"]) {
       const boardLabel = ctx.values.board ? `Board ${ctx.values.board}` : "現在アクティブなBoard";
       const confirmed = await confirmReplace(boardLabel);
@@ -118,22 +142,19 @@ const applyCommand = define({
       }
     }
 
-    const target = isReplace ? "replace" : "new-board";
-    const cwd = ctx.values.cwd ?? process.cwd();
-    const endpoint = resolveIpcEndpoint();
-    const applyOnce = (trust: boolean | undefined) =>
+    const applyOnce = (t: boolean | undefined) =>
       applyLayout(endpoint, ctx.values.name, {
         target,
         cwd,
         workspaceId: ctx.values.workspace,
         boardId: ctx.values.board,
         startup: ctx.values.startup,
-        trust,
+        trust: t,
       });
 
-    let result = await applyOnce(ctx.values.trust);
-    // プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけるにはtrustが要る（TASK-0069）。
-    // アプリ側が同意を求めてきたら確認を取り、了承されたぶんだけ付け直して再送する
+    let result = await applyOnce(trust);
+    // 事前確認をすり抜けた場合（プリセット一覧を取ってから適用するまでの間に設定が変わった等）の保険。
+    // アプリ側が同意を求めてきたら、ここでも確認を取って付け直す（TASK-0069）
     if (!result.ok && "needsTrust" in result) {
       if (!(await confirmTrust(result.needsTrust))) {
         console.log("キャンセルしました");
