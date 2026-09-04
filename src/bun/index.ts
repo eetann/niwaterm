@@ -3,6 +3,7 @@ import Electrobun, {
   BrowserView,
   BrowserWindow,
   type RPCSchema,
+  Screen,
   Utils,
 } from "electrobun/bun";
 import { APP_VARIANT } from "./app-variant.generated";
@@ -30,6 +31,15 @@ import { loadPersistedState, persistedFilePath, savePersistedState } from "./per
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, TabId, TileId } from "./tile-layout";
 import { sendWindowsNotification } from "./windows-notification";
+import {
+  isFrameRestorable,
+  loadWindowState,
+  resolveWindowFrame,
+  saveWindowState,
+  type ScreenArea,
+  type WindowFrame,
+  windowStateFilePath,
+} from "./window-state";
 import {
   createWorkspaceManager,
   type AppRenderState,
@@ -613,19 +623,87 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
   },
 });
 
+interface DisplayInfo {
+  workArea: ScreenArea;
+  isPrimary: boolean;
+}
+
+/** プライマリを先頭にした各ディスプレイの作業領域。取得できない環境では空配列 */
+function screenWorkAreas(): ScreenArea[] {
+  try {
+    const displays = Screen.getAllDisplays() as DisplayInfo[];
+    return displays
+      .slice()
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
+      .map((display) => display.workArea)
+      .filter((area) => area.width >= 1 && area.height >= 1);
+  } catch (err: unknown) {
+    console.log(`[bun] failed to query displays: ${String(err)}`);
+    return [];
+  }
+}
+
+const windowFramePath = windowStateFilePath();
+let windowFrame = resolveWindowFrame(loadWindowState(windowFramePath), screenWorkAreas());
+
 const mainWindow = new BrowserWindow({
   // 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
   // タイトルバーで見分けられるよう、実際のアプリ名をそのまま使う
   title: APP_VARIANT,
   url: "views://mainview/index.html",
   frame: {
-    width: 900,
-    height: 600,
-    x: 200,
-    y: 200,
+    width: windowFrame.width,
+    height: windowFrame.height,
+    x: windowFrame.x,
+    y: windowFrame.y,
   },
   rpc,
 });
+
+// 保存する値はネイティブ側の外枠（getFrame）から取り直す。move/resizeイベントが持つ
+// width/heightはwebview（クライアント領域）のサイズで、ウィンドウ生成時に渡す外枠より
+// タイトルバー・枠の分だけ小さいため、イベント値をそのまま保存すると起動のたびに縮んでいく。
+// 最小化中など復元に使えない値のときは、直前に控えた値を残す
+function captureWindowFrame() {
+  let frame: WindowFrame;
+  try {
+    frame = mainWindow.getFrame();
+  } catch (err: unknown) {
+    console.log(`[bun] failed to read window frame: ${String(err)}`);
+    return;
+  }
+  const rounded: WindowFrame = {
+    x: Math.round(frame.x),
+    y: Math.round(frame.y),
+    width: Math.round(frame.width),
+    height: Math.round(frame.height),
+  };
+  if (!isFrameRestorable(rounded, screenWorkAreas())) return;
+  windowFrame = rounded;
+}
+
+function saveWindowFrameNow() {
+  captureWindowFrame();
+  try {
+    saveWindowState(windowFramePath, windowFrame);
+  } catch (err: unknown) {
+    console.log(`[bun] failed to save window frame: ${String(err)}`);
+  }
+}
+
+// ウィンドウ枠の保存は500msでコアレスする（ドラッグ中はmove/resizeが連続で飛んでくる）
+let windowFrameSaveScheduled = false;
+function scheduleWindowFrameSave() {
+  if (windowFrameSaveScheduled) return;
+  windowFrameSaveScheduled = true;
+  setTimeout(() => {
+    windowFrameSaveScheduled = false;
+    saveWindowFrameNow();
+  }, 500);
+}
+
+mainWindow.on("move", () => scheduleWindowFrameSave());
+mainWindow.on("resize", () => scheduleWindowFrameSave());
 
 // Electrobunはアプリコードをbun Worker上で実行するため、Worker側で登録したprocess.on("exit")や
 // シグナルハンドラはアプリ終了時に発火しない（Electrobunがprocess.exitを上書きし、ネイティブ側の
@@ -636,9 +714,14 @@ const mainWindow = new BrowserWindow({
 // cleanup()を呼ぶ。will-closeはウィンドウを閉じる直前（ネイティブのcloseWindowより前）、
 // before-quitはCmd+Q等のアプリ終了要求で発火する。cleanup()は冪等なので複数経路から
 // 呼ばれても問題ない
-mainWindow.on("will-close", () => cleanup());
-mainWindow.on("close", () => cleanup());
-Electrobun.events.on("before-quit", () => cleanup());
+function onExit() {
+  saveWindowFrameNow();
+  cleanup();
+}
+
+mainWindow.on("will-close", () => onExit());
+mainWindow.on("close", () => onExit());
+Electrobun.events.on("before-quit", () => onExit());
 
 // WindowsではmainWindow.activate()（ネイティブのactivateWindow）がwebviewのOSキーボードフォーカスを
 // 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
