@@ -53,6 +53,14 @@ export interface WorkspaceListEntry {
   popup: { tabId: TabId; visible: boolean } | null;
 }
 
+/** listStartupLayoutBoardsの1件（TASK-0077 / TASK-0069） */
+export interface StartupLayoutBoard {
+  boardId: BoardId;
+  preset: string;
+  /** プリセットの解決元プロジェクトルート。未設定ならグローバル設定から引く */
+  projectRoot?: string;
+}
+
 export interface TabLocation {
   workspaceId: WorkspaceId;
   boardId: BoardId;
@@ -273,14 +281,23 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   /**
    * 起動時にレイアウトプリセットで組み直すBoard（restoreMode: "layout"）の一覧。
-   * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う（TASK-0077）
+   * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う（TASK-0077）。
+   * projectRootが載っているBoardは、グローバル設定ではなくそのプロジェクトの
+   * .niwaterm/config.tsからプリセットを引く（TASK-0069）
    */
-  function listStartupLayoutBoards(): { boardId: BoardId; preset: string }[] {
-    const result: { boardId: BoardId; preset: string }[] = [];
+  function listStartupLayoutBoards(): StartupLayoutBoard[] {
+    const result: StartupLayoutBoard[] = [];
     for (const ws of order) {
       for (const board of (workspaces.get(ws) as Workspace).listBoards()) {
         if (board.startup?.restoreMode === "layout") {
-          result.push({ boardId: board.boardId, preset: board.startup.preset });
+          const entry: StartupLayoutBoard = {
+            boardId: board.boardId,
+            preset: board.startup.preset,
+          };
+          if (board.startup.projectRoot !== undefined) {
+            entry.projectRoot = board.startup.projectRoot;
+          }
+          result.push(entry);
         }
       }
     }

@@ -142,7 +142,7 @@ niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
 niwaterm board switch --board <boardId>
 niwaterm board close --board <boardId>
 niwaterm board rename --board <boardId> <name>
-niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>]
+niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>] [--cwd <dir>] [--trust]
 ```
 
 Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。対象の`boardId`は`niwaterm list`（複数Board時のみBoard行が表示される）または`board new`実行時に表示される値で確認する。
@@ -156,14 +156,14 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm layout list
-niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup]
+niwaterm layout list [--cwd <dir>]
+niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup] [--trust]
 ```
 
-`niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
+`niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）とプロジェクトローカルの`.niwaterm/config.ts`（「プロジェクトローカルのレイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
 
-- `layout list` — 定義済みプリセットを`name<TAB>description`形式で表示する。1件も定義されていない場合はその旨を表示する
-- `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`/`--replace-force`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る）
+- `layout list` — 定義済みプリセットを`name<TAB>解決元<TAB>description`形式で表示する。解決元は`[project: <projectRoot>]`か`[global]`。`--cwd`はプロジェクトローカルのプリセットを探す起点で、省略時は実行したディレクトリ。1件も定義されていない場合はその旨を表示する
+- `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（`--replace`/`--replace-force`時、それ以上分割されず最初に到達するタイルだけは既存タブを使い回すため、このデフォルトが効かず元のcwdのまま残る。プロジェクトローカル由来のプリセットでは`--cwd`ではなくプロジェクトルートが基準になる）。成功時は`board: <boardId><TAB>preset: <name>`を表示し、プロジェクトローカル由来なら`[project: <projectRoot>]`が付く
 
 指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合はいずれもエラーメッセージと共に終了コード1を返す（検証失敗の主な原因は`shellProfile`の未知のid、`focus:true`の重複、ratioの範囲外指定等）。検証失敗時はBoardに一切変更を加えない。
 
@@ -183,13 +183,63 @@ niwaterm board startup clear --board board-12
 
 `layout apply`は成功したBoardに適用したプリセット名を必ず記録する。`--startup`を付けた場合だけそのBoardが起動時の組み直し対象（`restoreMode: "layout"`）になり、付けなければ名前を覚えるだけで従来どおり保存した骨格を復元する。
 
-`board startup <mode>`のmodeは次の3つ。`--preset`を省略すると、そのBoardに既に記録されているプリセット名を引き継ぐ（一度も`layout apply`していないBoardでは`--preset`が必須）。
+`board startup <mode>`のmodeは次の3つ。`--preset`を省略すると、そのBoardに既に記録されているプリセット名を（プロジェクトローカル由来ならその解決元ごと）引き継ぐ（一度も`layout apply`していないBoardでは`--preset`が必須）。
 
 - `layout` — 起動時にプリセットで組み直す。保存した骨格は使わないので、前回セッションのタブ名・タブ変数・cwdは持ち込まれず、プリセットの`command`も改めて実行される
 - `restore` — 保存した骨格を復元する（既定の挙動）。プリセット名の記録自体は残るので、あとから`layout`へ戻せる
 - `clear` — プリセットの紐づけごと解除する
 
-起動時にプリセットが`niwaterm.config.ts`から消えていた場合、そのBoardは単一タブのまま残り、デスクトップ通知でその旨を知らせる（骨格は復元されない）。プリセット名を変える際は`board startup`で追随させること。
+起動時にプリセットが設定から消えていた場合、そのBoardは単一タブのまま残り、デスクトップ通知でその旨を知らせる（骨格は復元されない）。プリセット名を変える際は`board startup`で追随させること。プロジェクトローカル由来の場合は、記録された`projectRoot`が消えている・`.niwaterm/config.ts`からプリセットが消えている場合も同じ扱いになる。
+
+### プロジェクトローカルのレイアウト
+
+リポジトリ内の`<projectRoot>/.niwaterm/config.ts`にレイアウトプリセットを置くと、そのリポジトリでだけ使えるプリセットになる。チーム内でレイアウトを共有したい場合や、リポジトリごとにタイル構成が違う場合に使う。
+
+```ts
+// .niwaterm/config.ts
+import type { NiwatermProjectConfig } from "@niwaterm/config";
+
+export default {
+  layouts: {
+    dev: {
+      description: "editor + test watcher",
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        ratio: 0.6,
+        first: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] },
+        second: { kind: "tile", tabs: [{ name: "test", cwd: "./packages/cli", command: "bun test --watch" }] },
+      },
+    },
+  },
+} satisfies NiwatermProjectConfig;
+```
+
+`import type`はトランスパイル時に消えるため、リポジトリに`@niwaterm/config`が入っていなくてもそのまま動く（型補完が欲しい場合だけ入れればよい）。グローバル設定と違い`defineConfig`のようなランタイムヘルパーは使わず、素のオブジェクトをdefault exportする。
+
+**解決の仕組み**
+
+`.niwaterm/`は暗黙に探されるわけではなく、次の2つの場面でだけ参照される。
+
+- **CLI・API実行時**（`layout list` / `layout apply` / `board startup --preset`） — 実行したディレクトリ（`--cwd`）から上向きに`.niwaterm/`を探す。見つからない場合はgitのメインワークツリー側の`.niwaterm/`も見る（リンクされたワークツリーに`.niwaterm/`をコミットしていない運用のため）
+- **起動時**（起動時レイアウト） — cwdが存在しないため探索は行わず、紐づけを作った時点の解決元（`projectRoot`）をそのまま読む
+
+Boardが複数のディレクトリのタブを開いていても解決先は曖昧にならない。Boardが覚えているのは「どのプロジェクトのプリセットで組まれたか」という出自1つで、タブのcwdは解決に使われないため。
+
+**同名プリセットはプロジェクト側が優先される**。どちらが適用されるかは`layout list`の解決元列で確認できる。
+
+タブの`cwd`はプロジェクトルート基準の相対パスで書ける（`cwd`省略時のデフォルトもプロジェクトルート）。プリセットをリポジトリごと持ち運んでも同じ構成を再現できる。
+
+**信頼（trust）**
+
+プロジェクトローカルのプリセットを**起動時レイアウトへ紐づける**とき（`layout apply <name> --startup`、`board startup layout`）だけ、y/nの確認プロンプトが出る。紐づけると以後アプリを起動するたびにそのリポジトリの`.niwaterm/config.ts`が評価され、プリセットの`command`がシェルへ流し込まれるため、cloneしてきたリポジトリのコードが自動実行されることになる。信頼できるリポジトリでのみ許可すること。
+
+- グローバル設定由来のプリセットでは確認は出ない（ユーザー自身の設定のため）
+- 紐づけを伴わない一度きりの`layout apply`でも確認は出ない（ユーザーがそのディレクトリで明示的に実行しているため）。ただし同名プリセットの影に隠れて気づかない事故を避けるため、適用したプリセットの解決元は必ず出力に表示される
+- 非対話環境（パイプ・スクリプト実行等）ではハングせずエラーで終了する。確認をスキップするには`--trust`を使う
+- 確認は「起動時の自動実行を有効にする操作」ごとに出る。`board startup restore`で一度止めてから`board startup layout`で戻す場合も、改めて確認が出る（解決元の記録は残っているが、自動実行を再び有効にするのはガードすべき操作という判断）
+- 信頼の記録は専用のストアを持たない。起動時に自動実行される経路は起動時レイアウトの紐づけ1本だけで、それは必ずこの確認を通ってしか作られないため。紐づけを外す（`board startup restore`／`clear`）と起動時の自動実行も止まる
+- trust後に`git pull`等で`.niwaterm/config.ts`の内容が変わった場合の再確認は行わない（内容ハッシュを持たない）
 
 ```sh
 niwaterm font-size increase|decrease|reset

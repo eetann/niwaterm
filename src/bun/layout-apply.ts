@@ -16,12 +16,24 @@ import type {
   ShellProfile,
 } from "@niwaterm/config";
 import type { BoardId } from "./board";
+import { resolveTabCwd } from "./project-config";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { findNode, listLeaves, type TabId, type TileId } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
 
 export type ApplyLayoutTarget = "new-board" | "replace";
+
+/** applyLayoutPresetのcwd解決に関わるオプション（TASK-0069） */
+export interface ApplyLayoutOptions {
+  /** `niwaterm layout apply`を実行したCLIのcwd。プロジェクトローカル由来でないときのcwd基準になる */
+  invocationCwd?: string;
+  /**
+   * プロジェクトローカル（<projectRoot>/.niwaterm/config.ts）由来のプリセットならその解決元。
+   * 指定するとinvocationCwdより優先してcwdの基準になり、tabConfig.cwdの相対パスもここから解決される
+   */
+  projectRoot?: string;
+}
 
 export type ApplyLayoutResult = { ok: true; boardId: BoardId } | { ok: false; error: string };
 
@@ -97,8 +109,12 @@ interface BuildContext {
   profiles: ShellProfile[];
   boardId: BoardId;
   focusTarget: { tileId: TileId; tabId: TabId } | null;
-  /** `niwaterm layout apply`を実行したCLIのcwd。tabConfig.cwd未指定時のデフォルトに使う */
-  invocationCwd?: string;
+  /**
+   * tabConfig.cwd未指定時のデフォルトであり、相対cwdの解決基準。
+   * プロジェクトローカル由来のプリセットならprojectRoot、そうでなければ
+   * `niwaterm layout apply`を実行したCLIのcwd（ApplyLayoutOptionsで決まる）
+   */
+  baseCwd?: string;
 }
 
 /** 全Workspaceを横断してboardIdのBoardListEntryを探す（Board 1つはたかだか数十件程度のため線形探索で十分） */
@@ -120,7 +136,7 @@ function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
   return node.tabIds[0] as TabId;
 }
 
-// プレースホルダータブは既定シェル・invocationCwd（buildNode内のsplitTile呼び出しで
+// プレースホルダータブは既定シェル・baseCwd（buildNode内のsplitTile呼び出しで
 // 既に渡している）で生成済みのPTYを持つ。tabConfigがshellProfile/cwdを指定していなければ
 // 結果は同一になるため、newTab+closeTabで新規PTYを作って即座に古いPTYを破棄する
 // （Windows実機でネイティブ層のクラッシュを誘発した。layout-apply-crush.log参照）代わりに、
@@ -188,7 +204,7 @@ function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig
   const tabId = ctx.workspaceManager.newTab(
     tileId,
     shellOverride,
-    tabConfig.cwd ?? ctx.invocationCwd,
+    resolveTabCwd(tabConfig.cwd, ctx.baseCwd),
   );
   if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
   configureTab(ctx, tileId, tabId, tabConfig);
@@ -200,12 +216,7 @@ function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): v
     buildTile(ctx, tileId, node);
     return;
   }
-  const result = ctx.workspaceManager.splitTile(
-    tileId,
-    node.orientation,
-    node.ratio,
-    ctx.invocationCwd,
-  );
+  const result = ctx.workspaceManager.splitTile(tileId, node.orientation, node.ratio, ctx.baseCwd);
   if (!result) throw new Error(`internal error: failed to split tile ${tileId}`);
   // splitTileはfirst=既存(tileIdのまま)/second=新規(result.tileId)で分割する（tile-layout.ts参照）
   buildNode(ctx, tileId, node.first);
@@ -246,7 +257,7 @@ function getRootTileId(workspaceManager: WorkspaceManager, boardId: BoardId): Ti
  * （既存タブ・PTYは無条件でcloseする。確認プロンプト等の要否はroadmap「プロセスはどうなるのか」で別途検討）。
  * 検証エラー時はBoardに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
  * ok:falseで返すが、その時点までに行った操作はロールバックされない。
- * invocationCwdは`niwaterm layout apply`を実行したCLIのcwdで、tabConfig.cwd未指定時のデフォルトになる
+ * cwdの基準はoptionsで決まる（ApplyLayoutOptions参照）
  * （"replace"時、それ以上分割されないまま最初に到達するタイルだけは既存タブを使い回すため、
  * このデフォルトが効かず元のcwdのまま残る点に注意）
  */
@@ -256,7 +267,7 @@ export function applyLayoutPreset(
   preset: LayoutPreset,
   target: ApplyLayoutTarget,
   boardId: BoardId,
-  invocationCwd?: string,
+  options: ApplyLayoutOptions = {},
 ): ApplyLayoutResult {
   const validationError = validateLayoutPreset(preset, profiles);
   if (validationError) return { ok: false, error: validationError };
@@ -270,7 +281,9 @@ export function applyLayoutPreset(
     profiles,
     boardId,
     focusTarget: null,
-    invocationCwd,
+    // プロジェクトローカル由来のプリセットはprojectRootを基準にする。リポジトリへコミットした
+    // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため（TASK-0069）
+    baseCwd: options.projectRoot ?? options.invocationCwd,
   };
   try {
     buildNode(ctx, getRootTileId(workspaceManager, boardId), preset.layout);

@@ -72,9 +72,12 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   return true;
 }
 
-// 前回importFreshConfigで使った一時ディレクトリ。次回読み込み成功時に削除する
-// （importが失敗する可能性があるファイルを即座には消さず、常に「最後にimportへ成功した」ものを1世代分だけ残す）
-let previousImportDir: string | null = null;
+// 前回importFreshConfigで使った一時ディレクトリを、コピー元ディレクトリごとに1つ覚えておき、
+// 次回そのディレクトリの読み込みへ成功したときに削除する
+// （importが失敗する可能性があるファイルを即座には消さず、常に「最後にimportへ成功した」ものを1世代分だけ残す）。
+// グローバル設定とプロジェクトローカル設定（TASK-0069、複数リポジトリぶん）を並行して読むため、
+// 単一スロットではなくコピー元パスをキーにしたMapで管理する（互いの世代を消し合わないようにする）
+const previousImportDirs = new Map<string, string>();
 
 /**
  * configDirPath()配下のソースファイル（.ts/.js等）を毎回新しい一時ディレクトリへ実体コピーしてから
@@ -85,15 +88,15 @@ let previousImportDir: string | null = null;
  * node_modulesは巨大になりうるためコピーせずシンボリックリンクで繋ぐ（@niwaterm/config等の
  * パッケージimportの解決に必要）。
  */
-async function importFreshConfig(path: string): Promise<unknown> {
+export async function importFreshConfig(path: string): Promise<unknown> {
   const dir = dirname(path);
   const entryName = basename(path);
   const importDir = await mkdtemp(join(tmpdir(), "niwaterm-config-"));
   try {
     await copyConfigSources(dir, importDir);
     const mod: unknown = await import(pathToFileURL(join(importDir, entryName)).href);
-    const staleDir = previousImportDir;
-    previousImportDir = importDir;
+    const staleDir = previousImportDirs.get(dir);
+    previousImportDirs.set(dir, importDir);
     if (staleDir) {
       await rm(staleDir, { recursive: true, force: true }).catch(() => {});
     }
@@ -135,9 +138,10 @@ async function copyConfigSources(srcDir: string, destDir: string): Promise<void>
 
 /** アプリ終了時に一時importディレクトリを片付ける（index.tsのcleanup()から呼ぶ） */
 export function cleanupConfigImportDir(): void {
-  if (!previousImportDir) return;
-  rmSync(previousImportDir, { recursive: true, force: true });
-  previousImportDir = null;
+  for (const dir of previousImportDirs.values()) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  previousImportDirs.clear();
 }
 
 /**
@@ -431,16 +435,24 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * （layout-apply.ts）に行う
  */
 export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig {
-  const user = userConfig?.layouts;
+  return normalizeLayouts(userConfig?.layouts, "layouts");
+}
+
+/**
+ * resolveLayoutsの実体。プロジェクトローカル設定（TASK-0069、project-config.ts）からも
+ * 同じ検証を使えるよう、NiwatermConfigではなくlayoutsの生値を受け取る形で切り出している。
+ * sourceは警告ログに出す出所（"layouts" / "<projectRoot>/.niwaterm/config.ts layouts"）
+ */
+export function normalizeLayouts(user: unknown, source: string): LayoutsConfig {
   if (user === undefined) return {};
   if (!isPlainObject(user)) {
-    console.log(`[bun] ignoring invalid layouts: ${String(user)}`);
+    console.log(`[bun] ignoring invalid ${source}: ${String(user)}`);
     return {};
   }
   const result: LayoutsConfig = {};
   for (const [name, preset] of Object.entries(user)) {
     if (!isPlainObject(preset) || !isPlainObject(preset["layout"])) {
-      console.log(`[bun] ignoring invalid layouts entry: ${name}`);
+      console.log(`[bun] ignoring invalid ${source} entry: ${name}`);
       continue;
     }
     result[name] = preset as unknown as LayoutPreset;

@@ -61,9 +61,19 @@ export type BoardRestoreMode = "restore" | "layout";
 
 /** Boardに紐づくレイアウトプリセットと、起動時の組み直し方（TASK-0077） */
 export interface PersistedBoardStartup {
-  /** niwaterm.config.tsのlayoutsのキー */
+  /** layoutsのキー（プリセット名） */
   preset: string;
   restoreMode: BoardRestoreMode;
+  /**
+   * プリセットの解決元プロジェクトルート（絶対パス、TASK-0069）。
+   * 省略時はグローバル設定（~/.config/niwaterm/niwaterm.config.ts）から引く。
+   *
+   * 起動時にはcwdが存在しないためプリセット名だけでは解決元が決まらない。Board内のタブのcwdから
+   * 推測する方式は採らず（cdで変わるため解決キーとして不安定）、紐づけを作った時点の解決元を
+   * ここへ記録して、起動時はそのディレクトリだけを読む。Boardが複数ディレクトリを開いていても
+   * 「このBoardはどのプロジェクトのレイアウトで組まれたか」という出自は1つに定まる
+   */
+  projectRoot?: string;
 }
 
 /** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
@@ -219,6 +229,9 @@ function isPersistedBoardStartup(value: unknown): value is PersistedBoardStartup
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (typeof v["preset"] !== "string" || v["preset"] === "") return false;
+  if (v["projectRoot"] !== undefined) {
+    if (typeof v["projectRoot"] !== "string" || v["projectRoot"] === "") return false;
+  }
   return v["restoreMode"] === "restore" || v["restoreMode"] === "layout";
 }
 

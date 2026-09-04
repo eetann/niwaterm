@@ -14,6 +14,7 @@ export type {
   LayoutTileConfig,
   LayoutsConfig,
 } from "./layout";
+export type { NiwatermProjectConfig } from "./project";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export { type WorkspaceConfig } from "./workspace";
 export {

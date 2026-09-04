@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { type BoardStartupMode, resolveIpcEndpoint, setBoardStartup } from "../../ipc-client";
+import { confirmTrust } from "../../layout-trust";
 
 const MODES: BoardStartupMode[] = ["layout", "restore", "clear"];
 
@@ -26,7 +27,17 @@ export default define({
       type: "string",
       short: "p",
       description:
-        "紐づけるプリセット名（niwaterm layout listで確認）。省略時は現在紐づいているプリセットを引き継ぐ",
+        "紐づけるプリセット名（niwaterm layout listで確認）。省略時は現在紐づいているプリセット（解決元込み）を引き継ぐ",
+    },
+    cwd: {
+      type: "string",
+      description:
+        "--presetの解決元を探す起点ディレクトリ（省略時はこのコマンドを実行したディレクトリ）",
+    },
+    trust: {
+      type: "boolean",
+      description:
+        "プロジェクトローカルのプリセットを紐づける際の確認をスキップする（非対話環境用）",
     },
   },
   run: async (ctx) => {
@@ -36,12 +47,24 @@ export default define({
         `board startupに失敗しました: modeは${MODES.join(" / ")}のいずれかを指定してください`,
       );
     }
-    const result = await setBoardStartup(
-      resolveIpcEndpoint(),
-      mode,
-      ctx.values.board,
-      ctx.values.preset,
-    );
+    const endpoint = resolveIpcEndpoint();
+    const setOnce = (trust: boolean | undefined) =>
+      setBoardStartup(endpoint, mode, {
+        boardId: ctx.values.board,
+        preset: ctx.values.preset,
+        cwd: ctx.values.cwd ?? process.cwd(),
+        trust,
+      });
+
+    let result = await setOnce(ctx.values.trust);
+    // プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけるにはtrustが要る（TASK-0069）
+    if (!result.ok && "needsTrust" in result) {
+      if (!(await confirmTrust(result.needsTrust))) {
+        console.log("キャンセルしました");
+        return;
+      }
+      result = await setOnce(true);
+    }
     if (!result.ok) {
       failAndExit(`board startupに失敗しました: ${result.error}`);
     }
@@ -49,8 +72,9 @@ export default define({
       console.log(`board: ${result.boardId}\tstartup: none`);
       return;
     }
+    const source = result.startup.projectRoot ? ` [project: ${result.startup.projectRoot}]` : "";
     console.log(
-      `board: ${result.boardId}\tpreset: ${result.startup.preset}\tmode: ${result.startup.restoreMode}`,
+      `board: ${result.boardId}\tpreset: ${result.startup.preset}${source}\tmode: ${result.startup.restoreMode}`,
     );
   },
 });

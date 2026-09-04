@@ -366,7 +366,7 @@ export async function sendKeys(
 export type SplitOrientation = "horizontal" | "vertical";
 
 /** POST（`{ok:true}`系）呼び出しの共通処理。成功時はbodyをそのまま返す */
-async function postJson<T extends { ok: true }>(
+async function postJson<T extends { ok: boolean }>(
   endpoint: IpcEndpoint,
   path: string,
   body: unknown,
@@ -538,15 +538,30 @@ export async function listShellProfiles(endpoint: IpcEndpoint): Promise<ListShel
 export interface LayoutSummary {
   name: string;
   description?: string;
+  /**
+   * プロジェクトローカル（<projectRoot>/.niwaterm/config.ts）由来ならその解決元、
+   * グローバル設定由来ならnull（TASK-0069）
+   */
+  projectRoot: string | null;
 }
 
 export type ListLayoutsResult =
   | { ok: true; layouts: LayoutSummary[] }
   | { ok: false; error: string };
 
-export async function listLayouts(endpoint: IpcEndpoint): Promise<ListLayoutsResult> {
+/**
+ * cwdを渡すと、そこから解決できるプロジェクトローカルのプリセットも併せて一覧する（TASK-0069）。
+ * 同名はプロジェクト側だけが返る（実際にapplyされる方に揃えるため）
+ */
+export async function listLayouts(endpoint: IpcEndpoint, cwd?: string): Promise<ListLayoutsResult> {
   try {
-    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/layouts"), ipcFetchInit(endpoint));
+    const query =
+      cwd === undefined ? "" : `?cwd=${encodeURIComponent(toWindowsAccessibleCwd(endpoint, cwd))}`;
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, `/layouts${query}`),
+      ipcFetchInit(endpoint),
+    );
     const body = (await res.json().catch(() => null)) as {
       layouts?: unknown;
       error?: unknown;
@@ -563,7 +578,19 @@ export async function listLayouts(endpoint: IpcEndpoint): Promise<ListLayoutsRes
 
 export type ApplyLayoutTarget = "new-board" | "replace";
 
-export type ApplyLayoutResult = { ok: true; boardId: string } | { ok: false; error: string };
+/**
+ * プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけようとしたが、まだtrustされていない。
+ * CLIはこの内容でtrust promptを出し、同意が得られたらtrust: trueを付けて再送する（TASK-0069）
+ */
+export interface LayoutTrustRequest {
+  projectRoot: string;
+  preset: string;
+}
+
+export type ApplyLayoutResult =
+  | { ok: true; boardId: string; projectRoot?: string }
+  | { ok: false; needsTrust: LayoutTrustRequest; error: string }
+  | { ok: false; error: string };
 
 export interface ApplyLayoutOptions {
   target: ApplyLayoutTarget;
@@ -572,6 +599,8 @@ export interface ApplyLayoutOptions {
   boardId?: string;
   /** trueなら次回起動時もこのプリセットでBoardを組み直す（TASK-0077） */
   startup?: boolean;
+  /** trust promptに同意済み。プロジェクトローカル由来プリセット×startup時のみ必要（TASK-0069） */
+  trust?: boolean;
 }
 
 export function applyLayout(
@@ -586,12 +615,14 @@ export function applyLayout(
     workspaceId?: string;
     boardId?: string;
     startup?: boolean;
+    trust?: boolean;
   } = { name, target: opts.target };
   if (opts.cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, opts.cwd);
   if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
   if (opts.boardId !== undefined) body.boardId = opts.boardId;
   if (opts.startup !== undefined) body.startup = opts.startup;
-  return postJson(endpoint, "/apply-layout", body);
+  if (opts.trust !== undefined) body.trust = opts.trust;
+  return postJson<ApplyLayoutResult>(endpoint, "/apply-layout", body);
 }
 
 /** 起動時にBoardをどう組み直すか（TASK-0077） */
@@ -601,20 +632,42 @@ export type BoardStartupResult =
   | {
       ok: true;
       boardId: string;
-      startup: { preset: string; restoreMode: "layout" | "restore" } | null;
+      startup: {
+        preset: string;
+        restoreMode: "layout" | "restore";
+        /** プロジェクトローカル由来ならその解決元（TASK-0069） */
+        projectRoot?: string;
+      } | null;
     }
+  | { ok: false; needsTrust: LayoutTrustRequest; error: string }
   | { ok: false; error: string };
+
+export interface SetBoardStartupOptions {
+  boardId?: string;
+  preset?: string;
+  /** presetを明示指定したときの解決元を決めるCLIのcwd（TASK-0069） */
+  cwd?: string;
+  /** trust promptに同意済み（TASK-0069） */
+  trust?: boolean;
+}
 
 export function setBoardStartup(
   endpoint: IpcEndpoint,
   mode: BoardStartupMode,
-  boardId?: string,
-  preset?: string,
+  opts: SetBoardStartupOptions = {},
 ): Promise<BoardStartupResult> {
-  const body: { mode: BoardStartupMode; boardId?: string; preset?: string } = { mode };
-  if (boardId !== undefined) body.boardId = boardId;
-  if (preset !== undefined) body.preset = preset;
-  return postJson(endpoint, "/board-startup", body);
+  const body: {
+    mode: BoardStartupMode;
+    boardId?: string;
+    preset?: string;
+    cwd?: string;
+    trust?: boolean;
+  } = { mode };
+  if (opts.boardId !== undefined) body.boardId = opts.boardId;
+  if (opts.preset !== undefined) body.preset = opts.preset;
+  if (opts.cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, opts.cwd);
+  if (opts.trust !== undefined) body.trust = opts.trust;
+  return postJson<BoardStartupResult>(endpoint, "/board-startup", body);
 }
 
 export type OpenPopupResult =

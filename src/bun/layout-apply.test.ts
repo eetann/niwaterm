@@ -312,7 +312,9 @@ describe("applyLayoutPreset (target: new-board)", () => {
     const boardId = newBoardInActiveWorkspace(mgr, "/proj");
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ name: "editor" }] } };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/proj");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      invocationCwd: "/proj",
+    });
     resolvePending(mgr);
 
     expect(result.ok).toBe(true);
@@ -332,12 +334,55 @@ describe("applyLayoutPreset (target: new-board)", () => {
       },
     };
 
-    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, "/invocation/dir");
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      invocationCwd: "/invocation/dir",
+    });
     resolvePending(mgr);
 
     expect(result.ok).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
     expect(sessionOpts.some((o) => o.cwd === "/explicit")).toBe(true);
+  });
+
+  // --- プロジェクトローカル由来のプリセット（TASK-0069） ---
+
+  test("projectRootはinvocationCwdより優先してcwdの基準になる", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr, "/proj");
+    const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ name: "editor" }] } };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      invocationCwd: "/somewhere/else",
+      projectRoot: "/proj",
+    });
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    // リポジトリへコミットしたプリセットが「どこから実行されたか」に左右されないようにする
+    expect(sessionOpts.some((o) => o.cwd === "/proj")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/somewhere/else")).toBe(false);
+  });
+
+  test("tabConfig.cwdの相対パスはprojectRoot基準で解決される", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr, "/proj");
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "cli", cwd: "./packages/cli" }] },
+        second: { kind: "tile", tabs: [{ name: "abs", cwd: "/elsewhere" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      projectRoot: "/proj",
+    });
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/proj/packages/cli")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/elsewhere")).toBe(true);
   });
 
   test("バリデーションに失敗した場合はBoardに一切触れずエラーを返す", () => {

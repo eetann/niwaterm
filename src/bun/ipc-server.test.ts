@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LayoutsConfig } from "@niwaterm/config";
@@ -2435,7 +2435,9 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(await res.json()).toEqual({ ok: true, layouts: [] });
   });
 
-  test("GET /layouts: 設定済みプリセットをname/descriptionの一覧として返す", async () => {
+  // 解決元(projectRoot)を必ず載せる。プロジェクトローカルのプリセットと同名になりうるため、
+  // CLI側はこれを見てどちらが適用されるかを表示する（TASK-0069）
+  test("GET /layouts: 設定済みプリセットをname/description/projectRootの一覧として返す", async () => {
     const { serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;
 
@@ -2443,8 +2445,8 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; layouts: unknown[] };
     expect(body.layouts).toEqual([
-      { name: "dev", description: "Editor + terminal" },
-      { name: "broken", description: undefined },
+      { name: "broken", projectRoot: null },
+      { name: "dev", description: "Editor + terminal", projectRoot: null },
     ]);
   });
 
@@ -2767,6 +2769,190 @@ describe("GET /layouts, POST /apply-layout", () => {
       body: JSON.stringify({ mode: "preset" }),
     });
     expect(badMode.status).toBe(400);
+  });
+
+  // --- プロジェクトローカルのプリセット（TASK-0069） ---
+
+  /** <dir>/proj/.niwaterm/config.ts に同名の"dev"プリセットを置き、そのルートを返す */
+  async function createProjectWithDevPreset(): Promise<string> {
+    const projectRoot = join(dir, "proj");
+    await mkdir(join(projectRoot, ".niwaterm"), { recursive: true });
+    await writeFile(
+      join(projectRoot, ".niwaterm", "config.ts"),
+      `export default {
+  layouts: {
+    dev: { description: "project dev", layout: { kind: "tile", tabs: [{ name: "proj" }] } },
+  },
+};
+`,
+    );
+    return projectRoot;
+  }
+
+  test("GET /layouts: cwdを渡すとプロジェクトローカルのプリセットが同名グローバルより優先される", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch(`http://localhost/layouts?cwd=${encodeURIComponent(projectRoot)}`, {
+      unix: socketPath,
+    });
+    const body = (await res.json()) as {
+      layouts: { name: string; description?: string; projectRoot: string | null }[];
+    };
+    expect(body.layouts).toEqual([
+      { name: "dev", description: "project dev", projectRoot },
+      { name: "broken", projectRoot: null },
+    ]);
+  });
+
+  test("POST /apply-layout: cwdから解決したプロジェクトローカルのプリセットを適用し、projectRootを返す", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd: projectRoot }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; boardId: string; projectRoot?: string };
+    expect(body.ok).toBe(true);
+    expect(body.projectRoot).toBe(projectRoot);
+    // 適用しただけ（startup未指定）ならrestoreのまま。解決元は覚えておく
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "restore",
+      projectRoot,
+    });
+  });
+
+  test("POST /apply-layout: プロジェクトローカル×startupはtrust無しだとneedsTrustを返し、Boardに触れない", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardsBefore = mgr.listWorkspaces().flatMap((w) => w.boards).length;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd: projectRoot, startup: true }),
+    });
+
+    const body = (await res.json()) as {
+      ok: boolean;
+      needsTrust?: { projectRoot: string; preset: string };
+    };
+    expect(body.ok).toBe(false);
+    expect(body.needsTrust).toEqual({ projectRoot, preset: "dev" });
+    expect(mgr.listWorkspaces().flatMap((w) => w.boards).length).toBe(boardsBefore);
+  });
+
+  test("POST /apply-layout: trust:trueなら適用し、解決元込みで起動時レイアウトに紐づける", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd: projectRoot, startup: true, trust: true }),
+    });
+
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      projectRoot,
+    });
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId: body.boardId, preset: "dev", projectRoot },
+    ]);
+  });
+
+  test("POST /apply-layout: グローバル由来のプリセットならstartupでもtrustは要らない", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", startup: true }),
+    });
+
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
+  });
+
+  test("POST /board-startup: プロジェクトローカルのpresetはtrust無しだとneedsTrustを返す", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+
+    const withoutTrust = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout", boardId, preset: "dev", cwd: projectRoot }),
+    });
+    const body = (await withoutTrust.json()) as {
+      ok: boolean;
+      needsTrust?: { projectRoot: string; preset: string };
+    };
+    expect(body.ok).toBe(false);
+    expect(body.needsTrust).toEqual({ projectRoot, preset: "dev" });
+    expect(mgr.getBoardStartup(boardId)).toBeNull();
+
+    const withTrust = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: "layout",
+        boardId,
+        preset: "dev",
+        cwd: projectRoot,
+        trust: true,
+      }),
+    });
+    expect(withTrust.status).toBe(200);
+    expect(mgr.getBoardStartup(boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      projectRoot,
+    });
+  });
+
+  test("POST /board-startup: preset省略時は解決元ごと引き継ぐ（別ディレクトリから叩いても入れ替わらない）", async () => {
+    const projectRoot = await createProjectWithDevPreset();
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardStartup(boardId, { preset: "dev", restoreMode: "restore", projectRoot });
+
+    // cwdはプロジェクト外。preset省略なので再解決せず、記録済みのprojectRootを使う
+    const res = await fetch("http://localhost/board-startup", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "layout", boardId, cwd: dir, trust: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mgr.getBoardStartup(boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      projectRoot,
+    });
   });
 });
 

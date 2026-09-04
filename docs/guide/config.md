@@ -444,6 +444,8 @@ workspace: {
 
 `layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`は空一覧を返す。
 
+ここで定義するのは全プロジェクト共通のプリセット。リポジトリ固有のレイアウトは`<projectRoot>/.niwaterm/config.ts`にも置ける（同名ならそちらが優先される。書き方・解決順・trustの扱いは`docs/guide/cli.md`「プロジェクトローカルのレイアウト」節）。プリセットの中身（下の表とタイル構成）はどちらでも同じ。
+
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `description` | `string` | `niwaterm layout list`に表示する説明文（省略可） |

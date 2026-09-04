@@ -1,22 +1,35 @@
 import { createInterface } from "node:readline/promises";
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
+import { confirmTrust } from "../layout-trust";
 import { applyLayout, listLayouts, resolveIpcEndpoint } from "../ipc-client";
 
 const listCommand = define({
   name: "list",
   description: "利用可能なレイアウトプリセットの一覧を表示",
-  run: async () => {
-    const result = await listLayouts(resolveIpcEndpoint());
+  args: {
+    cwd: {
+      type: "string",
+      description:
+        "プロジェクトローカルのプリセット（.niwaterm/config.ts）を探す起点ディレクトリ（省略時はこのコマンドを実行したディレクトリ）",
+    },
+  },
+  run: async (ctx) => {
+    const result = await listLayouts(resolveIpcEndpoint(), ctx.values.cwd ?? process.cwd());
     if (!result.ok) {
       failAndExit(`layout listに失敗しました: ${result.error}`);
     }
     if (result.layouts.length === 0) {
-      console.log("レイアウトプリセットが設定されていません（niwaterm.config.tsのlayoutsを参照）");
+      console.log(
+        "レイアウトプリセットが設定されていません（niwaterm.config.tsのlayouts、または.niwaterm/config.tsを参照）",
+      );
       return;
     }
+    // 解決元を必ず出す: 同名プリセットはプロジェクト側が優先されるため、
+    // どちらが適用されるのかが名前だけでは分からない（TASK-0069）
     for (const layout of result.layouts) {
-      console.log(`${layout.name}\t${layout.description ?? ""}`);
+      const source = layout.projectRoot ? `[project: ${layout.projectRoot}]` : "[global]";
+      console.log(`${layout.name}\t${source}\t${layout.description ?? ""}`);
     }
   },
 });
@@ -77,6 +90,11 @@ const applyCommand = define({
       description:
         "次回以降の起動時も、このBoardをこのプリセットで組み直す（保存した骨格の復元ではなくcommandごと再実行される）",
     },
+    trust: {
+      type: "boolean",
+      description:
+        "プロジェクトローカルのプリセットを--startupで紐づける際の確認をスキップする（非対話環境用）",
+    },
   },
   run: async (ctx) => {
     const isReplace = ctx.values.replace || ctx.values["replace-force"];
@@ -102,17 +120,32 @@ const applyCommand = define({
 
     const target = isReplace ? "replace" : "new-board";
     const cwd = ctx.values.cwd ?? process.cwd();
-    const result = await applyLayout(resolveIpcEndpoint(), ctx.values.name, {
-      target,
-      cwd,
-      workspaceId: ctx.values.workspace,
-      boardId: ctx.values.board,
-      startup: ctx.values.startup,
-    });
+    const endpoint = resolveIpcEndpoint();
+    const applyOnce = (trust: boolean | undefined) =>
+      applyLayout(endpoint, ctx.values.name, {
+        target,
+        cwd,
+        workspaceId: ctx.values.workspace,
+        boardId: ctx.values.board,
+        startup: ctx.values.startup,
+        trust,
+      });
+
+    let result = await applyOnce(ctx.values.trust);
+    // プロジェクトローカル由来のプリセットを起動時レイアウトへ紐づけるにはtrustが要る（TASK-0069）。
+    // アプリ側が同意を求めてきたら確認を取り、了承されたぶんだけ付け直して再送する
+    if (!result.ok && "needsTrust" in result) {
+      if (!(await confirmTrust(result.needsTrust))) {
+        console.log("キャンセルしました");
+        return;
+      }
+      result = await applyOnce(true);
+    }
     if (!result.ok) {
       failAndExit(`layout applyに失敗しました: ${result.error}`);
     }
-    console.log(`board: ${result.boardId}`);
+    const source = result.projectRoot ? ` [project: ${result.projectRoot}]` : "";
+    console.log(`board: ${result.boardId}\tpreset: ${ctx.values.name}${source}`);
   },
 });
 

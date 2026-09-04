@@ -23,6 +23,7 @@ import { watchConfigFile } from "./config-watcher";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { applyLayoutPreset } from "./layout-apply";
+import { loadProjectPreset } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
@@ -325,14 +326,21 @@ await refreshConfig();
  * 実行タイミングはconfig読み込み直後・BrowserView生成前に固定する。この時点では全タブが
  * まだPTY起動保留中（TASK-0047のspawnSessionPending）で、プリセットのcommandも
  * sendInitialInputで保留キューへ積まれるため、実測cols/rowsが確定してから正しいサイズで
- * 一度だけシェルが起動する。プリセットがconfigから消えている場合は単一タブのまま残し、
- * ユーザーが気づけるよう通知する
+ * 一度だけシェルが起動する。プリセットが見つからない場合は単一タブのまま残し、
+ * ユーザーが気づけるよう通知する。
+ *
+ * projectRootが紐づいているBoardは、グローバル設定ではなくそのプロジェクトの
+ * .niwaterm/config.tsから引く（TASK-0069）。起動時にはcwdが無いため探索は一切行わず、
+ * 紐づけを作った時点で記録した解決元をそのまま読む
  */
-function applyStartupLayouts(): void {
-  for (const { boardId, preset } of workspaceManager.listStartupLayoutBoards()) {
-    const layoutPreset = layouts[preset];
+async function applyStartupLayouts(): Promise<void> {
+  for (const { boardId, preset, projectRoot } of workspaceManager.listStartupLayoutBoards()) {
+    const layoutPreset = projectRoot
+      ? await loadProjectPreset(projectRoot, preset)
+      : layouts[preset];
     if (!layoutPreset) {
-      const message = `Board ${boardId}に紐づくレイアウトプリセット "${preset}" が設定に見つかりません`;
+      const source = projectRoot ? `${projectRoot}の.niwaterm/config.ts` : "設定";
+      const message = `Board ${boardId}に紐づくレイアウトプリセット "${preset}" が${source}に見つかりません`;
       console.log(`[bun] ${message}`);
       sendNotification({ title: "起動時レイアウトを適用できません", body: message });
       continue;
@@ -343,6 +351,7 @@ function applyStartupLayouts(): void {
       layoutPreset,
       "replace",
       boardId,
+      projectRoot ? { projectRoot } : {},
     );
     if (!result.ok) {
       console.log(
@@ -356,7 +365,7 @@ function applyStartupLayouts(): void {
   }
 }
 
-applyStartupLayouts();
+await applyStartupLayouts();
 
 // 設定ファイル変更の検知→再読み込み→RPC送信をまとめて行う。実行中に次の変更が来たら
 // 1回だけ追いかけて再実行する（多重実行の抑制）。scheduleRenderは無条件で呼ぶ:

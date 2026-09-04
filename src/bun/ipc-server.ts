@@ -17,6 +17,11 @@ import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
+import {
+  loadProjectPreset,
+  listResolvedLayouts,
+  resolveLayoutPresetByName,
+} from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
@@ -382,6 +387,8 @@ interface ApplyLayoutRequestBody {
   boardId?: string;
   /** trueなら次回起動時もこのプリセットで組み直す（TASK-0077）。省略時はrestoreMode: "restore" */
   startup?: boolean;
+  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか（TASK-0069） */
+  trust?: boolean;
 }
 
 function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
@@ -392,6 +399,7 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
     workspaceId?: unknown;
     boardId?: unknown;
     startup?: unknown;
+    trust?: unknown;
   };
   if (typeof b.name !== "string" || b.name.length === 0) return null;
   if (b.target !== undefined && b.target !== "new-board" && b.target !== "replace") {
@@ -414,6 +422,10 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
     if (typeof b.startup !== "boolean") return null;
     result.startup = b.startup;
   }
+  if (b.trust !== undefined) {
+    if (typeof b.trust !== "boolean") return null;
+    result.trust = b.trust;
+  }
   return result;
 }
 
@@ -427,10 +439,20 @@ interface BoardStartupRequestBody {
   mode: "layout" | "restore" | "clear";
   /** modeが"clear"以外のときのプリセット名。省略時は現在紐づいているプリセットを引き継ぐ */
   preset?: string;
+  /** プリセットの解決元を決めるCLIのcwd（TASK-0069）。presetを明示指定したときのみ使う */
+  cwd?: string;
+  /** プロジェクトローカル由来プリセットのtrust promptに同意済みか（TASK-0069） */
+  trust?: boolean;
 }
 
 function parseBoardStartupBody(body: unknown): BoardStartupRequestBody | null {
-  const b = body as { boardId?: unknown; mode?: unknown; preset?: unknown };
+  const b = body as {
+    boardId?: unknown;
+    mode?: unknown;
+    preset?: unknown;
+    cwd?: unknown;
+    trust?: unknown;
+  };
   if (b.mode !== "layout" && b.mode !== "restore" && b.mode !== "clear") return null;
   const result: BoardStartupRequestBody = { mode: b.mode };
   if (b.boardId !== undefined) {
@@ -440,6 +462,14 @@ function parseBoardStartupBody(body: unknown): BoardStartupRequestBody | null {
   if (b.preset !== undefined) {
     if (typeof b.preset !== "string" || b.preset.length === 0) return null;
     result.preset = b.preset;
+  }
+  if (b.cwd !== undefined) {
+    if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
+    result.cwd = b.cwd;
+  }
+  if (b.trust !== undefined) {
+    if (typeof b.trust !== "boolean") return null;
+    result.trust = b.trust;
   }
   return result;
 }
@@ -659,11 +689,10 @@ function buildApp(
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
 
-  app.get("/layouts", (c) => {
-    const layouts = Object.entries(getLayouts()).map(([name, preset]) => ({
-      name,
-      description: preset.description,
-    }));
+  // cwdを渡すと、そこから解決できるプロジェクトローカルのプリセット（<projectRoot>/.niwaterm/config.ts）も
+  // 併せて一覧する（TASK-0069）。同名はプロジェクト側だけを返し、実際にapplyされる方に揃える
+  app.get("/layouts", async (c) => {
+    const layouts = await listResolvedLayouts(c.req.query("cwd"), getLayouts());
     return c.json({ ok: true, layouts });
   });
 
@@ -681,8 +710,18 @@ function buildApp(
         400,
       );
     }
-    const preset = getLayouts()[parsed.name];
-    if (!preset) return c.json({ ok: false, error: `layout not found: ${parsed.name}` }, 404);
+    const resolved = await resolveLayoutPresetByName(parsed.name, parsed.cwd, getLayouts());
+    if (!resolved) return c.json({ ok: false, error: `layout not found: ${parsed.name}` }, 404);
+    // プロジェクトローカル由来のプリセットを起動時レイアウトに紐づける操作は、以後アプリ起動のたびに
+    // そのリポジトリのコードとcommandが自動実行されることを意味する。CLI側でtrust promptを出させ、
+    // 同意（trust: true）を得てから再送してもらう（TASK-0069）
+    if (parsed.startup && resolved.projectRoot && !parsed.trust) {
+      return c.json({
+        ok: false,
+        needsTrust: { projectRoot: resolved.projectRoot, preset: parsed.name },
+        error: `layout "${parsed.name}" is defined in ${resolved.projectRoot} and needs trust`,
+      });
+    }
 
     const target = parsed.target ?? "new-board";
     let boardId: string;
@@ -705,19 +744,28 @@ function buildApp(
     const result = applyLayoutPreset(
       workspaceManager,
       getShellProfiles(),
-      preset,
+      resolved.preset,
       target,
       boardId,
-      parsed.cwd,
+      {
+        ...(parsed.cwd !== undefined ? { invocationCwd: parsed.cwd } : {}),
+        ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+      },
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
     // どのプリセットから生えたBoardかを記録しておく（TASK-0077）。--startup指定時のみ
-    // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する
+    // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する。
+    // プロジェクトローカル由来なら解決元も一緒に記録する（起動時にはcwdが無いため、TASK-0069）
     workspaceManager.setBoardStartup(result.boardId, {
       preset: parsed.name,
       restoreMode: parsed.startup ? "layout" : "restore",
+      ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
     });
-    return c.json({ ok: true, boardId: result.boardId });
+    return c.json({
+      ok: true,
+      boardId: result.boardId,
+      ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+    });
   });
 
   app.post("/board-startup", async (c) => {
@@ -742,7 +790,8 @@ function buildApp(
       workspaceManager.setBoardStartup(boardId, null);
       return c.json({ ok: true, boardId, startup: null });
     }
-    const preset = parsed.preset ?? workspaceManager.getBoardStartup(boardId)?.preset;
+    const existing = workspaceManager.getBoardStartup(boardId);
+    const preset = parsed.preset ?? existing?.preset;
     if (!preset) {
       return c.json(
         {
@@ -752,10 +801,32 @@ function buildApp(
         400,
       );
     }
-    if (!getLayouts()[preset]) {
-      return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
+    // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元込み）を引き継ぎ、
+    // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする（TASK-0069）
+    let projectRoot: string | null;
+    if (parsed.preset !== undefined) {
+      const resolved = await resolveLayoutPresetByName(parsed.preset, parsed.cwd, getLayouts());
+      if (!resolved) return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
+      projectRoot = resolved.projectRoot;
+    } else {
+      projectRoot = existing?.projectRoot ?? null;
+      const stillExists = projectRoot
+        ? (await loadProjectPreset(projectRoot, preset)) !== null
+        : getLayouts()[preset] !== undefined;
+      if (!stillExists) return c.json({ ok: false, error: `layout not found: ${preset}` }, 404);
     }
-    const startup = { preset, restoreMode: parsed.mode } as const;
+    if (parsed.mode === "layout" && projectRoot && !parsed.trust) {
+      return c.json({
+        ok: false,
+        needsTrust: { projectRoot, preset },
+        error: `layout "${preset}" is defined in ${projectRoot} and needs trust`,
+      });
+    }
+    const startup = {
+      preset,
+      restoreMode: parsed.mode,
+      ...(projectRoot ? { projectRoot } : {}),
+    };
     workspaceManager.setBoardStartup(boardId, startup);
     return c.json({ ok: true, boardId, startup });
   });
