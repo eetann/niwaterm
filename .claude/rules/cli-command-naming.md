@@ -68,6 +68,38 @@ packages/cli/src/commands/
 
 `failAndExit`へ渡す文字列は`"<resource> <verb>に失敗しました: ${result.error}"`の形式で、フルコマンド名を含める（`tab close`のように空白区切り）。サブコマンド単体の名前だけだと何の操作が失敗したか分かりにくいため。
 
+## 対象IDのオプションは省略可能にする
+
+`--tile`/`--tab`/`--board`/`--workspace`のような「操作対象を指すID」は`required: true`にせず、
+`resolve-target.ts`の`createTargetResolver`で省略時のフォールバックを付ける。省略時は
+そのコマンドを実行しているタブ（niwaterm外から実行した場合はフォーカス中タイル・アクティブタブ）が
+対象になる。
+
+```ts
+run: async (ctx) => {
+  const endpoint = resolveIpcEndpoint();
+  const target = createTargetResolver(endpoint, "tab close", {
+    tileId: ctx.values.tile,
+    tabId: ctx.values.tab,
+  });
+  const result = await closeTab(endpoint, await target.tileId(), await target.tabId());
+  ...
+}
+```
+
+第2引数はエラー文言用のフルコマンド名で、`failAndExit`へ渡すものと揃える。
+
+例外として`required: true`のまま残すのは以下。
+
+- 自分自身を指しても意味が無い切り替え系（`tab switch --tab`・`board switch --board`・`workspace switch --workspace`）
+- 誤送信の危険がある`tab send-keys --tab`
+- 対象がブラウザタブに限られる`browser *`の`--tab`（自タブはterminalタブなのでフォールバックが成立しない）
+- `tab var`系の`--tab`（`NIWATERM_TAB_ID`のみを見る。シェル統合・エージェント統合のhookがniwaterm外で
+  意図しないタブへ書き込むのを避けるため）
+
+オプションの`description`にも省略時の対象を書き、`docs/guide/cli.md`のシグネチャは
+`[--tile <tileId>]`のように角括弧付きへ揃える。
+
 ## 排他オプションの扱い
 
 `tile focus`の`--tile`/`--direction`のように、意味的には別コマンドになり得るが実装が単純な操作は、1つのサブコマンドに排他オプションとしてまとめてよい（無理に`tile focus-by-id`/`tile focus-by-direction`のように分けない）。判断基準: 結果の型が同じで、パラメータの片方が省略可能な形で自然に共存できるか。

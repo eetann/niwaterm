@@ -337,6 +337,66 @@ export async function listWorkspaces(endpoint: IpcEndpoint): Promise<ListResult>
   }
 }
 
+export type WorkspaceId = string;
+
+/** `--tile`等を省略した時に使う「今の対象」。ワークスペースからタブまで一式が揃う */
+export interface ResolvedTarget {
+  workspaceId: WorkspaceId;
+  boardId: BoardId;
+  tileId: TileId;
+  tabId: TabId;
+}
+
+export type ResolveTargetResult =
+  | { ok: true; target: ResolvedTarget }
+  | { ok: false; error: string };
+
+/**
+ * 省略された対象IDの既定値をniwatermへ問い合わせる。`scopeTabId`を起点にその所属
+ * ワークスペース・Board・タイルを返し、渡さない場合や見つからない場合は
+ * アクティブなワークスペースのフォーカス中タイル・アクティブタブを返す。
+ * 呼び出し側の使い方はresolve-target.tsのresolveTargetIds参照
+ */
+export async function resolveTarget(
+  endpoint: IpcEndpoint,
+  scopeTabId?: string,
+): Promise<ResolveTargetResult> {
+  const query = scopeTabId ? `?tabId=${encodeURIComponent(scopeTabId)}` : "";
+  try {
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, `/resolve-target${query}`),
+      ipcFetchInit(endpoint),
+    );
+    const body = (await res.json().catch(() => null)) as
+      | (Partial<ResolvedTarget> & {
+          error?: unknown;
+        })
+      | null;
+    if (
+      res.ok &&
+      typeof body?.workspaceId === "string" &&
+      typeof body.boardId === "string" &&
+      typeof body.tileId === "string" &&
+      typeof body.tabId === "string"
+    ) {
+      return {
+        ok: true,
+        target: {
+          workspaceId: body.workspaceId,
+          boardId: body.boardId,
+          tileId: body.tileId,
+          tabId: body.tabId,
+        },
+      };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export type SendKeysResult = { ok: true } | { ok: false; error: string };
 
 export async function sendKeys(

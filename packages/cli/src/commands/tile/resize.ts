@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resizeTile, resolveIpcEndpoint } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "resize",
@@ -9,8 +10,8 @@ export default define({
     tile: {
       type: "string",
       short: "t",
-      required: true,
-      description: "リサイズ対象のtileId（niwaterm listで確認）",
+      description:
+        "リサイズ対象のtileId（niwaterm listで確認）。省略時はこのコマンドを実行したタブのタイル（niwatermの外から実行した場合はフォーカス中のタイル）",
     },
     direction: {
       type: "enum",
@@ -27,9 +28,11 @@ export default define({
   },
   run: async (ctx) => {
     const { tile, direction, amount } = ctx.values;
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "tile resize", { tileId: tile });
     const result = await resizeTile(
-      resolveIpcEndpoint(),
-      tile,
+      endpoint,
+      await target.tileId(),
       direction as NonNullable<typeof direction>,
       amount,
     );

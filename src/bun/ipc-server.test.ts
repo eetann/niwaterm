@@ -176,6 +176,107 @@ describe("GET /list", () => {
   });
 });
 
+describe("GET /resolve-target", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("tabIdを渡すと、そのタブの所属ワークスペース・Board・タイルを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    // 分割してフォーカスを移し、「フォーカス中タイル」と「呼び出し元タブのタイル」をずらす
+    mgr.splitTile(firstTileId, "vertical");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/resolve-target?tabId=${firstTabId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      workspaceId,
+      boardId,
+      tileId: firstTileId,
+      tabId: firstTabId,
+    });
+    expect(mgr.getFocusedTileId()).not.toBe(firstTileId);
+  });
+
+  test("tabId未指定はアクティブなワークスペースのフォーカス中タイル・アクティブタブを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const split = mgr.splitTile(firstTileId, "vertical");
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resolve-target", { unix: socketPath });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      workspaceId,
+      boardId,
+      tileId: split?.tileId,
+      tabId: split?.tabId,
+    });
+  });
+
+  test("存在しないtabIdは404にせずフォーカス中タイル・アクティブタブへフォールバックする", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/resolve-target?tabId=not-found", {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, tileId, tabId });
+  });
+
+  test("ポップアップのタブはtabIdをそのまま返し、タイルはフォーカス中タイルへ落ちる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const popupTabId = mgr.openPopup() as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/resolve-target?tabId=${popupTabId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, tileId, tabId: popupTabId });
+  });
+
+  test("非アクティブなワークスペースのtabIdでも、そのタブ側のワークスペースを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstWorkspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const secondWorkspaceId = mgr.newWorkspace();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/resolve-target?tabId=${firstTabId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, workspaceId: firstWorkspaceId });
+    expect(mgr.getActiveWorkspaceId()).toBe(secondWorkspaceId);
+  });
+});
+
 describe("POST /send-keys", () => {
   let dir: string;
   let socketPath: string;

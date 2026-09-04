@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { renameWorkspace, resolveIpcEndpoint } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "rename",
@@ -9,8 +10,8 @@ export default define({
     workspace: {
       type: "string",
       short: "w",
-      required: true,
-      description: "対象のworkspaceId（niwaterm listで確認）",
+      description:
+        "対象のworkspaceId（niwaterm listで確認）。省略時はこのコマンドを実行したタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）",
     },
     name: {
       type: "positional",
@@ -18,11 +19,11 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await renameWorkspace(
-      resolveIpcEndpoint(),
-      ctx.values.workspace,
-      ctx.values.name,
-    );
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "workspace rename", {
+      workspaceId: ctx.values.workspace,
+    });
+    const result = await renameWorkspace(endpoint, await target.workspaceId(), ctx.values.name);
     if (!result.ok) {
       failAndExit(`workspace renameに失敗しました: ${result.error}`);
     }

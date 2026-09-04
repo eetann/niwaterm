@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { focusDirection, focusTile, resolveIpcEndpoint } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "focus",
@@ -9,7 +10,8 @@ export default define({
     tile: {
       type: "string",
       short: "t",
-      description: "フォーカスするtileId（niwaterm listで確認）。--directionとは同時指定不可",
+      description:
+        "フォーカスするtileId（niwaterm listで確認）。--directionとは同時指定不可。どちらも省略した場合はこのコマンドを実行したタブのタイルへフォーカスを移す",
     },
     direction: {
       type: "enum",
@@ -21,15 +23,19 @@ export default define({
   },
   run: async (ctx) => {
     const { tile, direction } = ctx.values;
-    if ((tile === undefined) === (direction === undefined)) {
-      failAndExit(
-        "tile focusに失敗しました: --tileまたは--directionのどちらか一方を指定してください",
-      );
+    if (tile !== undefined && direction !== undefined) {
+      failAndExit("tile focusに失敗しました: --tileと--directionは同時に指定できません");
     }
-    const result =
-      tile !== undefined
-        ? await focusTile(resolveIpcEndpoint(), tile)
-        : await focusDirection(resolveIpcEndpoint(), direction as NonNullable<typeof direction>);
+    const endpoint = resolveIpcEndpoint();
+    if (direction !== undefined) {
+      const result = await focusDirection(endpoint, direction);
+      if (!result.ok) {
+        failAndExit(`tile focusに失敗しました: ${result.error}`);
+      }
+      return;
+    }
+    const target = createTargetResolver(endpoint, "tile focus", { tileId: tile });
+    const result = await focusTile(endpoint, await target.tileId());
     if (!result.ok) {
       failAndExit(`tile focusに失敗しました: ${result.error}`);
     }

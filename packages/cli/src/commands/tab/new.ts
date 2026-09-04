@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint, newTab } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "new",
@@ -9,8 +10,8 @@ export default define({
     tile: {
       type: "string",
       short: "t",
-      required: true,
-      description: "対象のtileId（niwaterm listで確認）",
+      description:
+        "対象のtileId（niwaterm listで確認）。省略時はこのコマンドを実行したタブのタイル（niwatermの外から実行した場合はフォーカス中のタイル）",
     },
     url: {
       type: "string",
@@ -51,9 +52,11 @@ export default define({
     ) {
       failAndExit("tab newに失敗しました: --cwdは--url・--custom-viewと同時に指定できません");
     }
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "tab new", { tileId: ctx.values.tile });
     const result = await newTab(
-      resolveIpcEndpoint(),
-      ctx.values.tile,
+      endpoint,
+      await target.tileId(),
       ctx.values.url,
       ctx.values["custom-view"],
       ctx.values.shell,

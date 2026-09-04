@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint, respawnTab } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "respawn",
@@ -10,8 +11,8 @@ export default define({
     tab: {
       type: "string",
       short: "t",
-      required: true,
-      description: "再起動するtabId（niwaterm listで確認）",
+      description:
+        "再起動するtabId（niwaterm listで確認）。省略時はこのコマンドを実行しているタブ（niwatermの外から実行した場合はフォーカス中タイルのアクティブタブ）",
     },
     shell: {
       type: "string",
@@ -30,9 +31,11 @@ export default define({
     },
   },
   run: async (ctx) => {
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "tab respawn", { tabId: ctx.values.tab });
     const result = await respawnTab(
-      resolveIpcEndpoint(),
-      ctx.values.tab,
+      endpoint,
+      await target.tabId(),
       ctx.values.shell,
       ctx.values.cwd,
       ctx.values.command,

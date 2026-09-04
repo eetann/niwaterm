@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { renameBoard, resolveIpcEndpoint } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "rename",
@@ -9,8 +10,8 @@ export default define({
     board: {
       type: "string",
       short: "b",
-      required: true,
-      description: "対象のboardId（board new実行時に表示される値で確認）",
+      description:
+        "対象のboardId（board new実行時に表示される値で確認）。省略時はこのコマンドを実行したタブが属するBoard（niwatermの外から実行した場合はアクティブなBoard）",
     },
     name: {
       type: "positional",
@@ -18,7 +19,9 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await renameBoard(resolveIpcEndpoint(), ctx.values.board, ctx.values.name);
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "board rename", { boardId: ctx.values.board });
+    const result = await renameBoard(endpoint, await target.boardId(), ctx.values.name);
     if (!result.ok) {
       failAndExit(`board renameに失敗しました: ${result.error}`);
     }

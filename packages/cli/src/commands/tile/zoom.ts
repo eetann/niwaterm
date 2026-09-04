@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint, zoomTile } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "zoom",
@@ -10,13 +11,14 @@ export default define({
     tile: {
       type: "string",
       short: "t",
-      required: true,
-      description: "ズーム対象のtileId（niwaterm listで確認）",
+      description:
+        "ズーム対象のtileId（niwaterm listで確認）。省略時はこのコマンドを実行したタブのタイル（niwatermの外から実行した場合はフォーカス中のタイル）",
     },
   },
   run: async (ctx) => {
-    const { tile } = ctx.values;
-    const result = await zoomTile(resolveIpcEndpoint(), tile);
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "tile zoom", { tileId: ctx.values.tile });
+    const result = await zoomTile(endpoint, await target.tileId());
     if (!result.ok) {
       failAndExit(`tile zoomに失敗しました: ${result.error}`);
     }

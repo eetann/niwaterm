@@ -63,25 +63,25 @@ niwaterm tab send-keys -t tab-3 C-c
 対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm tile split --tile <tileId> [--orientation horizontal|vertical] [--cwd <dir>]
-niwaterm tab new --tile <tileId> [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
-niwaterm tab switch --tile <tileId> --tab <tabId>
-niwaterm tab close --tile <tileId> --tab <tabId>
-niwaterm tab respawn --tab <tabId> [--shell <shellProfileId>] [--cwd <dir>] [--command <cmd>]
-niwaterm tile focus --tile <tileId>
+niwaterm tile split [--tile <tileId>] [--orientation horizontal|vertical] [--cwd <dir>]
+niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
+niwaterm tab switch [--tile <tileId>] --tab <tabId>
+niwaterm tab close [--tile <tileId>] [--tab <tabId>]
+niwaterm tab respawn [--tab <tabId>] [--shell <shellProfileId>] [--cwd <dir>] [--command <cmd>]
+niwaterm tile focus [--tile <tileId>]
 niwaterm tile focus --direction up|down|left|right
-niwaterm tile resize --tile <tileId> --direction up|down|left|right [--amount <0より大きく1以下>]
-niwaterm tile zoom --tile <tileId>
+niwaterm tile resize [--tile <tileId>] --direction up|down|left|right [--amount <0より大きく1以下>]
+niwaterm tile zoom [--tile <tileId>]
 ```
 
-レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。
+レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。`--tile`/`--tab`を省略した場合の対象は「対象IDの省略」節を参照。
 
 - `tile split` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
 - `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
-- `tab switch` — 指定タイル内でアクティブタブを切り替える
-- `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない
+- `tab switch` — 指定タイル内でアクティブタブを切り替える。`--tile`省略時は`--tab`のタブが属するタイル
+- `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない。引数を全て省略すると実行しているタブ自身が閉じる
 - `tab respawn` — 指定タブのプロセスを強制終了し、同じ`tabId`・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当、対象がブラウザタブの場合は失敗する）。`--shell`省略時はデフォルトシェル、`--cwd`省略時は元のタブが実際にいるディレクトリを引き継ぐ。`--command`を指定すると、シェルの代わりにそのコマンドを実行する（`popup open`の位置引数と同じ意味のワンショット実行）。GUIのキーバインドからこの操作を割り当てた場合は実行前にy/nの確認ダイアログを挟むが、CLIからの実行に確認は無い
-- `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる
+- `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる。どちらも省略すると実行しているタブのタイルへフォーカスを移す（背面のタブから自分を前に出す用途）
 - `tile resize` — 指定タイルを指定方向へ拡大する（tmuxの`resize-pane`相当）。`--amount`省略時は既定の1ステップ分。`--direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は失敗する
 - `tile zoom` — 指定タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠して画面全体に表示し、再度実行すると解除する。ズーム中のタイルを分割する、または他のタイルへフォーカスを移すと自動的に解除される
 
@@ -124,11 +124,11 @@ niwaterm popup promote
 ```sh
 niwaterm workspace new
 niwaterm workspace switch --workspace <workspaceId>
-niwaterm workspace close --workspace <workspaceId>
-niwaterm workspace rename --workspace <workspaceId> <name>
+niwaterm workspace close [--workspace <workspaceId>]
+niwaterm workspace rename [--workspace <workspaceId>] <name>
 ```
 
-ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。
+ワークスペース単位の操作コマンド。対象の`workspaceId`は`niwaterm list`で確認する。`close`/`rename`は`--workspace`を省略でき、その場合は実行しているタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）が対象になる。
 
 - `workspace new` — 新規ワークスペースを作成し、アクティブにする。成功時、新規`workspaceId`を表示する
 - `workspace switch` — 指定したワークスペースへ切り替える
@@ -140,8 +140,8 @@ niwaterm workspace rename --workspace <workspaceId> <name>
 ```sh
 niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
 niwaterm board switch --board <boardId>
-niwaterm board close --board <boardId>
-niwaterm board rename --board <boardId> <name>
+niwaterm board close [--board <boardId>]
+niwaterm board rename [--board <boardId>] <name>
 niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>] [--cwd <dir>] [--trust]
 ```
 
@@ -149,8 +149,8 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 
 - `board new` — 新規Boardを作成し、アクティブにする。`--workspace`省略時は現在アクティブなワークスペースに作成する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）。成功時、新規`boardId`を表示する
 - `board switch` — 指定したBoardへ切り替える
-- `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない
-- `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る
+- `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない。`--board`省略時は実行しているタブが属するBoard（niwatermの外から実行した場合はアクティブなBoard）
+- `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る。`--board`の省略時の扱いは`board close`と同じ
 - `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
@@ -255,10 +255,10 @@ niwaterm shell-profiles
 利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`tab new --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
 
 ```sh
-niwaterm tab capture --tab <tabId>
+niwaterm tab capture [--tab <tabId>]
 ```
 
-指定したタブの現在の画面内容をプレーンテキストで標準出力へ表示する（tmuxの`capture-pane -p`相当）。エスケープシーケンス・色情報は含まれず、現在画面（viewport）の内容のみが対象でスクロールバックは含まれない。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
+指定したタブの現在の画面内容をプレーンテキストで標準出力へ表示する（tmuxの`capture-pane -p`相当）。エスケープシーケンス・色情報は含まれず、現在画面（viewport）の内容のみが対象でスクロールバックは含まれない。`--tab`省略時は実行しているタブ自身の画面を取得する。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm tab var set --tab <tabId> <key> <value>
@@ -274,6 +274,14 @@ niwaterm tab var find --board <boardId> <key> <value>
 検索対象のBoardは`--board <boardId>`で明示できる。省略時は`NIWATERM_TAB_ID`環境変数のタブが属するBoard、それも無ければ（niwaterm外のシェルから実行した等）アクティブなBoardを検索する。**「アクティブなBoard」ではなく「実行しているタブの所属Board」を先に見るのが重要**で、レイアウトプリセットの`command`が実際に走るのはPTY起動・シェル初期化を待った後のため、その時点でユーザーが別のBoardへ切り替えていても自分のBoardを正しく指せる。`--board`は`tab var get/set/list`の`--tab`（操作対象のタブ）とは意味が異なり、検索範囲の指定である点に注意する。存在しないboardId・tabIdを指定した場合はエラーメッセージと共に終了コード1を返す。
 
 `tab var set/get/list`の`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+
+## 対象IDの省略
+
+多くのコマンドは`--tile`/`--tab`/`--board`/`--workspace`を省略でき、その場合は**そのコマンドを実行しているタブ**が対象になる。niwatermが起動したシェルには`NIWATERM_TAB_ID`環境変数が入っており、CLIはそれを起点に所属タイル・Board・ワークスペースを解決する。niwatermの外（普通のターミナル・スクリプト）から実行した場合は、アクティブなワークスペース→アクティブなBoard→フォーカス中タイル→そのアクティブタブへフォールバックする（tmuxの`current-pane`相当）。
+
+明示指定した値がこの解決結果で上書きされることはない。存在しないIDを渡しても別の対象へすり替わらず、そのままエラーになる。`--tab`だけを指定して`--tile`を省略した場合は、実行元ではなく**指定したタブが属するタイル**が埋まる（`tab close --tab <tabId>`のような使い方ができる）。
+
+省略できないのは、自分自身を指しても意味が無い切り替え系（`tab switch --tab`、`board switch --board`、`workspace switch --workspace`）、誤送信を避けたい`tab send-keys --tab`、対象がブラウザタブに限られる`browser *`の`--tab`。`tab var`系の`--tab`は`NIWATERM_TAB_ID`のみを見て、フォーカス中タブへのフォールバックは行わない（シェル統合・エージェント統合のhookがniwaterm外で暴発しないようにするため）。
 
 ## シェル統合
 
@@ -326,7 +334,7 @@ niwaterm browser navigate --tab <tabId> --url <url>
 niwaterm browser get-text --tab <tabId>
 niwaterm browser get-html --tab <tabId>
 niwaterm browser screenshot --tab <tabId> --out <path>
-niwaterm tab show --tab <tabId>
+niwaterm tab show [--tab <tabId>]
 ```
 
 ブラウザタブをCLIから操作するコマンド（PlaywrightのAPIのような感覚での操作を想定。読み取り中心のMVPで、click/fill等の操作系は未対応）。

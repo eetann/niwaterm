@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint, splitTile } from "../../ipc-client";
+import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "split",
@@ -9,8 +10,8 @@ export default define({
     tile: {
       type: "string",
       short: "t",
-      required: true,
-      description: "分割対象のtileId（niwaterm listで確認）",
+      description:
+        "分割対象のtileId（niwaterm listで確認）。省略時はこのコマンドを実行したタブのタイル（niwatermの外から実行した場合はフォーカス中のタイル）",
     },
     orientation: {
       type: "enum",
@@ -25,9 +26,11 @@ export default define({
     },
   },
   run: async (ctx) => {
+    const endpoint = resolveIpcEndpoint();
+    const target = createTargetResolver(endpoint, "tile split", { tileId: ctx.values.tile });
     const result = await splitTile(
-      resolveIpcEndpoint(),
-      ctx.values.tile,
+      endpoint,
+      await target.tileId(),
       ctx.values.orientation,
       ctx.values.cwd,
     );

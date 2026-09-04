@@ -593,6 +593,31 @@ function buildApp(
 
   app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
 
+  // CLIが`--tile`等を省略された時の既定の対象を引くための解決口。`tabId`には呼び出し元タブ
+  // （PTYへ注入したNIWATERM_TAB_ID）が渡る。タイル階層に居ないタブ（ポップアップ）や、
+  // niwatermの外から叩かれてtabIdが無い場合は、アクティブなワークスペース→アクティブBoard→
+  // フォーカス中タイル→そのアクティブタブへ落とす。
+  // 存在しないtabIdでも404にせずフォールバックするのは、CLIが明示指定された値をここの結果で
+  // 上書きしない（省略された項目だけ埋める）ため、誤ったIDは本来の操作側で
+  // 「tile/tab not found」として弾かれるから
+  app.get("/resolve-target", (c) => {
+    const scopeTabId = c.req.query("tabId");
+    const location = scopeTabId ? workspaceManager.locateTab(scopeTabId) : null;
+    const workspaceId = location?.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+    const boardId =
+      location?.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    if (!boardId) return c.json({ ok: false, error: "active board not found" }, 404);
+    const tileId = location?.tileId ?? workspaceManager.getFocusedTileId();
+    // ポップアップのタブはタイル階層に居ないためlocationはnullになるが、tabId自体は
+    // 呼び出し元のものが正しい
+    const tabId =
+      scopeTabId && workspaceManager.hasTab(scopeTabId)
+        ? scopeTabId
+        : workspaceManager.getActiveTabId(tileId);
+    if (!tabId) return c.json({ ok: false, error: `active tab not found in tile: ${tileId}` }, 404);
+    return c.json({ ok: true, workspaceId, boardId, tileId, tabId });
+  });
+
   app.post("/new-workspace", (c) => {
     const workspaceId = workspaceManager.newWorkspace();
     return c.json({ ok: true, workspaceId });

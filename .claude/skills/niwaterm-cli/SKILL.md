@@ -21,6 +21,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`layout`/`font-size`/`shell-profiles`/`notify`/`docs`はリソース単体に属さないためトップレベル）。
 
+**`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwaterm docs show cli`の「対象IDの省略」節を参照。
+
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）
 - `tab new` / `switch` / `close` / `respawn` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
