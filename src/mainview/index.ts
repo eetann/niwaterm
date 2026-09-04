@@ -1260,13 +1260,15 @@ function renderTileTabBar(tileId: TileId): void {
     tabId,
     label: lastTabNames[tabId] || String(index + 1),
   }));
-  let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}`;
+  const zoomed = zoomedTileId === tileId;
+  let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}\u0000${zoomed}`;
   for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}`;
   root.renderIfChanged(key, () =>
     createElement(TileTabBar, {
       tileId,
       tabs,
       activeTabId: leaf.activeTabId,
+      zoomed,
       shellProfiles,
       onSelectTab: (tabId) => {
         switchToTab(tileId, tabId);
@@ -1288,6 +1290,10 @@ function renderTileTabBar(tileId: TileId): void {
       },
       onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
       onRenameTab: renameSidebarTab,
+      onToggleZoom: () => {
+        focusTileLocally(tileId);
+        sendMessage("toggleZoomTile", { tileId });
+      },
     }),
   );
 }

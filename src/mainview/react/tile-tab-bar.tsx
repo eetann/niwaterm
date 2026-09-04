@@ -34,6 +34,8 @@ export interface TileTabBarProps {
   tileId: TileId;
   tabs: TileTabBarTabItem[];
   activeTabId: TabId;
+  /** このタイルがズーム表示中か。右クリックメニューのラベル出し分けに使う */
+  zoomed: boolean;
   shellProfiles: ShellProfile[];
   onSelectTab: (tabId: TabId) => void;
   onCloseTab: (tabId: TabId) => void;
@@ -41,6 +43,7 @@ export interface TileTabBarProps {
   onAddTabWithProfile: (shellProfileId: string | undefined) => void;
   onRequestTerminalFocus: () => void;
   onRenameTab: (tabId: TabId, name: string) => void;
+  onToggleZoom: () => void;
 }
 
 /**
@@ -55,6 +58,7 @@ export function TileTabBar({
   tileId,
   tabs,
   activeTabId,
+  zoomed,
   shellProfiles,
   onSelectTab,
   onCloseTab,
@@ -62,6 +66,7 @@ export function TileTabBar({
   onAddTabWithProfile,
   onRequestTerminalFocus,
   onRenameTab,
+  onToggleZoom,
 }: TileTabBarProps) {
   // 名前編集中のタブ。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
   const [editingTabId, setEditingTabId] = useState<TabId | null>(null);
@@ -159,6 +164,9 @@ export function TileTabBar({
                     }}
                   >
                     名前を変更
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={onToggleZoom}>
+                    {zoomed ? "ズームを解除" : "ズーム表示"}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
