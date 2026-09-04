@@ -240,6 +240,7 @@ keybindings: {
 | `c` | new-tab |
 | `shift+t` | new-browser-tab |
 | `n` / `p` | next-tab / prev-tab |
+| `,` | rename-board |
 | `shift+n` | new-workspace |
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
@@ -250,7 +251,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（37種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（38種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -265,6 +266,7 @@ keybindings: {
 | `next-tab` / `prev-tab` | タブ切替 |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
+| `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |

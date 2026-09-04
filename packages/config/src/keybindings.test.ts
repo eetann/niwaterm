@@ -213,10 +213,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の26個のアクションに1つずつ割り当てられている", () => {
+  test("UNASSIGNED_BINDING_ACTIONS以外の27個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(26);
-    expect(new Set(actions).size).toBe(26);
+    expect(actions.length).toBe(27);
+    expect(new Set(actions).size).toBe(27);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -225,6 +225,10 @@ describe("defaultKeybindings", () => {
 
   test("new-custom-view-tabはcustomView未設定時に無意味なため既定キーを持たない（ユーザー設定での割り当てを想定）", () => {
     expect(Object.values(defaultKeybindings.bindings ?? {})).not.toContain("new-custom-view-tab");
+  });
+
+  test("rename-boardはprefix + ,（tmuxのbind-key , rename-windowを踏襲する）", () => {
+    expect(defaultKeybindings.bindings?.[","]).toBe("rename-board");
   });
 
   test("copy-modeはprefix + v（[はワークスペース切替に使っているため、viのvisualモードを連想させるv）", () => {
@@ -326,17 +330,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings26件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings27件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(26);
+    expect(compiled.bindings.size).toBe(27);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings26件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings27件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(26);
+    expect(compiled.bindings.size).toBe(27);
     expect(compiled.direct.size).toBe(2);
   });
 

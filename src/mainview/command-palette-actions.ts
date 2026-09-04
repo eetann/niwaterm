@@ -27,6 +27,7 @@ import {
   MoveRight,
   MoveUp,
   PanelLeft,
+  Pencil,
   PictureInPicture2,
   Plus,
   RefreshCw,
@@ -207,6 +208,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "Board",
     icon: ChevronsLeft,
     keywords: ["previous-window", "window"],
+  },
+  {
+    action: "rename-board",
+    labelEn: "Rename Board",
+    label: "Boardの名前を変更",
+    category: "Board",
+    icon: Pencil,
+    keywords: ["rename-window", "window", "名前"],
   },
   {
     action: "new-workspace",

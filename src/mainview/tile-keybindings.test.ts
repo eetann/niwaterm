@@ -180,6 +180,15 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     expect(actionToTileCommand("prev-board")).toEqual({ type: "switchBoard", delta: -1 });
   });
 
+  test("prefix -> , でBoard名変更", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key(","))).toEqual({
+      kind: "command",
+      command: { type: "renameBoard" },
+    });
+  });
+
   test("prefix -> b でサイドバートグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

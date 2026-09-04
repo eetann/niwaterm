@@ -124,6 +124,14 @@ function findBoardAgent(
 }
 
 /**
+ * Board行の表示名。ユーザーが名前を設定していなければワークスペース内の並び順で連番へフォールバックする。
+ * サイドバー以外（キーバインド・コマンドパレット起点の名前変更ダイアログ）でも同じラベルを出すためexportする
+ */
+export function boardLabel(board: BoardListEntry, index: number): string {
+  return board.name || `Board ${index + 1}`;
+}
+
+/**
  * renderSidebar()旧実装のラベル整形・active判定ロジックを、DOM非依存の純粋関数として抽出したもの。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
  * Tile/Tabはサイドバーに表示しない（ADR 0006後の再設計。「1つのBoard=1つの独立した作業」という
@@ -157,7 +165,7 @@ export function buildSidebarWorkspaceItems(
       const agent = findBoardAgent(board, representativeTabId);
       return {
         boardId: board.boardId,
-        label: board.name || `Board ${boardIndex + 1}`,
+        label: boardLabel(board, boardIndex),
         active: entry.workspaceId === currentActiveWorkspaceId && board.active,
         branch,
         agent,

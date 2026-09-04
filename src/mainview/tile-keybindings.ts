@@ -35,6 +35,7 @@ export type TileCommand =
   | { type: "restartTab" }
   | { type: "newWorkspace" }
   | { type: "switchBoard"; delta: 1 | -1 }
+  | { type: "renameBoard" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "togglePopup" }
@@ -181,6 +182,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "switchBoard", delta: 1 };
     case "prev-board":
       return { type: "switchBoard", delta: -1 };
+    case "rename-board":
+      return { type: "renameBoard" };
     case "new-workspace":
       return { type: "newWorkspace" };
     case "next-workspace":

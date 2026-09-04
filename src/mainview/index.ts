@@ -30,8 +30,9 @@ import { BrowserToolbar } from "./react/browser-toolbar";
 import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
 import { ConfirmDialog } from "./react/confirm-dialog";
 import { PopupToolbar } from "./react/popup-toolbar";
+import { PromptDialog } from "./react/prompt-dialog";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
-import { buildSidebarWorkspaceItems } from "./react/sidebar-props";
+import { boardLabel, buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import { SidebarWorkspaceList } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
@@ -67,6 +68,7 @@ const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElem
 const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
+const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -281,6 +283,52 @@ function openConfirmDialog(
   confirmDialogOnConfirm = onConfirm;
   confirmDialogOpen = true;
   renderConfirmDialog();
+}
+
+// ---- 入力ダイアログ: 名前変更向け（サイドバーを開いていなくてもキーボードだけで完結できる）----
+const promptDialogRoot = createMemoRoot(promptDialogRootEl, "prompt-dialog");
+let promptDialogOpen = false;
+let promptDialogTitle = "";
+let promptDialogDescription: string | undefined;
+let promptDialogInitialValue = "";
+let promptDialogOnSubmit: ((value: string) => void) | null = null;
+
+function renderPromptDialog(): void {
+  promptDialogRoot.renderOnEvent(
+    createElement(PromptDialog, {
+      open: promptDialogOpen,
+      title: promptDialogTitle,
+      description: promptDialogDescription,
+      initialValue: promptDialogInitialValue,
+      onSubmit: (value: string) => {
+        const onSubmit = promptDialogOnSubmit;
+        closePromptDialog();
+        onSubmit?.(value);
+      },
+      onCancel: () => closePromptDialog(),
+    }),
+  );
+}
+
+function closePromptDialog(): void {
+  promptDialogOpen = false;
+  promptDialogOnSubmit = null;
+  renderPromptDialog();
+  imeEl.focus({ preventScroll: true });
+}
+
+function openPromptDialog(
+  title: string,
+  description: string | undefined,
+  initialValue: string,
+  onSubmit: (value: string) => void,
+): void {
+  promptDialogTitle = title;
+  promptDialogDescription = description;
+  promptDialogInitialValue = initialValue;
+  promptDialogOnSubmit = onSubmit;
+  promptDialogOpen = true;
+  renderPromptDialog();
 }
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
@@ -1357,6 +1405,28 @@ function closeSidebarBoard(boardId: BoardId, name: string): void {
   );
 }
 
+/**
+ * キーバインド・コマンドパレットからのアクティブBoardの名前変更。サイドバーのインライン編集と違い
+ * サイドバーの表示状態に依存しないよう、入力ダイアログで受ける（初期値・空文字列の扱いは
+ * サイドバー側と揃える）
+ */
+function openRenameActiveBoardDialog(): void {
+  const boardId = activeBoardId;
+  if (!boardId) return;
+  const workspace = lastWorkspaces.find((w) => w.workspaceId === activeWorkspaceId);
+  const index = workspace?.boards.findIndex((b) => b.boardId === boardId) ?? -1;
+  const board = index >= 0 ? workspace?.boards[index] : undefined;
+  if (!board) return;
+  openPromptDialog(
+    "Boardの名前を変更",
+    "空のまま確定すると既定の連番ラベルへ戻ります。",
+    boardLabel(board, index),
+    (name) => {
+      sendMessage("renameBoard", { boardId, name });
+    },
+  );
+}
+
 /** タイルのタブバーからのタブ名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
 function renameSidebarTab(tabId: TabId, name: string): void {
   sendMessage("renameTab", { tabId, name });
@@ -1913,6 +1983,9 @@ document.addEventListener("keydown", (e) => {
   // 確認ダイアログ表示中はConfirmDialog内のonKeyDown（y/n/Esc）に処理を委ね、PTYへの入力や
   // 他のキーバインド発火を止める（inputEl判定と違いDialogContentはdiv要素のため上のガードでは拾えない）
   if (confirmDialogOpen) return;
+  // 入力ダイアログ表示中も同様。入力欄自体は上のHTMLInputElement判定で拾えるが、
+  // ボタンへフォーカスが移った状態のキー入力はここで止める
+  if (promptDialogOpen) return;
 
   const result = keybindResolver.handleKeydown(e);
   if (result.kind === "command") {
@@ -1972,6 +2045,12 @@ function handleTileCommand(cmd: TileCommand): void {
   }
   if (cmd.type === "commandPalette") {
     openCommandPalette();
+    return;
+  }
+  // Board名の変更はフォーカス中タイルではなくアクティブBoardが対象なので、
+  // focusedTileIdのガードより手前で処理する
+  if (cmd.type === "renameBoard") {
+    openRenameActiveBoardDialog();
     return;
   }
   if (cmd.type === "increaseFontSize") {
