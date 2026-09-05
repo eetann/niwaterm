@@ -18,7 +18,7 @@ function stopEventPropagation(e: { stopPropagation: () => void }): void {
 export function PopupToolbar({ onPromote, onMinimize, onClose }: PopupToolbarProps) {
   return (
     <div
-      className="flex items-center gap-0.5 rounded-md bg-background/80 p-0.5"
+      className="flex items-center gap-0.5"
       onPointerDown={stopEventPropagation}
       onMouseDown={stopEventPropagation}
     >

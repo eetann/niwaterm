@@ -355,22 +355,43 @@ body {
   justify-content: center;
 }
 #popup-box {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 80%;
   height: 80%;
   max-width: 1200px;
-  padding: 4px;
+  padding: 0 4px 4px;
   background: var(--term-bg);
   border: 1px solid #313244;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   overflow: hidden;
 }
+
+/*
+ * ツールバーはターミナル出力に重ねず、独立したヘッダー行として高さを占有する
+ * （重ねると右上のセルがボタンに隠れて読めなくなる）。
+ * 負のmarginは#popup-boxの左右paddingを打ち消して枠いっぱいに伸ばすため
+ */
 #popup-toolbar {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  margin: 0 -4px 4px;
+  padding: 2px 4px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+}
+
+/*
+ * .cursor/.copy-overlayのabsolute基準。ここにpaddingを置くとcursorの原点（padding box）が
+ * .termの文字原点からずれるため、余白は#popup-box側で持たせる
+ */
+#popup-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* フォーマッタ出力はinline styleでfont-family: monospaceを持つため上書きする */
