@@ -1,5 +1,6 @@
 node_modules/
-build/
+# ルート直下のビルド成果物のみ。先頭の"/"が無いとdocs/build/まで巻き込む
+/build/
 dist/
 artifacts/
 *.tsbuildinfo
