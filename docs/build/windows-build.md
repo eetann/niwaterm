@@ -142,7 +142,7 @@ opensrc path ghostty-org/ghostty   # 取得先パスが返る
 **Zig 0.16.0以上が必要**（ghosttyのbuild.zigが `minimum_zig_version = 0.16.0` を要求する）。
 
 ```bash
-bun run build:vendor:win
+mise run build:vendor:win
 ```
 
 中身は次のコマンド:
@@ -173,10 +173,11 @@ macOSの `.dylib` と違い、**DLL本体は `lib/` ではなく `bin/` に出�
 ### 3-3. shim をWindows向けにビルドする
 
 ```bash
-bun run build:native:win
+mise run build:native
 ```
 
-中身は次のコマンド:
+`build:native`は実行環境からターゲットを判別して振り分けるだけのタスクで、WSLでは
+`build:native:win`（`mise.toml`参照）が動く。中身は次のコマンド:
 
 ```bash
 mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
@@ -207,7 +208,7 @@ cp -r vendor/libghostty/include "$WIN_REPO/vendor/libghostty/"
 
 ```powershell
 cd $env:USERPROFILE\niwaterm-worktrees\<worktree名>
-bun run start
+bun x electrobun dev
 ```
 
 WSLから起動する場合:
@@ -215,7 +216,7 @@ WSLから起動する場合:
 ```bash
 powershell.exe -NoProfile -Command "\
   \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \
-  cd C:\Users\<ユーザー名>\niwaterm-worktrees\<worktree名>; bun run start"
+  cd C:\Users\<ユーザー名>\niwaterm-worktrees\<worktree名>; bun x electrobun dev"
 ```
 
 > **初回起動は数分かかる。** Electrobunが自分のCLIバイナリ（数十MB）とコアバイナリ

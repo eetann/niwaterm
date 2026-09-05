@@ -18,8 +18,70 @@
 #
 # アプリ名(NIWATERM_APP_NAME)は現在のブランチから自動判定する（mainならniwaterm-daily、
 # それ以外はniwaterm-wip）。詳細はstartタスク参照。
+#
+# package.jsonのscriptsとmiseタスクの棲み分け:
+# OS・ブランチに依存しない素のツールチェーン（lint/format/test）だけをpackage.jsonに残し、
+# 実行環境で中身が変わるもの（起動・ネイティブビルド・Windows同期）はすべてここへ集約する。
+# 他タスクからしか呼ばれない実処理は`hide = true`で`mise tasks`・補完から隠している
+# （直接`mise run`することは可能）。
 
-# devモードの起動口はこのタスクに一本化する（`npm run start`は廃止）。
+# ネイティブ成果物（libghostty-vtのシム・PTYの制御端末ラッパー）のビルド。何を作るかは
+# 実行環境で決まる（macOSはローカル向けの.dylib、WSLはzigでWindows向けの.dllへクロスビルド）ため、
+# ここで判別して実処理タスクへ振り分ける。
+[tasks."build:native"]
+description = "libghostty-vtのシムとPTYラッパーを現在の環境向けにビルドする（macOSはローカル向け、WSLはWindows向けクロスビルド）"
+run = '''
+if [ "$(uname -s)" = "Darwin" ]; then
+  mise run build:native:mac
+elif grep -qi microsoft /proc/version 2>/dev/null; then
+  mise run build:native:win
+else
+  echo "ネイティブ成果物のビルドはmacOS（ローカル向け）とWSL（Windows向けクロスビルド）のみ対応しています" >&2
+  exit 1
+fi
+'''
+
+# niwaterm-ptyexecはmacOS専用。WindowsのPTYはConPTYで制御端末の付け替えが不要なため
+# （src/bun/pty.tsのwithPtyExec参照）
+[tasks."build:native:mac"]
+hide = true
+description = "shimとniwaterm-ptyexecをmacOS向けにビルドする（build:nativeから呼ばれる）"
+run = '''
+cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c \
+  -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path \
+  -o vendor/libghostty/lib/libniwashim.dylib
+cc -O2 src/native/ptyexec.c -o vendor/libghostty/lib/niwaterm-ptyexec
+'''
+
+# zigはWindowsのみDLL本体をbin/へ出す（lib/に入るのはリンク用のインポートライブラリ）。
+# src/bun/ghostty.ts側の探索先もそれに合わせてbin/になっている
+[tasks."build:native:win"]
+hide = true
+description = "shimをWindows向けにクロスビルドする（build:nativeから呼ばれる）"
+run = '''
+mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
+  -Ivendor/libghostty/include \
+  src/native/shim.c \
+  -Lvendor/libghostty/lib -lghostty-vt \
+  -o vendor/libghostty/bin/niwashim.dll
+'''
+
+# vendor（libghostty-vt本体）のビルドはシムと違い、libghostty-vtのバージョンを上げるときにしか
+# 実行しないのでbuild:nativeの振り分けには含めない。macOS向けはghosttyソースの取得(opensrc)が
+# 前段に必要で手順が別物なためタスク化しておらず、docs/build/macos-build.mdの手順を使う。
+[tasks."build:vendor:win"]
+description = "libghostty-vt本体をWindows向けにクロスビルドする（vendor更新時のみ。要vendor/libghostty へのghosttyソース配置）"
+run = '''
+cd vendor/libghostty
+# -Dtargetの`-gnu`は必須。ghosttyのbuild.zigはWindowsターゲット時にABIをMSVCへ自動で
+# 切り替えるため、省略するとWSL上に無いMSVCツールチェーンを要求されて失敗する
+mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
+  -Dtarget=x86_64-windows-gnu \
+  -Doptimize=ReleaseFast \
+  --prefix "$PWD"
+'''
+
+# devモードの起動口はこのタスクに一本化する（package.jsonのscriptsには置かない）。
 # 現在のブランチからアプリ名(wip/daily)を自動判定するため、`start:daily`のような
 # 専用タスクは用意しない。WSLとMac(Linux実機含む)で実行環境が異なるため、ここで判別して分岐する。
 # 停止方法もOSで異なる（Mac等はフォアグラウンド実行なのでCtrl+Cで止まるが、
@@ -81,6 +143,7 @@ powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::U
 # ログは固定パスに毎回上書き（ファイルが際限なく増えないようにするため）。
 # 起動コマンド自体は .claude/skills/windows-gui-testing/SKILL.md の定型と同じ。
 [tasks."win:start"]
+hide = true
 description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み。startタスクが解決したNIWATERM_APP_NAMEを引き継ぐ）"
 run = '''
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")

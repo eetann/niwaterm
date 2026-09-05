@@ -17,7 +17,7 @@ function findLibDir(): string {
   const found = findNativeArtifact(join(libSubdir, nativeLayout.vt));
   if (found) return dirname(found);
   throw new Error(
-    `${libSubdir} が見つからない。\`bun run build:native\` の前に libghostty-vt をビルドすること`,
+    `${libSubdir} が見つからない。\`mise run build:native\` の前に libghostty-vt をビルドすること`,
   );
 }
 

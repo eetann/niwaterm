@@ -46,7 +46,7 @@ niwatermのpopup（`popup open --capture-stdout`、`fzf-niwaterm`、`niwa.popup.
 
 ## 対応
 
-**PTYの最初のプロセスとして薄いラッパー`niwaterm-ptyexec`（`src/native/ptyexec.c`）を挟み、`setsid()` + `ioctl(TIOCSCTTY)`で標準入力（＝PTYスレーブ）を制御端末に設定してから本来のシェルへ`exec`する**ようにした（`src/bun/pty.ts`の`withPtyExec`）。`bun run build:native`で`vendor/libghostty/lib/niwaterm-ptyexec`へ生成し、実行時は`findNativeArtifact`（`src/bun/native-artifacts.ts`）でrepoルート方向へ探索する。ラッパーが見つからない場合（`build:native`未実行）とWindows（ConPTY）はラップせず従来どおり起動する。
+**PTYの最初のプロセスとして薄いラッパー`niwaterm-ptyexec`（`src/native/ptyexec.c`）を挟み、`setsid()` + `ioctl(TIOCSCTTY)`で標準入力（＝PTYスレーブ）を制御端末に設定してから本来のシェルへ`exec`する**ようにした（`src/bun/pty.ts`の`withPtyExec`）。`mise run build:native`で`vendor/libghostty/lib/niwaterm-ptyexec`へ生成し、実行時は`findNativeArtifact`（`src/bun/native-artifacts.ts`）でrepoルート方向へ探索する。ラッパーが見つからない場合（`build:native`未実行）とWindows（ConPTY）はラップせず従来どおり起動する。
 
 実機（macOS、`python3 -c "import pty; pty.spawn(['mise','run','start'])"`で制御端末を持たせて起動）で確認した結果:
 

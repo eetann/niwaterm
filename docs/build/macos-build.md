@@ -75,10 +75,11 @@ vendor/libghostty/include/                  ← ヘッダ（shimのビルドに�
 ### 2-3. shim をビルドする
 
 ```bash
-bun run build:native
+mise run build:native
 ```
 
-中身は次のコマンド（`package.json` 参照）:
+`build:native`は実行環境からターゲットを判別して振り分けるだけのタスクで、macOSでは
+`build:native:mac`（`mise.toml`参照）が動く。中身は次のコマンド:
 
 ```bash
 cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c \
@@ -121,9 +122,8 @@ niwaterm自体の開発中は上記のdevビルド（appフォルダ名`niwaterm
 macOSでも同じ設計上の制約が該当する）。設定ファイル・IPCソケットはアプリ名別に分離されている
 （`src/bun/app-paths.ts`参照）ため、devビルドと同時に起動しても干渉しない。
 
-```bash
-mise run start:daily   # NIWATERM_APP_NAME=niwaterm-daily bun x electrobun dev と同義
-```
+普段遣い用は`main`ブランチ（メインワークツリー）側で`mise run start`する。`start`タスクが
+ブランチからアプリ名を判定するため、専用タスクは用意していない。
 
 ## vendorの更新が必要かどうかの見分け方
 
@@ -154,7 +154,7 @@ grep -n -A3 "ghostty_terminal_new" vendor/libghostty/include/ghostty/vt/terminal
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う                                   |
 | `cc: command not found`                                                     | Xcode Command Line Toolsが未導入。`xcode-select --install`                                 |
-| `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー）       | `build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                           |
+| `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー）       | `mise run build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                  |
 | 起動はするがターミナル入出力がおかしい・即クラッシュする                    | vendorがコードより古い可能性が高い。上記「vendorの更新が必要かどうかの見分け方」で確認する |
 | `opensrc path` が古いバージョンのソースを返しているように見える             | キャッシュ済みで最新化されていない。`opensrc remove ghostty-org/ghostty` してから取り直す  |
 

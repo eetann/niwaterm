@@ -1,7 +1,7 @@
 import type { ElectrobunConfig } from "electrobun";
 
 // 開発中ビルド(niwaterm-wip)がデフォルト。普段遣い用ビルドは`NIWATERM_APP_NAME=niwaterm-daily`
-// を指定して起動する（mise.tomlの`start:daily`/`win:start:daily`参照）。devチャンネルのまま
+// を指定して起動する（mise.tomlのstartタスクが現在のブランチから判定する）。devチャンネルのまま
 // アプリ名だけ変えることで、両者を同時に安全に動かせる。どちらも"wip"/"daily"という一目で
 // 区別できる単語にしてあるのは、指示を取り違えて普段遣いの方を操作する事故を防ぐため
 // （devチャンネルのサフィックス頼みの命名だと見分けがつかない）。

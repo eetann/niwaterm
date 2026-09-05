@@ -44,7 +44,7 @@ export interface Pty {
 }
 
 /**
- * PTYの子プロセスへ制御端末を持たせるラッパー（src/native/ptyexec.c、`bun run build:native`で生成）。
+ * PTYの子プロセスへ制御端末を持たせるラッパー（src/native/ptyexec.c、`mise run build:native`で生成）。
  * Bun.TerminalはPTYを子の制御端末に設定しないため、これを挟まないとniwatermを端末から起動した際に
  * PTY内の子がniwaterm自身の起動元ttyを制御端末として引き継ぎ、/dev/ttyを開くプログラム（fzf等）が
  * SIGTTIN/SIGTTOUで停止する（詳細: docs/known-issues/macos-pty-child-controlling-terminal.md）
