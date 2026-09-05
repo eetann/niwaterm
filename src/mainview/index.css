@@ -251,7 +251,11 @@ body {
   outline: 1px solid #f9e2af;
   outline-offset: -1px;
 }
-/* タブD&Dのドロップ先ハイライト。::afterのoverlayでタイル全体（タブバー・ターミナル領域とも）を示す */
+/*
+ * タブD&Dのドロップ先ハイライト。破線のoutlineがドロップ対象のタイル、::afterのoverlayが
+ * ドロップしたタブの置き場所を示す。中央（タブ移動）はタイル全体、端（分割）は分割後に
+ * 新しいタイルが占める側の半分を塗る
+ */
 .tile.drag-over {
   outline: 2px dashed #89b4fa;
   outline-offset: -2px;
@@ -263,6 +267,22 @@ body {
   z-index: 1;
   background: rgba(137, 180, 250, 0.12);
   pointer-events: none;
+}
+.tile.drag-over[data-drop-zone="left"]::after {
+  inset: 0 50% 0 0;
+  background: rgba(137, 180, 250, 0.22);
+}
+.tile.drag-over[data-drop-zone="right"]::after {
+  inset: 0 0 0 50%;
+  background: rgba(137, 180, 250, 0.22);
+}
+.tile.drag-over[data-drop-zone="top"]::after {
+  inset: 0 0 50% 0;
+  background: rgba(137, 180, 250, 0.22);
+}
+.tile.drag-over[data-drop-zone="bottom"]::after {
+  inset: 50% 0 0 0;
+  background: rgba(137, 180, 250, 0.22);
 }
 
 .tab-bar {

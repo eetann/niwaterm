@@ -1484,6 +1484,57 @@ describe("moveTab", () => {
   });
 });
 
+describe("moveTabToSplit", () => {
+  test("同一workspace内なら分割してタブを移せる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const movingTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const split = mgr.splitTile(firstTileId, "vertical") as { tileId: string };
+
+    const result = mgr.moveTabToSplit(
+      firstTileId,
+      movingTabId,
+      split.tileId,
+      "horizontal",
+      "after",
+    );
+
+    expect(result).toBe(true);
+    const after = mgr.snapshot().workspace.board.layout;
+    expect(after.kind).toBe("split");
+  });
+
+  test("別workspaceのtileIdへの分割はfalseを返す（PTYセッションを移管できないため非対応）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace();
+    const secondTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+
+    const result = mgr.moveTabToSplit(firstTileId, firstTabId, secondTileId, "vertical", "after");
+
+    expect(result).toBe(false);
+    mgr.switchWorkspace(firstId);
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).tabIds).toEqual([firstTabId]);
+  });
+
+  test("存在しないtileIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
+
+    expect(mgr.moveTabToSplit("not-found", leaf.activeTabId, leaf.id, "vertical", "after")).toBe(
+      false,
+    );
+    expect(mgr.moveTabToSplit(leaf.id, leaf.activeTabId, "not-found", "vertical", "after")).toBe(
+      false,
+    );
+  });
+});
+
 describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => {
   test("openPopupは新規タブを作成しtabIdを返す。2回目のopenPopupはnullを返す（同時1つ制約）", () => {
     const { created, factory } = createFakeSessionFactory();

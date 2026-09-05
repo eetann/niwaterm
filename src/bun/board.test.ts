@@ -7,7 +7,7 @@ import type {
   TerminalSessionCallbacks,
   TerminalSessionOptions,
 } from "./terminal-session";
-import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
+import { listLeaves, type TileLeaf, type TileNode, type TileSplit } from "./tile-layout";
 import { createBoard, type Board, type BoardOptions } from "./board";
 
 function idGen(prefix: string): () => string {
@@ -906,6 +906,115 @@ describe("moveTab", () => {
     const result = ws.moveTab(leaf.id, leaf.activeTabId, leaf.id);
 
     expect(result).toBe(false);
+  });
+});
+
+describe("moveTabToSplit", () => {
+  test("別タイルの端へ移すと、そのタイルを分割した新タイルへタブが移りフォーカスも移る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(firstTileId);
+    const [movingTabId] = (ws.snapshot().layout as TileLeaf).tabIds;
+    const split = ws.splitTile(firstTileId, "vertical") as { tileId: string };
+    const sessionCountBefore = created.length;
+
+    const result = ws.moveTabToSplit(firstTileId, movingTabId, split.tileId, "horizontal", "after");
+
+    expect(result).toBe(true);
+    const layout = ws.snapshot().layout as TileSplit;
+    const newSplit = layout.second as TileSplit;
+    expect(newSplit.kind).toBe("split");
+    expect(newSplit.direction).toBe("column");
+    expect((newSplit.first as TileLeaf).id).toBe(split.tileId);
+    const newTile = newSplit.second as TileLeaf;
+    expect(newTile.tabIds).toEqual([movingTabId]);
+    expect(ws.snapshot().focusedTileId).toBe(newTile.id);
+    // 移動したのは既存タブなので、PTYセッションは新しく起動しない
+    expect(created.length).toBe(sessionCountBefore);
+  });
+
+  test("placement=beforeでは新しいタイルが分割の手前側（first）に入る", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(firstTileId);
+    const [movingTabId] = (ws.snapshot().layout as TileLeaf).tabIds;
+    const split = ws.splitTile(firstTileId, "vertical") as { tileId: string };
+
+    ws.moveTabToSplit(firstTileId, movingTabId, split.tileId, "vertical", "before");
+
+    const newSplit = (ws.snapshot().layout as TileSplit).second as TileSplit;
+    expect(newSplit.direction).toBe("row");
+    expect((newSplit.first as TileLeaf).tabIds).toEqual([movingTabId]);
+    expect((newSplit.second as TileLeaf).id).toBe(split.tileId);
+  });
+
+  test("複数タブのタイルは自分自身の端へ移すとタブを引き剥がして分割する", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const movingTabId = ws.newTab(tileId) as string;
+    const [stayingTabId] = (ws.snapshot().layout as TileLeaf).tabIds;
+
+    const result = ws.moveTabToSplit(tileId, movingTabId, tileId, "vertical", "after");
+
+    expect(result).toBe(true);
+    const layout = ws.snapshot().layout as TileSplit;
+    expect((layout.first as TileLeaf).tabIds).toEqual([stayingTabId]);
+    expect((layout.second as TileLeaf).tabIds).toEqual([movingTabId]);
+  });
+
+  test("1タブだけのタイルを自分自身へ移した場合はfalseを返し、木は変化しない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const leaf = ws.snapshot().layout as TileLeaf;
+    const before = ws.snapshot().layout;
+
+    const result = ws.moveTabToSplit(leaf.id, leaf.activeTabId, leaf.id, "vertical", "after");
+
+    expect(result).toBe(false);
+    expect(ws.snapshot().layout).toEqual(before);
+  });
+
+  test("移動元がタイル最後の1タブだった場合、そのタイルは畳まれタイル名も破棄される", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    const movingTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    const split = ws.splitTile(firstTileId, "vertical") as { tileId: string };
+    ws.setTileName(firstTileId, "元タイル");
+
+    const result = ws.moveTabToSplit(firstTileId, movingTabId, split.tileId, "vertical", "after");
+
+    expect(result).toBe(true);
+    expect(ws.snapshot().tileNames[firstTileId]).toBeUndefined();
+  });
+
+  test("分割対象がズーム中だった場合はズームを解除する", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const firstTileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(firstTileId);
+    const [movingTabId] = (ws.snapshot().layout as TileLeaf).tabIds;
+    const split = ws.splitTile(firstTileId, "vertical") as { tileId: string };
+    ws.toggleZoomTile(split.tileId);
+
+    ws.moveTabToSplit(firstTileId, movingTabId, split.tileId, "vertical", "after");
+
+    expect(ws.snapshot().zoomedTileId).toBeNull();
+  });
+
+  test("存在しないtabId・tileIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const leaf = ws.snapshot().layout as TileLeaf;
+    const split = ws.splitTile(leaf.id, "vertical") as { tileId: string };
+
+    expect(ws.moveTabToSplit(leaf.id, "not-a-tab", split.tileId, "vertical", "after")).toBe(false);
+    expect(ws.moveTabToSplit(leaf.id, leaf.activeTabId, "not-found", "vertical", "after")).toBe(
+      false,
+    );
   });
 });
 

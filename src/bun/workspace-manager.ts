@@ -9,7 +9,7 @@ import {
 import type { BoardId } from "./board";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
-import type { SplitOrientation, TabId, TileId } from "./tile-layout";
+import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import {
   createWorkspace,
   type BoardListEntry,
@@ -391,6 +391,19 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return owner.moveTab(fromTileId, tabId, toTileId);
   }
 
+  // タブをタイルの端へドロップしての画面分割。moveTabと同じくBoardをまたぐ操作は非対応
+  function moveTabToSplit(
+    fromTileId: TileId,
+    tabId: TabId,
+    targetTileId: TileId,
+    orientation: SplitOrientation,
+    placement: SplitPlacement,
+  ): boolean {
+    const owner = findOwnerByTileId(fromTileId);
+    if (!owner || owner !== findOwnerByTileId(targetTileId)) return false;
+    return owner.moveTabToSplit(fromTileId, tabId, targetTileId, orientation, placement);
+  }
+
   function closeTab(tileId: TileId, tabId: TabId): boolean {
     return findOwnerByTileId(tileId)?.closeTab(tileId, tabId) ?? false;
   }
@@ -679,6 +692,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     switchTab,
     cycleTab,
     moveTab,
+    moveTabToSplit,
     closeTab,
     focusTile,
     focusDirection,

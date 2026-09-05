@@ -30,7 +30,7 @@ import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
-import type { SplitOrientation, TabId, TileId } from "./tile-layout";
+import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import { sendWindowsNotification } from "./windows-notification";
 import {
   isFrameRestorable,
@@ -126,6 +126,14 @@ export type NiwaRPC = {
       resetFontSizeZoom: {};
       switchTab: { tileId: TileId; tabId: TabId };
       moveTab: { fromTileId: TileId; tabId: TabId; toTileId: TileId };
+      /** タブをタイルの端へドロップしての画面分割。targetTileIdを分割し、生まれた新タイルへタブを移す */
+      moveTabToSplit: {
+        fromTileId: TileId;
+        tabId: TabId;
+        targetTileId: TileId;
+        orientation: SplitOrientation;
+        placement: SplitPlacement;
+      };
       closeTab: { tileId: TileId; tabId: TabId };
       /** mainview側のConfirmDialogで確認済みのタブ再起動要求（niwa.tab.respawnと同機構、常にデフォルトシェル・元cwd引き継ぎ） */
       restartTab: { tabId: TabId };
@@ -583,6 +591,21 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         toTileId: TileId;
       }) => {
         workspaceManager.moveTab(fromTileId, tabId, toTileId);
+      },
+      moveTabToSplit: ({
+        fromTileId,
+        tabId,
+        targetTileId,
+        orientation,
+        placement,
+      }: {
+        fromTileId: TileId;
+        tabId: TabId;
+        targetTileId: TileId;
+        orientation: SplitOrientation;
+        placement: SplitPlacement;
+      }) => {
+        workspaceManager.moveTabToSplit(fromTileId, tabId, targetTileId, orientation, placement);
       },
       closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
         workspaceManager.closeTab(tileId, tabId);

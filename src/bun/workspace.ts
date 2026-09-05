@@ -23,6 +23,7 @@ import {
   findNode,
   listLeaves,
   type SplitOrientation,
+  type SplitPlacement,
   type TabId,
   type TileId,
 } from "./tile-layout";
@@ -397,6 +398,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return owner.moveTab(fromTileId, tabId, toTileId);
   }
 
+  // タブをタイルの端へドロップしての画面分割。moveTabと同じくBoardをまたぐ操作は非対応
+  function moveTabToSplit(
+    fromTileId: TileId,
+    tabId: TabId,
+    targetTileId: TileId,
+    orientation: SplitOrientation,
+    placement: SplitPlacement,
+  ): boolean {
+    const owner = findBoardOwnerByTileId(fromTileId);
+    if (!owner || owner !== findBoardOwnerByTileId(targetTileId)) return false;
+    return owner.moveTabToSplit(fromTileId, tabId, targetTileId, orientation, placement);
+  }
+
   function closeTab(tileId: TileId, tabId: TabId): boolean {
     return findBoardOwnerByTileId(tileId)?.closeTab(tileId, tabId) ?? false;
   }
@@ -698,6 +712,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     switchTab,
     cycleTab,
     moveTab,
+    moveTabToSplit,
     closeTab,
     focusTile,
     focusDirection,

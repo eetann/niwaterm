@@ -19,6 +19,7 @@ import {
   findNode,
   focusNeighbor,
   listLeaves,
+  moveTabToNewSplit,
   moveTabToTile,
   nextTabId,
   resizeInDirection,
@@ -27,6 +28,7 @@ import {
   switchActiveTab,
   toFlexDirection,
   type SplitOrientation,
+  type SplitPlacement,
   type TabId,
   type TileId,
   type TileNode,
@@ -407,6 +409,35 @@ export function createBoard(opts: BoardOptions) {
     return true;
   }
 
+  // タブをタイルの端へドロップしての画面分割。新しいタイルへ入るのは既存タブなので、
+  // moveTabと同じくtree（木構造）の差し替えだけで済む（PTYの起動は要らない）
+  function moveTabToSplit(
+    fromTileId: TileId,
+    tabId: TabId,
+    targetTileId: TileId,
+    orientation: SplitOrientation,
+    placement: SplitPlacement,
+  ): boolean {
+    const result = moveTabToNewSplit(
+      tree,
+      fromTileId,
+      tabId,
+      { tileId: targetTileId, direction: toFlexDirection(orientation), placement },
+      { splitId: genTileId(), tileId: genTileId() },
+    );
+    if (!result) return false;
+    tree = result.tree;
+    if (result.removedTileId) {
+      tileNames.delete(result.removedTileId);
+      if (zoomedTileId === result.removedTileId) zoomedTileId = null;
+    }
+    // 分割で増えたタイルが隠れたままにならないよう、splitTileと同じくズームを解除する
+    if (zoomedTileId === targetTileId) zoomedTileId = null;
+    focusedTileId = result.newTileId;
+    opts.onDirty();
+    return true;
+  }
+
   // タイルに複数タブがあればアクティブタブだけ閉じる。最後の1タブだった場合はタイルごと閉じる
   // （そのタイルがBoard最後の1枚だった場合のみ、誤操作防止のため何もしない）
   function closeTab(tileId: TileId, tabId: TabId): boolean {
@@ -769,6 +800,7 @@ export function createBoard(opts: BoardOptions) {
     switchTab,
     cycleTab,
     moveTab,
+    moveTabToSplit,
     closeTab,
     focusTile: focusTileById,
     focusDirection: focusDirectionFrom,

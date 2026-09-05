@@ -40,6 +40,7 @@ import {
   type SidebarApplyLayoutRequest,
 } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
+import { resolveTileDropZone, splitForDropZone, type TileDropZone } from "./tile-drop-zone";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import {
   type CellGlyphTransform,
@@ -2479,12 +2480,23 @@ document.addEventListener("click", (e) => {
   imeEl.focus({ preventScroll: true });
 });
 
-// ---- タブD&D移動（別タイルへドロップしたら該当タイルへ移動する）----
+// ---- タブD&D（タイルの中央へドロップでそのタイルへ移動、端へドロップでタイルを分割）----
 let dragOverTileEl: HTMLElement | null = null;
 
 function clearTabDragOver(): void {
   dragOverTileEl?.classList.remove("drag-over");
+  dragOverTileEl?.removeAttribute("data-drop-zone");
   dragOverTileEl = null;
+}
+
+/**
+ * タブバー上は端の帯の判定に入れず常に中央（タブ移動）扱いにする。タブバーはタイル高さの
+ * ごく一部しか占めないため、そのままでは上端の帯へまるごと収まって分割になってしまう
+ */
+function dropZoneAt(tileEl: HTMLElement, e: DragEvent): TileDropZone {
+  if ((e.target as HTMLElement).closest(".tab-bar")) return "center";
+  const rect = tileEl.getBoundingClientRect();
+  return resolveTileDropZone(e.clientX - rect.left, e.clientY - rect.top, rect);
 }
 
 tileTreeEl.addEventListener("dragover", (e) => {
@@ -2499,6 +2511,7 @@ tileTreeEl.addEventListener("dragover", (e) => {
     tileEl.classList.add("drag-over");
     dragOverTileEl = tileEl;
   }
+  tileEl.dataset["dropZone"] = dropZoneAt(tileEl, e);
 });
 tileTreeEl.addEventListener("dragleave", (e) => {
   // tileTreeEl自体から出た場合のみ解除する（子要素間の行き来ではdragOverTileElを維持する）
@@ -2507,20 +2520,37 @@ tileTreeEl.addEventListener("dragleave", (e) => {
 tileTreeEl.addEventListener("drop", (e) => {
   const raw = e.dataTransfer?.getData(TAB_DRAG_MIME);
   const tileEl = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  const zone = tileEl ? dropZoneAt(tileEl, e) : "center";
   clearTabDragOver();
   if (!raw || !tileEl) return;
   e.preventDefault();
-  const toTileId = tileEl.dataset["tileId"];
-  if (!toTileId) return;
+  const targetTileId = tileEl.dataset["tileId"];
+  if (!targetTileId) return;
   let payload: TabDragPayload;
   try {
     payload = JSON.parse(raw);
   } catch {
     return;
   }
-  if (payload.fromTileId === toTileId) return;
-  focusTileLocally(toTileId);
-  sendMessage("moveTab", { fromTileId: payload.fromTileId, tabId: payload.tabId, toTileId });
+  const split = splitForDropZone(zone);
+  if (split) {
+    // 分割で生まれるタイルのidはbun側の採番なので、フォーカス表示の反映は次のrenderに任せる
+    sendMessage("moveTabToSplit", {
+      fromTileId: payload.fromTileId,
+      tabId: payload.tabId,
+      targetTileId,
+      orientation: split.orientation,
+      placement: split.placement,
+    });
+  } else {
+    if (payload.fromTileId === targetTileId) return;
+    focusTileLocally(targetTileId);
+    sendMessage("moveTab", {
+      fromTileId: payload.fromTileId,
+      tabId: payload.tabId,
+      toTileId: targetTileId,
+    });
+  }
   imeEl.focus({ preventScroll: true });
 });
 // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もハイライトを解除する

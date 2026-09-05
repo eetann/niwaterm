@@ -6,6 +6,7 @@ import {
   findNode,
   focusNeighbor,
   listLeaves,
+  moveTabToNewSplit,
   moveTabToTile,
   nextTabId,
   resizeInDirection,
@@ -638,6 +639,167 @@ describe("moveTabToTile", () => {
       },
       removedTileId: "b",
     });
+  });
+});
+
+describe("moveTabToNewSplit", () => {
+  function twoTiles(): TileNode {
+    return {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: { kind: "leaf", id: "a", tabIds: ["t1", "t2"], activeTabId: "t1" },
+      second: leaf("b"),
+    };
+  }
+
+  test("placement=after で移動先leafが新splitのfirst、移動したタブのtileがsecondになる", () => {
+    const result = moveTabToNewSplit(
+      twoTiles(),
+      "a",
+      "t2",
+      { tileId: "b", direction: "row", placement: "after" },
+      { splitId: "new-split", tileId: "new-tile" },
+    );
+    expect(result).toEqual({
+      tree: {
+        kind: "split",
+        id: "root",
+        direction: "row",
+        ratio: 0.5,
+        first: { kind: "leaf", id: "a", tabIds: ["t1"], activeTabId: "t1" },
+        second: {
+          kind: "split",
+          id: "new-split",
+          direction: "row",
+          ratio: 0.5,
+          first: leaf("b"),
+          second: { kind: "leaf", id: "new-tile", tabIds: ["t2"], activeTabId: "t2" },
+        },
+      },
+      newTileId: "new-tile",
+    });
+  });
+
+  test("placement=before では移動したタブのtileが新splitのfirstになる", () => {
+    const result = moveTabToNewSplit(
+      twoTiles(),
+      "a",
+      "t2",
+      { tileId: "b", direction: "column", placement: "before" },
+      { splitId: "new-split", tileId: "new-tile" },
+    );
+    expect(result?.tree).toEqual({
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: { kind: "leaf", id: "a", tabIds: ["t1"], activeTabId: "t1" },
+      second: {
+        kind: "split",
+        id: "new-split",
+        direction: "column",
+        ratio: 0.5,
+        first: { kind: "leaf", id: "new-tile", tabIds: ["t2"], activeTabId: "t2" },
+        second: leaf("b"),
+      },
+    });
+  });
+
+  test("移動元が最後の1タブだった場合、tileごと畳まれ removedTileId が返る", () => {
+    const tree: TileNode = {
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: leaf("a"),
+      second: leaf("b"),
+    };
+    const result = moveTabToNewSplit(
+      tree,
+      "a",
+      "a-tab",
+      { tileId: "b", direction: "row", placement: "after" },
+      { splitId: "new-split", tileId: "new-tile" },
+    );
+    expect(result).toEqual({
+      tree: {
+        kind: "split",
+        id: "new-split",
+        direction: "row",
+        ratio: 0.5,
+        first: leaf("b"),
+        second: { kind: "leaf", id: "new-tile", tabIds: ["a-tab"], activeTabId: "a-tab" },
+      },
+      newTileId: "new-tile",
+      removedTileId: "a",
+    });
+  });
+
+  test("2タブ以上あるtileは自分自身へのドロップでもタブを引き剥がして分割する", () => {
+    const result = moveTabToNewSplit(
+      twoTiles(),
+      "a",
+      "t2",
+      { tileId: "a", direction: "row", placement: "after" },
+      { splitId: "new-split", tileId: "new-tile" },
+    );
+    expect(result?.tree).toEqual({
+      kind: "split",
+      id: "root",
+      direction: "row",
+      ratio: 0.5,
+      first: {
+        kind: "split",
+        id: "new-split",
+        direction: "row",
+        ratio: 0.5,
+        first: { kind: "leaf", id: "a", tabIds: ["t1"], activeTabId: "t1" },
+        second: { kind: "leaf", id: "new-tile", tabIds: ["t2"], activeTabId: "t2" },
+      },
+      second: leaf("b"),
+    });
+    expect(result?.removedTileId).toBeUndefined();
+  });
+
+  test("1タブだけのtileを自分自身へドロップした場合はnullを返す", () => {
+    const tree = twoTiles();
+    expect(
+      moveTabToNewSplit(
+        tree,
+        "b",
+        "b-tab",
+        { tileId: "b", direction: "row", placement: "after" },
+        { splitId: "new-split", tileId: "new-tile" },
+      ),
+    ).toBeNull();
+  });
+
+  test("移動元にtabIdが存在しない場合はnullを返す", () => {
+    expect(
+      moveTabToNewSplit(
+        twoTiles(),
+        "a",
+        "not-a-tab",
+        { tileId: "b", direction: "row", placement: "after" },
+        { splitId: "new-split", tileId: "new-tile" },
+      ),
+    ).toBeNull();
+  });
+
+  test("分割先がsplitノードのid・存在しないidの場合はnullを返す", () => {
+    for (const tileId of ["root", "not-found"]) {
+      expect(
+        moveTabToNewSplit(
+          twoTiles(),
+          "a",
+          "t2",
+          { tileId, direction: "row", placement: "after" },
+          { splitId: "new-split", tileId: "new-tile" },
+        ),
+      ).toBeNull();
+    }
   });
 });
 

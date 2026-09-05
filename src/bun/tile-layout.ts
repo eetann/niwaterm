@@ -64,25 +64,53 @@ export function splitTile(
   newTabId: TabId,
   ratio = 0.5,
 ): SplitResult | null {
+  const newLeaf: TileLeaf = {
+    kind: "leaf",
+    id: newTileId,
+    tabIds: [newTabId],
+    activeTabId: newTabId,
+  };
+  const newTree = replaceLeafWithSplit(tree, targetTileId, newLeaf, {
+    direction,
+    splitId: newSplitId,
+    placement: "after",
+    ratio,
+  });
+  if (!newTree) return null;
+  return { tree: newTree, newTileId, newTabId };
+}
+
+/** 新しいtileを既存tileのどちら側へ置くか。beforeは分割方向の手前（左/上）、afterは奥（右/下） */
+export type SplitPlacement = "before" | "after";
+
+/**
+ * targetTileIdのleafを、そのleafとnewLeafを並べたsplitで置き換える。
+ * targetTileIdが見つからない、またはleafでない場合はnullを返す。
+ */
+function replaceLeafWithSplit(
+  tree: TileNode,
+  targetTileId: TileId,
+  newLeaf: TileLeaf,
+  split: {
+    direction: FlexDirection;
+    splitId: TileId;
+    placement: SplitPlacement;
+    ratio: number;
+  },
+): TileNode | null {
   let found = false;
 
   function recurse(node: TileNode): TileNode {
     if (node.kind === "leaf") {
       if (node.id !== targetTileId) return node;
       found = true;
-      const newLeaf: TileLeaf = {
-        kind: "leaf",
-        id: newTileId,
-        tabIds: [newTabId],
-        activeTabId: newTabId,
-      };
       return {
         kind: "split",
-        id: newSplitId,
-        direction,
-        ratio: clampRatio(ratio),
-        first: node,
-        second: newLeaf,
+        id: split.splitId,
+        direction: split.direction,
+        ratio: clampRatio(split.ratio),
+        first: split.placement === "before" ? newLeaf : node,
+        second: split.placement === "before" ? node : newLeaf,
       };
     }
     const first = recurse(node.first);
@@ -92,8 +120,7 @@ export function splitTile(
   }
 
   const newTree = recurse(tree);
-  if (!found) return null;
-  return { tree: newTree, newTileId, newTabId };
+  return found ? newTree : null;
 }
 
 export interface CloseResult {
@@ -261,6 +288,61 @@ export function moveTabToTile(
   if (!newTree) return null;
 
   return { tree: newTree, removedTileId: closeResult.tileClosed ? fromTileId : undefined };
+}
+
+export interface MoveTabToNewSplitResult {
+  tree: TileNode;
+  /** 移動したタブが入る、新しく作られたtileのid */
+  newTileId: TileId;
+  /** 移動元のtileが最後の1タブだった場合、tileごと畳まれる。その場合のみ元tileIdを返す（呼び出し側の後始末用） */
+  removedTileId?: TileId;
+}
+
+/**
+ * fromTileId内のtabIdを、targetTileIdを分割して作った新しいtileへ移動する
+ * （タブをタイルの端へドラッグ&ドロップしての画面分割）。
+ * moveTabToTileと同様、移動元は「タブを閉じる」規則（最後の1タブならtileごと畳む）に従う。
+ * fromTileIdとtargetTileIdが同一でも、そのtileに2タブ以上あれば有効（タブを引き剥がして隣へ置く）。
+ * 1タブだけのtileを自分自身へ落とすとtileが畳まれて同じ位置に作り直されるだけなのでnullを返す。
+ * tabIdがfromTileIdに無い、targetTileIdがleafでない場合もnullを返す。
+ */
+export function moveTabToNewSplit(
+  tree: TileNode,
+  fromTileId: TileId,
+  tabId: TabId,
+  target: { tileId: TileId; direction: FlexDirection; placement: SplitPlacement },
+  newIds: { splitId: TileId; tileId: TileId },
+): MoveTabToNewSplitResult | null {
+  const fromLeaf = findNode(tree, fromTileId);
+  if (!fromLeaf || fromLeaf.kind !== "leaf" || !fromLeaf.tabIds.includes(tabId)) return null;
+  const targetLeaf = findNode(tree, target.tileId);
+  if (!targetLeaf || targetLeaf.kind !== "leaf") return null;
+  if (fromTileId === target.tileId && fromLeaf.tabIds.length === 1) return null;
+
+  const closeResult = closeTabInTile(tree, fromTileId, tabId);
+  // closeResult.tree === null は「fromTileIdがtree全体で唯一のleafかつ最後の1タブ」の場合のみで、
+  // それはtarget.tileId === fromTileIdを意味するため上のガードで既に弾かれている
+  if (!closeResult || !closeResult.tree) return null;
+
+  const newLeaf: TileLeaf = {
+    kind: "leaf",
+    id: newIds.tileId,
+    tabIds: [tabId],
+    activeTabId: tabId,
+  };
+  const newTree = replaceLeafWithSplit(closeResult.tree, target.tileId, newLeaf, {
+    direction: target.direction,
+    splitId: newIds.splitId,
+    placement: target.placement,
+    ratio: 0.5,
+  });
+  if (!newTree) return null;
+
+  return {
+    tree: newTree,
+    newTileId: newIds.tileId,
+    removedTileId: closeResult.tileClosed ? fromTileId : undefined,
+  };
 }
 
 /** leaf内でactiveTabIdからdelta方向へ巡回移動した次/前のtabIdを返す */
