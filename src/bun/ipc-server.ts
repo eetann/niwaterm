@@ -377,6 +377,18 @@ function parseRenameBoardBody(body: unknown): RenameBoardRequestBody | null {
   return { ...boardIdBody, name: b.name };
 }
 
+interface MoveBoardRequestBody extends BoardIdRequestBody {
+  direction: "up" | "down";
+}
+
+function parseMoveBoardBody(body: unknown): MoveBoardRequestBody | null {
+  const boardIdBody = parseBoardIdBody(body);
+  if (!boardIdBody) return null;
+  const b = body as { direction?: unknown };
+  if (b.direction !== "up" && b.direction !== "down") return null;
+  return { ...boardIdBody, direction: b.direction };
+}
+
 function parseSetVarBody(body: unknown): SetVarRequestBody | null {
   const tabIdBody = parseTabIdBody(body);
   if (!tabIdBody) return null;
@@ -737,6 +749,22 @@ function buildApp(
       return c.json({ ok: false, error: "expected { boardId: string, name: string }" }, 400);
     }
     const ok = workspaceManager.setBoardName(parsed.boardId, parsed.name);
+    if (!ok) return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
+    return c.json({ ok: true });
+  });
+
+  // move-workspaceと同じく相対移動のみを受け付け、端でこれ以上動かせない場合もokを返す
+  app.post("/move-board", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseMoveBoardBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { boardId: string, direction: "up"|"down" }' },
+        400,
+      );
+    }
+    const ok = workspaceManager.moveBoardBy(parsed.boardId, parsed.direction === "up" ? -1 : 1);
     if (!ok) return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
     return c.json({ ok: true });
   });

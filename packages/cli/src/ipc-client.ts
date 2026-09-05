@@ -539,6 +539,16 @@ export function moveWorkspace(
   return postJson(endpoint, "/move-workspace", { workspaceId, direction });
 }
 
+export type MoveBoardResult = { ok: true } | { ok: false; error: string };
+
+export function moveBoard(
+  endpoint: IpcEndpoint,
+  boardId: string,
+  direction: "up" | "down",
+): Promise<MoveBoardResult> {
+  return postJson(endpoint, "/move-board", { boardId, direction });
+}
+
 export type NewBoardResult = { ok: true; boardId: string } | { ok: false; error: string };
 
 export function newBoard(

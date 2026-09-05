@@ -212,6 +212,22 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["previous-window", "window"],
   },
   {
+    action: "move-board-up",
+    labelEn: "Move Board Up",
+    label: "Boardを上へ移動",
+    category: "Board",
+    icon: ChevronUp,
+    keywords: ["reorder", "並び替え", "順番"],
+  },
+  {
+    action: "move-board-down",
+    labelEn: "Move Board Down",
+    label: "Boardを下へ移動",
+    category: "Board",
+    icon: ChevronDown,
+    keywords: ["reorder", "並び替え", "順番"],
+  },
+  {
     action: "rename-board",
     labelEn: "Rename Board",
     label: "Boardの名前を変更",

@@ -24,10 +24,10 @@ import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
 import {
   type SidebarBoardItem,
+  type SidebarDropPosition,
+  sidebarDropIndex,
   type SidebarPopupItem,
   type SidebarWorkspaceItem,
-  type WorkspaceDropPosition,
-  workspaceDropIndex,
 } from "./sidebar-props";
 
 /** サイドバーから選ばれたレイアウトプリセット。適用は既存タブを閉じるため、確認は呼び出し側が取る */
@@ -53,6 +53,8 @@ export interface SidebarWorkspaceListProps {
   onClearBoardStartup: (boardId: BoardId) => void;
   /** ワークスペース見出しのD&Dによる並び替え。toIndexは0始まりの移動先（bun側のmoveWorkspaceへそのまま渡る） */
   onMoveWorkspace: (workspaceId: WorkspaceId, toIndex: number) => void;
+  /** Board行のD&Dによる並び替え。toIndexは所属ワークスペース内での0始まりの移動先 */
+  onMoveBoard: (boardId: BoardId, toIndex: number) => void;
 }
 
 /** 起動時レイアウトのサブメニューに並べるプリセット。開くたびに取り直す（configはホットリロードされるため） */
@@ -63,17 +65,31 @@ type LayoutMenuState =
 const COLLAPSED_WORKSPACES_STORAGE_KEY = "niwaterm:sidebarCollapsedWorkspaces";
 
 /**
- * ワークスペース並び替えD&D用のdataTransfer MIMEタイプ。タブD&D（TAB_DRAG_MIME）と別にすることで、
- * タブをサイドバーへ落としても並び替えが起きず、ワークスペースをタイルへ落としてもタブ移動が起きない
+ * ワークスペース並び替えD&D用のdataTransfer MIMEタイプ。タブD&D（TAB_DRAG_MIME）・Board並び替えと
+ * 別にすることで、タブをサイドバーへ落としても並び替えが起きず、ワークスペースをタイルへ落としても
+ * タブ移動が起きず、ワークスペース見出しをBoard行へ落としてもBoardの並びが動かない
  */
 const WORKSPACE_DRAG_MIME = "application/x-niwaterm-workspace";
+
+/** Board並び替えD&D用のdataTransfer MIMEタイプ。WORKSPACE_DRAG_MIMEと分ける理由は同上 */
+const BOARD_DRAG_MIME = "application/x-niwaterm-board";
 
 interface WorkspaceDragPayload {
   workspaceId: WorkspaceId;
 }
 
-/** ドロップ先ワークスペースの上半分なら手前、下半分なら後ろへ挿入する */
-function dropPositionAt(e: React.DragEvent<HTMLElement>): WorkspaceDropPosition {
+interface BoardDragPayload {
+  boardId: BoardId;
+  workspaceId: WorkspaceId;
+}
+
+/** ドラッグ中はガイド線を1本だけ出すため、ワークスペース行とBoard行で状態を共有する */
+type SidebarDropTarget =
+  | { kind: "workspace"; workspaceId: WorkspaceId; position: SidebarDropPosition }
+  | { kind: "board"; boardId: BoardId; position: SidebarDropPosition };
+
+/** ドロップ先の行の上半分なら手前、下半分なら後ろへ挿入する */
+function dropPositionAt(e: React.DragEvent<HTMLElement>): SidebarDropPosition {
   const rect = e.currentTarget.getBoundingClientRect();
   return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 }
@@ -116,6 +132,7 @@ export function SidebarWorkspaceList({
   onApplyBoardLayout,
   onClearBoardStartup,
   onMoveWorkspace,
+  onMoveBoard,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -128,10 +145,10 @@ export function SidebarWorkspaceList({
   // 開いた直後に閉じて別Boardを開いた場合、先行リクエストの結果が後から届いて上書きするのを防ぐ
   const layoutRequestSeq = useRef(0);
   // D&D中に挿入位置のガイド線を出す対象。ドラッグが終わったら必ずnullへ戻す
-  const [dropTarget, setDropTarget] = useState<{
-    workspaceId: WorkspaceId;
-    position: WorkspaceDropPosition;
-  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<SidebarDropTarget | null>(null);
+  // ドラッグ中のBoardが属するワークスペース。dragover中はdataTransferの中身を読めないため、
+  // 「別ワークスペースのBoard行の上か」の判定にはdragStartで控えたこの値を使う
+  const draggingBoardWorkspaceId = useRef<WorkspaceId | null>(null);
 
   function openLayoutMenu(boardId: BoardId): void {
     const seq = ++layoutRequestSeq.current;
@@ -177,10 +194,54 @@ export function SidebarWorkspaceList({
     e.dataTransfer.dropEffect = "move";
     const position = dropPositionAt(e);
     setDropTarget((prev) =>
-      prev?.workspaceId === workspaceId && prev.position === position
+      prev?.kind === "workspace" && prev.workspaceId === workspaceId && prev.position === position
         ? prev
-        : { workspaceId, position },
+        : { kind: "workspace", workspaceId, position },
     );
+  }
+
+  // Boardの移動は所属ワークスペース内で完結する（別ワークスペースのBoard行の上ではdropEffectを
+  // 立てないので、カーソルもドロップ不可のまま）
+  function handleBoardDragOver(
+    e: React.DragEvent<HTMLElement>,
+    workspaceId: WorkspaceId,
+    boardId: BoardId,
+  ): void {
+    if (!e.dataTransfer.types.includes(BOARD_DRAG_MIME)) return;
+    if (draggingBoardWorkspaceId.current !== workspaceId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const position = dropPositionAt(e);
+    setDropTarget((prev) =>
+      prev?.kind === "board" && prev.boardId === boardId && prev.position === position
+        ? prev
+        : { kind: "board", boardId, position },
+    );
+  }
+
+  function handleBoardDrop(
+    e: React.DragEvent<HTMLElement>,
+    workspaceId: WorkspaceId,
+    overIndex: number,
+  ): void {
+    const raw = e.dataTransfer.getData(BOARD_DRAG_MIME);
+    const position = dropPositionAt(e);
+    setDropTarget(null);
+    if (!raw) return;
+    e.preventDefault();
+    let payload: BoardDragPayload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (payload.workspaceId !== workspaceId) return;
+    const boards = workspaces.find((w) => w.workspaceId === workspaceId)?.boards ?? [];
+    const fromIndex = boards.findIndex((b) => b.boardId === payload.boardId);
+    if (fromIndex === -1) return;
+    const toIndex = sidebarDropIndex(fromIndex, overIndex, position);
+    if (toIndex === null) return;
+    onMoveBoard(payload.boardId, toIndex);
   }
 
   function handleWorkspaceDrop(e: React.DragEvent<HTMLElement>, overIndex: number): void {
@@ -199,7 +260,7 @@ export function SidebarWorkspaceList({
     }
     const fromIndex = workspaces.findIndex((w) => w.workspaceId === payload.workspaceId);
     if (fromIndex === -1) return;
-    const toIndex = workspaceDropIndex(fromIndex, overIndex, position);
+    const toIndex = sidebarDropIndex(fromIndex, overIndex, position);
     if (toIndex === null) return;
     onMoveWorkspace(payload.workspaceId, toIndex);
   }
@@ -316,7 +377,12 @@ export function SidebarWorkspaceList({
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
    * 「❯/⚠ <statusText>」を表示する）
    */
-  function renderBoardRow(workspaceId: WorkspaceId, board: SidebarBoardItem, canClose: boolean) {
+  function renderBoardRow(
+    workspaceId: WorkspaceId,
+    board: SidebarBoardItem,
+    boardIndex: number,
+    canClose: boolean,
+  ) {
     if (editingTarget?.kind === "board" && editingTarget.id === board.boardId) {
       return (
         <div key={board.boardId} className="px-1.5 py-1">
@@ -331,6 +397,10 @@ export function SidebarWorkspaceList({
         : board.agent?.status === "blocked"
           ? "bg-amber-500 shadow-[0_0_4px] shadow-amber-500"
           : "bg-muted-foreground/30";
+    const dropPosition =
+      dropTarget?.kind === "board" && dropTarget.boardId === board.boardId
+        ? dropTarget.position
+        : null;
     const titleParts: string[] = [];
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
@@ -341,14 +411,31 @@ export function SidebarWorkspaceList({
           <button
             type="button"
             tabIndex={-1}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              const payload: BoardDragPayload = { boardId: board.boardId, workspaceId };
+              e.dataTransfer.setData(BOARD_DRAG_MIME, JSON.stringify(payload));
+              draggingBoardWorkspaceId.current = workspaceId;
+            }}
+            // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
+            onDragEnd={() => {
+              draggingBoardWorkspaceId.current = null;
+              setDropTarget(null);
+            }}
+            onDragOver={(e) => handleBoardDragOver(e, workspaceId, board.boardId)}
+            onDrop={(e) => handleBoardDrop(e, workspaceId, boardIndex)}
             onClick={() => onSelectBoard(workspaceId, board.boardId)}
             onDoubleClick={(e) => {
               e.stopPropagation();
               startEditing({ kind: "board", id: board.boardId }, board.label);
             }}
             className={cn(
-              "flex w-full flex-col rounded-md text-left hover:bg-accent",
+              // ガイド線は透明なborderの色替えで出す（ワークスペース行と同じ理由）
+              "flex w-full flex-col rounded-md border-y-2 border-transparent text-left hover:bg-accent",
               board.active && "bg-accent",
+              dropPosition === "before" && "border-t-sky-400",
+              dropPosition === "after" && "border-b-sky-400",
             )}
             title={titleParts.length > 0 ? titleParts.join(" / ") : undefined}
           >
@@ -466,7 +553,9 @@ export function SidebarWorkspaceList({
         const isEditingThisWorkspace =
           editingTarget?.kind === "workspace" && editingTarget.id === workspace.workspaceId;
         const dropPosition =
-          dropTarget?.workspaceId === workspace.workspaceId ? dropTarget.position : null;
+          dropTarget?.kind === "workspace" && dropTarget.workspaceId === workspace.workspaceId
+            ? dropTarget.position
+            : null;
         return (
           <div
             key={workspace.workspaceId}
@@ -547,8 +636,13 @@ export function SidebarWorkspaceList({
             </div>
             {!isWorkspaceCollapsed && (
               <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
-                {workspace.boards.map((board) =>
-                  renderBoardRow(workspace.workspaceId, board, workspace.boards.length > 1),
+                {workspace.boards.map((board, boardIndex) =>
+                  renderBoardRow(
+                    workspace.workspaceId,
+                    board,
+                    boardIndex,
+                    workspace.boards.length > 1,
+                  ),
                 )}
                 {workspace.popup && renderPopupCard(workspace.workspaceId, workspace.popup)}
               </div>

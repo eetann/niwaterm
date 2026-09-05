@@ -1446,6 +1446,89 @@ describe("POST /move-workspace", () => {
   });
 });
 
+describe("POST /move-board", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function moveBoard(boardId: string, direction: string): Promise<Response> {
+    return fetch("http://localhost/move-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId, direction }),
+    });
+  }
+
+  function listBoardIds(mgr: WorkspaceManager): string[] {
+    return mgr.snapshot().workspace.boardIds;
+  }
+
+  test("direction: downで1つ後ろへ移動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstId = mgr.snapshot().workspace.activeBoardId;
+    const secondId = mgr.newBoard(workspaceId) as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveBoard(firstId, "down");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(listBoardIds(mgr)).toEqual([secondId, firstId]);
+  });
+
+  test("direction: upで1つ手前へ移動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstId = mgr.snapshot().workspace.activeBoardId;
+    const secondId = mgr.newBoard(workspaceId) as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveBoard(secondId, "up");
+
+    expect(res.status).toBe(200);
+    expect(listBoardIds(mgr)).toEqual([secondId, firstId]);
+  });
+
+  test("端でこれ以上動かせない場合もokを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyId = mgr.snapshot().workspace.activeBoardId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveBoard(onlyId, "up");
+
+    expect(res.status).toBe(200);
+    expect(listBoardIds(mgr)).toEqual([onlyId]);
+  });
+
+  test("存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    expect((await moveBoard("not-found", "up")).status).toBe(404);
+  });
+
+  test("未知のdirectionは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const onlyId = mgr.snapshot().workspace.activeBoardId;
+    server = await createIpcServer(socketPath, mgr);
+
+    expect((await moveBoard(onlyId, "sideways")).status).toBe(400);
+  });
+});
+
 describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-board", () => {
   let dir: string;
   let socketPath: string;

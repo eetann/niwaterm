@@ -46,18 +46,19 @@ export interface SidebarWorkspaceItem {
   popup: SidebarPopupItem | null;
 }
 
-/** ドラッグ中のワークスペースを、ドロップ先ワークスペースの手前へ入れるか後ろへ入れるか */
-export type WorkspaceDropPosition = "before" | "after";
+/** ドラッグ中の行を、ドロップ先の行の手前へ入れるか後ろへ入れるか */
+export type SidebarDropPosition = "before" | "after";
 
 /**
- * サイドバーのD&Dによるワークスペース並び替えの移動先index（0始まり、bun側のmoveWorkspaceへ渡す値）。
+ * サイドバーのD&Dによる並び替えの移動先index（0始まり、bun側のmoveWorkspace/moveBoardへ渡す値）。
  * overIndexの手前/後ろへ挿入した結果の位置を、ドラッグ元を取り除いた後のindexとして返す。
- * 並びが変わらない組み合わせ（自分自身の手前・後ろへのドロップ）はnull
+ * 並びが変わらない組み合わせ（自分自身の手前・後ろへのドロップ）はnull。
+ * ワークスペースの並びとワークスペース内のBoardの並びで同じ計算を使う
  */
-export function workspaceDropIndex(
+export function sidebarDropIndex(
   fromIndex: number,
   overIndex: number,
-  position: WorkspaceDropPosition,
+  position: SidebarDropPosition,
 ): number | null {
   const insertAt = position === "before" ? overIndex : overIndex + 1;
   const toIndex = insertAt > fromIndex ? insertAt - 1 : insertAt;

@@ -266,6 +266,19 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return owner.closeBoard(boardId);
   }
 
+  /**
+   * Boardの表示順（サイドバーの並び・未設定時の連番ラベル）の並び替え。所属ワークスペース内で
+   * 完結し、Boardが別のワークスペースへ移ることはない。toIndexは0始まりで範囲外はクランプする
+   */
+  function moveBoard(boardId: BoardId, toIndex: number): boolean {
+    return findOwnerByBoardId(boardId)?.moveBoard(boardId, toIndex) ?? false;
+  }
+
+  /** moveBoardの相対指定版。deltaは-1で1つ前へ、+1で1つ後ろへ（CLIの`board move --up/--down`向け） */
+  function moveBoardBy(boardId: BoardId, delta: number): boolean {
+    return findOwnerByBoardId(boardId)?.moveBoardBy(boardId, delta) ?? false;
+  }
+
   function setBoardName(boardId: BoardId, name: string): boolean {
     return findOwnerByBoardId(boardId)?.setBoardName(boardId, name) ?? false;
   }
@@ -643,6 +656,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     hasBoard,
     switchBoard,
     closeBoard,
+    moveBoard,
+    moveBoardBy,
     setBoardName,
     setBoardStartup,
     getBoardStartup,

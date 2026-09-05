@@ -321,6 +321,104 @@ describe("Board操作", () => {
   });
 });
 
+describe("moveBoard", () => {
+  function createThreeBoards() {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const secondId = mgr.newBoard(workspaceId) as string;
+    const thirdId = mgr.newBoard(workspaceId) as string;
+    const boardIds = () =>
+      mgr
+        .listWorkspaces()
+        .find((e) => e.workspaceId === workspaceId)
+        ?.boards.map((b) => b.boardId);
+    return { mgr, workspaceId, firstId, secondId, thirdId, boardIds };
+  }
+
+  test("指定したindexへ移動する（間のBoardは詰められる）", () => {
+    const { mgr, firstId, secondId, thirdId, boardIds } = createThreeBoards();
+    expect(mgr.moveBoard(firstId, 2)).toBe(true);
+    expect(boardIds()).toEqual([secondId, thirdId, firstId]);
+  });
+
+  test("末尾から先頭へも移動できる", () => {
+    const { mgr, firstId, secondId, thirdId, boardIds } = createThreeBoards();
+    expect(mgr.moveBoard(thirdId, 0)).toBe(true);
+    expect(boardIds()).toEqual([thirdId, firstId, secondId]);
+  });
+
+  test("範囲外のindexは先頭・末尾へクランプする", () => {
+    const { mgr, firstId, secondId, thirdId, boardIds } = createThreeBoards();
+    expect(mgr.moveBoard(firstId, 99)).toBe(true);
+    expect(boardIds()).toEqual([secondId, thirdId, firstId]);
+    expect(mgr.moveBoard(firstId, -5)).toBe(true);
+    expect(boardIds()).toEqual([firstId, secondId, thirdId]);
+  });
+
+  test("アクティブなBoardは変わらない", () => {
+    const { mgr, workspaceId, firstId, thirdId } = createThreeBoards();
+    mgr.moveBoard(firstId, 2);
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId)?.activeBoardId).toBe(
+      thirdId,
+    );
+  });
+
+  test("存在しないboardId・数値でないindexはfalseで順序は変わらない", () => {
+    const { mgr, firstId, secondId, thirdId, boardIds } = createThreeBoards();
+    expect(mgr.moveBoard("not-found", 0)).toBe(false);
+    expect(mgr.moveBoard(firstId, Number.NaN)).toBe(false);
+    expect(boardIds()).toEqual([firstId, secondId, thirdId]);
+  });
+
+  test("moveBoardByは相対位置へ移動し、端では何もせずtrueを返す", () => {
+    const { mgr, firstId, secondId, thirdId, boardIds } = createThreeBoards();
+    expect(mgr.moveBoardBy(thirdId, -1)).toBe(true);
+    expect(boardIds()).toEqual([firstId, thirdId, secondId]);
+    expect(mgr.moveBoardBy(firstId, -1)).toBe(true);
+    expect(boardIds()).toEqual([firstId, thirdId, secondId]);
+  });
+
+  test("moveBoardByは存在しないboardIdでfalse", () => {
+    const { mgr } = createThreeBoards();
+    expect(mgr.moveBoardBy("not-found", 1)).toBe(false);
+  });
+
+  test("別ワークスペースのBoardの並びには影響しない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstWs = mgr.snapshot().activeWorkspaceId;
+    const firstWsBoardA = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const firstWsBoardB = mgr.newBoard(firstWs) as string;
+    mgr.newWorkspace();
+    const secondWs = mgr.snapshot().activeWorkspaceId;
+    const secondWsBoardA = mgr.listWorkspaces()[1]?.activeBoardId as string;
+    const secondWsBoardB = mgr.newBoard(secondWs) as string;
+
+    expect(mgr.moveBoard(secondWsBoardB, 0)).toBe(true);
+
+    const entries = mgr.listWorkspaces();
+    expect(entries[0]?.boards.map((b) => b.boardId)).toEqual([firstWsBoardA, firstWsBoardB]);
+    expect(entries[1]?.boards.map((b) => b.boardId)).toEqual([secondWsBoardB, secondWsBoardA]);
+  });
+
+  test("並び替えた順序は永続化データへ反映される", () => {
+    const { mgr, firstId, secondId, thirdId } = createThreeBoards();
+    // PersistedBoardはboardIdを持たないため、名前で並びを見分ける
+    mgr.setBoardName(firstId, "first");
+    mgr.setBoardName(secondId, "second");
+    mgr.setBoardName(thirdId, "third");
+
+    mgr.moveBoard(firstId, 2);
+
+    const persisted = mgr.serializeForPersistence().workspaces[0];
+    expect(persisted?.boards.map((b) => b.name)).toEqual(["second", "third", "first"]);
+    // activeBoardIndexも移動後のorderを基準に振り直される
+    expect(persisted?.activeBoardIndex).toBe(1);
+  });
+});
+
 describe("moveWorkspace", () => {
   function createThreeWorkspaces() {
     const { factory } = createFakeSessionFactory();

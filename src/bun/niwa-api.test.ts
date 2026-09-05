@@ -406,6 +406,21 @@ describe("niwa.board", () => {
   });
 });
 
+describe("niwa.board.move", () => {
+  test("moveで所属ワークスペース内の指定indexへ移動する", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    const firstId = workspaceManager.snapshot().workspace.activeBoardId;
+    const secondId = niwa.board.create() as string;
+    expect(niwa.board.move(firstId, 1)).toBe(true);
+    expect(workspaceManager.snapshot().workspace.boardIds).toEqual([secondId, firstId]);
+  });
+
+  test("moveで存在しないidを渡すとfalse", () => {
+    const { niwa } = createTestSetup();
+    expect(niwa.board.move("no-such-board", 0)).toBe(false);
+  });
+});
+
 describe("niwa.workspace", () => {
   test("createで新しいワークスペースが増える", () => {
     const { niwa, workspaceManager } = createTestSetup();

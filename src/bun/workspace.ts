@@ -251,6 +251,30 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return { ok: true };
   }
 
+  /**
+   * ワークスペース内での表示順（サイドバーの並び・未設定時の連番ラベル）の並び替え。
+   * orderの位置だけを動かし、各Boardの中身（レイアウト・タブ）とアクティブBoardは変更しない。
+   * toIndexは0始まりで、範囲外はクランプする（端へのD&D・キーバインド連打が失敗扱いに
+   * ならないようにするため）。falseを返すのはboardIdが無い・toIndexが数値として不正な場合のみ
+   */
+  function moveBoard(boardId: BoardId, toIndex: number): boolean {
+    const fromIndex = order.indexOf(boardId);
+    if (fromIndex === -1 || !Number.isFinite(toIndex)) return false;
+    const clamped = Math.min(Math.max(0, Math.trunc(toIndex)), order.length - 1);
+    if (clamped === fromIndex) return true;
+    order.splice(fromIndex, 1);
+    order.splice(clamped, 0, boardId);
+    opts.onDirty();
+    return true;
+  }
+
+  /** moveBoardの相対指定版。deltaは-1で1つ前へ、+1で1つ後ろへ（CLIの`board move --up/--down`向け） */
+  function moveBoardBy(boardId: BoardId, delta: number): boolean {
+    const fromIndex = order.indexOf(boardId);
+    if (fromIndex === -1) return false;
+    return moveBoard(boardId, fromIndex + delta);
+  }
+
   /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
   function setBoardName(boardId: BoardId, name: string): boolean {
     if (!boards.has(boardId)) return false;
@@ -652,6 +676,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     newBoard,
     switchBoard,
     closeBoard,
+    moveBoard,
+    moveBoardBy,
     setBoardName,
     setBoardStartup,
     getBoardStartup,

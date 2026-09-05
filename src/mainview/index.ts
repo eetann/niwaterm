@@ -1383,6 +1383,7 @@ function renderSidebar(
       onApplyBoardLayout: applySidebarBoardLayout,
       onClearBoardStartup: clearSidebarBoardStartup,
       onMoveWorkspace: moveSidebarWorkspace,
+      onMoveBoard: moveSidebarBoard,
     }),
   );
 }
@@ -1413,6 +1414,15 @@ function activateSidebarBoard(workspaceId: WorkspaceId, boardId: BoardId): void 
  */
 function moveSidebarWorkspace(workspaceId: WorkspaceId, toIndex: number): void {
   sendMessage("moveWorkspace", { workspaceId, toIndex });
+  imeEl.focus({ preventScroll: true });
+}
+
+/**
+ * サイドバーのD&DによるBoard並び替え。挿入先の計算はSidebarWorkspaceList側が済ませており、
+ * ここでは所属ワークスペース内の0始まりのtoIndexをそのまま送る（範囲外のクランプはbun側の責務）
+ */
+function moveSidebarBoard(boardId: BoardId, toIndex: number): void {
+  sendMessage("moveBoard", { boardId, toIndex });
   imeEl.focus({ preventScroll: true });
 }
 
@@ -2252,6 +2262,16 @@ function handleTileCommand(cmd: TileCommand): void {
       const len = workspaceIds.length;
       const workspaceId = workspaceIds[(index + cmd.delta + len) % len];
       sendMessage("switchWorkspace", { workspaceId });
+      break;
+    }
+    case "moveBoard": {
+      if (!activeBoardId || boardIds.length < 2) return;
+      const index = boardIds.indexOf(activeBoardId);
+      if (index === -1) return;
+      // switchBoardと違い端では巡回しない（並び替えは端で止まる方が結果を予測しやすい）
+      const toIndex = index + cmd.delta;
+      if (toIndex < 0 || toIndex >= boardIds.length) return;
+      sendMessage("moveBoard", { boardId: activeBoardId, toIndex });
       break;
     }
     case "moveWorkspace": {

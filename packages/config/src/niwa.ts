@@ -139,6 +139,12 @@ export interface NiwaBoardApi {
    * cwdは引き継がない）。作成できなかった場合はnull
    */
   create(cwd?: string): string | null;
+  /**
+   * Boardを所属ワークスペース内の表示順（サイドバーの並び・未設定時の連番ラベル）のindex番目へ
+   * 移動する。indexは0始まりで、範囲外は先頭・末尾へクランプする。中身（レイアウト・タブ）と
+   * アクティブなBoardは変更しない。別のワークスペースへは移せない。boardIdが存在しない場合はfalse
+   */
+  move(boardId: string, index: number): boolean;
 }
 
 export interface NiwaWorkspaceInfo {
