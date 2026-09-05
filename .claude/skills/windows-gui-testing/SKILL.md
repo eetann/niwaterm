@@ -89,11 +89,18 @@ powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::U
 disown
 ```
 
-停止・再起動は`bun.exe`と`electrobun.exe`のプロセスをまとめて止める（プロセス名で複数ヒットする）:
+停止は`mise run win:stop:mine`を使う（現在のブランチに対応する側だけを止める。devワークツリーなら
+wipだけ）。プロセス名で止めようとすると`bun.exe`はwip・daily・無関係のbunで複数ヒットし、
+**dailyまで巻き込んで落とす**（`mise run win:stop`も同様に全部止めるので使わない）。
 
 ```bash
-powershell.exe -NoProfile -Command "$PS_PREFIX Get-Process | Where-Object { \$_.ProcessName -match 'bun|electrobun' } | Select-Object Id,ProcessName"
-powershell.exe -NoProfile -Command "$PS_PREFIX Stop-Process -Id <上で確認したId群をカンマ区切り> -Force -ErrorAction SilentlyContinue"
+mise run win:stop:mine
+```
+
+どうしても手で止める必要がある場合は、プロセス名ではなく実行パスで対象を絞ること:
+
+```bash
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.ExecutablePath -like '*niwaterm-wip-dev\\*' } | Select-Object ProcessId,ExecutablePath | Format-List"
 ```
 
 **ログファイルのバッファリングに注意**: PowerShell経由のリダイレクトは、出力が数分単位で
@@ -107,14 +114,20 @@ powershell.exe -NoProfile -Command "$PS_PREFIX Stop-Process -Id <上で確認し
 
 - `tab send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
   `niwaterm tab send-keys --tab tab-3 'echo foo' Enter`
-- `tab switch`は`--tile`必須: `niwaterm tab switch --tile tile-4 --tab tab-6`
+- `tab switch`は`--tab`（切替先のtabId）か`--direction next|prev`（タイル内のタブ並び順で巡回）の
+  どちらか一方が必須。`--tile`は省略可（省略時は`--tab`のタブが属するタイル、`--direction`なら
+  実行しているタブのタイル）: `niwaterm tab switch --tile tile-4 --tab tab-6` /
+  `niwaterm tab switch --tile tile-4 -d next`
 - WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profiles`で確認してから
   `niwaterm tab new -t <tileId> -s <shellProfileId>`で作成する
 - **daily（普段遣い）のタブ内で作業している場合、`niwaterm-dev`でもdailyに繋がる**。
   タブへ注入された`NIWATERM_BRIDGE_PORT`が接続先の解決で先に使われるため、
   `NIWATERM_APP_VARIANT=niwaterm-wip`を付けても効かない。wipを触るときは注入分をunsetする:
   `env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID NIWATERM_APP_VARIANT=niwaterm-wip niwaterm-dev ping`。
-  返ってきたpidがwipのプロセス（`MainWindowTitle`が`niwaterm-wip`）か必ず確認すること。
+  返ってきたpidがwipのプロセスか必ず確認すること。確実なのは実行パスでの突き合わせで、
+  ウィンドウが出る前・ヘルパープロセスでも効く（`MainWindowTitle`はウィンドウが出るまで空）:
+  `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'bun.exe' } | Select-Object ProcessId,ExecutablePath | Format-List"`。
+  パスに`niwaterm-wip`が入っていればwip、`niwaterm-daily`ならdaily。
   仕組みはdocs/build/windows-build.md「6. WSLディストロからniwaterm CLIを使う」参照
 
 ## 目視確認・スクリーンショット
