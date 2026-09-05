@@ -223,6 +223,11 @@ export interface KeybindOptions {
    * directはprefix無しの即時発火でOSのキーリピートがそのまま連続入力を生むため実効果を持たない
    */
   repeat?: boolean;
+  /**
+   * キーバインド一覧（`niwaterm keybind list`）に表示する説明。省略時はアクション名（文字列アクション）
+   * または`function`（関数ハンドラ）が表示されるため、関数ハンドラには何をするバインドなのかを書いておく
+   */
+  description?: string;
 }
 
 /**

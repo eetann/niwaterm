@@ -241,34 +241,44 @@ export function isBindingTarget(value: unknown): value is BindingTarget {
 }
 
 /**
- * repeat:trueを明示的に付けたバインドの表現（tmuxのbind-key -r相当）。プレーンなBindingTargetとの
- * ユニオンで bindings/direct の値に持たせる。repeatはboolean（true固定にしない）で受け、
- * {target, repeat:false}のような一見冗長な入力もプレーンなBindingTargetと同様に扱えるようにする
+ * repeat（tmuxのbind-key -r相当）・descriptionといった付加情報を添えたバインドの表現。
+ * プレーンなBindingTargetとのユニオンで bindings/direct の値に持たせる。repeatはboolean
+ * （true固定にしない）で受け、{target, repeat:false}のような一見冗長な入力もプレーンな
+ * BindingTargetと同様に扱えるようにする
  */
-export interface RepeatableBinding {
+export interface DetailedBinding {
   target: BindingTarget;
-  repeat: boolean;
+  repeat?: boolean;
+  /** キーバインド一覧（`niwaterm keybind list`）でアクション名の代わりに表示する説明 */
+  description?: string;
 }
 
-export function isRepeatableBinding(value: unknown): value is RepeatableBinding {
+export function isDetailedBinding(value: unknown): value is DetailedBinding {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return typeof v["repeat"] === "boolean" && isBindingTarget(v["target"]);
+  if (!isBindingTarget(v["target"])) return false;
+  if (v["repeat"] !== undefined && typeof v["repeat"] !== "boolean") return false;
+  if (v["description"] !== undefined && typeof v["description"] !== "string") return false;
+  return true;
 }
 
-/** bindings/directの値として許容する形。プレーンなBindingTarget、またはrepeatフラグ付きのラップ形 */
-export type BindingEntry = BindingTarget | RepeatableBinding;
+/** bindings/directの値として許容する形。プレーンなBindingTarget、または付加情報付きのラップ形 */
+export type BindingEntry = BindingTarget | DetailedBinding;
 
-/** compileKeybindings後のMap値。target/repeatの2フィールドに正規化済み */
+/** compileKeybindings後のMap値。repeatは既定値まで埋めた形に正規化済み */
 export interface CompiledBindingEntry {
   target: BindingTarget;
   repeat: boolean;
+  /** 未指定はundefined（一覧表示側でアクション名へフォールバックする） */
+  description?: string;
 }
 
 /** 生のBindingEntryをCompiledBindingEntryへ正規化する。不正な形はnull */
 export function resolveBindingEntry(value: unknown): CompiledBindingEntry | null {
   if (isBindingTarget(value)) return { target: value, repeat: false };
-  if (isRepeatableBinding(value)) return { target: value.target, repeat: value.repeat };
+  if (isDetailedBinding(value)) {
+    return { target: value.target, repeat: value.repeat ?? false, description: value.description };
+  }
   return null;
 }
 

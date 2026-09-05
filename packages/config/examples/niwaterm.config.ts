@@ -7,10 +7,15 @@ export default defineConfig({
     niwa.keybind("d", "split-horizontal");
     niwa.keybind("shift+d", "split-vertical");
 
-    // 任意のTSコードを書ける（tmuxのif-shell/run-shell相当は素のif文・Bun.spawnで表現する）
-    niwa.keybind("g", () => {
-      niwa.popup.open({ width: 90, height: 90, command: "lazygit" });
-    });
+    // 任意のTSコードを書ける（tmuxのif-shell/run-shell相当は素のif文・Bun.spawnで表現する）。
+    // descriptionは`niwaterm keybind list`の一覧表示に使われる（省略すると"function"とだけ表示される）
+    niwa.keybind(
+      "g",
+      () => {
+        niwa.popup.open({ width: 90, height: 90, command: "lazygit" });
+      },
+      { description: "lazygitをポップアップで開く" },
+    );
   },
   appearance: {
     // defaultAppearanceを丸ごと引き継ぎつつ、一部だけ上書きする例

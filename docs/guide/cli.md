@@ -259,6 +259,26 @@ niwaterm font-size increase|decrease|reset
 ターミナルのフォントサイズを1段階拡大・縮小、またはconfigファイル（`niwaterm.config.ts`の`appearance.fontSize`）の値へリセットする。上限・下限でクランプされる。`niwaterm.config.ts`自体は変更しない実行時のみのズームで、キーバインド（既定: prefix `ctrl+b` → `=`/`-`/`0`）・コマンドパレットからの操作とも共有される。成功時、変更後のフォントサイズをpx単位で表示する。
 
 ```sh
+niwaterm keybind list
+```
+
+現在有効なキーバインドの一覧を表示する（tmuxの`list-keys`相当）。1行目にprefixキーと`repeat-timeout`を出し、続けてprefix経由のバインド（`[prefix]`）・prefix不要の即時発火バインド（`[direct]`）をキー表記順に並べる。
+
+```
+prefix: ctrl+b (repeat-timeout: 500ms)
+
+[prefix]
+ctrl+b d          split-vertical
+ctrl+b h          resize-left (repeat)
+ctrl+b r          設定をリロードして通知する
+
+[direct]
+ctrl+shift+c      copy-selection
+```
+
+右側にはアクション名を表示するが、`niwaterm.config.ts`で`niwa.keybind(key, handler, { description })`と説明を付けたバインドはその説明を表示する（説明の無い関数ハンドラは`function`とだけ表示される）。表示されるのは実際に発火するバインドのみで、キー表記が不正なエントリ（`bindings`側に`ctrl+x`を書いた等）は起動時に無視されるため一覧にも出ない。設定の反映状況の確認に使う。
+
+```sh
 niwaterm shell-profiles
 ```
 

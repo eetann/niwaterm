@@ -6,6 +6,7 @@ import browserCommand from "./commands/browser";
 import docsCommand from "./commands/docs";
 import fontSizeCommand from "./commands/font-size";
 import initCommand from "./commands/init";
+import keybindCommand from "./commands/keybind";
 import layoutCommand from "./commands/layout";
 import listCommand from "./commands/list";
 import notifyCommand from "./commands/notify";
@@ -43,6 +44,7 @@ try {
       workspace: workspaceCommand,
       board: boardCommand,
       tile: tileCommand,
+      keybind: keybindCommand,
       popup: popupCommand,
       browser: browserCommand,
       "shell-profiles": shellProfilesCommand,

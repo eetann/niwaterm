@@ -615,6 +615,45 @@ export async function listShellProfiles(endpoint: IpcEndpoint): Promise<ListShel
   }
 }
 
+export interface KeybindEntry {
+  /** noPrefix:falseならprefix入力後の2打目キー、trueならキー表記そのもの */
+  key: string;
+  /** アクション名。関数ハンドラは"function" */
+  action: string;
+  /** niwaterm.config.tsのniwa.keybindに渡した説明。未指定はundefined */
+  description?: string;
+  repeat: boolean;
+  noPrefix: boolean;
+}
+
+export type ListKeybindingsResult =
+  | { ok: true; prefix: string | null; repeatTimeoutMs: number; entries: KeybindEntry[] }
+  | { ok: false; error: string };
+
+export async function listKeybindings(endpoint: IpcEndpoint): Promise<ListKeybindingsResult> {
+  try {
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/keybindings"), ipcFetchInit(endpoint));
+    const body = (await res.json().catch(() => null)) as {
+      prefix?: unknown;
+      repeatTimeoutMs?: unknown;
+      entries?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.entries)) {
+      return {
+        ok: true,
+        prefix: typeof body.prefix === "string" ? body.prefix : null,
+        repeatTimeoutMs: typeof body.repeatTimeoutMs === "number" ? body.repeatTimeoutMs : 0,
+        entries: body.entries as KeybindEntry[],
+      };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export interface LayoutSummary {
   name: string;
   description?: string;

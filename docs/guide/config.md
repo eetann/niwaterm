@@ -82,7 +82,7 @@ export default defineConfig({
 |---|---|
 | `niwa.prefix(binding)` | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")` |
 | `niwa.repeatTimeout(ms)` | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms |
-| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない） |
+| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない）。`opts.description`で一覧表示（`niwaterm keybind list`）用の説明を付けられる |
 | `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
 | `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
 | `niwa.notify(opts)` | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent? }`（`title`のみ必須）。クリックしてもniwatermへのフォーカス移動は行わない |
@@ -169,6 +169,25 @@ keybindings: (niwa) => {
 ```
 
 `resize-up`/`resize-down`/`resize-left`/`resize-right`はフォーカス中タイルを既定の1ステップ分（`niwa.tile.resize`と同じ量）だけ拡大する組み込みアクションで、既定キーは割り当てられていない（上記のように自分で割り当てる）。`repeat`は`bindings`（prefix経由の2打目キー）側でのみ効果を持ち、`noPrefix: true`のdirectショートカットには効果がない（directは元々prefix無しの即時発火で、キーを押し続ければOSのキーリピートがそのまま連続入力を生むため）。
+
+#### 一覧での説明表示
+
+現在有効なキーバインドは`niwaterm keybind list`（詳細: `docs/guide/cli.md`）で確認できる。一覧に出るのは既定ではアクション名（文字列アクション）または`function`（関数ハンドラ）のため、関数ハンドラには`opts.description`で何をするバインドなのかを添えておくと読める一覧になる。
+
+```ts
+niwa.keybind(
+  "r",
+  async () => {
+    await niwa.reloadConfig();
+    niwa.notify({ title: "設定をリロードしました" });
+  },
+  { description: "設定をリロードして通知する" },
+);
+```
+
+```
+ctrl+b r          設定をリロードして通知する
+```
 
 #### 複数ファイルへの分割
 

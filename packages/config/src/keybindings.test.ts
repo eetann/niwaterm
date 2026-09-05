@@ -8,8 +8,8 @@ import {
   defaultWindowsKeybindings,
   isBindingTarget,
   isCustomBindingRef,
+  isDetailedBinding,
   isKeybindAction,
-  isRepeatableBinding,
   KEYBIND_ACTIONS,
   parseKeyBindingString,
   parseSecondKeyString,
@@ -394,19 +394,21 @@ describe("compileKeybindings", () => {
   });
 });
 
-describe("isRepeatableBinding", () => {
-  test("{target, repeat:true}・{target, repeat:false}はどちらもtrue", () => {
-    expect(isRepeatableBinding({ target: "split-vertical", repeat: true })).toBe(true);
-    expect(isRepeatableBinding({ target: "split-vertical", repeat: false })).toBe(true);
-    expect(isRepeatableBinding({ target: { kind: "custom", id: "h" }, repeat: true })).toBe(true);
+describe("isDetailedBinding", () => {
+  test("targetを持つオブジェクトはrepeat・descriptionの有無によらずtrue", () => {
+    expect(isDetailedBinding({ target: "split-vertical", repeat: true })).toBe(true);
+    expect(isDetailedBinding({ target: "split-vertical", repeat: false })).toBe(true);
+    expect(isDetailedBinding({ target: "split-vertical" })).toBe(true);
+    expect(isDetailedBinding({ target: "split-vertical", description: "分割する" })).toBe(true);
+    expect(isDetailedBinding({ target: { kind: "custom", id: "h" }, repeat: true })).toBe(true);
   });
 
-  test("targetが不正・repeatが真偽値でない・null等はfalse", () => {
-    expect(isRepeatableBinding({ target: "not-a-real-action", repeat: true })).toBe(false);
-    expect(isRepeatableBinding({ target: "split-vertical", repeat: "true" })).toBe(false);
-    expect(isRepeatableBinding({ target: "split-vertical" })).toBe(false);
-    expect(isRepeatableBinding("split-vertical")).toBe(false);
-    expect(isRepeatableBinding(null)).toBe(false);
+  test("targetが不正・repeat/descriptionの型が違う・null等はfalse", () => {
+    expect(isDetailedBinding({ target: "not-a-real-action", repeat: true })).toBe(false);
+    expect(isDetailedBinding({ target: "split-vertical", repeat: "true" })).toBe(false);
+    expect(isDetailedBinding({ target: "split-vertical", description: 1 })).toBe(false);
+    expect(isDetailedBinding("split-vertical")).toBe(false);
+    expect(isDetailedBinding(null)).toBe(false);
   });
 });
 
@@ -425,10 +427,15 @@ describe("resolveBindingEntry", () => {
     });
   });
 
-  test("RepeatableBindingはtarget/repeatをそのまま透過する", () => {
+  test("DetailedBindingはtarget/repeat/descriptionをそのまま透過する", () => {
     expect(resolveBindingEntry({ target: "resize-left", repeat: true })).toEqual({
       target: "resize-left",
       repeat: true,
+    });
+    expect(resolveBindingEntry({ target: "resize-left", description: "左へ広げる" })).toEqual({
+      target: "resize-left",
+      repeat: false,
+      description: "左へ広げる",
     });
   });
 

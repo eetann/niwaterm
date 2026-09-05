@@ -154,10 +154,20 @@ describe("niwa.keybind / niwa.prefix / niwa.unbind（登録フェーズ）", () 
     });
   });
 
-  test("repeat未指定はプレーンなBindingTargetのまま登録される", () => {
+  test("repeat・description未指定はプレーンなBindingTargetのまま登録される", () => {
     const { niwa, extractKeybindingsConfig } = createTestSetup();
     niwa.keybind("d", "split-horizontal");
     expect(extractKeybindingsConfig().bindings?.["d"]).toBe("split-horizontal");
+  });
+
+  test("descriptionを付けたバインドは{target, description}として登録される", () => {
+    const { niwa, extractKeybindingsConfig } = createTestSetup();
+    niwa.keybind("r", () => {}, { description: "設定をリロードする" });
+    const entry = extractKeybindingsConfig().bindings?.["r"];
+    expect(entry).toEqual({
+      target: { kind: "custom", id: expect.any(String) },
+      description: "設定をリロードする",
+    });
   });
 
   test("niwa.repeatTimeoutで指定した値が反映される", () => {

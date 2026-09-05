@@ -823,6 +823,81 @@ describe("GET /shell-profiles", () => {
   });
 });
 
+describe("GET /keybindings", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("getKeybindingsが返す設定をprefix・エントリ一覧へ均して返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      () => null,
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => ({
+        prefix: "ctrl+b",
+        bindings: {
+          d: "split-vertical",
+          r: { target: { kind: "custom", id: "handler-0" }, description: "設定をリロードする" },
+        },
+        repeatTimeoutMs: 500,
+      }),
+    );
+
+    const res = await fetch("http://localhost/keybindings", { unix: socketPath });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      prefix: "ctrl+b",
+      repeatTimeoutMs: 500,
+      entries: [
+        { key: "d", action: "split-vertical", repeat: false, noPrefix: false },
+        {
+          key: "r",
+          action: "function",
+          description: "設定をリロードする",
+          repeat: false,
+          noPrefix: false,
+        },
+      ],
+    });
+  });
+
+  test("getKeybindings未指定時はprefix:null・空のエントリ一覧を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/keybindings", { unix: socketPath });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      prefix: null,
+      repeatTimeoutMs: 500,
+      entries: [],
+    });
+  });
+});
+
 describe("POST /switch-tab", () => {
   let dir: string;
   let socketPath: string;

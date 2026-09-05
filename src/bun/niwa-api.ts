@@ -7,8 +7,10 @@
 import type {
   BindingEntry,
   BindingTarget,
+  DetailedBinding,
   KeyBindingString,
   KeybindHandler,
+  KeybindOptions,
   KeybindingsConfig,
   Niwa,
   NiwaNotifyOptions,
@@ -73,6 +75,15 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   const handlerRegistry = new Map<string, KeybindHandler>();
   let handlerIdCounter = 0;
 
+  /** repeat・descriptionのどちらも無いバインドはプレーンなBindingTargetのまま保つ */
+  function toBindingEntry(target: BindingTarget, opts: KeybindOptions | undefined): BindingEntry {
+    if (!opts?.repeat && opts?.description === undefined) return target;
+    const entry: DetailedBinding = { target };
+    if (opts.repeat) entry.repeat = true;
+    if (opts.description !== undefined) entry.description = opts.description;
+    return entry;
+  }
+
   function toBindingTarget(action: Parameters<Niwa["keybind"]>[1]): BindingTarget {
     if (typeof action !== "function") return action;
     const id = `handler-${handlerIdCounter++}`;
@@ -96,7 +107,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     },
     keybind(key, action, opts) {
       const target = toBindingTarget(action);
-      const entry: BindingEntry = opts?.repeat ? { target, repeat: true } : target;
+      const entry = toBindingEntry(target, opts);
       if (opts?.noPrefix) {
         direct.set(key as KeyBindingString, entry);
       } else {

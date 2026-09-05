@@ -447,6 +447,7 @@ try {
     () => adjustFontSize(-FONT_SIZE_STEP),
     () => resetFontSizeZoom(),
     sendNotification,
+    () => keybindings,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {

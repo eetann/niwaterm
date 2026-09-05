@@ -215,7 +215,10 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
       );
       continue;
     }
-    niwa.keybind(key, resolved.target, { repeat: resolved.repeat });
+    niwa.keybind(key, resolved.target, {
+      repeat: resolved.repeat,
+      description: resolved.description,
+    });
   }
   for (const [key, rawEntry] of Object.entries(config.direct ?? {})) {
     if (rawEntry === undefined) continue;
@@ -226,7 +229,11 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
       );
       continue;
     }
-    niwa.keybind(key, resolved.target, { noPrefix: true, repeat: resolved.repeat });
+    niwa.keybind(key, resolved.target, {
+      noPrefix: true,
+      repeat: resolved.repeat,
+      description: resolved.description,
+    });
   }
 }
 

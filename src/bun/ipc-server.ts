@@ -8,6 +8,7 @@ import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
 import type {
+  KeybindingsConfig,
   LayoutsConfig,
   NiwaNotifyOptions,
   ResolvedCustomViewConfig,
@@ -18,6 +19,7 @@ import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { changeBoardStartup, checkLayoutTrust } from "./board-startup";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
+import { buildKeybindList } from "./keybind-list";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
@@ -619,6 +621,7 @@ function buildApp(
   decreaseFontSize: () => number,
   resetFontSize: () => number,
   sendNotification: (opts: NiwaNotifyOptions) => void,
+  getKeybindings: () => KeybindingsConfig,
 ) {
   const app = new Hono();
 
@@ -782,6 +785,8 @@ function buildApp(
   });
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
+
+  app.get("/keybindings", (c) => c.json({ ok: true, ...buildKeybindList(getKeybindings()) }));
 
   // cwdを渡すと、そこから解決できるプロジェクトローカルのプリセット（<projectRoot>/.niwaterm/config.ts）も
   // 併せて一覧する。同名はプロジェクト側だけを返し、実際にapplyされる方に揃える
@@ -1464,6 +1469,7 @@ export async function createIpcServer(
   decreaseFontSize: () => number = () => 0,
   resetFontSize: () => number = () => 0,
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
+  getKeybindings: () => KeybindingsConfig = () => ({}),
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1485,6 +1491,7 @@ export async function createIpcServer(
     decreaseFontSize,
     resetFontSize,
     sendNotification,
+    getKeybindings,
   );
   const server = Bun.serve({ unix: path, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];
