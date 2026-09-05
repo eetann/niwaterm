@@ -379,6 +379,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTileId(tileId)?.switchTab(tileId, tabId) ?? false;
   }
 
+  function cycleTab(tileId: TileId, delta: 1 | -1): boolean {
+    return findOwnerByTileId(tileId)?.cycleTab(tileId, delta) ?? false;
+  }
+
   // ドラッグ&ドロップによるタブ移動。PTYセッションはWorkspaceインスタンスのクロージャ内に
   // 閉じているため、workspaceをまたぐ移動はセッションの移管が必要になり非対応（無視してfalseを返す）
   function moveTab(fromTileId: TileId, tabId: TabId, toTileId: TileId): boolean {
@@ -673,6 +677,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     togglePopupVisibility,
     promotePopup,
     switchTab,
+    cycleTab,
     moveTab,
     closeTab,
     focusTile,

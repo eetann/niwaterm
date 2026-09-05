@@ -874,6 +874,72 @@ describe("POST /switch-tab", () => {
   });
 });
 
+describe("POST /cycle-tab", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("prevで1つ前のタブへ切り替える", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    mgr.newTab(tileId);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/cycle-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, direction: "prev" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect((mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId).toBe(firstTabId);
+  });
+
+  test("タブが1枚だけのタイルは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/cycle-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, direction: "next" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  test("未知のdirectionは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/cycle-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, direction: "up" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /close-tab", () => {
   let dir: string;
   let socketPath: string;

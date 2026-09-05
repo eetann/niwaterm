@@ -303,6 +303,18 @@ function parseTileTabBody(body: unknown): TileTabRequestBody | null {
   return { ...tileIdBody, tabId: b.tabId };
 }
 
+interface CycleTabRequestBody extends TileIdRequestBody {
+  direction: "next" | "prev";
+}
+
+function parseCycleTabBody(body: unknown): CycleTabRequestBody | null {
+  const tileIdBody = parseTileIdBody(body);
+  if (!tileIdBody) return null;
+  const b = body as { direction?: unknown };
+  if (b.direction !== "next" && b.direction !== "prev") return null;
+  return { ...tileIdBody, direction: b.direction };
+}
+
 /** 英数字・_・-・. のみ、1〜128文字。CLI出力（tab var listのkey=value整形）を壊す空白・改行等を排除する */
 const TAB_VAR_KEY_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
 
@@ -980,6 +992,23 @@ function buildApp(
         { ok: false, error: `tile/tab not found: ${parsed.tileId}/${parsed.tabId}` },
         404,
       );
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/cycle-tab", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseCycleTabBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: 'expected { tileId: string, direction: "next"|"prev" }' },
+        400,
+      );
+    }
+    const ok = workspaceManager.cycleTab(parsed.tileId, parsed.direction === "next" ? 1 : -1);
+    if (!ok) {
+      return c.json({ ok: false, error: `tile not found (or single tab): ${parsed.tileId}` }, 404);
     }
     return c.json({ ok: true });
   });

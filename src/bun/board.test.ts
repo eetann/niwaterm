@@ -792,6 +792,40 @@ describe("switchTab", () => {
   });
 });
 
+describe("cycleTab", () => {
+  test("delta方向の隣のタブへ切り替わり、端では反対側へ回り込む", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    ws.newTab(tileId);
+    const tabIds = (ws.snapshot().layout as TileLeaf).tabIds;
+    expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(tabIds[2]);
+
+    expect(ws.cycleTab(tileId, 1)).toBe(true);
+    expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(tabIds[0]);
+
+    expect(ws.cycleTab(tileId, -1)).toBe(true);
+    expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(tabIds[2]);
+  });
+
+  test("タブが1枚だけのタイルはfalseを返し、何も起きない", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    const before = ws.snapshot().layout as TileLeaf;
+
+    expect(ws.cycleTab(before.id, 1)).toBe(false);
+    expect((ws.snapshot().layout as TileLeaf).activeTabId).toBe(before.activeTabId);
+  });
+
+  test("存在しないtileIdはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+
+    expect(ws.cycleTab("not-a-tile", 1)).toBe(false);
+  });
+});
+
 describe("moveTab", () => {
   test("タブを別タイルへ移動すると、移動先のactiveTabIdになりtrueを返す", () => {
     const { factory } = createFakeSessionFactory();

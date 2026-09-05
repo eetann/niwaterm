@@ -66,6 +66,7 @@ niwaterm tab send-keys -t tab-3 C-c
 niwaterm tile split [--tile <tileId>] [--orientation horizontal|vertical] [--cwd <dir>]
 niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
 niwaterm tab switch [--tile <tileId>] --tab <tabId>
+niwaterm tab switch [--tile <tileId>] --direction next|prev
 niwaterm tab close [--tile <tileId>] [--tab <tabId>]
 niwaterm tab respawn [--tab <tabId>] [--shell <shellProfileId>] [--cwd <dir>] [--command <cmd>]
 niwaterm tile focus [--tile <tileId>]
@@ -78,7 +79,7 @@ niwaterm tile zoom [--tile <tileId>]
 
 - `tile split` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
 - `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
-- `tab switch` — 指定タイル内でアクティブタブを切り替える。`--tile`省略時は`--tab`のタブが属するタイル
+- `tab switch` — 指定タイル内でアクティブタブを切り替える。`--tab`（直接指定）と`--direction`（タブ並び順で1つ次/前へ巡回。端では反対側へ回り込む）はどちらか一方のみ指定でき、両方省略するとエラーになる。`--tile`省略時は`--tab`のタブが属するタイル、`--direction`指定時は実行しているタブのタイル。対象タイルのタブが1枚だけの場合は失敗する
 - `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない。引数を全て省略すると実行しているタブ自身が閉じる
 - `tab respawn` — 指定タブのプロセスを強制終了し、同じ`tabId`・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当、対象がブラウザタブの場合は失敗する）。`--shell`省略時はデフォルトシェル、`--cwd`省略時は元のタブが実際にいるディレクトリを引き継ぐ。`--command`を指定すると、シェルの代わりにそのコマンドを実行する（`popup open`の位置引数と同じ意味のワンショット実行）。GUIのキーバインドからこの操作を割り当てた場合は実行前にy/nの確認ダイアログを挟むが、CLIからの実行に確認は無い
 - `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる。どちらも省略すると実行しているタブのタイルへフォーカスを移す（背面のタブから自分を前に出す用途）
@@ -290,7 +291,7 @@ niwaterm tab var find --board <boardId> <key> <value>
 
 明示指定した値がこの解決結果で上書きされることはない。存在しないIDを渡しても別の対象へすり替わらず、そのままエラーになる。`--tab`だけを指定して`--tile`を省略した場合は、実行元ではなく**指定したタブが属するタイル**が埋まる（`tab close --tab <tabId>`のような使い方ができる）。
 
-省略できないのは、自分自身を指しても意味が無い切り替え系（`tab switch --tab`、`board switch --board`、`workspace switch --workspace`）、誤送信を避けたい`tab send-keys --tab`、対象がブラウザタブに限られる`browser *`の`--tab`。`tab var`系の`--tab`は`NIWATERM_TAB_ID`のみを見て、フォーカス中タブへのフォールバックは行わない（シェル統合・エージェント統合のhookがniwaterm外で暴発しないようにするため）。
+省略できないのは、自分自身を指しても意味が無い切り替え系（`tab switch`の`--tab`/`--direction`、`board switch --board`、`workspace switch --workspace`）、誤送信を避けたい`tab send-keys --tab`、対象がブラウザタブに限られる`browser *`の`--tab`。`tab var`系の`--tab`は`NIWATERM_TAB_ID`のみを見て、フォーカス中タブへのフォールバックは行わない（シェル統合・エージェント統合のhookがniwaterm外で暴発しないようにするため）。
 
 ## シェル統合
 
@@ -367,7 +368,7 @@ niwaterm tab show [--tab <tabId>]
 対象`tabId`がterminalタブの場合、または存在しない場合は、いずれもエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab show`で対象ワークスペースをアクティブ化してから呼び直す。
 
 - `tab show` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`tab switch`/`tile focus`と役割が重なって見えるが、粒度が異なる合成コマンドである:
-  - `tab switch --tile --tab` — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
+  - `tab switch --tile --tab`（または`--direction`） — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
   - `tile focus --tile` — フォーカス（キー入力の宛先）を移すのみ
   - `tab show --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
 

@@ -20,6 +20,7 @@ import {
   focusNeighbor,
   listLeaves,
   moveTabToTile,
+  nextTabId,
   resizeInDirection,
   resizeSplit,
   splitTile,
@@ -382,6 +383,13 @@ export function createBoard(opts: BoardOptions) {
     tree = result;
     opts.onDirty();
     return true;
+  }
+
+  /** leaf内でアクティブタブをdelta方向へ巡回移動する。タイルが無い・タブが1枚だけならfalse */
+  function cycleTab(tileId: TileId, delta: 1 | -1): boolean {
+    const leaf = findNode(tree, tileId);
+    if (!leaf || leaf.kind !== "leaf" || leaf.tabIds.length < 2) return false;
+    return switchTab(tileId, nextTabId(leaf, delta));
   }
 
   // ドラッグ&ドロップによるタブのタイル間移動。PTYセッション自体はtabId単位で管理しており
@@ -759,6 +767,7 @@ export function createBoard(opts: BoardOptions) {
     getFocusedTabSnapshot,
     adoptTab,
     switchTab,
+    cycleTab,
     moveTab,
     closeTab,
     focusTile: focusTileById,

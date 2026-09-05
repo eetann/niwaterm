@@ -831,6 +831,19 @@ export function switchTab(
   return postJson(endpoint, "/switch-tab", { tileId, tabId });
 }
 
+export type TabCycleDirection = "next" | "prev";
+
+export type CycleTabResult = { ok: true } | { ok: false; error: string };
+
+/** 指定タイル内でアクティブタブを1つ次/前へ巡回移動する（端は反対側へ回り込む） */
+export function cycleTab(
+  endpoint: IpcEndpoint,
+  tileId: TileId,
+  direction: TabCycleDirection,
+): Promise<CycleTabResult> {
+  return postJson(endpoint, "/cycle-tab", { tileId, direction });
+}
+
 export type CloseTabResult = { ok: true } | { ok: false; error: string };
 
 export function closeTab(

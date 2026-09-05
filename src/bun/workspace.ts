@@ -385,6 +385,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTileId(tileId)?.switchTab(tileId, tabId) ?? false;
   }
 
+  function cycleTab(tileId: TileId, delta: 1 | -1): boolean {
+    return findBoardOwnerByTileId(tileId)?.cycleTab(tileId, delta) ?? false;
+  }
+
   // ドラッグ&ドロップによるタブ移動。PTYセッションはBoardインスタンスのクロージャ内に閉じているため、
   // Boardをまたぐ移動はセッションの移管が必要になり非対応（無視してfalseを返す）
   function moveTab(fromTileId: TileId, tabId: TabId, toTileId: TileId): boolean {
@@ -692,6 +696,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     togglePopupVisibility,
     promotePopup,
     switchTab,
+    cycleTab,
     moveTab,
     closeTab,
     focusTile,
