@@ -47,6 +47,14 @@ export interface TileTabBarProps {
 }
 
 /**
+ * TabsTriggerの見た目。shadcn既定のline下線はタブの5px下（after:bottom-[-5px]）へ出るが、
+ * .tab-barはタブと同じ高さでoverflowを持つため、そのままではクリップされて表示されず、
+ * アクティブ表示が文字色の濃淡だけになってしまう。下線をタブ下端の内側へ引き直す。
+ */
+const TAB_TRIGGER_CLASS =
+  "h-7 flex-none gap-1.5 px-2 text-xs group-data-[orientation=horizontal]/tabs:after:bottom-0";
+
+/**
  * Radix TabsTriggerはpointerdown/clickでタブ選択がトリガーされるため、内側の閉じるボタンは
  * onPointerDown/onClick両方でstopPropagationしないと、閉じる前に一瞬そのタブが選択されてしまう。
  */
@@ -125,12 +133,16 @@ export function TileTabBar({
                   <TabsTrigger
                     value={tab.tabId}
                     draggable
+                    // ContextMenuTrigger(asChild)は自身のdata-state(open/closed)を子へマージする
+                    // ため、TabsTriggerが内部で付けるdata-state="active"が握り潰される。shadcnの
+                    // タブの見た目（下線・文字色）はdata-state=activeを見ているので明示的に付け直す
+                    data-state={tab.tabId === activeTabId ? "active" : "inactive"}
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
                       const payload: TabDragPayload = { tabId: tab.tabId, fromTileId: tileId };
                       e.dataTransfer.setData(TAB_DRAG_MIME, JSON.stringify(payload));
                     }}
-                    className="h-7 flex-none gap-1.5 px-2 text-xs"
+                    className={TAB_TRIGGER_CLASS}
                   >
                     <span>{tab.label}</span>
                     <Button
