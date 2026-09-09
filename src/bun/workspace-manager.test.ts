@@ -1143,6 +1143,30 @@ describe("Boardの起動時レイアウト設定(setBoardStartup/getBoardStartup
     ]);
   });
 
+  test("listStartupLayoutBoardsはプリセットの解決元と紐づけ時のcwdもそのまま返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const projectBoardId = mgr.snapshot().workspace.activeBoardId;
+    const globalBoardId = mgr.newBoard(workspaceId) as string;
+
+    mgr.setBoardStartup(projectBoardId, {
+      preset: "dev",
+      restoreMode: "layout",
+      projectRoot: "/home/me/repo",
+    });
+    mgr.setBoardStartup(globalBoardId, {
+      preset: "dev",
+      restoreMode: "layout",
+      cwd: "/home/me/dotfiles",
+    });
+
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId: projectBoardId, preset: "dev", projectRoot: "/home/me/repo" },
+      { boardId: globalBoardId, preset: "dev", cwd: "/home/me/dotfiles" },
+    ]);
+  });
+
   test('restoreMode: "layout"のBoardは骨格を復元せず単一タブで復元される（applyLayoutPresetで組み直す前提）', () => {
     const { created, factory } = createFakeSessionFactory();
     const restoreFrom: PersistedState = {

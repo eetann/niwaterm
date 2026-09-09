@@ -44,6 +44,19 @@ export function checkLayoutTrust(
   };
 }
 
+/**
+ * 起動時に組み直すときのcwdの基準として、PersistedBoardStartupへ記録する分を組み立てる。
+ * projectRootがあればそれ自体が基準になる（applyLayoutPresetのbaseCwdはprojectRoot優先）ため、
+ * 実行ディレクトリは記録しない
+ */
+export function startupCwdFields(
+  projectRoot: string | null,
+  cwd: string | undefined,
+): { projectRoot?: string; cwd?: string } {
+  if (projectRoot) return { projectRoot };
+  return cwd !== undefined ? { cwd } : {};
+}
+
 export type ChangeBoardStartupResult =
   | { ok: true; boardId: BoardId; startup: PersistedBoardStartup | null }
   | {
@@ -66,7 +79,10 @@ export interface ChangeBoardStartupInput {
   mode: BoardStartupMode;
   /** 紐づけるプリセット名。省略時は既に紐づいているプリセットを解決元ごと引き継ぐ */
   preset?: string;
-  /** presetの解決元（プロジェクトローカル）を探す起点ディレクトリ */
+  /**
+   * presetの解決元（プロジェクトローカル）を探す起点ディレクトリ。
+   * グローバル設定由来のpresetならタブのcwdの基準としても記録される（PersistedBoardStartup.cwd）
+   */
   cwd?: string;
   /** プロジェクトローカル由来のプリセットを"layout"へ紐づける同意が取れているか */
   trust?: boolean;
@@ -94,15 +110,18 @@ export async function changeBoardStartup(
       error: `board ${boardId} has no layout preset; pass preset to associate one`,
     };
   }
-  // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元込み）を引き継ぎ、
+  // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元・cwd込み）を引き継ぎ、
   // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする
   let projectRoot: string | null;
+  let cwd: string | undefined;
   if (input.preset !== undefined) {
     const resolved = await resolveLayoutPresetByName(input.preset, input.cwd, layouts);
     if (!resolved) return { ok: false, status: 404, error: `layout not found: ${preset}` };
     projectRoot = resolved.projectRoot;
+    cwd = input.cwd;
   } else {
     projectRoot = existing?.projectRoot ?? null;
+    cwd = existing?.cwd;
     const stillExists = projectRoot
       ? (await loadProjectPreset(projectRoot, preset)) !== null
       : layouts[preset] !== undefined;
@@ -113,7 +132,7 @@ export async function changeBoardStartup(
   const startup: PersistedBoardStartup = {
     preset,
     restoreMode: input.mode,
-    ...(projectRoot ? { projectRoot } : {}),
+    ...startupCwdFields(projectRoot, cwd),
   };
   store.setBoardStartup(boardId, startup);
   return { ok: true, boardId, startup };
@@ -123,7 +142,10 @@ export interface ApplyAndBindStartupLayoutInput {
   boardId: BoardId;
   /** 適用するプリセット名 */
   preset: string;
-  /** presetの解決元（プロジェクトローカル）を探す起点ディレクトリ */
+  /**
+   * presetの解決元（プロジェクトローカル）を探す起点ディレクトリ。
+   * グローバル設定由来のpresetならタブのcwdの基準としても記録される（PersistedBoardStartup.cwd）
+   */
   cwd?: string;
   trust?: boolean;
 }
@@ -170,7 +192,7 @@ export async function applyAndBindStartupLayout(
   const startup: PersistedBoardStartup = {
     preset: input.preset,
     restoreMode: "layout",
-    ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+    ...startupCwdFields(resolved.projectRoot, input.cwd),
   };
   workspaceManager.setBoardStartup(applied.boardId, startup);
   return { ok: true, boardId: applied.boardId, startup };

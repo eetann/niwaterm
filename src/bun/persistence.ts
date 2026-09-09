@@ -87,6 +87,14 @@ export interface PersistedBoardStartup {
    * 「このBoardはどのプロジェクトのレイアウトで組まれたか」という出自は1つに定まる
    */
   projectRoot?: string;
+  /**
+   * 紐づけを作った時点の実行ディレクトリ（絶対パス）。tabConfig.cwdを指定していないタブの
+   * cwdの基準になる。projectRootがある場合はそちらが基準になるため記録しない。
+   *
+   * 起動時にはCLIの実行ディレクトリが無く、記録しないとグローバル設定由来のプリセットで
+   * 組み直されるBoardのタブが既定cwd（ホーム）で開いてしまう
+   */
+  cwd?: string;
 }
 
 /** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
@@ -244,6 +252,9 @@ function isPersistedBoardStartup(value: unknown): value is PersistedBoardStartup
   if (typeof v["preset"] !== "string" || v["preset"] === "") return false;
   if (v["projectRoot"] !== undefined) {
     if (typeof v["projectRoot"] !== "string" || v["projectRoot"] === "") return false;
+  }
+  if (v["cwd"] !== undefined) {
+    if (typeof v["cwd"] !== "string" || v["cwd"] === "") return false;
   }
   return v["restoreMode"] === "restore" || v["restoreMode"] === "layout";
 }

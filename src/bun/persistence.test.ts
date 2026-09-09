@@ -514,6 +514,58 @@ describe("loadPersistedState / savePersistedState", () => {
     expect(await loadPersistedState(path)).toEqual(state);
   });
 
+  test("startupのcwd（紐づけ時の実行ディレクトリ）がラウンドトリップする", async () => {
+    const path = join(dir, "board-startup-cwd.json");
+    const state = {
+      version: 3 as const,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "leaf" as const,
+                tabs: [{ kind: "terminal" as const }],
+                activeTabIndex: 0,
+              },
+              startup: {
+                preset: "dev",
+                restoreMode: "layout" as const,
+                cwd: "/home/me/dotfiles",
+              },
+            },
+          ],
+        },
+      ],
+    };
+    await writeFile(path, JSON.stringify(state));
+    expect(await loadPersistedState(path)).toEqual(state);
+  });
+
+  test("startupのcwdが空文字列の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-startup-cwd.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 3,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            activeBoardIndex: 0,
+            boards: [
+              {
+                layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                startup: { preset: "dev", restoreMode: "layout", cwd: "" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await loadPersistedState(path)).toBeNull();
+  });
+
   test("startupのprojectRootが空文字列の場合はnullを返す", async () => {
     const path = join(dir, "invalid-startup-project-root.json");
     await writeFile(

@@ -3296,6 +3296,28 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(mgr.getBoardStartup(body.boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
   });
 
+  test("POST /apply-layout: グローバル由来×startupは実行ディレクトリも記録する（起動時のcwdの基準になる）", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "niwaterm-apply-layout-cwd-"));
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd, startup: true }),
+    });
+
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.ok).toBe(true);
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      cwd,
+    });
+    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId: body.boardId, preset: "dev", cwd }]);
+  });
+
   test("POST /board-startup: プロジェクトローカルのpresetはtrust無しだとneedsTrustを返す", async () => {
     const projectRoot = await createProjectWithDevPreset();
     const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);

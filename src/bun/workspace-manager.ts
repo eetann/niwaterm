@@ -59,6 +59,8 @@ export interface StartupLayoutBoard {
   preset: string;
   /** プリセットの解決元プロジェクトルート。未設定ならグローバル設定から引く */
   projectRoot?: string;
+  /** 紐づけを作った時点の実行ディレクトリ。projectRootが無いときのcwdの基準になる */
+  cwd?: string;
 }
 
 export interface TabLocation {
@@ -340,7 +342,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
    * 起動時にレイアウトプリセットで組み直すBoard（restoreMode: "layout"）の一覧。
    * bun/index.tsが設定読み込み後にapplyLayoutPresetを流し込むために使う。
    * projectRootが載っているBoardは、グローバル設定ではなくそのプロジェクトの
-   * .niwaterm/config.tsからプリセットを引く
+   * .niwaterm/config.tsからプリセットを引く。cwdは紐づけを作った時点の実行ディレクトリで、
+   * projectRootが無いBoardのタブのcwdの基準になる
    */
   function listStartupLayoutBoards(): StartupLayoutBoard[] {
     const result: StartupLayoutBoard[] = [];
@@ -353,6 +356,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           };
           if (board.startup.projectRoot !== undefined) {
             entry.projectRoot = board.startup.projectRoot;
+          }
+          if (board.startup.cwd !== undefined) {
+            entry.cwd = board.startup.cwd;
           }
           result.push(entry);
         }

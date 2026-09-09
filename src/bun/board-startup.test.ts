@@ -83,6 +83,42 @@ describe("changeBoardStartup", () => {
     });
   });
 
+  test("グローバル設定由来のpresetは実行ディレクトリも記録する（起動時のタブのcwdの基準になる）", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "niwaterm-startup-cwd-"));
+    const store = createStore();
+
+    const result = await changeBoardStartup(store, LAYOUTS, {
+      boardId: "board-1",
+      mode: "layout",
+      preset: "dev",
+      cwd,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      boardId: "board-1",
+      startup: { preset: "dev", restoreMode: "layout", cwd },
+    });
+  });
+
+  test("preset省略時はcwdも引き継ぐ（別ディレクトリからmodeだけ切り替えても基準が動かない）", async () => {
+    const store = createStore({
+      "board-1": { preset: "dev", restoreMode: "layout", cwd: "/home/me/dotfiles" },
+    });
+
+    const result = await changeBoardStartup(store, LAYOUTS, {
+      boardId: "board-1",
+      mode: "restore",
+      cwd: tmpdir(),
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      boardId: "board-1",
+      startup: { preset: "dev", restoreMode: "restore", cwd: "/home/me/dotfiles" },
+    });
+  });
+
   test("mode:clearは紐づけごと解除する", async () => {
     const store = createStore({ "board-1": { preset: "dev", restoreMode: "layout" } });
 
@@ -280,6 +316,29 @@ describe("applyAndBindStartupLayout", () => {
     const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
     expect(leaf.kind).toBe("leaf");
     expect(mgr.snapshot().workspace.board.tabNames[leaf.tabIds[0] as string]).toBe("editor");
+  });
+
+  test("グローバル設定由来のプリセットは適用時のcwdを紐づけにも残す", async () => {
+    const mgr = createTestWorkspaceManager();
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const cwd = await mkdtemp(join(tmpdir(), "niwaterm-startup-cwd-"));
+
+    const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
+      boardId,
+      preset: "named",
+      cwd,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      boardId,
+      startup: { preset: "named", restoreMode: "layout", cwd },
+    });
+    expect(mgr.getBoardStartup(boardId)).toEqual({
+      preset: "named",
+      restoreMode: "layout",
+      cwd,
+    });
   });
 
   test("存在しないpresetは適用も紐づけもしない", async () => {

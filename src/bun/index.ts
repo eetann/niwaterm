@@ -454,10 +454,11 @@ await refreshConfig();
  *
  * projectRootが紐づいているBoardは、グローバル設定ではなくそのプロジェクトの
  * .niwaterm/config.tsから引く。起動時にはcwdが無いため探索は一切行わず、
- * 紐づけを作った時点で記録した解決元をそのまま読む
+ * 紐づけを作った時点で記録した解決元をそのまま読む。タブのcwdの基準も同じ理由で
+ * 紐づけ時に記録したもの（projectRoot、無ければcwd）を使う
  */
 async function applyStartupLayouts(): Promise<void> {
-  for (const { boardId, preset, projectRoot } of workspaceManager.listStartupLayoutBoards()) {
+  for (const { boardId, preset, projectRoot, cwd } of workspaceManager.listStartupLayoutBoards()) {
     const layoutPreset = projectRoot
       ? await loadProjectPreset(projectRoot, preset)
       : layouts[preset];
@@ -474,7 +475,7 @@ async function applyStartupLayouts(): Promise<void> {
       layoutPreset,
       "replace",
       boardId,
-      projectRoot ? { projectRoot } : {},
+      projectRoot ? { projectRoot } : cwd !== undefined ? { invocationCwd: cwd } : {},
     );
     if (!result.ok) {
       console.log(

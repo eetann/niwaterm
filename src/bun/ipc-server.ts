@@ -17,7 +17,7 @@ import type {
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
-import { changeBoardStartup, checkLayoutTrust } from "./board-startup";
+import { changeBoardStartup, checkLayoutTrust, startupCwdFields } from "./board-startup";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
 import { buildKeybindList } from "./keybind-list";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
@@ -854,11 +854,11 @@ function buildApp(
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
     // どのプリセットから生えたBoardかを記録しておく。--startup指定時のみ
     // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する。
-    // プロジェクトローカル由来なら解決元も一緒に記録する（起動時にはcwdが無いため）
+    // 解決元（プロジェクトローカル）と実行ディレクトリも一緒に記録する（起動時にはcwdが無いため）
     workspaceManager.setBoardStartup(result.boardId, {
       preset: parsed.name,
       restoreMode: parsed.startup ? "layout" : "restore",
-      ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+      ...startupCwdFields(resolved.projectRoot, parsed.cwd),
     });
     return c.json({
       ok: true,
