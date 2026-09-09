@@ -25,7 +25,7 @@ niwaterm docs show cli   # 全コマンドの使い方・IPCサーバー仕様�
 
 コマンド一覧は`niwaterm --help`、個別コマンドの詳細は`niwaterm <command> --help`。全コマンドの詳しい使い方・実行例・IPCサーバー仕様は`niwaterm docs show cli`（またはリポジトリ内の[docs/guide/cli.md](../../docs/guide/cli.md)）を参照。
 
-AIエージェント向けの操作ガイドは[.claude/skills/niwaterm-cli/SKILL.md](../../.claude/skills/niwaterm-cli/SKILL.md)を参照。
+AIエージェント向けの操作ガイドは[.agents/skills/niwaterm-cli/SKILL.md](../../.agents/skills/niwaterm-cli/SKILL.md)を参照。
 
 ## fzf-niwaterm
 

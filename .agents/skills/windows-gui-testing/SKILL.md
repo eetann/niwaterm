@@ -109,7 +109,7 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 
 ## niwaterm CLIでの操作
 
-疎通確認・一覧・レイアウト操作は`.claude/skills/niwaterm-cli/SKILL.md`と
+疎通確認・一覧・レイアウト操作は`.agents/skills/niwaterm-cli/SKILL.md`と
 `niwaterm docs show cli`が正。ここではハマりやすい引数の形だけメモする。
 
 - `tab send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
@@ -158,7 +158,7 @@ keydownイベント経由でRPCが飛ぶもの）は発火できない。これ�
 
 **`SetForegroundWindow`だけではwebviewにキー入力が届かない**。`GetForegroundWindow`で
 確認すると対象プロセスが確かにフォアグラウンドになっていても、SendKeysで送ったキーが
-無視されることがある。原因はCLAUDE.mdにある「キーボード入力には明示的なフォーカスが必要」
+無視されることがある。原因はAGENTS.mdにある「キーボード入力には明示的なフォーカスが必要」
 という制約で、ウィンドウ自体のフォアグラウンド化とwebview内DOM要素へのfocus()は別物。
 **確実なのはウィンドウのタイトルバーではなく、ターミナル表示領域を実際にマウスクリックして
 からSendKeysを送る**方法（クリックでwebview内の要素にfocusが移る）。

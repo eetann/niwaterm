@@ -109,7 +109,7 @@ run: async (ctx) => {
 コマンドを追加・変更したら、以下も必ず更新する。
 
 - `docs/guide/cli.md` — コマンドの正式なリファレンス
-- `.claude/skills/niwaterm-cli/SKILL.md` — AIエージェント向けの概要（詳細は書き写さず`docs/guide/cli.md`への導線に留める）
+- `.agents/skills/niwaterm-cli/SKILL.md` — AIエージェント向けの概要（詳細は書き写さず`docs/guide/cli.md`への導線に留める）
 - `contrib/shell-integration/*` — シェル統合スクリプト（`niwaterm tab var set branch`を呼ぶ）
 - `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwaterm tab var set agent_status`を呼ぶ）
 

@@ -141,7 +141,7 @@ powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::U
 '''
 
 # ログは固定パスに毎回上書き（ファイルが際限なく増えないようにするため）。
-# 起動コマンド自体は .claude/skills/windows-gui-testing/SKILL.md の定型と同じ。
+# 起動コマンド自体は .agents/skills/windows-gui-testing/SKILL.md の定型と同じ。
 [tasks."win:start"]
 hide = true
 description = "Windows実機でniwatermをdevモードでバックグラウンド起動する（要win:sync済み。startタスクが解決したNIWATERM_APP_NAMEを引き継ぐ）"

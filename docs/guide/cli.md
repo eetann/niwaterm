@@ -410,12 +410,12 @@ niwaterm docs show cli
 
 ## コマンド命名規則
 
-コマンドを追加する際の命名ルールは`.claude/rules/cli-command-naming.md`を参照。
+コマンドを追加する際の命名ルールは`.agents/rules/cli-command-naming.md`を参照。
 
 ## AIエージェント向けの導線
 
 - `packages/cli/README.md` — CLIパッケージのセットアップ手順・基本的な使い方
-- `.claude/skills/niwaterm-cli/SKILL.md` — Claude Codeなどのエージェントがniwatermを操作する際に自律的に発見できるスキル定義
+- `.agents/skills/niwaterm-cli/SKILL.md` — Claude Codeなどのエージェントがniwatermを操作する際に自律的に発見できるスキル定義
 
 いずれもコマンドの詳細はこのドキュメント（`niwaterm docs show cli`）への導線に留め、内容を書き写さない。
 
