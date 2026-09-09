@@ -370,6 +370,8 @@ mv /tmp/merged-settings.json ~/.claude/settings.json
 
 `agent`/`agent_status`/`agent_status_text`は他のタブ変数と違い、アプリ終了時に保存されても起動時のBoard復元では読み込まれない。復元後のタブに前回のエージェントプロセスは居ないため、残すと実在しない「応答待ち」がサイドバーに出続けてしまう。
 
+`bell`も同じく予約キーで、ターミナルがBEL文字（`0x07`）を出力するとniwatermが`1`をセットし、そのタブが画面に出た時点で自動的に消す（タブバー・サイドバーのベルアイコンの出し分けに使う）。復元で読み込まれない点も`agent`系と同じ。挙動の変更は設定ファイル側（`niwa.on("bell", ...)`、docs/guide/config.md「ベル」参照）で行う。
+
 ```sh
 niwaterm browser navigate --tab <tabId> --url <url>
 niwaterm browser get-text --tab <tabId>

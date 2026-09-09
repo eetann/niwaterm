@@ -682,3 +682,22 @@ describe("resolveCustomView", () => {
     }
   });
 });
+
+describe('設定ファイルのniwa.on("bell")', () => {
+  test("keybindings関数の中で登録したハンドラをextractBellHandlerで取り出せる", () => {
+    const api = createTestNiwaApi();
+    const handler = (): void => {};
+
+    resolveKeybindings({ keybindings: (niwa) => niwa.on("bell", handler) }, api);
+
+    expect(api.extractBellHandler()).toBe(handler);
+  });
+
+  test("登録していなければnullのまま（既定の処理を使う）", () => {
+    const api = createTestNiwaApi();
+
+    resolveKeybindings({ keybindings: (niwa) => niwa.keybind("d", "close-tile") }, api);
+
+    expect(api.extractBellHandler()).toBeNull();
+  });
+});
