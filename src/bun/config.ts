@@ -27,11 +27,13 @@ import {
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
+  type SelectionMenuFn,
   type ShellProfile,
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
+import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
 import type { WorkspaceManager } from "./workspace-manager";
 
 export function configDirPath(): string {
@@ -363,6 +365,20 @@ export function resolveMouse(userConfig: NiwatermConfig | null): ResolvedMouseCo
 }
 
 /**
+ * mouse.selectionMenuを取り出す。未設定・関数以外はnull（右クリックメニューは組み込み項目だけになる）。
+ * 関数の中身は右クリックのたびに評価されるため、ここでは型だけを確かめる
+ */
+export function resolveSelectionMenu(userConfig: NiwatermConfig | null): SelectionMenuFn | null {
+  const fn = userConfig?.mouse?.selectionMenu;
+  if (fn === undefined) return null;
+  if (typeof fn !== "function") {
+    console.log(`[bun] ignoring invalid mouse.selectionMenu: ${String(fn)}`);
+    return null;
+  }
+  return fn;
+}
+
+/**
  * ユーザー定義HTML UI設定を解決する。未設定ならnull（機能オフ）。
  * pathが有効ならconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。
  * どちらも無効なら警告して機能オフ（nullを返す）。nameは省略時"Custom View"にフォールバックする。
@@ -515,6 +531,8 @@ export async function loadAndResolveConfig(
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
   mouse: ResolvedMouseConfig;
+  /** 選択範囲の右クリックメニュー（mouse.selectionMenu）の組み立てと実行 */
+  selectionMenu: SelectionMenuHandle;
   workspaceDefaultCwd: string | undefined;
   /** キーバインドの関数ハンドラ（BindingTargetのkind:"custom"）を実行する。RPCのrunKeybindHandlerから呼ぶ */
   runKeybindHandler: (id: string) => Promise<void>;
@@ -550,6 +568,7 @@ export async function loadAndResolveConfig(
     shellProfiles,
     layouts: resolveLayouts(userConfig),
     mouse: resolveMouse(userConfig),
+    selectionMenu: createSelectionMenu(resolveSelectionMenu(userConfig), niwaApi.niwa),
     workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
     runKeybindHandler: niwaApi.runHandler,
     bellHandler: niwaApi.extractBellHandler(),

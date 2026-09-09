@@ -34,6 +34,7 @@ import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-pa
 import { ConfirmDialog } from "./react/confirm-dialog";
 import { PopupToolbar } from "./react/popup-toolbar";
 import { PromptDialog } from "./react/prompt-dialog";
+import { SelectionMenu, type SelectionMenuUserItem } from "./react/selection-menu";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { boardLabel, buildSidebarWorkspaceItems } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
@@ -77,6 +78,7 @@ const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivEl
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
+const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -1964,14 +1966,6 @@ document.addEventListener("mouseup", (e) => {
   sendMouseReport(tabId, termEl, "release", button, e);
 });
 
-// マウスレポート中の右クリックはアプリへ渡すので、webview既定のコンテキストメニューは出さない
-document.addEventListener("contextmenu", (e) => {
-  if (e.shiftKey) return;
-  const hit = findTerminalAt(e.target);
-  if (!hit || !isMouseTracking(hit.tabId)) return;
-  e.preventDefault();
-});
-
 // ---- マウスホイール（スクロールバック閲覧 / マウスレポート）----
 // トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
 // 1セルに満たない分は次回に持ち越す
@@ -2493,7 +2487,11 @@ tileTreeEl.addEventListener("mousedown", (e) => {
   }
 
   focusTileLocally(tileId);
-  // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す
+  // テキスト選択（コピー用ドラッグ）を妨げないようフォーカスだけ移す。
+  // 選択が残っている状態でtextareaへフォーカスを移すとその選択は消えるため、選択範囲の
+  // 右クリック（メニューを開く操作）では触らない。押下より後のcontextmenuで対象を失う
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed) return;
   imeEl.focus({ preventScroll: true });
 });
 
@@ -2525,6 +2523,99 @@ document.addEventListener("mouseup", () => {
   if (!isInTerminal(selection.anchorNode) || !isInTerminal(selection.focusNode)) return;
   const text = selection.toString();
   if (text) sendMessage("copySelection", { text });
+});
+
+// ---- 選択範囲の右クリックメニュー ----
+// 組み込みの「コピー」に加え、設定のmouse.selectionMenuが返した項目を並べる。
+// 項目の組み立てはbun側（ユーザーの関数）で走るため、RPCで問い合わせてから開く
+const selectionMenuRoot = createMemoRoot(selectionMenuRootEl, "selection-menu");
+let selectionMenuOpen = false;
+let selectionMenuX = 0;
+let selectionMenuY = 0;
+let selectionMenuText = "";
+let selectionMenuItems: SelectionMenuUserItem[] = [];
+// 問い合わせ中に右クリックし直された・閉じられた場合に、遅れて届いた結果で開かないための世代番号
+let selectionMenuRequestId = 0;
+
+function renderSelectionMenu(): void {
+  selectionMenuRoot.renderOnEvent(
+    createElement(SelectionMenu, {
+      open: selectionMenuOpen,
+      x: selectionMenuX,
+      y: selectionMenuY,
+      items: selectionMenuItems,
+      onCopy: () => {
+        if (selectionMenuText) sendMessage("copySelection", { text: selectionMenuText });
+        closeSelectionMenu();
+      },
+      onSelectItem: (id: string) => {
+        sendMessage("runSelectionMenuItem", { id });
+        closeSelectionMenu();
+      },
+      onClose: () => closeSelectionMenu(),
+    }),
+  );
+}
+
+function closeSelectionMenu(): void {
+  selectionMenuRequestId++;
+  if (!selectionMenuOpen) return;
+  selectionMenuOpen = false;
+  selectionMenuItems = [];
+  renderSelectionMenu();
+  imeEl.focus({ preventScroll: true });
+}
+
+async function openSelectionMenu(tabId: TabId, text: string, x: number, y: number): Promise<void> {
+  const requestId = ++selectionMenuRequestId;
+  let items: SelectionMenuUserItem[] = [];
+  try {
+    items = (await rpc.request.selectionMenuItems({ tabId, text })).items;
+  } catch (err) {
+    sendMessage("log", { msg: `[warn] selectionMenuItems failed: ${String(err)}` });
+  }
+  if (requestId !== selectionMenuRequestId) return;
+  selectionMenuOpen = true;
+  selectionMenuX = x;
+  selectionMenuY = y;
+  selectionMenuText = text;
+  selectionMenuItems = items;
+  renderSelectionMenu();
+}
+
+/**
+ * 選択のあるターミナルのtabIdを引く。右クリック位置が選択範囲の外（行末の余白等）でも
+ * 開けるよう、イベント対象で引けなければ選択の起点から辿る
+ */
+function selectionTabId(target: EventTarget | null, selection: Selection): TabId | null {
+  const fromTarget = findTerminalAt(target);
+  if (fromTarget) return fromTarget.tabId;
+  const anchor = selection.anchorNode;
+  const el = anchor instanceof Element ? anchor : anchor?.parentElement;
+  return findTerminalAt(el ?? null)?.tabId ?? null;
+}
+
+document.addEventListener("contextmenu", (e) => {
+  const selection = window.getSelection();
+  const hasTermSelection =
+    selection !== null &&
+    !selection.isCollapsed &&
+    isInTerminal(selection.anchorNode) &&
+    isInTerminal(selection.focusNode);
+  if (hasTermSelection) {
+    const tabId = selectionTabId(e.target, selection);
+    const text = selection.toString();
+    if (tabId !== null && text) {
+      e.preventDefault();
+      void openSelectionMenu(tabId, text, e.clientX, e.clientY);
+      return;
+    }
+  }
+  // マウスレポート中の右クリックはアプリへ渡すので、webview既定のコンテキストメニューは出さない
+  if (e.shiftKey) return;
+  const hit = findTerminalAt(e.target);
+  if (!hit || !isMouseTracking(hit.tabId)) return;
+  e.preventDefault();
 });
 
 // ---- OSC 8ハイパーリンク（フォーマッタがHTML出力時に <a href> として埋め込む）----

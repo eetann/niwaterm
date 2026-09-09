@@ -444,6 +444,7 @@ browser: {
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `copyOnSelect` | `boolean` | マウスでのテキスト選択が終わった時点で、選択範囲をクリップボードへ自動コピーする。未指定時は`false` |
+| `selectionMenu` | `function` | 選択範囲を右クリックした時のメニューに並べる項目を組み立てる。未指定時は組み込みの「コピー」だけが出る |
 
 ```ts
 mouse: {
@@ -456,6 +457,51 @@ mouse: {
 コピーが成立すると、そのターミナルの右上に`COPIED · 2行`のようなバッジが1.5秒だけ出る。この表示は`copyOnSelect`専用ではなく、`ctrl+shift+c`（`copy-selection`）・コピーモードの`y`でも共通に出る。一方、ターミナル上のアプリがOSC 52で書き込んだぶん（vimのyank等）はユーザー操作ではないためバッジを出さない。
 
 不正な値（真偽値以外）を指定した場合、警告付きで`false`にフォールバックする。
+
+### 選択範囲の右クリックメニュー（selectionMenu）
+
+ターミナル出力を選択した状態で右クリックすると、その選択範囲に対するメニューが出る。メニューの先頭には常に組み込みの「コピー」があり、その下に`selectionMenu`が返した項目が並ぶ。選択が無い状態の右クリックではメニューを出さない（マウスレポート中のTUIアプリにはこれまで通り右クリックがそのまま渡る）。
+
+`selectionMenu`は右クリックのたびに呼ばれる関数で、開くコマンドの出し分け（拡張子・OS・cwd）は素のif文で書ける。
+
+```ts
+mouse: {
+  selectionMenu: (selection, niwa) => {
+    const path = selection.text.trim();
+    const items = [];
+    if (/\.(png|jpe?g|gif|svg)$/.test(path)) {
+      items.push({
+        label: "画像を開く",
+        run: () => niwa.shell.run(`qlmanage -p '${path}'`, { cwd: selection.cwd }),
+      });
+    }
+    items.push({
+      label: process.platform === "win32" ? "エクスプローラで開く" : "openで開く",
+      run: () => {
+        const opener = process.platform === "win32" ? "explorer.exe" : "open";
+        return niwa.shell.run(`${opener} '${path}'`, { cwd: selection.cwd });
+      },
+    });
+    return items;
+  },
+},
+```
+
+第1引数には選択範囲の情報が渡る。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `text` | `string` | 選択されているテキスト |
+| `tabId` | `string` | 選択があるタブのid |
+| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
+
+第2引数は[キーバインドの関数ハンドラ](#キーバインド)と同じ`niwa`で、`niwa.shell.run`・`niwa.popup.open`・`niwa.tab.create`・`niwa.notify`等をそのまま呼べる。返す項目は`label`（メニューの表示名）と`run`（選んだ時の処理）を持つオブジェクトで、`run`は非同期でもよい。空配列を返せば組み込みの「コピー」だけのメニューになる。
+
+関数はniwaterm本体（bun側）で実行されるため、`process.platform`でのOS判定・`Bun.spawn`・`node:fs`の読み書きも書ける。選択テキストは`niwa.shell.run`でシェルへ渡るため、パスに空白や記号が入りうるならクォートする。
+
+関数が例外を投げた場合・配列以外を返した場合・`label`や`run`を欠く項目は、警告付きで無視される（メニュー自体は組み込みの項目だけで開く）。
+
+相対パスを開くには`cwd`が要るので、シェル統合（`contrib/shell-integration/`）を入れておくと扱いやすい。
 
 ## ユーザー定義HTML UI（customView）
 

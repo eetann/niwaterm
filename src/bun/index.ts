@@ -32,6 +32,7 @@ import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
+import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import { sendWindowsNotification } from "./windows-notification";
@@ -91,6 +92,14 @@ export type NiwaRPC = {
       listBoardLayouts: {
         params: { boardId: BoardId };
         response: { layouts: LayoutListEntry[] };
+      };
+      /**
+       * 選択範囲を右クリックした時に出すユーザー定義項目（mouse.selectionMenu）。
+       * 項目のrunはbun側に残るため、webviewへはidとラベルだけを返す
+       */
+      selectionMenuItems: {
+        params: { tabId: TabId; text: string };
+        response: { items: SelectionMenuEntry[] };
       };
     };
     messages: {
@@ -169,6 +178,8 @@ export type NiwaRPC = {
       clearBoardStartup: { boardId: BoardId };
       /** keybindingsのBindingTargetがkind:"custom"の場合に発火する。handlerIdはniwa-api.tsのhandlerRegistryのキー */
       runKeybindHandler: { handlerId: string };
+      /** 右クリックメニューで選ばれたユーザー定義項目。idはselectionMenuItemsで返したもの */
+      runSelectionMenuItem: { id: string };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
       reloadConfig: {};
       /** niwatermのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
@@ -339,6 +350,7 @@ let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
 let mouse: ResolvedMouseConfig;
+let selectionMenu: SelectionMenuHandle;
 let workspaceDefaultCwd: string | undefined;
 let runKeybindHandler: (id: string) => Promise<void>;
 let bellHandler: NiwaBellHandler | null;
@@ -413,6 +425,7 @@ async function refreshConfig(): Promise<void> {
     shellProfiles,
     layouts,
     mouse,
+    selectionMenu,
     workspaceDefaultCwd,
     runKeybindHandler,
     bellHandler,
@@ -543,6 +556,16 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       listBoardLayouts: async ({ boardId }: { boardId: BoardId }) => ({
         layouts: await listResolvedLayouts(workspaceManager.getBoardFocusedCwd(boardId), layouts),
       }),
+      selectionMenuItems: async ({ tabId, text }: { tabId: TabId; text: string }) => {
+        const cwd = workspaceManager.getTabVar(tabId, "cwd");
+        return {
+          items: await selectionMenu.build({
+            text,
+            tabId,
+            cwd: cwd.found ? cwd.value : undefined,
+          }),
+        };
+      },
     },
     messages: {
       log: ({ msg }: { msg: string }) => {
@@ -774,6 +797,9 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         runKeybindHandler(handlerId).catch((err: unknown) => {
           console.log(`[bun] keybind handler error: ${String(err)}`);
         });
+      },
+      runSelectionMenuItem: ({ id }: { id: string }) => {
+        void selectionMenu.run(id);
       },
       reloadConfig: () => {
         handleConfigFileChanged().catch((err: unknown) => {

@@ -17,6 +17,20 @@ export default defineConfig({
       { description: "lazygitをポップアップで開く" },
     );
   },
+  mouse: {
+    // 選択範囲を右クリックした時のメニュー項目。右クリックのたびに呼ばれるため、
+    // 拡張子・OSによる出し分けは素のif文で書ける（組み込みの「コピー」は常に先頭に出る）
+    selectionMenu: (selection, niwa) => {
+      const path = selection.text.trim();
+      const opener = process.platform === "win32" ? "explorer.exe" : "open";
+      return [
+        {
+          label: `${opener}で開く`,
+          run: () => niwa.shell.run(`${opener} '${path}'`, { cwd: selection.cwd }),
+        },
+      ];
+    },
+  },
   appearance: {
     // defaultAppearanceを丸ごと引き継ぎつつ、一部だけ上書きする例
     ...defaultAppearance,

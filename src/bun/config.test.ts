@@ -19,6 +19,7 @@ import {
   resolveKeybindings,
   resolveLayouts,
   resolveMouse,
+  resolveSelectionMenu,
   resolveShell,
   resolveShellProfiles,
   resolveWorkspaceDefaultCwd,
@@ -497,6 +498,28 @@ describe("resolveMouse", () => {
     try {
       const resolved = resolveMouse({ mouse: { copyOnSelect: "yes" as never } });
       expect(resolved.copyOnSelect).toBe(defaultMouseConfig.copyOnSelect);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveSelectionMenu", () => {
+  test("未設定ならnull", () => {
+    expect(resolveSelectionMenu(null)).toBeNull();
+    expect(resolveSelectionMenu({ mouse: { copyOnSelect: true } })).toBeNull();
+  });
+
+  test("設定された関数をそのまま返す", () => {
+    const fn = () => [];
+    expect(resolveSelectionMenu({ mouse: { selectionMenu: fn } })).toBe(fn);
+  });
+
+  test("関数以外は警告付きで無効化する", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveSelectionMenu({ mouse: { selectionMenu: "open" as never } })).toBeNull();
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
