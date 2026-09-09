@@ -537,8 +537,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           if (!renderState || renderState.kind !== "terminal") continue;
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
-          termEl.innerHTML = renderState.html;
-          fixGlyphs(termEl);
+          applyTermHtml(tabId, termEl, renderState.html);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
           // 加えて、フォーカスしていないタイルのタブではカーソルを表示しない（tmux同様の挙動）
@@ -811,6 +810,35 @@ function fixGlyphs(root: HTMLElement) {
     flushNarrow();
     node.parentNode?.replaceChild(frag, node);
   }
+}
+
+// ---- ドラッグ選択中の描画保留 ----
+// .termのinnerHTML差し替えは選択の起点があるテキストノードごと作り直すため、ドラッグの途中で
+// 走るとChromiumが起点を.termの先頭へ寄せ、以降のドラッグが画面上端からの巨大な選択になる。
+// ボタンを押している間は差し替えを止め、その間に届いたHTMLは最新の1件だけ持っておく
+let selectionDragging = false;
+const pendingTermHtmlByTabId = new Map<TabId, string>();
+
+function setTermHtml(termEl: HTMLElement, html: string): void {
+  termEl.innerHTML = html;
+  fixGlyphs(termEl);
+}
+
+/** ドラッグ選択中は反映を保留する（保留した分はドラッグ終了時にまとめて反映する） */
+function applyTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
+  if (selectionDragging) {
+    pendingTermHtmlByTabId.set(tabId, html);
+    return;
+  }
+  setTermHtml(termEl, html);
+}
+
+function flushPendingTermHtml(): void {
+  for (const [tabId, html] of pendingTermHtmlByTabId) {
+    const termEl = termElByTabId.get(tabId);
+    if (termEl) setTermHtml(termEl, html);
+  }
+  pendingTermHtmlByTabId.clear();
 }
 
 // ---- タイル木構造 → DOM reconciliation ----
@@ -1965,6 +1993,33 @@ document.addEventListener("mouseup", (e) => {
   flushMouseMotion();
   sendMouseReport(tabId, termEl, "release", button, e);
 });
+
+// ---- ドラッグ選択の開始・終了検知（描画保留の開始・解除）----
+// 上のマウスレポートと排他の関係にある。アプリがマウスを掴んでいるターミナルでは既定の
+// テキスト選択が起きない（Shift併用のときだけ選択になる）ため、その場合は保留しない
+document.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  const hit = findTerminalAt(e.target);
+  if (!hit) return;
+  if (!e.shiftKey && isMouseTracking(hit.tabId)) return;
+  selectionDragging = true;
+});
+
+function endSelectionDrag(): void {
+  if (!selectionDragging) return;
+  selectionDragging = false;
+  // 保留分の反映は選択を消すため、copyOnSelect等の他のmouseupリスナーが選択範囲を
+  // 読み終えてから流す（マイクロタスクはリスナーごとに回るので次のタスクまで待つ）
+  setTimeout(flushPendingTermHtml, 0);
+}
+
+document.addEventListener("mouseup", endSelectionDrag);
+// ウィンドウ外でボタンを離すとmouseupが届かないため、押していない移動とフォーカス喪失も
+// ドラッグ終了とみなす（取りこぼすと描画が止まったままになる）
+document.addEventListener("mousemove", (e) => {
+  if (e.buttons === 0) endSelectionDrag();
+});
+window.addEventListener("blur", endSelectionDrag);
 
 // ---- マウスホイール（スクロールバック閲覧 / マウスレポート）----
 // トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
