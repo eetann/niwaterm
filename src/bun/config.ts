@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
   defaultBrowserConfig,
+  defaultMouseConfig,
   isKeybindAction,
   type KeybindingsConfig,
   type LayoutPreset,
@@ -25,6 +26,7 @@ import {
   type ResolvedAppearanceConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  type ResolvedMouseConfig,
   type ShellProfile,
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
@@ -66,6 +68,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   if ("layouts" in v) {
     const la = v["layouts"];
     if (typeof la !== "object" || la === null) return false;
+  }
+  if ("mouse" in v) {
+    const mo = v["mouse"];
+    if (typeof mo !== "object" || mo === null) return false;
   }
   if ("workspace" in v) {
     const ws = v["workspace"];
@@ -260,6 +266,10 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && value > 0;
 }
 
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
 /**
  * defaultAppearanceにユーザー設定をマージし、フィールド単位・ansiColorsはindex単位で
  * 不正値を警告付きで除外した最終値を返す（resolveKeybindingsと同じper-entry方針）。
@@ -332,6 +342,22 @@ export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrows
       user?.defaultUrl,
       defaultBrowserConfig.defaultUrl,
       isNonEmptyString,
+    ),
+  };
+}
+
+/**
+ * defaultMouseConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
+ */
+export function resolveMouse(userConfig: NiwatermConfig | null): ResolvedMouseConfig {
+  const user = userConfig?.mouse;
+  return {
+    copyOnSelect: resolveField(
+      "mouse",
+      "copyOnSelect",
+      user?.copyOnSelect,
+      defaultMouseConfig.copyOnSelect,
+      isBoolean,
     ),
   };
 }
@@ -488,6 +514,7 @@ export async function loadAndResolveConfig(
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
+  mouse: ResolvedMouseConfig;
   workspaceDefaultCwd: string | undefined;
   /** キーバインドの関数ハンドラ（BindingTargetのkind:"custom"）を実行する。RPCのrunKeybindHandlerから呼ぶ */
   runKeybindHandler: (id: string) => Promise<void>;
@@ -522,6 +549,7 @@ export async function loadAndResolveConfig(
     defaultShell: resolveShell(userConfig),
     shellProfiles,
     layouts: resolveLayouts(userConfig),
+    mouse: resolveMouse(userConfig),
     workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
     runKeybindHandler: niwaApi.runHandler,
     bellHandler: niwaApi.extractBellHandler(),

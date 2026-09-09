@@ -16,6 +16,7 @@ import type {
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
+  ResolvedMouseConfig,
   ShellProfile,
 } from "@niwaterm/config";
 import { applyAndBindStartupLayout } from "./board-startup";
@@ -196,6 +197,7 @@ export type NiwaRPC = {
       config: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
+        mouse: ResolvedMouseConfig;
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
       };
@@ -240,7 +242,13 @@ function sendConfig() {
   if (!mainWindow) return;
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
-  rpcSend.config({ keybindings, appearance: effectiveAppearance(), customView, shellProfiles });
+  rpcSend.config({
+    keybindings,
+    appearance: effectiveAppearance(),
+    mouse,
+    customView,
+    shellProfiles,
+  });
 }
 
 // キーバインド・CLI・コマンドパレットからの実行時フォントサイズ変更（configファイルの
@@ -312,6 +320,7 @@ let customView: ResolvedCustomViewConfig | null;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
+let mouse: ResolvedMouseConfig;
 let workspaceDefaultCwd: string | undefined;
 let runKeybindHandler: (id: string) => Promise<void>;
 let bellHandler: NiwaBellHandler | null;
@@ -385,6 +394,7 @@ async function refreshConfig(): Promise<void> {
     defaultShell,
     shellProfiles,
     layouts,
+    mouse,
     workspaceDefaultCwd,
     runKeybindHandler,
     bellHandler,

@@ -3,6 +3,7 @@ import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
 import type { LayoutsConfig } from "./layout";
+import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
 import type { WorkspaceConfig } from "./workspace";
@@ -57,6 +58,11 @@ export interface NiwatermConfig {
    * 例: { dev: { layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] } } }
    */
   layouts?: LayoutsConfig;
+  /**
+   * マウス操作の挙動設定。未指定のフィールドはdefaultMouseConfigの値のまま有効。
+   * 例: { copyOnSelect: true }
+   */
+  mouse?: MouseConfig;
   /**
    * ワークスペース設定。新規ワークスペース作成時（アプリ起動時の最初のワークスペース・
    * `niwaterm workspace new`）の最初のタブに使うデフォルトcwdを変更できる。

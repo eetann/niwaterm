@@ -4,9 +4,11 @@ import {
   compileKeybindings,
   defaultAppearance,
   defaultKeybindings,
+  defaultMouseConfig,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
   type ResolvedCustomViewConfig,
+  type ResolvedMouseConfig,
   type ShellProfile,
 } from "@niwaterm/config";
 import { createElement, type ReactElement } from "react";
@@ -382,6 +384,8 @@ let keybindResolver = createKeybindResolver(compileKeybindings(defaultKeybinding
 let lastWorkspaces: WorkspaceListEntry[] = [];
 // bun側で解決されたシェルプロファイル一覧（configメッセージで受信）。+ボタン横のドロップダウンに表示する
 let shellProfiles: ShellProfile[] = [];
+// bun側で解決されたマウス設定（configメッセージで受信）。copy-on-selectの有効・無効に使う
+let mouseConfig: ResolvedMouseConfig = defaultMouseConfig;
 
 const SIDEBAR_OPEN_STORAGE_KEY = "niwaterm:sidebarOpen";
 
@@ -560,11 +564,13 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       config: ({
         keybindings,
         appearance,
+        mouse,
         customView,
         shellProfiles: profiles,
       }: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
+        mouse: ResolvedMouseConfig;
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
       }) => {
@@ -572,6 +578,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
         lastKeybindingsConfig = keybindings;
         applyAppearance(appearance);
+        mouseConfig = mouse;
         applyCustomView(customView);
         shellProfiles = profiles;
         shellProfilesVersion++;
@@ -2468,6 +2475,24 @@ tileTreeEl.addEventListener("mouseup", () => {
   const selection = window.getSelection();
   if (selection && !selection.isCollapsed) return;
   imeEl.focus({ preventScroll: true });
+});
+
+/** ノードがターミナル出力（.term）の中にあるか。テキストノードは親要素から辿る */
+function isInTerminal(node: Node | null): boolean {
+  const el = node instanceof Element ? node : node?.parentElement;
+  return el?.closest(".term") != null;
+}
+
+// mouse.copyOnSelect: 選択が確定した時点でクリップボードへ入れる。両端が.term内にある選択に
+// 限ることで、サイドバー・コマンドパレット等のUI文字列を掴んだだけでクリップボードを
+// 上書きしないようにする。タイル・popup双方に効かせるためdocumentレベルで委譲する
+document.addEventListener("mouseup", () => {
+  if (!mouseConfig.copyOnSelect) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  if (!isInTerminal(selection.anchorNode) || !isInTerminal(selection.focusNode)) return;
+  const text = selection.toString();
+  if (text) sendMessage("copySelection", { text });
 });
 
 // ---- OSC 8ハイパーリンク（フォーマッタがHTML出力時に <a href> として埋め込む）----

@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
   defaultBrowserConfig,
+  defaultMouseConfig,
   platformDefaultKeybindings,
 } from "@niwaterm/config";
 import {
@@ -17,6 +18,7 @@ import {
   resolveCustomView,
   resolveKeybindings,
   resolveLayouts,
+  resolveMouse,
   resolveShell,
   resolveShellProfiles,
   resolveWorkspaceDefaultCwd,
@@ -141,6 +143,12 @@ describe("loadUserConfig", () => {
   test("browser以外の形（配列やnull）の場合はnullを返す", async () => {
     const path = join(dir, "invalid-browser-shape.config.ts");
     await writeFile(path, "export default { browser: null };\n");
+    expect(await loadUserConfig(path)).toBeNull();
+  });
+
+  test("mouse以外の形（配列やnull）の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-mouse-shape.config.ts");
+    await writeFile(path, "export default { mouse: null };\n");
     expect(await loadUserConfig(path)).toBeNull();
   });
 
@@ -468,6 +476,27 @@ describe("resolveBrowser", () => {
     try {
       const resolved = resolveBrowser({ browser: { defaultUrl: "" } });
       expect(resolved.defaultUrl).toBe(defaultBrowserConfig.defaultUrl);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveMouse", () => {
+  test("nullを渡すとdefaultMouseConfigがそのまま返る", () => {
+    expect(resolveMouse(null)).toEqual(defaultMouseConfig);
+  });
+
+  test("copyOnSelectを有効化できる", () => {
+    expect(resolveMouse({ mouse: { copyOnSelect: true } }).copyOnSelect).toBe(true);
+  });
+
+  test("不正な型のフィールドは警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveMouse({ mouse: { copyOnSelect: "yes" as never } });
+      expect(resolved.copyOnSelect).toBe(defaultMouseConfig.copyOnSelect);
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
