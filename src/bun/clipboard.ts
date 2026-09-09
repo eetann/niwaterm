@@ -10,7 +10,21 @@
 
 const isWindows = process.platform === "win32";
 
+// クリップボードへ書き込んだことの通知先（webview側のコピーバッジ表示に使う）。
+// マウス選択・キーバインド・コピーモード・OSC52と経路が分かれているため、
+// 呼び出し側それぞれではなく書き込み口の1箇所で拾う
+let writeListener: ((text: string) => void) | null = null;
+
+export function setClipboardWriteListener(listener: (text: string) => void): void {
+  writeListener = listener;
+}
+
 export function writeClipboardText(text: string): void {
+  writeToOs(text);
+  writeListener?.(text);
+}
+
+function writeToOs(text: string): void {
   if (isWindows) {
     const proc = Bun.spawn(
       [

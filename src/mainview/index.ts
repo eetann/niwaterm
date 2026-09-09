@@ -71,6 +71,7 @@ const popupBoxEl = document.getElementById("popup-box") as HTMLDivElement;
 const popupTermEl = popupBoxEl.querySelector(".term") as HTMLDivElement;
 const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
 const popupCopyOverlayEl = popupBoxEl.querySelector(".copy-overlay") as HTMLDivElement;
+const popupCopiedBadgeEl = popupBoxEl.querySelector(".copied-badge") as HTMLDivElement;
 const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
 const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
@@ -587,6 +588,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
         // ショートカット表示（prefix+2打目キー）を最新のkeybindingsで再renderする
         renderCommandPalette();
+      },
+      copied: ({ chars, lines }: { chars: number; lines: number }) => {
+        showCopiedBadge(chars, lines);
       },
     },
   },
@@ -1730,6 +1734,34 @@ function updateCopyModeForTab(tabId: TabId, copyMode: CopyModeRenderState | null
     frag.appendChild(el);
   }
   overlayEl.replaceChildren(frag);
+}
+
+// コピー完了バッジを出しておく時間。見落とさない程度に長く、出力の邪魔にならない程度に短く
+const COPIED_BADGE_MS = 1500;
+let copiedBadgeTimer: ReturnType<typeof setTimeout> | null = null;
+let shownCopiedBadgeEl: HTMLElement | null = null;
+
+/** コピー完了バッジの表示先。popupが開いていればpopup、そうでなければフォーカス中タイルのタブ */
+function activeCopiedBadgeEl(): HTMLElement | null {
+  if (popupVisible) return popupCopiedBadgeEl;
+  const tabContentEl = currentTabId ? tabContentElByTabId.get(currentTabId) : null;
+  return tabContentEl?.querySelector<HTMLElement>(".copied-badge") ?? null;
+}
+
+/** クリップボードへ入った直後に、いま見えているターミナルの右上へ一定時間バッジを出す */
+function showCopiedBadge(chars: number, lines: number): void {
+  if (copiedBadgeTimer !== null) clearTimeout(copiedBadgeTimer);
+  // 連続コピーの間にタブ・popupを移っていると表示先が変わるため、前のバッジを明示的に消す
+  shownCopiedBadgeEl?.classList.remove("show");
+  const badgeEl = activeCopiedBadgeEl();
+  if (!badgeEl) return;
+  badgeEl.textContent = lines > 1 ? `COPIED · ${lines}行` : `COPIED · ${chars}文字`;
+  badgeEl.classList.add("show");
+  shownCopiedBadgeEl = badgeEl;
+  copiedBadgeTimer = setTimeout(() => {
+    copiedBadgeTimer = null;
+    badgeEl.classList.remove("show");
+  }, COPIED_BADGE_MS);
 }
 
 /** スクロールバック閲覧中であることを示すバッジの表示切替（CSSの::afterで描画） */

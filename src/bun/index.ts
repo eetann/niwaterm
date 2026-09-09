@@ -22,7 +22,7 @@ import type {
 import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
-import { readClipboardText, writeClipboardText } from "./clipboard";
+import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
 import type { MouseEventInput } from "./ghostty";
@@ -201,6 +201,7 @@ export type NiwaRPC = {
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
       };
+      copied: { chars: number; lines: number };
     };
   }>;
 };
@@ -250,6 +251,23 @@ function sendConfig() {
     shellProfiles,
   });
 }
+
+/**
+ * クリップボードへ入った直後にwebviewへ知らせる（コピー完了バッジ用）。マウス選択・キーバインド・
+ * コピーモード・OSC52のどの経路でも同じ表示にするため、clipboard.tsの書き込み口から一括で拾う。
+ * 表示先タブはwebview側が決めるためここでは送らない
+ */
+function sendCopied(text: string): void {
+  // render()と同じ理由でmainWindow構築前に呼ばれうるためガードする
+  if (!mainWindow) return;
+  const rpcSend = (mainWindow.webview.rpc as any)?.send;
+  if (!rpcSend) return;
+  // 末尾の改行は数えない（行末まで選択したときに1行多く見える・空コピーで0文字と出るのを防ぐ）
+  const body = text.replace(/\n+$/u, "");
+  if (body === "") return;
+  rpcSend.copied({ chars: [...body].length, lines: body.split("\n").length });
+}
+setClipboardWriteListener(sendCopied);
 
 // キーバインド・CLI・コマンドパレットからの実行時フォントサイズ変更（configファイルの
 // appearance.fontSizeとは独立したズーム量として保持する）。設定ファイルのホットリロードでは

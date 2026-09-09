@@ -581,6 +581,34 @@ body {
   opacity: 0.9;
 }
 
+/* クリップボードへコピーした直後に一定時間だけ出すバッジ（コピー経路を問わず同じ表示）。
+   display切替だとフェードアウトできないのでopacityで出し入れする */
+.copied-badge {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  color: #1e1e2e;
+  background: #a6e3a1;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.copied-badge.show {
+  opacity: 0.9;
+}
+
+/* スクロールバック・コピーモードのバッジと同じ位置なので、それらが出ている間は1段下げる */
+.scrolled-history > .copied-badge,
+.copy-overlay.active ~ .copied-badge {
+  top: 28px;
+}
+
 /* スクロールバック閲覧中であることを示すバッジ（マウスホイール/Cmd+Up等で表示） */
 .tab-content.scrolled-history::after {
   content: "SCROLLBACK · キー入力で最新行へ戻る";
