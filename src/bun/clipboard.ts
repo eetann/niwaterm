@@ -11,7 +11,7 @@
 const isWindows = process.platform === "win32";
 
 // クリップボードへ書き込んだことの通知先（webview側のコピーバッジ表示に使う）。
-// マウス選択・キーバインド・コピーモード・OSC52と経路が分かれているため、
+// マウス選択・キーバインド・コピーモードと経路が分かれているため、
 // 呼び出し側それぞれではなく書き込み口の1箇所で拾う
 let writeListener: ((text: string) => void) | null = null;
 
@@ -19,9 +19,18 @@ export function setClipboardWriteListener(listener: (text: string) => void): voi
   writeListener = listener;
 }
 
+/** ユーザー操作によるコピー。書き込んだことをリスナー（コピーバッジ）へ伝える */
 export function writeClipboardText(text: string): void {
   writeToOs(text);
   writeListener?.(text);
+}
+
+/**
+ * ターミナル上のアプリからのコピー（OSC 52）。vimのyank等でユーザーが「コピーした」と
+ * 意識しないまま頻繁に発火するため、writeClipboardTextと違いリスナーへは伝えない
+ */
+export function writeClipboardTextFromApp(text: string): void {
+  writeToOs(text);
 }
 
 function writeToOs(text: string): void {

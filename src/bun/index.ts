@@ -254,7 +254,7 @@ function sendConfig() {
 
 /**
  * クリップボードへ入った直後にwebviewへ知らせる（コピー完了バッジ用）。マウス選択・キーバインド・
- * コピーモード・OSC52のどの経路でも同じ表示にするため、clipboard.tsの書き込み口から一括で拾う。
+ * コピーモードのどの経路でも同じ表示にするため、clipboard.tsの書き込み口から一括で拾う。
  * 表示先タブはwebview側が決めるためここでは送らない
  */
 function sendCopied(text: string): void {

@@ -1,7 +1,7 @@
 // PTY(forkpty) + libghostty-vt(VTパーサ) を束ねた「1ターミナルセッション」。
 // index.tsはPTY/FFIの詳細を知らずにこのモジュールだけを使う。
 // 将来のタブ実装は createTerminalSession() 1呼び出し = タブ1つに対応させる想定。
-import { writeClipboardText } from "./clipboard";
+import { writeClipboardText, writeClipboardTextFromApp } from "./clipboard";
 import {
   applyCopyModeKey,
   clampCopyModeCursor,
@@ -127,7 +127,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   // OSC 52によるクリップボード書き込みをシステムクリップボードへ流す
   term.onClipboardWrite((data) => {
-    writeClipboardText(new TextDecoder().decode(data));
+    writeClipboardTextFromApp(new TextDecoder().decode(data));
   });
 
   // OSC 7/9/1337によるカレントディレクトリの変化を呼び出し側へ伝える。
