@@ -14,6 +14,8 @@ import {
   type LayoutPreset,
   type LayoutsConfig,
   type Niwa,
+  type NiwaBellEvent,
+  type NiwaBellHandler,
   type NiwaNotifyOptions,
   type NiwatermConfig,
   parseKeyBindingString,
@@ -489,6 +491,10 @@ export async function loadAndResolveConfig(
   workspaceDefaultCwd: string | undefined;
   /** キーバインドの関数ハンドラ（BindingTargetのkind:"custom"）を実行する。RPCのrunKeybindHandlerから呼ぶ */
   runKeybindHandler: (id: string) => Promise<void>;
+  /** niwa.on("bell", ...)で登録されたハンドラ。未登録はnull（既定の処理を使う） */
+  bellHandler: NiwaBellHandler | null;
+  /** ベルの既定の処理（niwa.bell.defaultと同じもの）。ハンドラ未登録時の処理として呼ぶ */
+  runDefaultBell: (event: NiwaBellEvent) => void;
 }> {
   const userConfig = await loadUserConfig(path);
   const shellProfiles = resolveShellProfiles(userConfig, detectedShellProfiles);
@@ -505,8 +511,11 @@ export async function loadAndResolveConfig(
     sendNotification,
     reloadConfig,
   });
+  // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
+  // 登録内容の取り出しはその後でなければならない
+  const keybindings = resolveKeybindings(userConfig, niwaApi);
   return {
-    keybindings: resolveKeybindings(userConfig, niwaApi),
+    keybindings,
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     customView: resolveCustomView(userConfig),
@@ -515,5 +524,7 @@ export async function loadAndResolveConfig(
     layouts: resolveLayouts(userConfig),
     workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
     runKeybindHandler: niwaApi.runHandler,
+    bellHandler: niwaApi.extractBellHandler(),
+    runDefaultBell: niwaApi.runDefaultBell,
   };
 }

@@ -80,6 +80,8 @@ export interface WorkspaceManagerOptions {
   getDefaultShell?: WorkspaceOptions["getDefaultShell"];
   /** 新規ワークスペース作成時の最初のタブに使うデフォルトcwdを取得する。省略時はpty.ts側のOS標準ホームディレクトリを使う */
   getDefaultCwd?: WorkspaceOptions["getDefaultCwd"];
+  /** いずれかのタブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
+  onBell?: WorkspaceOptions["onBell"];
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: WorkspaceOptions["createSession"];
 }
@@ -116,6 +118,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
+      onBell: opts.onBell,
       createSession: opts.createSession,
     });
     workspaces.set(id, ws);
@@ -176,6 +179,43 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       if (ws.hasTile(tileId)) return ws;
     }
     return undefined;
+  }
+
+  /** アクティブなワークスペースで画面に出ているタブ（各タイルのアクティブタブ、ズーム中はそのタイルのみ） */
+  function listVisibleTabIds(): TabId[] {
+    return (workspaces.get(activeId) as Workspace).listVisibleTabIds();
+  }
+
+  function isTabVisible(tabId: TabId): boolean {
+    return listVisibleTabIds().includes(tabId);
+  }
+
+  /**
+   * 画面に出ているタブのベルのマークを消す（表示された＝既読とみなす）。描画の直前に呼ぶ想定のため
+   * onDirtyは呼ばず、消したものがあったかどうかだけを返す
+   */
+  function clearBellOnVisibleTabs(): boolean {
+    const ws = workspaces.get(activeId) as Workspace;
+    let cleared = false;
+    for (const tabId of ws.listVisibleTabIds()) {
+      if (ws.clearBell(tabId)) cleared = true;
+    }
+    return cleared;
+  }
+
+  /**
+   * ベルのマークを明示的に消す（niwa.bell.clear）。clearBellOnVisibleTabsと違い、
+   * 描画のついでではなくユーザーの操作として呼ばれるためonDirtyで描画も促す
+   */
+  function clearBell(tabId: TabId): boolean {
+    const cleared = findOwnerByTabId(tabId)?.clearBell(tabId) ?? false;
+    if (cleared) opts.onDirty();
+    return cleared;
+  }
+
+  /** ユーザーがサイドバーから設定したタブ名。未設定・不存在はnull */
+  function getTabName(tabId: TabId): string | null {
+    return findOwnerByTabId(tabId)?.getTabName(tabId) ?? null;
   }
 
   function findOwnerByTabId(tabId: TabId): Workspace | undefined {
@@ -717,6 +757,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     handleScrollToBottom,
     snapshot,
     listWorkspaces,
+    isTabVisible,
+    clearBell,
+    clearBellOnVisibleTabs,
+    getTabName,
     hasTab,
     locateTab,
     locateBrowserTab,

@@ -8,7 +8,7 @@ import type {
   TerminalSessionOptions,
 } from "./terminal-session";
 import { listLeaves, type TileLeaf, type TileNode, type TileSplit } from "./tile-layout";
-import { createBoard, type Board, type BoardOptions } from "./board";
+import { BELL_TAB_VAR, createBoard, type Board, type BoardOptions } from "./board";
 
 function idGen(prefix: string): () => string {
   let n = 0;
@@ -41,7 +41,12 @@ function createFakeSessionFactory() {
     const record: FakeSessionRecord = {
       opts,
       disposed: false,
-      callbacks: { onOutput: opts.onOutput, onExit: opts.onExit, onPwdChanged: opts.onPwdChanged },
+      callbacks: {
+        onOutput: opts.onOutput,
+        onExit: opts.onExit,
+        onPwdChanged: opts.onPwdChanged,
+        onBell: opts.onBell,
+      },
     };
     created.push(record);
     return {
@@ -1641,5 +1646,63 @@ describe("getFocusedTabSnapshot", () => {
     const ws = createBoard(baseOpts({ createSession: factory }));
 
     expect(ws.getFocusedTabSnapshot()?.cwd).toBeUndefined();
+  });
+});
+
+describe("ベル（BEL）", () => {
+  test("セッションのonBellはtabId付きでBoardのonBellへ伝わる", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const bells: string[] = [];
+    const ws = createBoard(
+      baseOpts({ createSession: factory, onBell: (tabId) => bells.push(tabId) }),
+    );
+    resolvePending(ws);
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    created[0]?.opts.onBell?.();
+
+    expect(bells).toEqual([tabId]);
+  });
+
+  test("bellのタブ変数はsnapshot().bellTabIdsに現れ、clearBellで消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    ws.setTabVar(tabId, BELL_TAB_VAR, "1");
+    expect(ws.snapshot().bellTabIds).toEqual([tabId]);
+
+    expect(ws.clearBell(tabId)).toBe(true);
+    expect(ws.snapshot().bellTabIds).toEqual([]);
+  });
+
+  test("listVisibleTabIdsは各タイルのアクティブタブだけを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const hiddenTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    const shownTabId = ws.newTab(tileId);
+    const split = ws.splitTile(tileId, "vertical");
+    resolvePending(ws);
+    if (!shownTabId || !split) throw new Error("newTab/splitTileに失敗した");
+
+    expect(ws.listVisibleTabIds().sort()).toEqual([shownTabId, split.tabId].sort());
+    expect(ws.listVisibleTabIds()).not.toContain(hiddenTabId);
+  });
+
+  test("ズーム中のlistVisibleTabIdsはそのタイルのアクティブタブだけになる", () => {
+    const { factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    ws.splitTile(tileId, "vertical");
+    resolvePending(ws);
+
+    ws.toggleZoomTile(tileId);
+
+    expect(ws.listVisibleTabIds()).toEqual([tabId]);
   });
 });

@@ -338,6 +338,63 @@ prefix + `v`（`copy-mode`アクション）でコピーモードに入る。マ
 
 不正なバインド文字列（`prefix`/`direct`で未知の修飾子・`cmd`/`ctrl`/`alt`のいずれも含まない、`bindings`で`cmd`/`ctrl`を含む等）や未知のアクション名を指定した場合、そのエントリだけが無視され、警告がコンソールに出力される（起動時にターミナルから`mise run start`した場合に見える）。設定ファイル自体が読み込めない場合（構文エラー、`node_modules`未インストール等）はデフォルトキーバインド全体にフォールバックする。
 
+## ベル
+
+ターミナルがBEL文字（`0x07`）を出力すると、そのタブに「ベル」の印が付く。長いビルドの終わり（`make && printf '\a'`）やエージェントの応答待ちを、別のタブ・別のワークスペースを見ている間でも取りこぼさないための仕組み。
+
+既定の挙動は2つ。
+
+- **タブへのマーク**: タブバーとサイドバーのBoard行にベルのアイコンが出る。そのタブが画面に出た時点で自動的に消える（ウィンドウがフォーカスされていない間は、画面に出ていても消えない）
+- **デスクトップ通知**: niwatermのウィンドウがフォーカスされていない時だけ出す。画面を見ていればマークだけで足りるため。同じタブでベルが続く場合、通知は5秒間隔まで間引く（マークは常に付く）
+
+### 処理を差し替える（`niwa.on("bell", ...)`）
+
+`keybindings`の関数の中で`niwa.on("bell", handler)`を呼ぶと、**既定の処理の代わりに**そのハンドラが走る。
+
+```ts
+import { defineConfig } from "@niwaterm/config";
+
+export default defineConfig({
+  keybindings: (niwa) => {
+    niwa.on("bell", (event) => {
+      // 今見ていないワークスペースで鳴ったベルだけ通知する
+      if (event.workspaceId !== niwa.workspace.current()) {
+        niwa.notify({ title: "ベル", body: event.tabName ?? event.tabId });
+      }
+    });
+  },
+});
+```
+
+既定の挙動に何かを足したいだけなら、ハンドラの中から`niwa.bell.default(event)`を呼ぶ。
+
+```ts
+niwa.on("bell", (event) => {
+  niwa.bell.default(event);
+  niwa.tab.var.set(event.tabId, "bell_at", new Date().toLocaleTimeString());
+});
+```
+
+ハンドラは`async`にでき、`niwa`のAPI（`notify`・`shell.run`・`tab.show`等）をそのまま使える。
+
+### ハンドラに渡る値（`NiwaBellEvent`）
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `tabId` | `string` | ベルが鳴ったタブ |
+| `tabName` | `string \| null` | サイドバーから設定したタブ名。未設定は`null` |
+| `tileId` / `boardId` / `workspaceId` | `string` | そのタブの所在 |
+| `windowFocused` | `boolean` | 鳴った時点でniwatermのウィンドウがフォーカスされていたか |
+| `visible` | `boolean` | 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブなら`false`） |
+
+### `niwa.bell`
+
+| メソッド | 意味 |
+|---|---|
+| `default(event)` | 既定の処理（マーク＋ウィンドウ非フォーカス時の通知）を実行する |
+| `mark(tabId)` | タブにマークを付ける。マークはそのタブが画面に出た時点で自動的に消える |
+| `clear(tabId)` | タブのマークを消す |
+
 ## 外観設定
 
 `appearance`はフォント・カラーテーマを指定するオブジェクト。全フィールドoptionalで、指定しなかったフィールドは`defaultAppearance`の値のまま有効（`defaultAppearance`をspreadしてから一部だけ上書きするのが基本の書き方）。

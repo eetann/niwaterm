@@ -355,6 +355,8 @@ let zoomedTileId: TileId | null = null;
 let lastLayout: TileNode | null = null;
 // 直近のrender()で受け取ったアクティブワークスペースのタブ名。タブバーのラベル表示に使う
 let lastTabNames: Record<TabId, string> = {};
+// ベルが鳴ったまま未読のタブ。タブバーの印に使う
+let lastBellTabIds: Set<TabId> = new Set();
 // ワークスペース切替（Cmd+Option+]/[）の次/前の対象を解決するために保持する
 let activeWorkspaceId: WorkspaceId | null = null;
 let workspaceIds: WorkspaceId[] = [];
@@ -504,6 +506,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         const activeBoard = p.workspace.board;
         lastLayout = activeBoard.layout;
         lastTabNames = activeBoard.tabNames;
+        lastBellTabIds = new Set(activeBoard.bellTabIds);
         // reconcile()がzoomedTileIdをモジュールスコープ変数から直接参照するため、
         // renderLayout()より前に確定させる必要がある（後回しにすると常に1render分古い
         // ズーム状態でreconcileしてしまい、ズーム切り替えの反映が一拍遅れて見た目が壊れる）
@@ -1264,10 +1267,11 @@ function renderTileTabBar(tileId: TileId): void {
   const tabs = leaf.tabIds.map((tabId, index) => ({
     tabId,
     label: lastTabNames[tabId] || String(index + 1),
+    bell: lastBellTabIds.has(tabId),
   }));
   const zoomed = zoomedTileId === tileId;
   let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}\u0000${zoomed}`;
-  for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}`;
+  for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}\u0001${tab.bell}`;
   root.renderIfChanged(key, () =>
     createElement(TileTabBar, {
       tileId,
@@ -2557,6 +2561,7 @@ tileTreeEl.addEventListener("drop", (e) => {
 document.addEventListener("dragend", clearTabDragOver);
 
 window.addEventListener("focus", () => {
+  sendMessage("windowFocusChanged", { focused: true });
   // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで
   // imeElへフォーカスを奪われ編集が中断してしまうため、その場合はスキップする
   if (document.activeElement instanceof HTMLInputElement) return;
@@ -2565,6 +2570,7 @@ window.addEventListener("focus", () => {
 // prefix入力後の2打目キー待ち中にウィンドウのフォーカスが外れると、復帰後の最初のキー入力が
 // 意図せず2打目キーとして解釈されてしまうため、フォーカス喪失時に待ち状態を解除する
 window.addEventListener("blur", () => {
+  sendMessage("windowFocusChanged", { focused: false });
   keybindResolver.reset();
 });
 imeEl.focus({ preventScroll: true });
@@ -2578,6 +2584,8 @@ applySidebarVisibility();
 measureCell();
 renderCommandPalette();
 sendMessage("ready");
+// 他アプリの裏で起動した場合もベルの通知判定が合うよう、初期のフォーカス状態を伝える
+sendMessage("windowFocusChanged", { focused: document.hasFocus() });
 
 // Electrobunのwebview→bun RPCは`ws://127.0.0.1:<port>/socket`のWebSocketで飛び、そのポートは
 // ネイティブ層(ElectrobunCore.dll)が50000から上へ空きを探して決める。ところがWindowsは既に

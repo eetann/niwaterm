@@ -1,5 +1,5 @@
 import type { ShellProfile } from "@niwaterm/config";
-import { ChevronDown, Plus } from "lucide-react";
+import { Bell, ChevronDown, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,8 @@ import type { TabId, TileId } from "../../bun/tile-layout";
 export interface TileTabBarTabItem {
   tabId: TabId;
   label: string;
+  /** ベルが鳴ったまま未読か。そのタブを表示した時点で解除される */
+  bell: boolean;
 }
 
 /** タブD&D移動用のdataTransfer MIMEタイプ。mainview/index.ts側のドロップハンドラと共有する */
@@ -144,6 +146,9 @@ export function TileTabBar({
                     }}
                     className={TAB_TRIGGER_CLASS}
                   >
+                    {tab.bell && (
+                      <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />
+                    )}
                     <span>{tab.label}</span>
                     <Button
                       asChild

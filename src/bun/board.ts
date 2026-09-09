@@ -42,6 +42,9 @@ import { resolveActualCwd } from "./wsl-cwd";
 
 export type BoardId = string;
 
+/** ベルが鳴ったことを表すタブ変数のキー。値は"1"で、既読時はキーごと削除する */
+export const BELL_TAB_VAR = "bell";
+
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
 
 export interface BoardRenderState {
@@ -54,6 +57,8 @@ export interface BoardRenderState {
   tileNames: Record<TileId, string>;
   /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。永続化はしない（起動のたびnullに戻る） */
   zoomedTileId: TileId | null;
+  /** ベルが鳴ったまま未読のタブ。タブバーの印に使う（サイドバーはtabVarsの"bell"を直接見る） */
+  bellTabIds: TabId[];
 }
 
 /** 外部（popup.ts）からTerminalSessionを編入する際に渡すメタ情報。adoptTab参照 */
@@ -98,6 +103,8 @@ export type BoardOptions = {
    * getDefaultShellと同様、呼び出し毎に評価する（設定ファイルのホットリロードを反映するため）
    */
   getDefaultCwd?: () => string | undefined;
+  /** タブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
+  onBell?: (tabId: TabId) => void;
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: typeof createTerminalSession;
 };
@@ -167,6 +174,7 @@ export function createBoard(opts: BoardOptions) {
       onExit: () => handleTabProcessExit(tabId),
       // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
+      onBell: () => opts.onBell?.(tabId),
     });
     sessions.set(tabId, session);
   }
@@ -350,6 +358,7 @@ export function createBoard(opts: BoardOptions) {
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
+      onBell: () => opts.onBell?.(tabId),
     });
     sessions.set(tabId, session);
     sizeByTabId.set(tabId, { cols: meta.cols, rows: meta.rows });
@@ -658,6 +667,7 @@ export function createBoard(opts: BoardOptions) {
       tabNames: Object.fromEntries(tabNames),
       tileNames: Object.fromEntries(tileNames),
       zoomedTileId,
+      bellTabIds: [...tabVars].filter(([, vars]) => vars.get(BELL_TAB_VAR)).map(([tabId]) => tabId),
     };
   }
 
@@ -702,6 +712,24 @@ export function createBoard(opts: BoardOptions) {
 
   function getFocusedTileId(): TileId {
     return focusedTileId;
+  }
+
+  /**
+   * このBoardが表示されている間、画面に出ているタブ（各タイルのアクティブタブ）。
+   * ズーム中は他のタイルが隠れるため、そのタイルのアクティブタブ1件だけになる
+   */
+  function listVisibleTabIds(): TabId[] {
+    const leaves = listLeaves(tree);
+    const visible = zoomedTileId ? leaves.filter((leaf) => leaf.id === zoomedTileId) : leaves;
+    return visible.map((leaf) => leaf.activeTabId);
+  }
+
+  /**
+   * ベルのマークを消す。「画面に出ているタブは既読」として描画の直前に呼ばれるため、
+   * setTabVarと違いonDirtyを呼ばない（呼ぶと描画がさらに描画を呼び続ける）
+   */
+  function clearBell(tabId: TabId): boolean {
+    return tabVars.get(tabId)?.delete(BELL_TAB_VAR) ?? false;
   }
 
   /** サイドバー一覧用の軽量な参照。ズーム中でなければnull */
@@ -822,6 +850,8 @@ export function createBoard(opts: BoardOptions) {
     getLayout,
     getFocusedTileId,
     getZoomedTileId,
+    listVisibleTabIds,
+    clearBell,
     hasTab,
     hasBrowserTab,
     findTileIdForTab,

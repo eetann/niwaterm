@@ -28,6 +28,8 @@ export interface SidebarBoardItem {
   agent: SidebarBoardAgentInfo | null;
   /** フォーカス中タイルがズーム表示中か（toggle-zoom）。Board内のどのタイルかは問わず、見た目上は1行のBoardが対象 */
   zoomed: boolean;
+  /** Board内のいずれかのタブでベルが鳴ったまま未読か */
+  bell: boolean;
   /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
   startup: SidebarBoardStartupInfo | null;
 }
@@ -152,6 +154,16 @@ function findBoardAgent(
 }
 
 /**
+ * Board内のいずれかのタブでベルが鳴ったまま未読か。エージェント状態と同じく、フォーカスしていない
+ * タイル・非アクティブタブで鳴ったベルも取りこぼさないよう全タブを見る
+ */
+function hasUnreadBell(board: BoardListEntry): boolean {
+  return listLeaves(board.layout).some((leaf) =>
+    leaf.tabIds.some((tabId) => Boolean(board.tabVars[tabId]?.["bell"])),
+  );
+}
+
+/**
  * Board行の表示名。ユーザーが名前を設定していなければワークスペース内の並び順で連番へフォールバックする。
  * サイドバー以外（キーバインド・コマンドパレット起点の名前変更ダイアログ）でも同じラベルを出すためexportする
  */
@@ -198,6 +210,7 @@ export function buildSidebarWorkspaceItems(
         branch,
         agent,
         zoomed: board.zoomedTileId !== null,
+        bell: hasUnreadBell(board),
         startup: board.startup
           ? {
               preset: board.startup.preset,

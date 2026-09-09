@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Bell,
   ChevronRight,
   LayoutTemplate,
   Maximize2,
@@ -402,6 +403,7 @@ export function SidebarWorkspaceList({
         ? dropTarget.position
         : null;
     const titleParts: string[] = [];
+    if (board.bell) titleParts.push("ベル");
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
     if (board.startup) titleParts.push(startupLabel(board.startup));
@@ -461,6 +463,7 @@ export function SidebarWorkspaceList({
                   className="size-3 shrink-0 text-muted-foreground"
                 />
               )}
+              {board.bell && <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />}
             </div>
             {hasStatusLine && (
               <div className="flex w-full gap-1.5 px-1.5 pb-1.5">

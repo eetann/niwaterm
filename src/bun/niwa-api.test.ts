@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { isCustomBindingRef, type KeybindingsConfig, type ShellProfile } from "@niwaterm/config";
+import {
+  isCustomBindingRef,
+  type KeybindingsConfig,
+  type NiwaBellEvent,
+  type ShellProfile,
+} from "@niwaterm/config";
 import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createNiwaApi } from "./niwa-api";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
@@ -548,5 +553,79 @@ describe("niwa.reloadConfig", () => {
     await niwa.reloadConfig();
     niwa.notify({ title: "done" });
     expect(calls).toEqual(["reload", "notify"]);
+  });
+});
+
+describe('niwa.on("bell") / niwa.bell', () => {
+  /** テスト用のベルイベント。tabId以外は既定の処理が見る項目だけ埋める */
+  function bellEvent(tabId: string, windowFocused: boolean): NiwaBellEvent {
+    return {
+      tabId,
+      tabName: "build",
+      tileId: "tile-0",
+      boardId: "board-0",
+      workspaceId: "workspace-0",
+      windowFocused,
+      visible: false,
+    };
+  }
+
+  test("ハンドラを登録していなければextractBellHandlerはnullを返す", () => {
+    const { extractBellHandler } = createTestSetup();
+    expect(extractBellHandler()).toBeNull();
+  });
+
+  test("niwa.onで登録したハンドラを取り出せる（同じイベントへの再登録は後勝ち）", () => {
+    const { niwa, extractBellHandler } = createTestSetup();
+    const first = (): void => {};
+    const second = (): void => {};
+
+    niwa.on("bell", first);
+    niwa.on("bell", second);
+
+    expect(extractBellHandler()).toBe(second);
+  });
+
+  test("niwa.bell.markでタブ変数bellが立ち、clearで消える", () => {
+    const { niwa, workspaceManager } = createTestSetup();
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    niwa.bell.mark(tabId);
+    expect(workspaceManager.getTabVar(tabId, "bell")).toEqual({ found: true, value: "1" });
+
+    niwa.bell.clear(tabId);
+    expect(workspaceManager.getTabVar(tabId, "bell").found).toBe(false);
+  });
+
+  test("既定の処理はマークを付け、通知はウィンドウ非フォーカス時だけ出す", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(bellEvent(tabId, true));
+    expect(workspaceManager.getTabVar(tabId, "bell")).toEqual({ found: true, value: "1" });
+    expect(notified).toEqual([]);
+
+    runDefaultBell(bellEvent(tabId, false));
+    expect(notified).toEqual(["build"]);
+  });
+
+  test("同じタブのベルが続いても通知は間引かれる", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(bellEvent(tabId, false));
+    runDefaultBell(bellEvent(tabId, false));
+    runDefaultBell(bellEvent(tabId, false));
+
+    expect(notified).toHaveLength(1);
   });
 });

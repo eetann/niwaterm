@@ -29,6 +29,8 @@ export type TerminalSessionCallbacks = {
   onExit?: (code: number) => void;
   /** シェル統合が送るOSC 7/9/1337でカレントディレクトリが変化した時に呼ばれる */
   onPwdChanged?: (cwd: string) => void;
+  /** BEL文字(0x07)を受け取った時に呼ばれる */
+  onBell?: () => void;
 };
 
 export type TerminalSessionOptions = PtyOptions &
@@ -115,6 +117,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     onOutput: opts.onOutput,
     onExit: opts.onExit,
     onPwdChanged: opts.onPwdChanged,
+    onBell: opts.onBell,
   };
 
   // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
@@ -132,6 +135,10 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   term.onPwdChanged((raw) => {
     const cwd = decodePwdReport(raw);
     if (cwd !== null) callbacks.onPwdChanged?.(cwd);
+  });
+
+  term.onBell(() => {
+    callbacks.onBell?.();
   });
 
   // Windows実機ではPTYプロセスのonExit発火後にもdataコールバックが非同期に遅延発火することがあり、

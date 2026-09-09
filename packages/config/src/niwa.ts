@@ -214,6 +214,35 @@ export interface NiwaShellApi {
   run(command: string, opts?: NiwaShellRunOptions): Promise<NiwaShellRunResult>;
 }
 
+/** ベル（BEL文字 0x07）が鳴った時の状況。niwa.on("bell", ...)のハンドラへ渡る */
+export interface NiwaBellEvent {
+  tabId: string;
+  /** ユーザーがサイドバーから設定したタブ名。未設定はnull */
+  tabName: string | null;
+  tileId: string;
+  boardId: string;
+  workspaceId: string;
+  /** 鳴った時点でniwatermのウィンドウがフォーカスされていたか */
+  windowFocused: boolean;
+  /** 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブならfalse） */
+  visible: boolean;
+}
+
+export type NiwaBellHandler = (event: NiwaBellEvent) => void | Promise<void>;
+
+export interface NiwaBellApi {
+  /**
+   * ベルの既定の処理（タブへのマーク付けと、ウィンドウ非フォーカス時のデスクトップ通知）を実行する。
+   * niwa.on("bell", ...)を定義すると既定の処理は走らなくなるため、既定の挙動へ何か足したいだけの
+   * 場合はハンドラの中からこれを呼ぶ
+   */
+  default(event: NiwaBellEvent): void;
+  /** タブにベルのマークを付ける。マークはそのタブが画面に出た時点で自動的に消える */
+  mark(tabId: string): void;
+  /** タブのベルのマークを消す */
+  clear(tabId: string): void;
+}
+
 export interface KeybindOptions {
   /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrl/altのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
@@ -255,6 +284,12 @@ export interface Niwa {
   /** keybindで割り当てたバインドを解除する */
   unbind(key: SecondKeyString | KeyBindingString, opts?: KeybindOptions): void;
   /**
+   * ターミナル側で起きた出来事に対する処理を登録する。同じイベントへ複数回呼ぶと後勝ちで上書きされる。
+   * ハンドラを登録するとそのイベントの既定の処理は走らなくなるため、既定の挙動を残したい場合は
+   * ハンドラの中からniwa.bell.default(event)を呼ぶ
+   */
+  on(event: "bell", handler: NiwaBellHandler): void;
+  /**
    * 明示的な待ち時間(ms)。PTY起動〜シェルの入力受付までのタイミングはniwaterm側では検知しないため、
    * ハンドラ内で必要な待ちはこれで明示する（layoutsプリセットのdelayフィールドと同じ思想）
    */
@@ -273,6 +308,7 @@ export interface Niwa {
   reloadConfig(): Promise<void>;
   tile: NiwaTileApi;
   tab: NiwaTabApi;
+  bell: NiwaBellApi;
   popup: NiwaPopupApi;
   board: NiwaBoardApi;
   workspace: NiwaWorkspaceApi;

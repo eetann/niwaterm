@@ -13,10 +13,13 @@ import type {
   KeybindOptions,
   KeybindingsConfig,
   Niwa,
+  NiwaBellEvent,
+  NiwaBellHandler,
   NiwaNotifyOptions,
   SecondKeyString,
   ShellProfile,
 } from "@niwaterm/config";
+import { BELL_TAB_VAR } from "./board";
 import { readClipboardText, writeClipboardText } from "./clipboard";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { runShellCommand } from "./shell-run";
@@ -57,12 +60,22 @@ export interface CreateNiwaApiDeps {
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
 export const DEFAULT_RESIZE_AMOUNT = 0.05;
 
+/**
+ * 同じタブのベルで通知を出し直す最短間隔。BEL文字を短時間に何度も出すプログラムがあるため、
+ * マークと違って通知は間引かないと積み上がって他の通知を押し流してしまう
+ */
+export const BELL_NOTIFY_INTERVAL_MS = 5000;
+
 export interface NiwaApiHandle {
   niwa: Niwa;
   /** configファイル実行後に呼び出し、niwa.prefix/keybindで登録された内容を取り出す */
   extractKeybindingsConfig(): KeybindingsConfig;
   /** custom BindingTargetのidを受け取り、対応する関数ハンドラを実行する（RPC経由でbun側から呼ばれる） */
   runHandler(id: string): Promise<void>;
+  /** configファイル実行後に呼び出し、niwa.on("bell")で登録されたハンドラを取り出す。未登録はnull */
+  extractBellHandler(): NiwaBellHandler | null;
+  /** niwa.bell.defaultと同じ既定の処理。ユーザーがハンドラを登録していない場合の処理として呼ぶ */
+  runDefaultBell(event: NiwaBellEvent): void;
 }
 
 export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
@@ -74,6 +87,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   const direct = new Map<KeyBindingString, BindingEntry>();
   const handlerRegistry = new Map<string, KeybindHandler>();
   let handlerIdCounter = 0;
+  let bellHandler: NiwaBellHandler | null = null;
+  // タブごとの、既定の処理で最後に通知を出した時刻
+  const lastBellNotifiedAt = new Map<string, number>();
 
   /** repeat・descriptionのどちらも無いバインドはプレーンなBindingTargetのまま保つ */
   function toBindingEntry(target: BindingTarget, opts: KeybindOptions | undefined): BindingEntry {
@@ -113,6 +129,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       } else {
         bindings.set(key, entry);
       }
+    },
+    on(event, handler) {
+      if (event === "bell") bellHandler = handler;
     },
     unbind(key, opts) {
       if (opts?.noPrefix) {
@@ -255,6 +274,17 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         return readClipboardText();
       },
     },
+    bell: {
+      default(event) {
+        defaultBell(event);
+      },
+      mark(tabId) {
+        markBell(tabId);
+      },
+      clear(tabId) {
+        workspaceManager.clearBell(tabId);
+      },
+    },
     shell: {
       run(command, opts) {
         const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);
@@ -270,6 +300,31 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
     },
   };
+
+  /**
+   * ベルの既定の処理。マークは画面に出ていないタブの目印なので常に付ける（表示中のタブのマークは
+   * 次の描画で消える）。通知はniwatermから手が離れている時だけ出す
+   */
+  function markBell(tabId: string): void {
+    workspaceManager.setTabVar(tabId, BELL_TAB_VAR, "1");
+  }
+
+  function defaultBell(event: NiwaBellEvent): void {
+    markBell(event.tabId);
+    if (event.windowFocused) return;
+    const now = Date.now();
+    const last = lastBellNotifiedAt.get(event.tabId);
+    if (last !== undefined && now - last < BELL_NOTIFY_INTERVAL_MS) return;
+    lastBellNotifiedAt.set(event.tabId, now);
+    deps.sendNotification({
+      title: "ベル",
+      body: event.tabName ?? undefined,
+    });
+  }
+
+  function extractBellHandler(): NiwaBellHandler | null {
+    return bellHandler;
+  }
 
   function extractKeybindingsConfig(): KeybindingsConfig {
     return {
@@ -289,5 +344,11 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     await handler(niwa);
   }
 
-  return { niwa, extractKeybindingsConfig, runHandler };
+  return {
+    niwa,
+    extractKeybindingsConfig,
+    runHandler,
+    extractBellHandler,
+    runDefaultBell: defaultBell,
+  };
 }

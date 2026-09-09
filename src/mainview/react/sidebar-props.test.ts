@@ -84,6 +84,7 @@ describe("buildSidebarWorkspaceItems", () => {
             branch: null,
             agent: null,
             zoomed: false,
+            bell: false,
             startup: null,
           },
         ],
@@ -101,6 +102,7 @@ describe("buildSidebarWorkspaceItems", () => {
             branch: null,
             agent: null,
             zoomed: false,
+            bell: false,
             startup: null,
           },
         ],
@@ -580,5 +582,28 @@ describe("sidebarDropIndex", () => {
     expect(sidebarDropIndex(1, 1, "after")).toBeNull();
     expect(sidebarDropIndex(0, 1, "before")).toBeNull();
     expect(sidebarDropIndex(1, 0, "after")).toBeNull();
+  });
+});
+
+describe("Board行のベル", () => {
+  test("フォーカスしていないタイルの非アクティブタブで鳴ったベルも拾う", () => {
+    const layout = split(
+      "split-1",
+      leaf("tile-1", ["tab-1"], "tab-1"),
+      leaf("tile-2", ["tab-2", "tab-3"], "tab-2"),
+    );
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", layout, { focusedTileId: "tile-1", tabVars: { "tab-3": { bell: "1" } } }),
+      ]),
+    ];
+
+    expect(buildSidebarWorkspaceItems(workspaces, "ws-1")[0]?.boards[0]?.bell).toBe(true);
+  });
+
+  test("どのタブにもベルが立っていなければfalse", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
+
+    expect(buildSidebarWorkspaceItems(workspaces, "ws-1")[0]?.boards[0]?.bell).toBe(false);
   });
 });

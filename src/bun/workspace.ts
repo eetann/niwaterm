@@ -99,6 +99,7 @@ export interface WorkspaceOptions {
   onAllTabsClosed: () => void;
   getDefaultShell?: BoardOptions["getDefaultShell"];
   getDefaultCwd?: BoardOptions["getDefaultCwd"];
+  onBell?: BoardOptions["onBell"];
   createSession?: BoardOptions["createSession"];
 }
 
@@ -137,6 +138,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       onAllTabsClosed: () => handleBoardEmptied(id),
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
+      onBell: opts.onBell,
       createSession: opts.createSession,
     });
     boards.set(id, board);
@@ -181,6 +183,24 @@ export function createWorkspace(opts: WorkspaceOptions) {
       if (findNode(board.getLayout(), tileId)) return board;
     }
     return undefined;
+  }
+
+  /** 画面に出ているタブ。アクティブでないBoardのタブは見えていないため含まない */
+  function listVisibleTabIds(): TabId[] {
+    return (boards.get(activeBoardId) as Board).listVisibleTabIds();
+  }
+
+  function clearBell(tabId: TabId): boolean {
+    return findBoardOwnerByTabId(tabId)?.clearBell(tabId) ?? false;
+  }
+
+  /** ユーザーがサイドバーから設定したタブ名。未設定・不存在はnull */
+  function getTabName(tabId: TabId): string | null {
+    for (const board of boards.values()) {
+      const name = board.listTabNames()[tabId];
+      if (name !== undefined) return name;
+    }
+    return null;
   }
 
   function findBoardOwnerByTabId(tabId: TabId): Board | undefined {
@@ -734,6 +754,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handleScrollToBottom,
     snapshot,
     listBoards,
+    listVisibleTabIds,
+    clearBell,
+    getTabName,
     hasTab,
     hasTile,
     hasBoard,

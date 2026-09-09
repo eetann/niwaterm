@@ -10,6 +10,8 @@ import { APP_VARIANT } from "./app-variant.generated";
 import type {
   KeybindingsConfig,
   LayoutsConfig,
+  NiwaBellEvent,
+  NiwaBellHandler,
   NiwaNotifyOptions,
   ResolvedAppearanceConfig,
   ResolvedBrowserConfig,
@@ -168,6 +170,8 @@ export type NiwaRPC = {
       runKeybindHandler: { handlerId: string };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
       reloadConfig: {};
+      /** niwatermのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
+      windowFocusChanged: { focused: boolean };
     };
   }>;
   webview: RPCSchema<{
@@ -219,6 +223,9 @@ function render() {
   if (!mainWindow) return;
   const rpcSend = (mainWindow.webview.rpc as any)?.send;
   if (!rpcSend) return;
+  // 画面に出ているタブのベルは既読として消す。描画のたびに拾うことで、タブ切替・Board切替・
+  // ワークスペース切替・ウィンドウのフォーカス復帰のどの経路でも取りこぼさない
+  if (windowFocused) workspaceManager.clearBellOnVisibleTabs();
   const snap = workspaceManager.snapshot();
   mainWindow.setTitle(
     snap.workspaceIds.length === 1
@@ -307,6 +314,12 @@ let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
 let workspaceDefaultCwd: string | undefined;
 let runKeybindHandler: (id: string) => Promise<void>;
+let bellHandler: NiwaBellHandler | null;
+let runDefaultBell: (event: NiwaBellEvent) => void;
+
+// niwatermのウィンドウがフォーカスされているか（webview側のfocus/blurから届く）。
+// OSの通知はniwatermから手が離れている時にだけ意味があるため、ベルの扱いを分けるのに使う
+let windowFocused = true;
 
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
@@ -330,12 +343,38 @@ const workspaceManager = createWorkspaceManager({
   restoreFrom,
   getDefaultShell: () => defaultShell,
   getDefaultCwd: () => workspaceDefaultCwd,
+  onBell: handleBell,
   onAllWorkspacesClosed: () => {
     console.log("all workspaces closed, exiting");
     cleanup();
     process.exit(0);
   },
 });
+
+/**
+ * タブがBEL文字を出力した時の処理。niwa.on("bell", ...)が登録されていればそちらへ丸ごと委ね、
+ * 無ければ既定の処理（マーク＋ウィンドウ非フォーカス時の通知）を行う
+ */
+function handleBell(tabId: TabId): void {
+  const location = workspaceManager.locateTab(tabId);
+  if (!location) return;
+  const event: NiwaBellEvent = {
+    tabId,
+    tabName: workspaceManager.getTabName(tabId),
+    tileId: location.tileId,
+    boardId: location.boardId,
+    workspaceId: location.workspaceId,
+    windowFocused,
+    visible: workspaceManager.isTabVisible(tabId),
+  };
+  if (!bellHandler) {
+    runDefaultBell(event);
+    return;
+  }
+  Promise.resolve(bellHandler(event)).catch((err: unknown) => {
+    console.log(`[bun] bell handler failed: ${String(err)}`);
+  });
+}
 
 async function refreshConfig(): Promise<void> {
   ({
@@ -348,6 +387,8 @@ async function refreshConfig(): Promise<void> {
     layouts,
     workspaceDefaultCwd,
     runKeybindHandler,
+    bellHandler,
+    runDefaultBell,
   } = await loadAndResolveConfig(
     configFilePath(),
     workspaceManager,
@@ -695,6 +736,11 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       clearBoardStartup: ({ boardId }: { boardId: BoardId }) => {
         workspaceManager.setBoardStartup(boardId, null);
+      },
+      windowFocusChanged: ({ focused }: { focused: boolean }) => {
+        windowFocused = focused;
+        // フォーカスが戻った時点で見えているタブのベルを既読にするため、描画をやり直す
+        if (focused) scheduleRender();
       },
       runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
         runKeybindHandler(handlerId).catch((err: unknown) => {

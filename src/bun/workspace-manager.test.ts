@@ -1627,3 +1627,62 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     expect(leaf.kind).toBe("split");
   });
 });
+
+describe("ベル", () => {
+  test("セッションのonBellはWorkspace・Boardを貫いてtabId付きで届く", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const bells: string[] = [];
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, onBell: (tabId) => bells.push(tabId) }),
+    );
+    resolvePending(mgr);
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    created[0]?.opts.onBell?.();
+
+    expect(bells).toEqual([tabId]);
+  });
+
+  test("clearBellOnVisibleTabsは画面に出ているタブのマークだけを消す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    resolvePending(mgr);
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const hiddenTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const visibleTabId = mgr.newTab(tileId);
+    resolvePending(mgr);
+    if (!visibleTabId) throw new Error("newTabに失敗した");
+    mgr.setTabVar(hiddenTabId, "bell", "1");
+    mgr.setTabVar(visibleTabId, "bell", "1");
+
+    expect(mgr.clearBellOnVisibleTabs()).toBe(true);
+
+    expect(mgr.getTabVar(visibleTabId, "bell").found).toBe(false);
+    expect(mgr.getTabVar(hiddenTabId, "bell")).toEqual({ found: true, value: "1" });
+  });
+
+  test("isTabVisibleは非アクティブなワークスペースのタブにfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    resolvePending(mgr);
+    const firstTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    mgr.newWorkspace();
+    resolvePending(mgr);
+    const secondTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    expect(mgr.isTabVisible(secondTabId)).toBe(true);
+    expect(mgr.isTabVisible(firstTabId)).toBe(false);
+  });
+
+  test("getTabNameは設定済みのタブ名を返し、未設定・不存在はnull", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    resolvePending(mgr);
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    expect(mgr.getTabName(tabId)).toBeNull();
+    mgr.setTabName(tabId, "build");
+    expect(mgr.getTabName(tabId)).toBe("build");
+    expect(mgr.getTabName("tab-does-not-exist")).toBeNull();
+  });
+});

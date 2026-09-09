@@ -40,6 +40,8 @@ export const EPHEMERAL_TAB_VAR_KEYS: ReadonlySet<string> = new Set([
   "agent",
   "agent_status",
   "agent_status_text",
+  // ベルは「まだ見ていない出来事」の印。復元直後のタブは中身ごと出直しなので残す意味がない
+  "bell",
 ]);
 
 export interface PersistedTileLeaf {

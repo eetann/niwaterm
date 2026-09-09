@@ -144,6 +144,7 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
 
 // GhosttyTerminalOption
 const OPT_WRITE_PTY = 1;
+const OPT_BELL = 2;
 const OPT_CLIPBOARD_WRITE = 26;
 const OPT_SCROLLBACK_MAX_LINES = 28;
 const OPT_PWD_CHANGED = 25;
@@ -272,6 +273,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
   let writePtyCallback: JSCallback | null = null;
   let clipboardCallback: JSCallback | null = null;
   let pwdChangedCallback: JSCallback | null = null;
+  let bellCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
   // GhosttyTerminalScrollbar（uint64 x 3）の受け皿
   const scrollbarBuf = new Uint8Array(24);
@@ -360,6 +362,20 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
       },
     );
     vt.symbols.ghostty_terminal_set(term, OPT_PWD_CHANGED, pwdChangedCallback.ptr);
+  }
+
+  /** BEL文字(0x07)を受け取った時に呼ばれるコールバックを登録する */
+  function onBell(fn: () => void): void {
+    bellCallback = new JSCallback(
+      (_term: Pointer, _userdata: Pointer) => {
+        fn();
+      },
+      {
+        args: [FFIType.ptr, FFIType.ptr],
+        returns: FFIType.void,
+      },
+    );
+    vt.symbols.ghostty_terminal_set(term, OPT_BELL, bellCallback.ptr);
   }
 
   // GhosttyTerminalModeConfig { GhosttyMode mode(uint16); bool value; } のレイアウト（4バイト）。
@@ -710,12 +726,14 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     writePtyCallback?.close();
     clipboardCallback?.close();
     pwdChangedCallback?.close();
+    bellCallback?.close();
   }
 
   return {
     onWritePty,
     onClipboardWrite,
     onPwdChanged,
+    onBell,
     bracketedPaste,
     encodePaste,
     mouseTracking,
