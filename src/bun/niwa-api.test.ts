@@ -558,15 +558,18 @@ describe("niwa.reloadConfig", () => {
 
 describe('niwa.on("bell") / niwa.bell', () => {
   /** テスト用のベルイベント。tabId以外は既定の処理が見る項目だけ埋める */
-  function bellEvent(tabId: string, windowFocused: boolean): NiwaBellEvent {
+  function bellEvent(
+    tabId: string,
+    state: { windowFocused: boolean; visible: boolean },
+  ): NiwaBellEvent {
     return {
       tabId,
       tabName: "build",
       tileId: "tile-0",
       boardId: "board-0",
       workspaceId: "workspace-0",
-      windowFocused,
-      visible: false,
+      windowFocused: state.windowFocused,
+      visible: state.visible,
     };
   }
 
@@ -598,7 +601,7 @@ describe('niwa.on("bell") / niwa.bell', () => {
     expect(workspaceManager.getTabVar(tabId, "bell").found).toBe(false);
   });
 
-  test("既定の処理はマークを付け、通知はウィンドウ非フォーカス時だけ出す", () => {
+  test("既定の処理は、今見ているタブならマークを付けるだけで通知しない", () => {
     const notified: string[] = [];
     const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
       sendNotification: (opts) => notified.push(opts.body ?? opts.title),
@@ -606,11 +609,35 @@ describe('niwa.on("bell") / niwa.bell', () => {
     resolvePending(workspaceManager);
     const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
 
-    runDefaultBell(bellEvent(tabId, true));
+    runDefaultBell(bellEvent(tabId, { windowFocused: true, visible: true }));
+
     expect(workspaceManager.getTabVar(tabId, "bell")).toEqual({ found: true, value: "1" });
     expect(notified).toEqual([]);
+  });
 
-    runDefaultBell(bellEvent(tabId, false));
+  test("ウィンドウがフォーカスされていても、画面に出ていないタブのベルは通知する", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(bellEvent(tabId, { windowFocused: true, visible: false }));
+
+    expect(notified).toEqual(["build"]);
+  });
+
+  test("ウィンドウがフォーカスされていなければ、画面に出ているタブでも通知する", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(bellEvent(tabId, { windowFocused: false, visible: true }));
+
     expect(notified).toEqual(["build"]);
   });
 
@@ -621,10 +648,11 @@ describe('niwa.on("bell") / niwa.bell', () => {
     });
     resolvePending(workspaceManager);
     const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+    const event = bellEvent(tabId, { windowFocused: false, visible: false });
 
-    runDefaultBell(bellEvent(tabId, false));
-    runDefaultBell(bellEvent(tabId, false));
-    runDefaultBell(bellEvent(tabId, false));
+    runDefaultBell(event);
+    runDefaultBell(event);
+    runDefaultBell(event);
 
     expect(notified).toHaveLength(1);
   });

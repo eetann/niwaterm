@@ -353,7 +353,7 @@ const workspaceManager = createWorkspaceManager({
 
 /**
  * タブがBEL文字を出力した時の処理。niwa.on("bell", ...)が登録されていればそちらへ丸ごと委ね、
- * 無ければ既定の処理（マーク＋ウィンドウ非フォーカス時の通知）を行う
+ * 無ければ既定の処理（マーク＋画面に出ていないタブなら通知）を行う
  */
 function handleBell(tabId: TabId): void {
   const location = workspaceManager.locateTab(tabId);

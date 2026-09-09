@@ -301,17 +301,18 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     },
   };
 
-  /**
-   * ベルの既定の処理。マークは画面に出ていないタブの目印なので常に付ける（表示中のタブのマークは
-   * 次の描画で消える）。通知はniwatermから手が離れている時だけ出す
-   */
   function markBell(tabId: string): void {
     workspaceManager.setTabVar(tabId, BELL_TAB_VAR, "1");
   }
 
+  /**
+   * ベルの既定の処理。マークは画面に出ていないタブの目印なので常に付ける（表示中のタブのマークは
+   * 次の描画で消える）。通知は今まさに見ているタブ以外で鳴った時に出す（別Board・別ワークスペース・
+   * 非アクティブタブ・ウィンドウが後ろ、のいずれも画面を見ているだけでは気づけないため）
+   */
   function defaultBell(event: NiwaBellEvent): void {
     markBell(event.tabId);
-    if (event.windowFocused) return;
+    if (event.windowFocused && event.visible) return;
     const now = Date.now();
     const last = lastBellNotifiedAt.get(event.tabId);
     if (last !== undefined && now - last < BELL_NOTIFY_INTERVAL_MS) return;

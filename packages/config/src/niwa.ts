@@ -232,7 +232,7 @@ export type NiwaBellHandler = (event: NiwaBellEvent) => void | Promise<void>;
 
 export interface NiwaBellApi {
   /**
-   * ベルの既定の処理（タブへのマーク付けと、ウィンドウ非フォーカス時のデスクトップ通知）を実行する。
+   * ベルの既定の処理（タブへのマーク付けと、そのタブが画面に出ていない時のデスクトップ通知）を実行する。
    * niwa.on("bell", ...)を定義すると既定の処理は走らなくなるため、既定の挙動へ何か足したいだけの
    * 場合はハンドラの中からこれを呼ぶ
    */
