@@ -345,32 +345,32 @@ if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwa
 
 ## エージェント統合
 
-`contrib/agent-integration/`配下の設定を導入すると、タブ内で動くAIエージェント（Claude Code等）のhooks機構から、そのセッションの状態（idle/working/blocked）をタブ変数`agent`/`agent_status`へ自動反映する。内部では`niwaterm tab var set agent_status working`相当を呼んでいる。サイドバーのBoard行に状態ドットが表示されるようになる。Board行はTile/Tabを畳んだ1行なので、Board内の全タブ（フォーカスしていないタイル・非アクティブタブを含む）を走査し、`blocked` > `working` > `idle`の順で最も目立つ状態を1つ表示する。
-
-なお、**hooksは`~/.claude/settings.json`等へコピーして使う仕組みのため、niwaterm側のCLIコマンド名が変わってもインストール済みの設定は自動追従しない**。hookコマンドは`>/dev/null 2>&1`で出力を捨てるので、コマンド名がずれると`Command not found`が握り潰され「サイドバーに何も出ない」という症状だけが残る。表示されなくなったら、まず`contrib/agent-integration/claude-code/hooks.json`との差分を確認する。
+`agent setup`でCodex CLIまたはClaude Codeのhooksを導入する。アプリの起動は不要。
 
 ```sh
-# 既存のhooks設定を壊さずにマージする。niwaterm由来のエントリ（コマンドに$NIWATERM_TAB_IDを含むもの）
-# だけを入れ替え、同じイベントに刺さっている他ツールのhookはそのまま残す。
-# jqの `*` で丸ごとマージするとイベント単位で配列ごと置き換わり、他ツールのhookが消えるので使わない
-cp ~/.claude/settings.json ~/.claude/settings.json.bak
-jq -s '
-  def isNiwa: (.hooks // []) | any((.command // "") | test("NIWATERM_TAB_ID"));
-  .[0] as $cur | .[1] as $new
-  | $cur
-  | .hooks = (
-      reduce ($new.hooks | to_entries[]) as $e (
-        ($cur.hooks // {});
-        .[$e.key] = (((.[$e.key] // []) | map(select(isNiwa | not))) + $e.value)
-      )
-    )
-' ~/.claude/settings.json /path/to/niwaterm/contrib/agent-integration/claude-code/hooks.json > /tmp/merged-settings.json
-mv /tmp/merged-settings.json ~/.claude/settings.json
+niwaterm agent setup <codex-cli|claude-code> [--config <path>] [--cli <niwaterm|niwaterm-dev>]
+
+niwaterm agent setup codex-cli
+niwaterm agent setup claude-code
+niwaterm-dev agent setup codex-cli
 ```
 
-`branch`と同様、`agent`/`agent_status`もタブ変数の予約キーである（値は`niwaterm tab var set`で自由に読み書きできる汎用キーだが、この2つの名前はサイドバー表示用に予約されている）。`agent`はエージェントの種別を表す任意の文字列（Claude Codeは`claude-code`固定）、`agent_status`は`idle`/`working`/`blocked`のいずれか（未設定・未知の値は`idle`扱い）。各hookコマンドは`$NIWATERM_TAB_ID`が無い環境（niwaterm外のプロジェクト・ターミナル）では何もしないガードが入っているため、グローバル設定に追加しても安全（詳細: `contrib/agent-integration/README.md`）。Claude Code以外のエージェントを対応させる場合の規約も同READMEに記載している。
+既定の設定先はCodexが`$CODEX_HOME/hooks.json`（未設定なら`~/.codex/hooks.json`）、Claude Codeが`$CLAUDE_CONFIG_DIR/settings.json`（未設定なら`~/.claude/settings.json`）。プロジェクト単位など別のJSONへ書く場合は`--config`で指定する。
+既存の他ツールの設定を保持し、niwatermのhooksだけを追加・更新する。変更前のファイルは同じディレクトリの`*.niwaterm-<ID>.bak`へ保存する。再実行しても重複せず、設定のJSONが不正な場合は書き換えない。
 
-`agent`/`agent_status`/`agent_status_text`は他のタブ変数と違い、アプリ終了時に保存されても起動時のBoard復元では読み込まれない。復元後のタブに前回のエージェントプロセスは居ないため、残すと実在しない「応答待ち」がサイドバーに出続けてしまう。
+hooksに登録するCLI名は`NIWATERM_APP_VARIANT=niwaterm-wip`なら`niwaterm-dev`、それ以外なら`niwaterm`。`--cli`で明示もできる。
+Codexは導入後に`/hooks`で設定を確認して信頼し、再起動する。Claude Codeも再起動する。
+複数の設定元に重複して導入しない。Codexの`config.toml`に埋め込んだniwaterm用hooksはこのコマンドでは変更しないため、別途整理する。
+
+内部コマンド`niwaterm _hook <codex-cli|claude-code>`は通常のヘルプには表示しない。エージェントのJSON入力から、タブ変数`agent`（種別）・`agent_status`（`idle` / `working` / `blocked`）・`agent_status_text`（要約）を更新する。
+`NIWATERM_TAB_ID`がない環境では何もせず、不正入力や接続失敗でも無出力・終了コード0で終了する。処理の上限は2秒。`jq`は不要で、hook本体の修正はCLIの更新で反映される。購読イベントやCLI名を変えた場合は`agent setup`を再実行する。
+配布設定のシェル構文はmacOS・Linux/WSL向け。
+
+サイドバーはBoard内の全タブを走査し、`blocked` > `working` > `idle`の順で状態を表示する。`agent`が空のタブは対象外で、未知の状態値は`idle`扱い。要約は改行をスペースに置換し、Unicodeのコードポイント単位で60文字に切り詰める。
+Codexの質問ツールによる入力待ちは`working`のままで、`blocked`は承認要求を表す。並行ツールの状態は最後の書き込みが優先される。
+
+`agent` / `agent_status` / `agent_status_text`は予約キーで、通常のセッション終了時にクリアする。アプリ終了時に保存されても、Board復元では読み込まれない。
+エージェント別のイベント対応と導入例は、リポジトリの`contrib/agent-integration/`配下を参照。
 
 `bell`も同じく予約キーで、ターミナルがBEL文字（`0x07`）を出力するとniwatermが`1`をセットし、そのタブが画面に出た時点で自動的に消す（タブバー・サイドバーのベルアイコンの出し分けに使う）。復元で読み込まれない点も`agent`系と同じ。挙動の変更は設定ファイル側（`niwa.on("bell", ...)`、docs/guide/config.md「ベル」参照）で行う。
 

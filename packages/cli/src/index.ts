@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
 import { failAndExit } from "./cli-error";
+import agentCommand from "./commands/agent";
 import boardCommand from "./commands/board";
 import browserCommand from "./commands/browser";
 import docsCommand from "./commands/docs";
@@ -19,6 +20,13 @@ import workspaceCommand from "./commands/workspace";
 
 const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
 
+// hookの不正な引数も成功扱いにするため、通常の引数検証・ヘルプ表示を通さない。
+if (process.argv[2] === "_hook") {
+  const { runAgentHook } = await import("./agent-hook");
+  await runAgentHook(process.argv[3]);
+  process.exit(0);
+}
+
 const mainCommand = define({
   name: "niwaterm",
   description: DESCRIPTION,
@@ -36,6 +44,7 @@ try {
     description: DESCRIPTION,
     renderHeader: null,
     subCommands: {
+      agent: agentCommand,
       ping: pingCommand,
       init: initCommand,
       list: listCommand,
