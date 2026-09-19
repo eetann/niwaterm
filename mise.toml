@@ -67,8 +67,27 @@ mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
 '''
 
 # vendor（libghostty-vt本体）のビルドはシムと違い、libghostty-vtのバージョンを上げるときにしか
-# 実行しないのでbuild:nativeの振り分けには含めない。macOS向けはghosttyソースの取得(opensrc)が
-# 前段に必要で手順が別物なためタスク化しておらず、docs/build/macos-build.mdの手順を使う。
+# 実行しないのでbuild:nativeの振り分けには含めない。
+#
+# **`-Doptimize=ReleaseFast`は必須**。zigの既定はDebugで、Debugビルドのlibghostty-vtは
+# PageList.growのたびにPage.verifyIntegrity（全ページ走査の整合性チェック）が走るため、
+# 画面スクロール1行あたり約700µsかかる（ReleaseFastでは0.05µs未満）。ターミナルとしては
+# 致命的に遅く、シェルの通常出力すらPTY読み取りスレッドを止める
+# （詳細: docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
+[tasks."build:vendor:mac"]
+description = "libghostty-vt本体をmacOS向けにビルドする（vendor更新時のみ。要 opensrc でのghosttyソース取得）"
+run = '''
+SRC="$(opensrc path ghostty-org/ghostty)"
+DEST="$PWD/vendor/libghostty"
+cd "$SRC"
+mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
+  -Doptimize=ReleaseFast \
+  --prefix "$DEST"
+# dyldはパスごとにコード署名を記憶しており、同じパスのdylibを差し替えるとadhoc署名が
+# 一致せずdlopen時にSIGKILL（Code Signature Invalid）で落ちる。署名し直して回避する
+codesign -f -s - "$DEST/lib/libghostty-vt.0.1.0.dylib"
+'''
+
 [tasks."build:vendor:win"]
 description = "libghostty-vt本体をWindows向けにクロスビルドする（vendor更新時のみ。要vendor/libghostty へのghosttyソース配置）"
 run = '''

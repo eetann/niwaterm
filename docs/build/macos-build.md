@@ -58,12 +58,18 @@ opensrc path ghostty-org/ghostty   # 取得先パスが返る
 
 ### 2-2. libghostty-vt をビルドする（vendor生成）
 
-取得したghosttyソースのディレクトリに移動して実行する:
-
 ```bash
-cd $(opensrc path ghostty-org/ghostty)
-mise exec zig@0.16.0 -- zig build -Demit-lib-vt --prefix <このリポジトリの絶対パス>/vendor/libghostty
+mise run build:vendor:mac
 ```
+
+ghosttyソースの場所解決・ビルド・ビルド後のコード署名までこのタスクが行う。
+
+> **手でビルドする場合は `-Doptimize=ReleaseFast` を必ず付けること**。zigの既定は `Debug` で、
+> Debugビルドのlibghostty-vtは画面スクロール1行あたり約700µsかかる（ReleaseFastの1万倍以上）。
+> ターミナルとしては致命的に遅く、PTY読み取りのイベントループごと数百ms止まる
+> （詳細: [/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md](/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md)）。
+> 同じパスのdylibを差し替えるとdyldが記憶しているadhoc署名と食い違い、`dlopen`時に
+> `SIGKILL (Code Signature Invalid)` で落ちるため、`codesign -f -s -` で署名し直すことも必要。
 
 生成物:
 
@@ -156,6 +162,8 @@ grep -n -A3 "ghostty_terminal_new" vendor/libghostty/include/ghostty/vt/terminal
 | `cc: command not found`                                                     | Xcode Command Line Toolsが未導入。`xcode-select --install`                                 |
 | `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー）       | `mise run build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                  |
 | 起動はするがターミナル入出力がおかしい・即クラッシュする                    | vendorがコードより古い可能性が高い。上記「vendorの更新が必要かどうかの見分け方」で確認する |
+| スクロールだけが極端に遅い・描画が引っ掛かる                                | vendorがDebugビルドになっている。`mise run build:vendor:mac` で作り直す                    |
+| dlopen時に `SIGKILL (Code Signature Invalid)` で落ちる                      | dylibを手で差し替えた。`codesign -f -s - vendor/libghostty/lib/libghostty-vt.0.1.0.dylib`  |
 | `opensrc path` が古いバージョンのソースを返しているように見える             | キャッシュ済みで最新化されていない。`opensrc remove ghostty-org/ghostty` してから取り直す  |
 
 ## 参考

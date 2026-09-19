@@ -27,7 +27,8 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
   - **wipの動作確認では必ず`niwaterm-dev`を使う**。`niwaterm`はdaily側のソースを指すため、devブランチでCLIを直しても反映されない（`bun link`はパッケージ名が同じで`niwaterm`を奪い合うので、別名のラッパーで棲み分けている）
   - `niwaterm-dev`は接続先もniwaterm-wipが既定。タブ内から叩く場合はアプリが注入した自インスタンスが優先される
 - `mise run build:native` — Cシム（src/native/shim.c）とPTYの制御端末ラッパー（src/native/ptyexec.c）を現在の環境向けにビルド（macOSはローカル向け、WSLはWindows向けクロスビルド）
-- `mise run build:vendor:win` — libghostty-vt本体をWindows向けにクロスビルド（vendor更新時のみ。詳細: docs/build/windows-build.md）
+- `mise run build:vendor:mac` / `mise run build:vendor:win` — libghostty-vt本体をビルド（vendor更新時のみ。詳細: docs/build/macos-build.md、docs/build/windows-build.md）
+  - **`-Doptimize=ReleaseFast`必須**。Debugビルドはスクロール1行あたり約700µsかかり、PTY読み取りのイベントループごと止まる（docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
 - `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/build/macos-build.md（**Zig 0.16.0以上が必要**）
