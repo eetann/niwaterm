@@ -535,6 +535,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         for (const tabId of Object.keys(activeBoard.tabs)) {
           const renderState = activeBoard.tabs[tabId];
           if (!renderState || renderState.kind !== "terminal") continue;
+          // パレットは.term要素の有無に関わらず反映する（DOM生成待ちのタブが先に
+          // 送ってきた分を取りこぼすと、以後は差分なし扱いで二度と届かないため）
+          applyPaletteCss(renderState.paletteCss);
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
           applyTermHtml(tabId, termEl, renderState.html);
@@ -824,6 +827,22 @@ function setTermHtml(termEl: HTMLElement, html: string): void {
   fixGlyphs(termEl);
 }
 
+// ---- パレット（インデックス指定色）----
+// フォーマッタのHTMLはSGRの16色・256色指定を`var(--vt-palette-N)`で出力するため、
+// その定義（256色分・6KB強）を1枚のstyle要素として文書に常駐させる。bun側は内容が
+// 変わったときだけ送ってくる（src/bun/index.tsのdropUnchangedPaletteCss）ので、
+// ここは届いた分をそのまま流し込むだけでよい。
+//
+// 定義は`:root`に載るためタブ間で共有される。タブごとに別のパレットへ塗り替えられた場合
+// （プログラムがOSC 4を送った場合）は最後に届いたものが全タブへ効く
+const paletteStyleEl = document.createElement("style");
+document.head.appendChild(paletteStyleEl);
+
+function applyPaletteCss(css: string | null): void {
+  if (css === null) return;
+  paletteStyleEl.textContent = css;
+}
+
 /** ドラッグ選択中は反映を保留する（保留した分はドラッグ終了時にまとめて反映する） */
 function applyTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
   if (selectionDragging) {
@@ -992,7 +1011,11 @@ function ensureTabContent(
 ): void {
   const existing = tabContentElByTabId.get(tabId);
   if (existing) {
-    if (existing.parentElement !== tileContentEl) tileContentEl.appendChild(existing);
+    if (existing.parentElement !== tileContentEl) {
+      tileContentEl.appendChild(existing);
+      // 移動先のタイルが同じ大きさだとResizeObserverが発火しないため、ここでも捨てる
+      invalidateTermOffsets();
+    }
     return;
   }
   if (renderState.kind === "terminal") {
@@ -1015,6 +1038,9 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
   copyOverlayElByTabId.set(tabId, copyOverlayEl);
   tileContentEl.appendChild(tabContentEl);
   const ro = new ResizeObserver(() => {
+    // .termのサイズが変わる＝タイル配置が動いたということなので、実寸を送るかどうかに
+    // 関わらず（下のスキップ条件より先に）キャッシュした配置情報を捨てる
+    invalidateTermOffsets();
     // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はスキップ。
     // 非アクティブタブ（display:none）はcontent-boxが0になり誤って2x2等のresizeを
     // 送ってしまうため、表示中でない限りスキップする（再表示時に正しいサイズで発火し直す）
@@ -1199,6 +1225,7 @@ function setupPopupContent(tabId: TabId): void {
   cursorElByTabId.set(tabId, popupCursorEl);
   copyOverlayElByTabId.set(tabId, popupCopyOverlayEl);
   popupResizeObserver = new ResizeObserver(() => {
+    invalidateTermOffsets();
     if (!popupVisible || !currentPopupTabId) return;
     sendResize(currentPopupTabId);
   });
@@ -1365,6 +1392,7 @@ function gcStale(
     tabContentElByTabId.get(tabId)?.remove();
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
+    termOffsetByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     copyOverlayElByTabId.delete(tabId);
     copyModeTabIds.delete(tabId);
@@ -1800,15 +1828,41 @@ function updateScrollIndicator(tabId: TabId, viewportPinned: boolean): void {
   tabContentEl?.classList.toggle("scrolled-history", !viewportPinned);
 }
 
+/**
+ * .termの左上が#screen内のどこにあるか（タブごと）。
+ *
+ * getBoundingClientRectは「レイアウトが汚れていれば同期で計算し直す」読み取りで、
+ * .termのinnerHTML差し替え直後に呼ぶと作り直したセル数百個のレイアウトがその場で走る。
+ * updateImePositionは出力のたびに呼ばれるため、実測するのはタイル配置が変わったときだけにして
+ * 残りはこのキャッシュで済ませる（求めているのは配置の情報で、ターミナルの中身には依らない）。
+ */
+const termOffsetByTabId = new Map<TabId, { left: number; top: number }>();
+
+/** .termが動きうる操作（リサイズ・タイル構成の変更・タブの移動）のたびに呼ぶ */
+function invalidateTermOffsets(): void {
+  termOffsetByTabId.clear();
+}
+
+function termOffset(tabId: TabId, termEl: HTMLElement): { left: number; top: number } {
+  const cached = termOffsetByTabId.get(tabId);
+  if (cached) return cached;
+  const termRect = termEl.getBoundingClientRect();
+  const screenRect = screenEl.getBoundingClientRect();
+  const offset = { left: termRect.left - screenRect.left, top: termRect.top - screenRect.top };
+  // 非表示の.term（Board・ワークスペース切替の直後など）は0x0で返るため、その値は覚えない。
+  // 覚えてしまうと、表示へ戻ってもリサイズが起きるまで誤った位置を返し続ける
+  if (termRect.width > 0 || termRect.height > 0) termOffsetByTabId.set(tabId, offset);
+  return offset;
+}
+
 // IME候補ウィンドウと未確定文字列を、フォーカス中タイルのカーソル位置に追従させる
 function updateImePosition(x: number, y: number): void {
   if (!currentTabId) return;
   const termEl = termElByTabId.get(currentTabId);
   if (!termEl) return;
-  const termRect = termEl.getBoundingClientRect();
-  const screenRect = screenEl.getBoundingClientRect();
-  const left = termRect.left - screenRect.left + x * cellWidth;
-  const top = termRect.top - screenRect.top + y * cellHeight;
+  const offset = termOffset(currentTabId, termEl);
+  const left = offset.left + x * cellWidth;
+  const top = offset.top + y * cellHeight;
   imeEl.style.left = `${left}px`;
   imeEl.style.top = `${top}px`;
   compositionEl.style.left = `${left}px`;

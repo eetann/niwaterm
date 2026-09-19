@@ -647,6 +647,7 @@ export function createBoard(opts: BoardOptions) {
       tabs[tabId] = {
         kind: "terminal",
         html: "",
+        paletteCss: null,
         cursorX: 0,
         cursorY: 0,
         cursorVisible: false,

@@ -54,6 +54,12 @@ export interface CopyModeRenderState {
 export interface TerminalRenderState {
   kind: "terminal";
   html: string;
+  /**
+   * インデックス指定色（SGRの30-37・38;5;N等）用のパレットCSS。中身は
+   * `:root{--vt-palette-0: #...;...}` の256色分で、htmlはこれをvar()で参照する。
+   * 内容が前回と変わったときだけ入り、変化なしならnull（index.tsが差分を判定する）
+   */
+  paletteCss: string | null;
   cursorX: number;
   cursorY: number;
   cursorVisible: boolean;
@@ -78,6 +84,24 @@ const INITIAL_INPUT_QUIET_MS = 150;
  * WSLディストロの起動は数秒かかることがあるため、短くしすぎるとプロンプト表示前に流してしまう
  */
 const INITIAL_INPUT_TIMEOUT_MS = 5000;
+
+const PALETTE_STYLE_OPEN = "<style>";
+const PALETTE_STYLE_CLOSE = "</style>";
+
+/**
+ * HTMLダンプの先頭に付くパレット定義（`<style>:root{--vt-palette-0: ...}</style>`）を本文から切り離す。
+ * 中身は256色分で6KB強あるうえ内容は普段変わらないため、毎フレーム丸ごと運ばずに済ませる。
+ * フォーマッタの出力形が変わって切り出せなかった場合は、丸ごと本文として扱い従来どおりに描かせる
+ */
+export function splitPaletteCss(html: string): { paletteCss: string | null; body: string } {
+  if (!html.startsWith(PALETTE_STYLE_OPEN)) return { paletteCss: null, body: html };
+  const close = html.indexOf(PALETTE_STYLE_CLOSE);
+  if (close < 0) return { paletteCss: null, body: html };
+  return {
+    paletteCss: html.slice(PALETTE_STYLE_OPEN.length, close),
+    body: html.slice(close + PALETTE_STYLE_CLOSE.length),
+  };
+}
 
 export function createTerminalSession(opts: TerminalSessionOptions) {
   const pty = createPty({
@@ -495,9 +519,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   function renderState(): TerminalRenderState {
     const cursor = term.cursor();
+    const { paletteCss, body } = splitPaletteCss(term.dumpHtml());
     return {
       kind: "terminal",
-      html: term.dumpHtml(),
+      html: body,
+      paletteCss,
       cursorX: cursor.x,
       cursorY: cursor.y,
       cursorVisible: cursor.visible,

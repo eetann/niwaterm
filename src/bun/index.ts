@@ -241,12 +241,29 @@ function render() {
   // ワークスペース切替・ウィンドウのフォーカス復帰のどの経路でも取りこぼさない
   if (windowFocused) workspaceManager.clearBellOnVisibleTabs();
   const snap = workspaceManager.snapshot();
+  dropUnchangedPaletteCss(snap);
   mainWindow.setTitle(
     snap.workspaceIds.length === 1
       ? APP_VARIANT
       : `${APP_VARIANT} — Workspace ${snap.workspaceIds.indexOf(snap.activeWorkspaceId) + 1}/${snap.workspaceIds.length}`,
   );
   rpcSend.render(snap);
+}
+
+/**
+ * 前回webviewへ送ったのと同じパレットCSSをnullへ潰す。パレットは6KB強ある一方、
+ * OSC 4等で塗り替えられない限り変わらないため、毎フレーム運ぶとRPCのペイロードが
+ * 無駄に膨らむ。webviewは受け取ったパレットを保持して次回以降も使い回す（mainview側の
+ * applyPaletteCss）ので、送り直しは内容が変わったときだけでよい
+ */
+const lastPaletteCssByTabId = new Map<TabId, string>();
+function dropUnchangedPaletteCss(snap: AppRenderState): void {
+  // popupのPTY描画状態もboard.tabsに同居しているため、ここを見るだけで両方拾える
+  for (const [tabId, state] of Object.entries(snap.workspace.board.tabs)) {
+    if (state.kind !== "terminal" || state.paletteCss === null) continue;
+    if (lastPaletteCssByTabId.get(tabId) === state.paletteCss) state.paletteCss = null;
+    else lastPaletteCssByTabId.set(tabId, state.paletteCss);
+  }
 }
 
 function sendConfig() {
@@ -573,6 +590,8 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
         console.log(`[view] ${msg}`);
       },
       ready: () => {
+        // webviewが読み込み直されると保持していたパレットも消えるため、差分判定を振り出しへ戻す
+        lastPaletteCssByTabId.clear();
         scheduleRender();
         sendConfig();
         focusWebviewOnce();
