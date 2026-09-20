@@ -56,6 +56,8 @@
   --term-line-height: 18px;
   --term-fg: #cdd6f4;
   --term-bg: #1e1e2e;
+  --term-bg-opacity: 100%;
+  --term-bg-image: none;
 }
 
 .dark {
@@ -115,7 +117,6 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--term-bg);
   color: var(--foreground);
   /* input/textarea等のフォームコントロールはUAスタイルシートでcolor-schemeに応じた
      独自既定色（light扱いだと黒文字）を持ち、colorプロパティのinherit継承では上書きできない。
@@ -129,9 +130,19 @@ body {
   font-family: var(--term-font);
 }
 
+/*
+ * 地の背景はbodyだけに置く（htmlと両方に指定すると半透明のとき2枚重なって濃くなる）。
+ * bodyの背景はキャンバスへ伝播するのでビューポート全体を覆う。
+ * --term-bgをそのまま使う#popup-box・#compositionは不透明のまま残り、
+ * 透過するのはターミナルの地の部分だけになる
+ */
 body {
   display: flex;
   flex-direction: row;
+  background-color: color-mix(in srgb, var(--term-bg) var(--term-bg-opacity), transparent);
+  background-image: var(--term-bg-image);
+  background-size: cover;
+  background-position: center;
 }
 
 #sidebar {

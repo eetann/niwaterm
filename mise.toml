@@ -57,13 +57,19 @@ cc -O2 src/native/ptyexec.c -o vendor/libghostty/lib/niwaterm-ptyexec
 # src/bun/ghostty.ts側の探索先もそれに合わせてbin/になっている
 [tasks."build:native:win"]
 hide = true
-description = "shimをWindows向けにクロスビルドする（build:nativeから呼ばれる）"
+description = "shimとウィンドウ透過ヘルパーをWindows向けにクロスビルドする（build:nativeから呼ばれる）"
 run = '''
 mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
   -Ivendor/libghostty/include \
   src/native/shim.c \
   -Lvendor/libghostty/lib -lghostty-vt \
   -o vendor/libghostty/bin/niwashim.dll
+# ウィンドウ透過はlibghostty-vtと無関係なのでDLLを分ける（shimはvt本体へ依存するため、
+# 透過だけ使いたい場面でもvtのロードを強制してしまう）
+mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
+  src/native/winwindow.c \
+  -ldwmapi -lgdi32 -luser32 \
+  -o vendor/libghostty/bin/niwawin.dll
 '''
 
 # vendor（libghostty-vt本体）のビルドはシムと違い、libghostty-vtのバージョンを上げるときにしか

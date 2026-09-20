@@ -406,6 +406,8 @@ niwa.on("bell", (event) => {
 | `lineHeight` | `number` | 行高（px） |
 | `foreground` | `string` | 前景色（CSSカラー値） |
 | `background` | `string` | 背景色（CSSカラー値） |
+| `backgroundOpacity` | `number` | 背景の不透明度（0〜1、既定`1`）。1未満にすると背後のウィンドウが透ける |
+| `backgroundImage` | `string` | 背景画像（既定`"none"`）。CSSの`background-image`値か、画像ファイルのパス |
 | `ansiColors` | `readonly string[]` | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる |
 
 ```ts
@@ -420,6 +422,26 @@ appearance: {
 ```
 
 不正な値（`fontSize`に文字列を渡す、色に空文字列を渡す等）を指定した場合、そのフィールド（`ansiColors`はそのindex）だけ警告付きでデフォルトにフォールバックする。256色のうち16-231（6x6x6カラーキューブ）・232-255（グレースケール）は固定の計算式でユーザー設定の対象外。
+
+### 背景の透過・グラデーション・画像
+
+```ts
+appearance: {
+  ...defaultAppearance,
+  backgroundOpacity: 0.85,
+  backgroundImage: "linear-gradient(135deg, rgba(137, 180, 250, 0.3), transparent)",
+  // 画像ファイルを直接指定することもできる
+  // backgroundImage: "/home/user/pictures/wall.png",
+},
+```
+
+`backgroundImage`はCSSの関数形式（`linear-gradient(...)`・`url(...)`・`none`）ならそのまま使われ、それ以外は画像ファイルのパスとして読み込んでdata URIへ埋め込む。対応拡張子はpng・jpg・jpeg・gif・webp・avif・bmp・svg。読めない場合は警告して背景なしになる。
+
+透過に関する注意:
+
+- `backgroundOpacity`を変えたときはniwatermの再起動が必要。透過の有無はウィンドウ生成時にしか決められない
+- 透過するのはターミナルの地の部分だけで、SGRで背景色が指定されたセル（TUIが塗った部分）は不透明のまま残る
+- 透過中はサブピクセルアンチエイリアスが使えずグレースケール描画になるため、文字の見え方がわずかに変わる
 
 ## ブラウザ設定
 

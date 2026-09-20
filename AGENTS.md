@@ -26,7 +26,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - `mise run cli:link` — 現在のワークツリーのniwaterm CLIをリンクする。**`main`（daily側）なら`niwaterm`、それ以外（devワークツリー＝wip）なら`niwaterm-dev`**という別名になる
   - **wipの動作確認では必ず`niwaterm-dev`を使う**。`niwaterm`はdaily側のソースを指すため、devブランチでCLIを直しても反映されない（`bun link`はパッケージ名が同じで`niwaterm`を奪い合うので、別名のラッパーで棲み分けている）
   - `niwaterm-dev`は接続先もniwaterm-wipが既定。タブ内から叩く場合はアプリが注入した自インスタンスが優先される
-- `mise run build:native` — Cシム（src/native/shim.c）とPTYの制御端末ラッパー（src/native/ptyexec.c）を現在の環境向けにビルド（macOSはローカル向け、WSLはWindows向けクロスビルド）
+- `mise run build:native` — Cシム（src/native/shim.c）・PTYの制御端末ラッパー（src/native/ptyexec.c、macOS専用）・ウィンドウ透過ヘルパー（src/native/winwindow.c、Windows専用）を現在の環境向けにビルド（macOSはローカル向け、WSLはWindows向けクロスビルド）
 - `mise run build:vendor:mac` / `mise run build:vendor:win` — libghostty-vt本体をビルド（vendor更新時のみ。詳細: docs/build/macos-build.md、docs/build/windows-build.md）
   - **`-Doptimize=ReleaseFast`必須**。Debugビルドはスクロール1行あたり約700µsかかり、PTY読み取りのイベントループごと止まる（docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）

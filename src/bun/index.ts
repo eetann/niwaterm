@@ -35,6 +35,7 @@ import { loadPersistedState, persistedFilePath, savePersistedState } from "./per
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
+import { enableWindowTransparency } from "./win-window";
 import { sendWindowsNotification } from "./windows-notification";
 import {
   isFrameRestorable,
@@ -850,6 +851,10 @@ function screenWorkAreas(): ScreenArea[] {
   }
 }
 
+// 透過の有無はウィンドウ生成時にしか決められない（Electrobunに実行時の切り替えAPIが無い）。
+// 設定を変えたときは再起動が必要
+const isBackgroundTransparent = appearance.backgroundOpacity < 1;
+
 const windowFramePath = windowStateFilePath();
 let windowFrame = resolveWindowFrame(loadWindowState(windowFramePath), screenWorkAreas());
 
@@ -864,8 +869,18 @@ const mainWindow = new BrowserWindow({
     x: windowFrame.x,
     y: windowFrame.y,
   },
+  // 透過ウィンドウはWebView2の背景色を透明にする副作用も持つため、実際に透かすときだけ有効にする。
+  // 不透明度そのものはwebview側のCSSで決まる（WebView2のDefaultBackgroundColorは
+  // アルファ0か255しか受け付けず、半透明を表現できない）
+  transparent: isBackgroundTransparent,
   rpc,
 });
+
+if (isBackgroundTransparent) {
+  // Electrobunが立てるWS_EX_LAYEREDのままだとネイティブ枠が描画されないため、
+  // 生成後にDWM側の透過へ切り替える（詳細: src/native/winwindow.c）
+  enableWindowTransparency();
+}
 
 // 保存する値はネイティブ側の外枠（getFrame）から取り直す。move/resizeイベントが持つ
 // width/heightはwebview（クライアント領域）のサイズで、ウィンドウ生成時に渡す外枠より

@@ -479,6 +479,9 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-line-height", `${config.lineHeight}px`);
   root.setProperty("--term-fg", config.foreground);
   root.setProperty("--term-bg", config.background);
+  // color-mix()へ渡す割合。calc()を挟まず済むよう、パーセント文字列にしてから渡す
+  root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
+  root.setProperty("--term-bg-image", config.backgroundImage);
   applyAnsiPalette(config.ansiColors);
   // 罫線・ブロック文字を行の高さへ合わせる変換はフォント・サイズ・行高に依存するため測り直す
   updateCellGlyphTransform();

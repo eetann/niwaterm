@@ -31,6 +31,7 @@ import {
   type ShellProfile,
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
+import { resolveBackgroundImage } from "./background-image";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
@@ -272,6 +273,10 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
+function isOpacity(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
 /**
  * defaultAppearanceにユーザー設定をマージし、フィールド単位・ansiColorsはindex単位で
  * 不正値を警告付きで除外した最終値を返す（resolveKeybindingsと同じper-entry方針）。
@@ -327,6 +332,22 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       user?.background,
       defaultAppearance.background,
       isNonEmptyString,
+    ),
+    backgroundOpacity: resolveField(
+      "appearance",
+      "backgroundOpacity",
+      user?.backgroundOpacity,
+      defaultAppearance.backgroundOpacity,
+      isOpacity,
+    ),
+    backgroundImage: resolveBackgroundImage(
+      resolveField(
+        "appearance",
+        "backgroundImage",
+        user?.backgroundImage,
+        defaultAppearance.backgroundImage,
+        isNonEmptyString,
+      ),
     ),
     ansiColors,
   };
