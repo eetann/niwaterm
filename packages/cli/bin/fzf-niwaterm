@@ -31,9 +31,23 @@ inputfile="$tmpdir/input"
 cat <&0 > "$inputfile"
 
 # アプリ未起動時、popup openへ直接進むとTCP接続タイムアウト待ちで長時間固まりうるため、
-# 軽量なpingで先に疎通確認する
+# 軽量なpingで先に疎通確認する。
+# `timeout`はGNU coreutils由来でmacOSの標準構成には無く（Homebrewのcoreutilsでも既定名は
+# `gtimeout`）、無い環境で呼ぶとcommand not found=127になる。pingの成否と区別が付かず
+# popupが常にローカルfzfへ落ちるため、使える実装だけを選んで呼ぶ。どちらも無ければ
+# niwaterm CLI自身が持つIPCタイムアウト（packages/cli/src/ipc-client.ts）に任せる
+niwaterm_ping() {
+  if command -v timeout > /dev/null 2>&1; then
+    timeout 3 niwaterm ping > /dev/null 2>&1
+  elif command -v gtimeout > /dev/null 2>&1; then
+    gtimeout 3 niwaterm ping > /dev/null 2>&1
+  else
+    niwaterm ping > /dev/null 2>&1
+  fi
+}
+
 if [[ -z "${NIWATERM_TAB_ID:-}" ]] || ! command -v niwaterm > /dev/null 2>&1 \
-  || ! timeout 3 niwaterm ping > /dev/null 2>&1; then
+  || ! niwaterm_ping; then
   "$fzf_bin" "$@" < "$inputfile"
   exit $?
 fi
