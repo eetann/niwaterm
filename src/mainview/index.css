@@ -246,6 +246,16 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /*
+   * 枠線（.focused/.zoomedのoutline）はoutline-offset: -1pxでタイルの内周へ引かれるため、
+   * 余白が無いと中身と同じピクセルを奪い合う。position指定のある子孫（.tab-content配下の
+   * ターミナル描画）は親のoutlineより後に描かれるので、そのままだと枠が部分的に欠ける。
+   * ブラウザタブのwebviewはネイティブのオーバーレイでCSSのスタッキングが効かないため、
+   * 中身を物理的に内側へ寄せるこの方法でしか枠を守れない。
+   * 枠にborderを使わずoutlineのままにしているのも対で、borderだとフォーカスのたびに
+   * 内寸が変わってcols/rowsが振り直される
+   */
+  padding: 2px;
 }
 .tile.focused {
   outline: 1px solid #89b4fa;
