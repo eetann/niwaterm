@@ -414,12 +414,12 @@ niwa.on("bell", (event) => {
 appearance: {
   ...defaultAppearance,
   fontSize: 16,
-  ansiColors: [
-    ...defaultAppearance.ansiColors,
-    "#ff0000", // index 0（黒相当）だけ赤に変更する例
-  ],
+  // index 0（黒相当）だけ赤に変更する例
+  ansiColors: defaultAppearance.ansiColors.with(0, "#ff0000"),
 },
 ```
+
+`ansiColors`はindex 0-15だけを読むため、`[...defaultAppearance.ansiColors, "#ff0000"]`のように末尾へ足す書き方だと追加分はindex 16以降になって無視される。一部だけ変えるときは上の`with()`を使うか、16色すべてを並べる。
 
 不正な値（`fontSize`に文字列を渡す、色に空文字列を渡す等）を指定した場合、そのフィールド（`ansiColors`はそのindex）だけ警告付きでデフォルトにフォールバックする。256色のうち16-231（6x6x6カラーキューブ）・232-255（グレースケール）は固定の計算式でユーザー設定の対象外。
 

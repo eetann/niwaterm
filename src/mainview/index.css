@@ -136,15 +136,25 @@ body {
  * （不透明度0.8を2枚重ねると0.96になる）、1ピクセルあたり1枚に保たないと
  * 領域ごとに透け方がばらつく。この3つの内側にあるクロームも、地を塗り直すのではなく
  * 黒を薄く重ねて陰影として表現する。
- * 背景画像だけはウィンドウ全体へ敷きたいのでbodyに残す（bodyの背景はキャンバスへ伝播する）。
  * オーバーレイである#popup-box・#compositionは--term-bgをそのまま使い不透明のまま残す
  */
 body {
   display: flex;
   flex-direction: row;
+}
+
+/*
+ * 背景画像は地の色を塗る要素それぞれに持たせる。bodyに置くと、地を塗る子要素が
+ * 不透明なときに覆い隠されてしまうため。
+ * background-attachment: fixedで位置とサイズの基準をビューポートに固定すると、
+ * 別々の要素に敷いても1枚の画像として繋がって見える
+ */
+#sidebar,
+#screen {
   background-image: var(--term-bg-image);
   background-size: cover;
   background-position: center;
+  background-attachment: fixed;
 }
 
 #sidebar {
