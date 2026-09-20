@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { appendCommandArgs, withPtyExec } from "./pty";
+import { appendCommandArgs, buildEnv, withPtyExec } from "./pty";
 
 describe("appendCommandArgs", () => {
   test("commandが未指定なら何もしない", () => {
@@ -133,5 +133,42 @@ describe("withPtyExec", () => {
       "-c",
       "ghq-select > '/tmp/out'",
     ]);
+  });
+});
+
+describe("buildEnv", () => {
+  /** テスト対象がprocess.envを直接読むため、退避してから書き換える */
+  function withProcessEnv(patch: Record<string, string>, fn: () => void): void {
+    const saved = new Map(Object.keys(patch).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, patch);
+    try {
+      fn();
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  test("起動元のマルチプレクサ由来の環境変数をタブへ渡さない", () => {
+    withProcessEnv(
+      { TMUX: "/tmp/tmux-501/default,19763,3", TMUX_PANE: "%47", TERM_PROGRAM_VERSION: "3.7c" },
+      () => {
+        const env = buildEnv(["/bin/zsh"], "xterm-256color", undefined);
+        expect(env["TMUX"]).toBeUndefined();
+        expect(env["TMUX_PANE"]).toBeUndefined();
+        expect(env["TERM_PROGRAM_VERSION"]).toBeUndefined();
+        expect(env["TERM_PROGRAM"]).toBe("niwaterm");
+        expect(env["TERM"]).toBe("xterm-256color");
+      },
+    );
+  });
+
+  test("extraEnvはprocess.envより優先される", () => {
+    withProcessEnv({ NIWATERM_TAB_ID: "tab-old" }, () => {
+      const env = buildEnv(["/bin/zsh"], "xterm-256color", { NIWATERM_TAB_ID: "tab-1" });
+      expect(env["NIWATERM_TAB_ID"]).toBe("tab-1");
+    });
   });
 });

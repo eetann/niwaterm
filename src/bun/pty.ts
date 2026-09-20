@@ -147,6 +147,26 @@ export function appendCommandArgs(
 }
 
 /**
+ * niwaterm自身が起動元から受け継いでしまう「今いるターミナルの素性」を示す変数。
+ * 別のマルチプレクサ（tmux等）のペインからniwatermを起動すると、これらがアプリの
+ * process.env経由でタブのシェルまで漏れる。$TMUXの有無で描画先を切り替えるツール
+ * （fzfの`--tmux`は描画をtmuxのpopupへ丸投げする）がniwatermのタブをtmuxの中だと誤認し、
+ * 画面が起動元のtmuxセッションへ吸われて操作不能になるため、渡す前に落とす。
+ * 詳細: docs/known-issues/inherited-multiplexer-env-leaks-into-tabs.md
+ */
+const INHERITED_TERMINAL_ENV_KEYS = [
+  "TMUX",
+  "TMUX_PANE",
+  // TERM_PROGRAMはniwaterm自身の名前へ差し替えるため、版数だけが起動元のまま残らないようにする
+  "TERM_PROGRAM_VERSION",
+  // GNU screen
+  "STY",
+  "ZELLIJ",
+  "ZELLIJ_PANE_ID",
+  "ZELLIJ_SESSION_NAME",
+];
+
+/**
  * WSLは`wsl.exe`起動時にWindows側の環境変数を既定では継承しない
  * （`WSLENV`にコロン区切りで明示リストした変数名だけがLinux側へ渡る仕様）。
  * niwatermがPTY起動時に注入する変数（NIWATERM_TAB_ID等）をWSL内のシェルまで
@@ -157,7 +177,9 @@ export function buildEnv(
   term: string,
   extraEnv: Record<string, string> | undefined,
 ): Record<string, string> {
-  const env: Record<string, string> = { ...process.env, TERM: term, ...extraEnv };
+  const env: Record<string, string> = { ...process.env, TERM: term, TERM_PROGRAM: "niwaterm" };
+  for (const key of INHERITED_TERMINAL_ENV_KEYS) delete env[key];
+  Object.assign(env, extraEnv);
   if (isWindows && extraEnv && cmd[0]?.toLowerCase() === "wsl.exe") {
     const existing = env["WSLENV"]?.split(":").filter((v) => v.length > 0) ?? [];
     env["WSLENV"] = [...new Set([...existing, ...Object.keys(extraEnv)])].join(":");
