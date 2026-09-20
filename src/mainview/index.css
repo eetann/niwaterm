@@ -131,15 +131,17 @@ body {
 }
 
 /*
- * 地の背景はbodyだけに置く（htmlと両方に指定すると半透明のとき2枚重なって濃くなる）。
- * bodyの背景はキャンバスへ伝播するのでビューポート全体を覆う。
- * --term-bgをそのまま使う#popup-box・#compositionは不透明のまま残り、
- * 透過するのはターミナルの地の部分だけになる
+ * 半透明の地はビューポートを隙間なく分割する#sidebar・#sidebar-divider・#screenの3つへ
+ * 分けて置き、bodyには置かない。半透明の塗りは重ねた枚数だけ不透明に近づくため
+ * （不透明度0.8を2枚重ねると0.96になる）、1ピクセルあたり1枚に保たないと
+ * 領域ごとに透け方がばらつく。この3つの内側にあるクロームも、地を塗り直すのではなく
+ * 黒を薄く重ねて陰影として表現する。
+ * 背景画像だけはウィンドウ全体へ敷きたいのでbodyに残す（bodyの背景はキャンバスへ伝播する）。
+ * オーバーレイである#popup-box・#compositionは--term-bgをそのまま使い不透明のまま残す
  */
 body {
   display: flex;
   flex-direction: row;
-  background-color: color-mix(in srgb, var(--term-bg) var(--term-bg-opacity), transparent);
   background-image: var(--term-bg-image);
   background-size: cover;
   background-position: center;
@@ -150,7 +152,7 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #181825;
+  background-color: color-mix(in srgb, #181825 var(--term-bg-opacity), transparent);
   border-right: 1px solid #313244;
 }
 
@@ -218,6 +220,7 @@ body {
   height: 100%;
   padding: 4px;
   cursor: text;
+  background-color: color-mix(in srgb, var(--term-bg) var(--term-bg-opacity), transparent);
 }
 
 #tile-tree {
@@ -306,10 +309,15 @@ body {
   background: rgba(137, 180, 250, 0.22);
 }
 
+/*
+ * クロームの陰影は地の色を塗り直さず黒を薄く重ねて作る。半透明時に地と二重に塗ると
+ * そこだけ不透明に寄ってしまうため。不透明度0.2は既定の地(--term-bgの#1e1e2e)に重ねると
+ * ちょうど#181825になる値で、--term-bgを変えても同じ濃さの関係が保たれる
+ */
 .tab-bar {
   display: flex;
   flex: 0 0 auto;
-  background: #181825;
+  background-color: rgba(0, 0, 0, 0.2);
   overflow-x: auto;
 }
 
@@ -357,14 +365,19 @@ body {
   flex: 0 0 auto;
   min-height: 36px;
   padding: 4px 6px;
-  background: #181825;
+  background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid #313244;
 }
 
+/*
+ * #sidebar-dividerはbody直下なので1枚だけだが、タイル間の仕切りは#screenの上に乗るため
+ * 半透明時だけそこが少し不透明に寄る。陰影に置き換えると地の色との関係が単純な重ねでは
+ * 表せず既定の色がずれるので、4pxの線であることを踏まえて色の正確さを優先する
+ */
 .divider {
   position: relative;
   flex: 0 0 4px;
-  background: #313244;
+  background-color: color-mix(in srgb, #313244 var(--term-bg-opacity), transparent);
 }
 .split[data-direction="row"] > .divider {
   cursor: col-resize;
@@ -420,7 +433,7 @@ body {
   flex: 0 0 auto;
   margin: 0 -4px 4px;
   padding: 2px 4px;
-  background: #181825;
+  background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid #313244;
 }
 
