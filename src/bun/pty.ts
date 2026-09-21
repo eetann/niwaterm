@@ -156,8 +156,6 @@ export function appendCommandArgs(
  * 2. niwaterm自身のビルド時設定（NIWATERM_APP_NAME）。タブのシェルが読む必要は無く、
  *    残っているとタブ内で`mise run start`したときにブランチではなく起動中インスタンスの
  *    アプリ名が採用され、wipのつもりでdailyを組んでしまう。
- *
- * 詳細: docs/known-issues/inherited-multiplexer-env-leaks-into-tabs.md
  */
 const INHERITED_TERMINAL_ENV_KEYS = [
   "TMUX",
