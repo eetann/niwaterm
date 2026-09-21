@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,16 @@ import codexHooks from "../../../contrib/agent-integration/codex-cli/hooks.json"
 import claudeHooks from "../../../contrib/agent-integration/claude-code/hooks.json";
 
 const entry = join(import.meta.dir, "index.ts");
+
+/** ipc-client.tsのisWslと同じ判定（あちらは非公開なので同じ内容を持つ） */
+function isWsl(): boolean {
+  if (process.platform !== "linux") return false;
+  try {
+    return /microsoft/i.test(readFileSync("/proc/version", "utf8"));
+  } catch {
+    return false;
+  }
+}
 async function invoke(args: string[], input: string, env: Record<string, string> = {}) {
   const process = Bun.spawn([Bun.which("bun")!, entry, ...args], {
     env: { ...Bun.env, NIWATERM_TAB_ID: "", ...env },
@@ -20,6 +31,42 @@ async function invoke(args: string[], input: string, env: Record<string, string>
     code: await process.exited,
     stdout: await new Response(process.stdout).text(),
     stderr: await new Response(process.stderr).text(),
+  };
+}
+
+/**
+ * CLIの接続先を再現するダミーIPCサーバー。ipc-client.tsのresolveIpcEndpointは
+ * WSLのときだけTCPブリッジを見て、それ以外はunix socketを見るため、テスト側も同じ分岐で
+ * 待ち受けないとリクエストが1件も届かない（macOSではNIWATERM_BRIDGE_PORTは無視される）
+ */
+async function startIpcStub(
+  requests: unknown[],
+): Promise<{ env: Record<string, string>; stop: () => Promise<void> }> {
+  const handler = {
+    async fetch(request: Request) {
+      expect(new URL(request.url).pathname).toBe("/set-var");
+      requests.push(await request.json());
+      return Response.json({ ok: true });
+    },
+  };
+  if (isWsl()) {
+    const server = Bun.serve({ port: 0, hostname: "127.0.0.1", ...handler });
+    return {
+      env: { NIWATERM_BRIDGE_PORT: String(server.port) },
+      stop: async () => {
+        server.stop(true);
+      },
+    };
+  }
+  const dir = await mkdtemp(join(tmpdir(), "niwaterm-agent-ipc-test-"));
+  const socketPath = join(dir, "niwaterm.sock");
+  const server = Bun.serve({ unix: socketPath, ...handler });
+  return {
+    env: { NIWATERM_SOCKET: socketPath },
+    stop: async () => {
+      server.stop(true);
+      await rm(dir, { recursive: true, force: true });
+    },
   };
 }
 
@@ -107,24 +154,13 @@ describe("agent hooks", () => {
   });
   test("実際のCLIから指定タブだけへIPCで3変数を書き込む", async () => {
     const requests: unknown[] = [];
-    const server = Bun.serve({
-      port: 0,
-      hostname: "127.0.0.1",
-      async fetch(request) {
-        expect(new URL(request.url).pathname).toBe("/set-var");
-        requests.push(await request.json());
-        return Response.json({ ok: true });
-      },
-    });
+    const stub = await startIpcStub(requests);
     try {
       expect(
         await invoke(
           ["_hook", "codex-cli"],
           JSON.stringify({ hook_event_name: "Stop", last_assistant_message: "完了" }),
-          {
-            NIWATERM_TAB_ID: "test-only-tab",
-            NIWATERM_BRIDGE_PORT: String(server.port),
-          },
+          { NIWATERM_TAB_ID: "test-only-tab", ...stub.env },
         ),
       ).toEqual({ code: 0, stdout: "", stderr: "" });
       expect(requests).toEqual([
@@ -133,7 +169,7 @@ describe("agent hooks", () => {
         { tabId: "test-only-tab", key: "agent_status", value: "idle" },
       ]);
     } finally {
-      server.stop(true);
+      await stub.stop();
     }
   });
   test("タブ外・不正入力・引数不正・IPC失敗でも無出力で成功する", async () => {
