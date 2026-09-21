@@ -609,10 +609,13 @@ export function newBoard(
   endpoint: IpcEndpoint,
   workspaceId?: string,
   cwd?: string,
+  /** falseなら作るだけでアクティブにしない（`worktree new --open board`の裏作成） */
+  activate?: boolean,
 ): Promise<NewBoardResult> {
-  const body: { workspaceId?: string; cwd?: string } = {};
+  const body: { workspaceId?: string; cwd?: string; activate?: boolean } = {};
   if (workspaceId !== undefined) body.workspaceId = workspaceId;
   if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (activate !== undefined) body.activate = activate;
   return postJson(endpoint, "/new-board", body);
 }
 

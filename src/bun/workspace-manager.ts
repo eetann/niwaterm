@@ -306,8 +306,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return { ok: true };
   }
 
-  function newBoard(workspaceId: WorkspaceId, cwd?: string): BoardId | null {
-    return workspaces.get(workspaceId)?.newBoard(cwd) ?? null;
+  function newBoard(workspaceId: WorkspaceId, cwd?: string, activate = true): BoardId | null {
+    return workspaces.get(workspaceId)?.newBoard(cwd, activate) ?? null;
   }
 
   function hasBoard(boardId: BoardId): boolean {

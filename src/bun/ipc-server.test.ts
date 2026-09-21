@@ -1800,6 +1800,41 @@ describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-b
     expect(entry?.activeBoardId).toBe(body.boardId);
   });
 
+  test("new-board: activate=falseならBoardは増えるがアクティブは変わらない", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ activate: false }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; boardId: string };
+    expect(body.boardId).not.toBe(firstBoardId);
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.map((b) => b.boardId)).toContain(body.boardId);
+    expect(entry?.activeBoardId).toBe(firstBoardId);
+  });
+
+  test("new-board: activateがboolean以外なら400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ activate: "yes" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("new-board: 存在しないworkspaceIdは404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);

@@ -316,7 +316,7 @@ niwaterm worktree list
 niwaterm worktree list --cwd /path/to/repo
 ```
 
-gitのワークツリー一覧をTSV（`path`／`branch`／`HEAD`／フラグ）で表示する。**このコマンドだけはniwatermアプリに接続せず、CLIプロセスから直接gitを呼ぶ**ため、アプリが起動していない普通のターミナルからも使える。値の無い列は`-`で埋めるので、`cut -f2`のような読み取りが列ずれで壊れない。
+gitのワークツリー一覧をTSV（`path`／`branch`／`HEAD`／フラグ）で表示する。**このコマンドはniwatermアプリに接続せず、CLIプロセスから直接gitを呼ぶ**ため、アプリが起動していない普通のターミナルからも使える。値の無い列は`-`で埋めるので、`cut -f2`のような読み取りが列ずれで壊れない。
 
 ```
 /home/eetann/ghq/github.com/eetann/niwaterm       main  3aa3f4f4...  main
@@ -327,23 +327,53 @@ gitのワークツリー一覧をTSV（`path`／`branch`／`HEAD`／フラグ）
 
 gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在しない場合は、それぞれの理由を示すエラーメッセージと共に終了コード1を返す。
 
+#### ワークツリーの作成
+
+```sh
+niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--workspace <workspaceId>] [--cwd <dir>]
+```
+
+ワークツリーを作り、それをniwatermで開く。ブランチが未作成なら`git worktree add -b`で同時に作り、既にあればそれをチェックアウトする。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
+
+作成先は「ワークツリーの置き場所」で決まるが、`--path`で個別に上書きできる（相対パスは実行したディレクトリ基準）。
+
+**そのブランチのワークツリーが既にある場合はエラーにせず、作成を飛ばしてそれを開く**。同じコマンドを何度叩いても同じ結果になるので、「あれば使う、無ければ作る」を分岐なしで書ける。このとき作成時にしか効かない`--from`／`--path`を渡していると、効いていない旨の警告を出す。
+
+`--open`は作成後の開き方で、次の4つから選ぶ。
+
+| 値 | 挙動 |
+|---|---|
+| `board`（既定） | 新規Boardとして開くが、そのBoardへは遷移しない |
+| `board-switch` | 新規Boardとして開き、そのBoardへ遷移する |
+| `current-tab` | 実行したタブをそのワークツリーへ`cd`する（同じBoardの他のタブは触らない） |
+| `none` | 開かない（ワークツリーを作るだけ） |
+
+既定を`board`（遷移しない）にしているのは、作業中のBoardを奪わずに次のブランチを仕込めるようにするため。既定値は設定の`worktree.open`で変えられる（「ワークツリーの置き場所」と同じ優先順位で解決する）。
+
+Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`は遷移しないためサイドバーの表示が唯一の手がかりになる。
+
+`current-tab`は`cd <path>`をそのタブへ送る（`tab send-keys`と同じ経路）。コマンドを実行しているシェルはCLIが終わるまで入力を読まないので、キーはtty側で待たされてからプロンプトへ流れる。`--open none`以外はniwatermアプリが起動している必要がある。
+
 #### ワークツリーの置き場所
 
 新規ワークツリーを作る場所は、`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）を展開するテンプレートで決める。既定は`../${repo}@${branch}`で、メインワークツリーの隣に`<repo>@<branch>`という名前で並ぶ。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は`niwaterm@feat-worktree`になる。
 
-テンプレートは次の順で探し、最初に見つかったものを使う。
+テンプレートは次の順で探し、最初に見つかったものを使う。`--open`の既定値（`worktree.open`）も同じ順で解決する。
 
 | 優先 | 置き場所 | 用途 |
 |---|---|---|
-| 1 | `<repoRoot>/.niwaterm/config.ts`の`worktree.dir` | そのリポジトリ固有の置き方（チームで共有できる） |
-| 2 | `~/.config/niwaterm/niwaterm.config.ts`の`worktree.dir` | ユーザー共通の置き方 |
-| 3 | git configの`niwaterm.worktree.dir` | niwatermを入れていない環境とも設定を共有したい場合の補助口 |
-| 4 | （既定値） | `../${repo}@${branch}` |
+| 1 | `<repoRoot>/.niwaterm/config.ts`の`worktree.*` | そのリポジトリ固有の方針（チームで共有できる） |
+| 2 | `~/.config/niwaterm/niwaterm.config.ts`の`worktree.*` | ユーザー共通の方針 |
+| 3 | git configの`niwaterm.worktree.*` | niwatermを入れていない環境とも設定を共有したい場合の補助口 |
+| 4 | （既定値） | `dir`は`../${repo}@${branch}`、`open`は`board` |
+
+解決は**項目ごとに独立している**。`dir`はグローバル設定、`open`はこのリポジトリだけ別、といった混ぜ方ができる。
 
 git configを一番弱くしているのは、niwatermの設定の正本が`niwaterm.config.ts`だから。git config内部のローカル／グローバルの優先順位はgit自身が解決するので、niwaterm側では段階を持たない。
 
 ```sh
 git config niwaterm.worktree.dir '.worktrees/${branch}'
+git config niwaterm.worktree.open board-switch
 ```
 
 テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は`docs/guide/config.md`「ワークツリー」節を参照。

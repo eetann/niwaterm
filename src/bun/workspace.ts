@@ -254,10 +254,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return activeBoardId;
   }
 
-  function newBoard(cwd?: string): BoardId {
-    activeBoardId = createAndRegisterBoard(undefined, cwd);
+  /**
+   * Boardを作る。activate=falseなら作るだけでアクティブにしない
+   * （`worktree new --open board-bg`のように、作業中のBoardを奪わず裏で用意する用途）
+   */
+  function newBoard(cwd?: string, activate = true): BoardId {
+    const boardId = createAndRegisterBoard(undefined, cwd);
+    if (activate) activeBoardId = boardId;
     opts.onDirty();
-    return activeBoardId;
+    return boardId;
   }
 
   function switchBoard(boardId: BoardId): boolean {

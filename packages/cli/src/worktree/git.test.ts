@@ -2,7 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listWorktrees, mainWorktree, parseWorktreePorcelain, worktreeFlags } from "./git";
+import {
+  addWorktree,
+  branchExists,
+  findWorktreeByBranch,
+  gitConfigSection,
+  listWorktrees,
+  mainWorktree,
+  parseWorktreePorcelain,
+  worktreeFlags,
+} from "./git";
 
 const SAMPLE_LINES = [
   "worktree /repo/main",
@@ -183,5 +192,120 @@ describe("listWorktrees", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.kind).toBe("invalid-cwd");
+  });
+});
+
+describe("addWorktree", () => {
+  /** commit済みのリポジトリを1つ作って渡す */
+  async function withRepo(fn: (dir: string, repo: string) => Promise<void>): Promise<void> {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-add-test-"));
+    try {
+      const repo = join(dir, "repo");
+      await git(dir, "init", "-b", "main", "repo");
+      await git(repo, "config", "user.email", "test@example.com");
+      await git(repo, "config", "user.name", "test");
+      await git(repo, "commit", "--allow-empty", "-m", "init");
+      await fn(dir, repo);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("未作成のブランチはワークツリーと同時に作る", async () => {
+    await withRepo(async (dir, repo) => {
+      const path = join(dir, "repo@feature");
+      expect(await addWorktree({ repoRoot: repo, path, branch: "feature" })).toEqual({ ok: true });
+      const result = await listWorktrees(repo);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(findWorktreeByBranch(result.worktrees, "feature")?.path).toBe(path);
+    });
+  });
+
+  test("既存ブランチはそのままチェックアウトする", async () => {
+    await withRepo(async (dir, repo) => {
+      await git(repo, "branch", "existing");
+      expect(await branchExists("existing", repo)).toBe(true);
+      const path = join(dir, "repo@existing");
+      expect(await addWorktree({ repoRoot: repo, path, branch: "existing" })).toEqual({ ok: true });
+      const result = await listWorktrees(repo);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(findWorktreeByBranch(result.worktrees, "existing")?.path).toBe(path);
+    });
+  });
+
+  test("fromで分岐元を指定できる", async () => {
+    await withRepo(async (dir, repo) => {
+      await git(repo, "branch", "base");
+      await git(repo, "commit", "--allow-empty", "-m", "second");
+      const path = join(dir, "repo@derived");
+      expect(await addWorktree({ repoRoot: repo, path, branch: "derived", from: "base" })).toEqual({
+        ok: true,
+      });
+      const result = await listWorktrees(repo);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const base = findWorktreeByBranch(result.worktrees, "main");
+      const derived = findWorktreeByBranch(result.worktrees, "derived");
+      // baseから分岐しているので、2つ目のcommitを持つmainとはHEADが違う
+      expect(derived?.head).not.toBe(base?.head);
+    });
+  });
+
+  test("既にチェックアウト済みのブランチはgitのエラーを返す", async () => {
+    await withRepo(async (dir, repo) => {
+      const result = await addWorktree({ repoRoot: repo, path: join(dir, "dup"), branch: "main" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toContain("main");
+    });
+  });
+
+  test("未作成のブランチではbranchExistsがfalse", async () => {
+    await withRepo(async (_dir, repo) => {
+      expect(await branchExists("nope", repo)).toBe(false);
+    });
+  });
+});
+
+describe("gitConfigSection", () => {
+  test("prefix配下のキーだけをprefixを除いて返す", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    try {
+      await git(dir, "init", "-b", "main");
+      await git(dir, "config", "niwaterm.worktree.dir", ".worktrees/${branch}");
+      await git(dir, "config", "niwaterm.worktree.open", "board-switch");
+      await git(dir, "config", "niwaterm.other.key", "ignored");
+      const values = await gitConfigSection("niwaterm.worktree", dir);
+      expect(values.get("dir")).toBe(".worktrees/${branch}");
+      expect(values.get("open")).toBe("board-switch");
+      expect(values.has("key")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("値に空白が入っても壊れない", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    try {
+      await git(dir, "init", "-b", "main");
+      await git(dir, "config", "niwaterm.worktree.dir", "../with space/${branch}");
+      expect((await gitConfigSection("niwaterm.worktree", dir)).get("dir")).toBe(
+        "../with space/${branch}",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("設定が1件も無ければ空のMap", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    try {
+      await git(dir, "init", "-b", "main");
+      expect((await gitConfigSection("niwaterm.worktree", dir)).size).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -242,3 +242,69 @@ export function worktreeFlags(entry: WorktreeEntry): string[] {
   if (entry.prunable) flags.push("prunable");
   return flags;
 }
+
+/** ローカルブランチが既に存在するか */
+export async function branchExists(branch: string, cwd: string): Promise<boolean> {
+  const result = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], cwd);
+  return result !== null && result.exitCode === 0;
+}
+
+/** 一覧からブランチ名でワークツリーを引く。detached・bareはbranchを持たないので当たらない */
+export function findWorktreeByBranch(
+  worktrees: WorktreeEntry[],
+  branch: string,
+): WorktreeEntry | null {
+  return worktrees.find((worktree) => worktree.branch === branch) ?? null;
+}
+
+export interface AddWorktreeOptions {
+  /** gitを実行する作業ディレクトリ。メインワークツリーを渡す */
+  repoRoot: string;
+  /** 作成先の絶対パス */
+  path: string;
+  branch: string;
+  /**
+   * 新規ブランチの分岐元。ブランチが既にある場合は指定できない
+   * （gitの`worktree add <path> <branch>`は分岐元を取らないため）
+   */
+  from?: string;
+}
+
+export type AddWorktreeResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * ワークツリーを作る。ブランチが未作成なら`-b`で同時に作る。
+ * 事前チェックはコマンド側で済ませる前提で、ここではgitのエラーをそのまま返す
+ */
+export async function addWorktree(opts: AddWorktreeOptions): Promise<AddWorktreeResult> {
+  const args = (await branchExists(opts.branch, opts.repoRoot))
+    ? ["worktree", "add", opts.path, opts.branch]
+    : ["worktree", "add", "-b", opts.branch, opts.path, ...(opts.from ? [opts.from] : [])];
+  const result = await runGit(args, opts.repoRoot);
+  if (result === null) return { ok: false, error: GIT_NOT_FOUND.error };
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.trim() || "git worktree addが失敗しました" };
+  }
+  return { ok: true };
+}
+
+/**
+ * `git config --get-regexp`で`<prefix>.`で始まる設定をまとめて読む。
+ * `-z`を付けるとキーと値が改行で、エントリ同士がNULで区切られるため、値に空白・改行が入っても壊れない。
+ * 返すキーはprefixを除いた残り（`niwaterm.worktree.dir`なら`dir`）
+ */
+export async function gitConfigSection(prefix: string, cwd: string): Promise<Map<string, string>> {
+  const values = new Map<string, string>();
+  const escaped = prefix.replaceAll(".", "\\.");
+  const result = await runGit(["config", "-z", "--get-regexp", `^${escaped}\\.`], cwd);
+  // 1件も無ければexitCode 1。エラーと区別する必要は無く、どちらも「設定なし」として扱う
+  if (result === null || result.exitCode !== 0) return values;
+  for (const entry of result.stdout.split("\0")) {
+    if (entry === "") continue;
+    const newline = entry.indexOf("\n");
+    const key = newline === -1 ? entry : entry.slice(0, newline);
+    const value = newline === -1 ? "" : entry.slice(newline + 1);
+    if (key.startsWith(`${prefix}.`)) values.set(key.slice(prefix.length + 1), value);
+  }
+  return values;
+}

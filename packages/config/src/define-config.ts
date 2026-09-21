@@ -74,9 +74,10 @@ export interface NiwatermConfig {
    */
   workspace?: WorkspaceConfig;
   /**
-   * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）を指定する。
-   * リポジトリ固有の置き方は<repoRoot>/.niwaterm/config.tsでも書け、そちらが優先される。
-   * 例: { dir: ".worktrees/${branch}" }
+   * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）と、
+   * 作成後の開き方の既定値（worktree.open）を指定する。
+   * リポジトリ固有の方針は<repoRoot>/.niwaterm/config.tsでも書け、項目ごとにそちらが優先される。
+   * 例: { dir: ".worktrees/${branch}", open: "board" }
    */
   worktree?: WorktreeConfig;
 }

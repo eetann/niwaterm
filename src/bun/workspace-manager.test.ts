@@ -220,6 +220,19 @@ describe("Board操作", () => {
     expect(entry?.activeBoardId).toBe(newBoardId);
   });
 
+  test("newBoard(activate=false)はBoardを増やすがアクティブにしない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+
+    const newBoardId = mgr.newBoard(workspaceId, undefined, false);
+
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.map((b) => b.boardId)).toEqual([firstBoardId, newBoardId]);
+    expect(entry?.activeBoardId).toBe(firstBoardId);
+  });
+
   test("存在しないworkspaceIdへのnewBoardはnullを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));

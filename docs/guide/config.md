@@ -728,21 +728,25 @@ niwaterm layout apply dev --startup
 
 ## ワークツリー
 
-`worktree`は、`niwaterm worktree`系コマンドが新規ワークツリーを作る場所を指定するオブジェクト。**未指定なら`../${repo}@${branch}`**（メインワークツリーの隣に`<repo>@<branch>`という名前で並べる）。
+`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `dir` | `string` | 新規ワークツリーの置き場所テンプレート |
+| フィールド | 型 | 意味 | 未指定時 |
+|---|---|---|---|
+| `dir` | `string` | 新規ワークツリーの置き場所テンプレート | `../${repo}@${branch}` |
+| `open` | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値 | `"board"` |
 
 ```ts
 worktree: {
   dir: ".worktrees/${branch}",
+  open: "board-switch",
 },
 ```
 
+`open`は作成したワークツリーをniwatermのどこで開くか。`board`は新規Boardとして開くが遷移せず、`board-switch`は遷移まで行う。`current-tab`はコマンドを実行したタブをそのワークツリーへ`cd`し、`none`は開かない。既定を`board`にしているのは、作業中のBoardを奪わずに次のブランチを仕込めるようにするため。
+
 テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
-ここで定義するのは全リポジトリ共通の置き方。リポジトリ固有の置き方は`<repoRoot>/.niwaterm/config.ts`にも書け、そちらが優先される。
+ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`open`はリポジトリ固有、という混ぜ方ができる）。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
@@ -753,9 +757,9 @@ export default {
 } satisfies NiwatermProjectConfig;
 ```
 
-どちらにも書かれていない場合はgit configの`niwaterm.worktree.dir`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/cli.md`「ワークツリーの置き場所」節を参照。
+どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/cli.md`「ワークツリーの置き場所」節を参照。
 
-レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
+レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所・開き方はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
 
 ## ホットリロード
 

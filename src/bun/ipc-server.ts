@@ -362,11 +362,13 @@ function parseBoardIdBody(body: unknown): BoardIdRequestBody | null {
 interface NewBoardRequestBody {
   workspaceId?: string;
   cwd?: string;
+  /** 省略時はtrue（作ったBoardをアクティブにする） */
+  activate?: boolean;
 }
 
 /** workspaceId省略時はgetActiveWorkspaceId()で解決する（エンドポイント側の責務） */
 function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
-  const b = body as { workspaceId?: unknown; cwd?: unknown };
+  const b = body as { workspaceId?: unknown; cwd?: unknown; activate?: unknown };
   const result: NewBoardRequestBody = {};
   if (b.workspaceId !== undefined) {
     if (typeof b.workspaceId !== "string" || b.workspaceId.length === 0) return null;
@@ -375,6 +377,10 @@ function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
   if (b.cwd !== undefined) {
     if (typeof b.cwd !== "string" || b.cwd.length === 0) return null;
     result.cwd = b.cwd;
+  }
+  if (b.activate !== undefined) {
+    if (typeof b.activate !== "boolean") return null;
+    result.activate = b.activate;
   }
   return result;
 }
@@ -733,10 +739,13 @@ function buildApp(
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
     const parsed = parseNewBoardBody(body);
     if (!parsed) {
-      return c.json({ ok: false, error: "expected { workspaceId?: string, cwd?: string }" }, 400);
+      return c.json(
+        { ok: false, error: "expected { workspaceId?: string, cwd?: string, activate?: boolean }" },
+        400,
+      );
     }
     const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
-    const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd);
+    const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd, parsed.activate ?? true);
     if (boardId === null) {
       return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);
     }

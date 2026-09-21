@@ -1,7 +1,7 @@
 ---
 name: niwaterm-cli
 description: |
-  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示、OSデスクトップ通知の送信、gitワークツリーの一覧）。
+  niwatermターミナルアプリをniwaterm CLI経由で操作する（ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示、OSデスクトップ通知の送信、gitワークツリーの一覧・作成）。
   トリガー: "niwaterm", "niwatermを操作", "niwaterm CLI", "タイルを分割して", "タブにキー送信", "niwatermのブラウザタブを操作", "niwatermで確認したい"
 user-invocable: true
 allowed-tools: Bash(niwaterm:*), Bash(niwaterm-dev:*)
@@ -15,7 +15,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 - **どのコマンドを使うかはワークツリーで決まる**。`main`（daily側）なら`niwaterm`、それ以外のワークツリー（devなど、開発中ビルドniwaterm-wip向け）なら`niwaterm-dev`。`niwaterm`はdaily側のソースを指すため、devブランチでCLIを直しても`niwaterm`には反映されない。
 - `niwaterm --version`（または`niwaterm-dev --version`）でコマンドが使えるか確認する。使えない場合は対象ワークツリーのルートで`mise run cli:link`を実行する。
-- niwatermアプリ本体が起動している必要がある。`niwaterm ping` で疎通確認し、pongが返らなければ`mise run start`でアプリを起動する（バックグラウンド起動を推奨）。ただし`init`・`agent setup`・`worktree list`はアプリへ接続しないため、起動していなくても使える。
+- niwatermアプリ本体が起動している必要がある。`niwaterm ping` で疎通確認し、pongが返らなければ`mise run start`でアプリを起動する（バックグラウンド起動を推奨）。ただし`init`・`agent setup`・`worktree list`・`worktree new --open none`はアプリへ接続しないため、起動していなくても使える。
 
 ## できること（概要）
 
@@ -35,7 +35,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
 - `layout list` / `apply <name>` — niwaterm.config.tsまたはプロジェクトローカルの`.niwaterm/config.ts`で定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う。`--startup`を付けるとそのBoardが次回起動時も同じプリセットで組み直される（`board startup`で後から切替・解除可）
   - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show cli`の「プロジェクトローカルのレイアウト」節
-- `worktree list` — gitのワークツリー一覧（`path`／`branch`／`HEAD`／フラグのTSV。先頭行は必ずメインワークツリー。アプリへ接続せず直接gitを呼ぶ）
+- `worktree list` / `new` — gitワークツリーの一覧・作成。`list`は`path`／`branch`／`HEAD`／フラグのTSVで、先頭行は必ずメインワークツリー（アプリへ接続せず直接gitを呼ぶ）。`new <branch>`はワークツリーを作ってniwatermで開き、`--open board`（既定、Boardを作るが遷移しない）／`board-switch`（遷移する）／`current-tab`（実行したタブをcd）／`none`（開かない）を選べる。**同じブランチのワークツリーが既にあればエラーにせずそれを開く**ので、「あれば使う、無ければ作る」を分岐なしで書ける
 - `keybind list` — 現在有効なキーバインドの一覧（tmuxの`list-keys`相当。prefix経由のバインドと即時発火のdirectを分けて表示。設定が反映されているかの確認に使う）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `notify --title <title> [--body] [--subtitle] [--silent]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。クリックしてもniwatermへのフォーカス移動は行わない）
