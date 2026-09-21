@@ -262,6 +262,7 @@ keybindings: {
 | `c` | new-tab |
 | `shift+t` | new-browser-tab |
 | `n` / `p` | next-tab / prev-tab |
+| `r` | rename-tab |
 | `,` | rename-board |
 | `shift+n` | new-workspace |
 | `]` / `[` | next-workspace / prev-workspace |
@@ -273,7 +274,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（38種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（39種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -286,6 +287,7 @@ keybindings: {
 | `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
 | `new-custom-view-tab` | `customView`設定を開くタブを作成（`customView`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある） |
 | `next-tab` / `prev-tab` | タブ切替 |
+| `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
@@ -411,6 +413,7 @@ niwa.on("bell", (event) => {
 | `backgroundOpacity` | `number` | 背景の不透明度（0〜1、既定`1`）。1未満にすると背後のウィンドウが透ける |
 | `backgroundImage` | `string` | 背景画像（既定`"none"`）。CSSの`background-image`値か、画像ファイルのパス |
 | `ansiColors` | `readonly string[]` | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる |
+| `tabBar` | `"auto"` / `"always"` | タブが1つだけのタイルでのタブバーの出し方（既定`"auto"`）。下記「タブバーの出し方」参照 |
 
 ```ts
 appearance: {
@@ -424,6 +427,24 @@ appearance: {
 `ansiColors`はindex 0-15だけを読むため、`[...defaultAppearance.ansiColors, "#ff0000"]`のように末尾へ足す書き方だと追加分はindex 16以降になって無視される。一部だけ変えるときは上の`with()`を使うか、16色すべてを並べる。
 
 不正な値（`fontSize`に文字列を渡す、色に空文字列を渡す等）を指定した場合、そのフィールド（`ansiColors`はそのindex）だけ警告付きでデフォルトにフォールバックする。256色のうち16-231（6x6x6カラーキューブ）・232-255（グレースケール）は固定の計算式でユーザー設定の対象外。
+
+### タブバーの出し方
+
+タブが1つだけのタイルでは、タブバーは常時表示せず、マウスカーソルをタイルの上端（数px）へ当てている間だけターミナルへ重ねて出す（既定の`tabBar: "auto"`）。1行分の高さがターミナルに回るぶん表示行が増える代わりに、`+`（新規タブ）・`▼`（シェルプロファイル指定の新規タブ）・タブの右クリックメニュー・タブのドラッグ&ドロップにはマウスを上端へ当ててから触ることになる。
+
+```ts
+appearance: {
+  ...defaultAppearance,
+  // タブの数に関わらず常にタブバーを表示する（従来の挙動）
+  tabBar: "always",
+},
+```
+
+- タブが2つ以上あるタイルは`"auto"`でも常時表示（どのタブを見ているか分からなくなるため）
+- ブラウザタブ・カスタムビュータブだけのタイルも常時表示（ネイティブのwebviewがHTMLより手前に描かれるため重ねられない）
+- 重ねての表示中も高さは占有しないので、出し入れでターミナルの行数は変わらない
+- 呼び出しの当たり判定はタイル上端の数pxだけ（バー1本分にはしていない。出たバーはマウスを受け取る側に回るため、判定を広げるとターミナル1行目のクリック・選択・マウスレポートがバーに吸われてしまう）
+- キーボードだけで同じ操作へ届くよう、`rename-tab`アクション（既定 prefix + `r`）とコマンドパレットの`New Tab: <プロファイル名>`を用意している
 
 ### 背景の透過・グラデーション・画像
 
@@ -592,6 +613,8 @@ Windows TerminalやWeztermのように、新規タブ作成時に起動するシ
 Windows環境では起動時に`wsl.exe --list --quiet`相当でインストール済みのWSLディストロを自動検出し、`id: "wsl-<ディストロ名>"`のプロファイルとして追加する（PowerShellは`id: "powershell"`の固定プロファイルとして常に追加される）。macOS/Linuxでは自動検出は行われず、`shell.profiles`で指定した分のみが有効。
 
 `shell.profiles`と自動検出プロファイルは`id`単位でマージされ、**同じidの場合は`shell.profiles`側が優先**される（自動検出結果の名前・コマンドを上書きしたい場合に使える）。不正なプロファイル（`id`/`name`/`command`のいずれかが欠けている、`id`が形式不正）は警告付きでスキップされる。
+
+コマンドパレット（既定 prefix + `:`）にもプロファイルごとに`New Tab: <name>`という項目が並ぶため、ドロップダウンを開かずキーボードだけでも同じ操作ができる。
 
 利用可能なプロファイル一覧はCLIの`niwaterm shell-profiles`で確認できる（詳細: `docs/guide/cli.md`）。
 

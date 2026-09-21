@@ -197,6 +197,15 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("prefix -> r でタブ名変更", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("r"))).toEqual({
+      kind: "command",
+      command: { type: "renameTab" },
+    });
+  });
+
   test("prefix -> b でサイドバートグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

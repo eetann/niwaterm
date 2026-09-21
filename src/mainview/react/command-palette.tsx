@@ -1,5 +1,6 @@
+import { Terminal } from "lucide-react";
 import { useMemo } from "react";
-import type { KeybindAction } from "@niwaterm/config";
+import type { KeybindAction, ShellProfile } from "@niwaterm/config";
 import {
   CommandDialog,
   CommandEmpty,
@@ -21,18 +22,37 @@ export interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectAction: (action: NonPaletteKeybindAction) => void;
+  /** シェルプロファイルを指定した新規タブ作成。タブバーの▼と同じ操作をキーボードだけで届かせる */
+  shellProfiles: ShellProfile[];
+  onSelectShellProfile: (shellProfileId: string) => void;
   shortcutLabelFor: (action: NonPaletteKeybindAction) => string | undefined;
 }
 
+/** アクション由来の項目とシェルプロファイル由来の項目を同じ並びへ混ぜるためのタグ付きUnion */
+type PaletteItem =
+  | { kind: "action"; def: CommandPaletteActionDef }
+  | { kind: "shellProfile"; profile: ShellProfile };
+
+/**
+ * カテゴリ順はCOMMAND_PALETTE_ACTIONSの登場順のまま。シェルプロファイルは
+ * new-tab系と並べたいので「タブ」カテゴリの末尾へ足す（そのカテゴリが無いことは無いが、
+ * 無ければ新しいカテゴリとして末尾に出る）
+ */
 function groupByCategory(
   defs: readonly CommandPaletteActionDef[],
-): Map<CommandPaletteCategory, CommandPaletteActionDef[]> {
-  const map = new Map<CommandPaletteCategory, CommandPaletteActionDef[]>();
+  shellProfiles: readonly ShellProfile[],
+): Map<CommandPaletteCategory, PaletteItem[]> {
+  const map = new Map<CommandPaletteCategory, PaletteItem[]>();
   for (const def of defs) {
     const list = map.get(def.category) ?? [];
-    list.push(def);
+    list.push({ kind: "action", def });
     map.set(def.category, list);
   }
+  const tabItems = map.get("タブ") ?? [];
+  for (const profile of shellProfiles) {
+    tabItems.push({ kind: "shellProfile", profile });
+  }
+  map.set("タブ", tabItems);
   return map;
 }
 
@@ -40,18 +60,46 @@ export function CommandPalette({
   open,
   onOpenChange,
   onSelectAction,
+  shellProfiles,
+  onSelectShellProfile,
   shortcutLabelFor,
 }: CommandPaletteProps) {
-  const grouped = useMemo(() => groupByCategory(COMMAND_PALETTE_ACTIONS), []);
+  const grouped = useMemo(
+    () => groupByCategory(COMMAND_PALETTE_ACTIONS, shellProfiles),
+    [shellProfiles],
+  );
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="コマンドを検索..." />
       <CommandList>
         <CommandEmpty>該当するコマンドがありません</CommandEmpty>
-        {[...grouped.entries()].map(([category, defs]) => (
+        {[...grouped.entries()].map(([category, items]) => (
           <CommandGroup key={category} heading={category}>
-            {defs.map((def) => {
+            {items.map((item) => {
+              if (item.kind === "shellProfile") {
+                const { profile } = item;
+                return (
+                  <CommandItem
+                    key={`shell:${profile.id}`}
+                    value={`New Tab: ${profile.name}`}
+                    keywords={[`${profile.name}で新しいタブを開く`, profile.id, profile.command]}
+                    onSelect={() => {
+                      onOpenChange(false);
+                      onSelectShellProfile(profile.id);
+                    }}
+                  >
+                    <Terminal />
+                    <div className="flex flex-col">
+                      <span>New Tab: {profile.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {profile.name}で新しいタブを開く
+                      </span>
+                    </div>
+                  </CommandItem>
+                );
+              }
+              const { def } = item;
               const Icon = def.icon;
               const shortcut = shortcutLabelFor(def.action);
               return (

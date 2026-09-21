@@ -10,6 +10,7 @@ import {
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
   type ShellProfile,
+  type TabBarMode,
 } from "@niwaterm/config";
 import { createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -86,6 +87,12 @@ const selectionMenuRootEl = document.getElementById("selection-menu-root") as HT
 const tileElByTileId = new Map<TileId, HTMLElement>();
 const tabBarElByTileId = new Map<TileId, HTMLDivElement>();
 const tabBarReactRootByTileId = new Map<TileId, MemoRoot>();
+/** タブバーの出し方（appearance.tabBar）。configが届くまでは既定の"auto"で動く */
+let tabBarMode: TabBarMode = defaultAppearance.tabBar;
+/** メニュー表示中・タブ名の編集中のタイル。オーバーレイのタブバーをマウスが離れても隠さない */
+const tabBarPinnedTileIds = new Set<TileId>();
+/** マウスが上端にいるタイル。オーバーレイのタブバーを出す条件のうちマウス側の分 */
+let hoveredTabBarTileId: TileId | null = null;
 // shellProfilesは設定リロードのたびに配列ごと作り直されるため、参照比較の代わりに世代番号で見る
 let shellProfilesVersion = 0;
 const tabContentElByTabId = new Map<TabId, HTMLDivElement>();
@@ -248,6 +255,11 @@ function renderCommandPalette(): void {
       },
       onSelectAction: (action: NonPaletteKeybindAction) => {
         handleTileCommand(actionToTileCommand(action));
+      },
+      shellProfiles,
+      onSelectShellProfile: (shellProfileId: string) => {
+        if (!focusedTileId) return;
+        sendMessage("newTab", { tileId: focusedTileId, shellProfileId });
       },
       shortcutLabelFor: shortcutLabelForAction,
     }),
@@ -523,6 +535,9 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
   root.setProperty("--term-bg-image", config.backgroundImage);
   applyAnsiPalette(config.ansiColors);
+  tabBarMode = config.tabBar;
+  // タブバーの出し方が変わると.tile-contentの高さも変わる。下のsendResizeが実寸を送り直す
+  for (const tileId of tabBarElByTileId.keys()) updateTabBarOverlay(tileId);
   // 罫線・ブロック文字を行の高さへ合わせる変換はフォント・サイズ・行高に依存するため測り直す
   updateCellGlyphTransform();
   // フォントサイズ変更でcellWidth/cellHeightが変わりうるため、表示中の全タブへ再計測・再送する
@@ -1429,9 +1444,91 @@ function renderTileTabBar(tileId: TileId): void {
         focusTileLocally(tileId);
         sendMessage("toggleZoomTile", { tileId });
       },
+      onInteractiveChange: (active: boolean) => {
+        if (active) tabBarPinnedTileIds.add(tileId);
+        else tabBarPinnedTileIds.delete(tileId);
+        syncTabBarReveal();
+      },
     }),
   );
+  updateTabBarOverlay(tileId);
 }
+
+// ---- タブが1つだけのタイルのタブバー（オーバーレイ表示。appearance.tabBar === "auto"）----
+// 1行分の高さをターミナルへ譲り、タイル上端へマウスが入っている間だけ重ねて出す。
+// タブが2つ以上あるタイルは識別のためにタブバーが常に要るので対象外。
+// ブラウザタブも対象外にする: ネイティブのオーバーレイ(OOPIF)がHTMLより手前に描かれるため
+// 重ねても見えず、マウスイベントも奪われてホバーを拾えない
+// （docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）。
+
+/** そのタイルのタブバーを重ね置きにするか決め、.overlayを付け外しする */
+function updateTabBarOverlay(tileId: TileId): void {
+  const barEl = tabBarElByTileId.get(tileId);
+  if (!barEl) return;
+  const activeTabId = activeTabByTile.get(tileId);
+  const overlay =
+    tabBarMode === "auto" &&
+    tabIdsByTileId.get(tileId)?.length === 1 &&
+    activeTabId !== undefined &&
+    !browserElByTabId.has(activeTabId);
+  barEl.classList.toggle("overlay", overlay);
+  syncTabBarReveal();
+}
+
+/** マウス位置・ピン状態から、オーバーレイ表示のタブバーの見え方を揃え直す */
+function syncTabBarReveal(): void {
+  for (const [tileId, barEl] of tabBarElByTileId) {
+    if (!barEl.classList.contains("overlay")) {
+      barEl.classList.remove("revealed");
+      continue;
+    }
+    barEl.classList.toggle(
+      "revealed",
+      tileId === hoveredTabBarTileId || tabBarPinnedTileIds.has(tileId),
+    );
+  }
+}
+
+/**
+ * オーバーレイのタブバーを呼び出すタイル上端からの距離(px)。バー1本分(29px)ではなく極細にする:
+ * 出たバーはマウスを受け取る側に回るため、帯をバーと同じ高さにするとターミナル1行目の
+ * クリック・選択・マウスレポートがバーに吸われてしまう。タイル自身のpadding(2px)も
+ * この帯に含まれるので、ターミナルから借りるのは実質2px
+ */
+const TAB_BAR_REVEAL_EDGE_PX = 4;
+
+/**
+ * マウスがタイル上端の呼び出し帯に入ったか、または出ているバーの上にいるかを見る
+ * （後者が無いと、バーへ手を伸ばした瞬間に帯から出て引っ込んでしまう）。
+ * getBoundingClientRectはレイアウトを強制するため、重ね置きのタブバーを持つタイルの上でだけ読む
+ */
+document.addEventListener("mousemove", (e) => {
+  const target = e.target instanceof Element ? e.target : null;
+  const tileEl = target?.closest(".tile");
+  const tileId = tileEl instanceof HTMLElement ? tileEl.dataset["tileId"] : undefined;
+  let hovered: TileId | null = null;
+  if (tileEl && tileId !== undefined) {
+    const barEl = tabBarElByTileId.get(tileId);
+    if (barEl?.classList.contains("overlay")) {
+      if (target?.closest(".tab-bar") === barEl) {
+        hovered = tileId;
+      } else {
+        const offsetY = e.clientY - tileEl.getBoundingClientRect().top;
+        if (offsetY >= 0 && offsetY <= TAB_BAR_REVEAL_EDGE_PX) hovered = tileId;
+      }
+    }
+  }
+  if (hovered === hoveredTabBarTileId) return;
+  hoveredTabBarTileId = hovered;
+  syncTabBarReveal();
+});
+
+// ウィンドウの外へ抜けるとmousemoveが来なくなり、出したままのバーが残る
+document.documentElement.addEventListener("mouseleave", () => {
+  if (hoveredTabBarTileId === null) return;
+  hoveredTabBarTileId = null;
+  syncTabBarReveal();
+});
 
 /** 前回登場したが今回登場しなかったtab/split/tileの後始末（DOM除去・ResizeObserver停止） */
 function gcStale(
@@ -1477,6 +1574,8 @@ function gcStale(
     tileEl.remove();
     tileElByTileId.delete(tileId);
     tabBarElByTileId.delete(tileId);
+    tabBarPinnedTileIds.delete(tileId);
+    if (hoveredTabBarTileId === tileId) hoveredTabBarTileId = null;
   }
   for (const [splitId, splitEl] of splitElBySplitId) {
     if (seenSplitIds.has(splitId)) continue;
@@ -1713,6 +1812,28 @@ function openRenameActiveBoardDialog(): void {
     boardLabel(board, index),
     (name) => {
       sendMessage("renameBoard", { boardId, name });
+    },
+  );
+}
+
+/**
+ * キーバインド・コマンドパレットからのフォーカス中タブの名前変更。タブバーのインライン編集と違い
+ * タブバーが出ていなくても（1タブのタイルのオーバーレイ表示）使えるよう、入力ダイアログで受ける
+ * （初期値・空文字列の扱いはタブバー側と揃える）
+ */
+function openRenameFocusedTabDialog(): void {
+  if (!focusedTileId || !currentTabId || !lastLayout) return;
+  const leaf = findNode(lastLayout, focusedTileId);
+  if (!leaf || leaf.kind !== "leaf") return;
+  const tabId = currentTabId;
+  const index = leaf.tabIds.indexOf(tabId);
+  if (index === -1) return;
+  openPromptDialog(
+    "タブの名前を変更",
+    "空のまま確定すると既定の連番ラベルへ戻ります。",
+    lastTabNames[tabId] || String(index + 1),
+    (name) => {
+      sendMessage("renameTab", { tabId, name });
     },
   );
 }
@@ -2508,6 +2629,9 @@ function handleTileCommand(cmd: TileCommand): void {
       break;
     case "newCustomViewTab":
       sendMessage("newCustomViewTab", { tileId: focusedTileId });
+      break;
+    case "renameTab":
+      openRenameFocusedTabDialog();
       break;
     case "restartTab": {
       if (!currentTabId) return;

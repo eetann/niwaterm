@@ -11,6 +11,7 @@ import {
   defaultBrowserConfig,
   defaultMouseConfig,
   isKeybindAction,
+  isTabBarMode,
   type KeybindingsConfig,
   type LayoutPreset,
   type LayoutsConfig,
@@ -350,6 +351,13 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       ),
     ),
     ansiColors,
+    tabBar: resolveField(
+      "appearance",
+      "tabBar",
+      user?.tabBar,
+      defaultAppearance.tabBar,
+      isTabBarMode,
+    ),
   };
 }
 

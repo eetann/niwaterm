@@ -189,6 +189,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     icon: ChevronLeft,
   },
   {
+    action: "rename-tab",
+    labelEn: "Rename Tab",
+    label: "タブの名前を変更",
+    category: "タブ",
+    icon: Pencil,
+    keywords: ["名前"],
+  },
+  {
     action: "restart-tab",
     labelEn: "Restart Tab",
     label: "タブを再起動",

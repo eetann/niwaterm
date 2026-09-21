@@ -43,6 +43,7 @@ export const KEYBIND_ACTIONS = [
   "new-custom-view-tab",
   "next-tab",
   "prev-tab",
+  "rename-tab",
   "restart-tab",
   "next-board",
   "prev-board",
@@ -104,6 +105,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   "shift+t": "new-browser-tab",
   n: "next-tab",
   p: "prev-tab",
+  // tmuxにpane名の概念は無いので踏襲元が無い。rename-boardの","と対で覚えられるよう、
+  // 素直にrenameの頭文字を充てる
+  r: "rename-tab",
   // tmuxのbind-key , rename-window相当（Boardはtmuxのwindowに対応する）
   ",": "rename-board",
   "shift+n": "new-workspace",

@@ -46,6 +46,11 @@ export interface TileTabBarProps {
   onRequestTerminalFocus: () => void;
   onRenameTab: (tabId: TabId, name: string) => void;
   onToggleZoom: () => void;
+  /**
+   * メニューを開いている・名前を編集している間だけtrue。オーバーレイ表示のタブバー
+   * （タブ1つのタイル）を、マウスがタイル上端から離れても消さないための通知
+   */
+  onInteractiveChange?: (active: boolean) => void;
 }
 
 /**
@@ -77,6 +82,7 @@ export function TileTabBar({
   onRequestTerminalFocus,
   onRenameTab,
   onToggleZoom,
+  onInteractiveChange,
 }: TileTabBarProps) {
   // 名前編集中のタブ。確定はEnterのみ、Escapeまたはフォーカス喪失時は変更を破棄する
   const [editingTabId, setEditingTabId] = useState<TabId | null>(null);
@@ -84,8 +90,19 @@ export function TileTabBar({
   // 「名前を変更」選択によるメニュー閉じ時はinputへautoFocusさせたいため、
   // onCloseAutoFocus側でonRequestTerminalFocusを呼ばないようにするための一時フラグ
   const renamingViaMenuRef = useRef(false);
+  // メニュー・名前編集の同時進行数。「名前を変更」はメニューを閉じながら編集を始めるので
+  // 一時的に2つ重なる（単なるbooleanだと、閉じた側の通知で編集中まで解除されてしまう）
+  const interactiveCountRef = useRef(0);
+
+  function changeInteractive(delta: number): void {
+    const before = interactiveCountRef.current;
+    const after = Math.max(0, before + delta);
+    interactiveCountRef.current = after;
+    if (before > 0 !== after > 0) onInteractiveChange?.(after > 0);
+  }
 
   function startEditing(tabId: TabId, currentLabel: string): void {
+    changeInteractive(1);
     setEditingTabId(tabId);
     setEditingValue(currentLabel);
   }
@@ -94,12 +111,14 @@ export function TileTabBar({
     if (!editingTabId) return;
     onRenameTab(editingTabId, editingValue);
     setEditingTabId(null);
+    changeInteractive(-1);
     onRequestTerminalFocus();
   }
 
   function cancelEditing(): void {
     if (!editingTabId) return;
     setEditingTabId(null);
+    changeInteractive(-1);
     onRequestTerminalFocus();
   }
 
@@ -130,7 +149,10 @@ export function TileTabBar({
                 className="h-7 w-20 flex-none rounded-md border border-ring bg-background px-2 text-xs text-foreground outline-none"
               />
             ) : (
-              <ContextMenu key={tab.tabId}>
+              <ContextMenu
+                key={tab.tabId}
+                onOpenChange={(open) => changeInteractive(open ? 1 : -1)}
+              >
                 <ContextMenuTrigger asChild>
                   <TabsTrigger
                     value={tab.tabId}
@@ -194,7 +216,7 @@ export function TileTabBar({
       <Button variant="ghost" size="icon-xs" onClick={onAddTab} title="新しいタブ">
         <Plus />
       </Button>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => changeInteractive(open ? 1 : -1)}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-xs" title="シェルを選択">
             <ChevronDown />

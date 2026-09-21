@@ -1,7 +1,9 @@
 export {
   type AppearanceConfig,
   defaultAppearance,
+  isTabBarMode,
   type ResolvedAppearanceConfig,
+  type TabBarMode,
 } from "./appearance";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export { type CustomViewConfig, type ResolvedCustomViewConfig } from "./custom-view";

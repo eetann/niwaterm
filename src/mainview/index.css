@@ -346,6 +346,33 @@ body {
   overflow-x: auto;
 }
 
+/*
+ * タブが1つだけのタイルのタブバー（appearance.tabBarが"auto"のとき）。1行分の高さを
+ * ターミナルへ譲り、タイル上端へマウスを寄せた間だけ.revealedが付いて重なって出る。
+ * 出し入れはopacity/pointer-eventsだけで行いレイアウトは動かさない（display:noneや
+ * flexへの出し入れだと、出るたびにcols/rowsが振り直されてTUIが再描画されてしまう）。
+ * 非表示中にpointer-events:noneを外せないのも同じ理由で、重なっているターミナル1行目の
+ * クリック・選択・マウスレポートを奪ってしまうため。
+ * 地は通常時と同じ#181825相当を不透明で塗る: 下にターミナルの文字がいるので、
+ * ウィンドウ透過中（--term-bg-opacity < 100%）と同じ塗り方では文字が透けてしまう
+ */
+.tab-bar.overlay {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  background-color: color-mix(in srgb, #000 20%, var(--term-bg));
+  border-bottom: 1px solid #313244;
+  transition: opacity 100ms ease-out;
+}
+.tab-bar.overlay.revealed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .tile-content {
   position: relative;
   flex: 1;

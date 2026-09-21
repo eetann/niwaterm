@@ -460,6 +460,19 @@ describe("resolveAppearance", () => {
       logSpy.mockRestore();
     }
   });
+
+  test('tabBarは"auto"/"always"だけ受け付ける', () => {
+    expect(resolveAppearance({ appearance: { tabBar: "always" } }).tabBar).toBe("always");
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveAppearance({ appearance: { tabBar: "hover" as never } }).tabBar).toBe(
+        defaultAppearance.tabBar,
+      );
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });
 
 describe("resolveBrowser", () => {
