@@ -52,7 +52,13 @@ if [[ -z "${NIWATERM_TAB_ID:-}" ]] || ! command -v niwaterm > /dev/null 2>&1 \
   exit $?
 fi
 
-opts=$(printf '%q ' "$@")
+# printfは引数が無くても書式を1回は適用するため、`fzf-niwaterm`を引数なしで呼ぶと
+# 空文字列の引数が1つ出てしまう。fzfは空の引数を`unknown option: `として即座に終了するので、
+# 引数がある時だけ組み立てる
+opts=""
+if [[ $# -gt 0 ]]; then
+  opts=$(printf '%q ' "$@")
+fi
 
 # popup内シェルはこのプロセスの環境変数（FZF_DEFAULT_OPTS等）をIPC越しには一切継承
 # しないため、fzf-tmuxと同様に必要な分だけ明示的にexportして渡す
