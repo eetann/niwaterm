@@ -111,6 +111,9 @@ export type BoardOptions = {
 
 export function createBoard(opts: BoardOptions) {
   const createSession = opts.createSession ?? createTerminalSession;
+  // 通知先のWorkspaceは固定ではない。Boardごと別ワークスペースへ移せる（workspace.tsの
+  // detachBoard/adoptBoard）ため、opts.onAllTabsClosedを直接呼ばず差し替え可能な変数で持つ
+  let onAllTabsClosed = opts.onAllTabsClosed;
   const sessions = new Map<TabId, TerminalSession>();
   const browserTabs = new Map<TabId, BrowserTabState>();
   const sizeByTabId = new Map<TabId, { cols: number; rows: number }>();
@@ -263,7 +266,7 @@ export function createBoard(opts: BoardOptions) {
     if (result.tree === null) {
       disposeSessions([tabId]);
       tabNames.delete(tabId);
-      opts.onAllTabsClosed();
+      onAllTabsClosed();
       return;
     }
     applyCloseResult(result.tree, [tabId], result.tileClosed ? leaf.id : undefined);
@@ -810,6 +813,14 @@ export function createBoard(opts: BoardOptions) {
     return true;
   }
 
+  /**
+   * 「最後のタブが閉じた」通知の宛先を差し替える。Boardごと別ワークスペースへ移した際に、
+   * 移動先のWorkspaceが自分のhandleBoardEmptiedへ張り直すために使う（workspace.tsのadoptBoard）
+   */
+  function setOnAllTabsClosed(handler: () => void): void {
+    onAllTabsClosed = handler;
+  }
+
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
@@ -865,6 +876,7 @@ export function createBoard(opts: BoardOptions) {
     listTabNames,
     listTileNames,
     getPersistableTabs,
+    setOnAllTabsClosed,
     dispose,
   };
 }

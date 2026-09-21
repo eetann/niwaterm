@@ -164,6 +164,12 @@ export type NiwaRPC = {
       switchBoard: { boardId: BoardId };
       /** サイドバーのD&D・move-board-*キーバインドからの並び替え。toIndexは所属ワークスペース内の0始まりの位置（範囲外はbun側でクランプ） */
       moveBoard: { boardId: BoardId; toIndex: number };
+      /**
+       * サイドバーの別ワークスペースへのD&D・move-board-to-workspaceのピッカーからの移動。
+       * toIndexは移動先ワークスペース内の0始まりの挿入位置で、省略時は末尾。
+       * 移動元が空になる（＝そのワークスペースが畳まれる）場合の確認はwebview側が取ってから送る
+       */
+      moveBoardToWorkspace: { boardId: BoardId; workspaceId: WorkspaceId; toIndex?: number };
       closeBoard: { boardId: BoardId };
       renameTab: { tabId: TabId; name: string };
       renameTile: { tileId: TileId; name: string };
@@ -763,6 +769,17 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       moveBoard: ({ boardId, toIndex }: { boardId: BoardId; toIndex: number }) => {
         workspaceManager.moveBoard(boardId, toIndex);
+      },
+      moveBoardToWorkspace: ({
+        boardId,
+        workspaceId,
+        toIndex,
+      }: {
+        boardId: BoardId;
+        workspaceId: WorkspaceId;
+        toIndex?: number;
+      }) => {
+        workspaceManager.moveBoardToWorkspace(boardId, workspaceId, toIndex);
       },
       closeBoard: ({ boardId }: { boardId: BoardId }) => {
         workspaceManager.closeBoard(boardId);

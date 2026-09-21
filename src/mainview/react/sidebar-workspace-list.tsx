@@ -56,6 +56,11 @@ export interface SidebarWorkspaceListProps {
   onMoveWorkspace: (workspaceId: WorkspaceId, toIndex: number) => void;
   /** Board行のD&Dによる並び替え。toIndexは所属ワークスペース内での0始まりの移動先 */
   onMoveBoard: (boardId: BoardId, toIndex: number) => void;
+  /**
+   * Board行を別ワークスペースへD&Dしたときの移動。toIndexは移動先ワークスペース内での0始まりの
+   * 挿入位置。移動元が空になる場合の確認は呼び出し側が取る
+   */
+  onMoveBoardToWorkspace: (boardId: BoardId, workspaceId: WorkspaceId, toIndex: number) => void;
 }
 
 /** 起動時レイアウトのサブメニューに並べるプリセット。開くたびに取り直す（configはホットリロードされるため） */
@@ -87,7 +92,10 @@ interface BoardDragPayload {
 /** ドラッグ中はガイド線を1本だけ出すため、ワークスペース行とBoard行で状態を共有する */
 type SidebarDropTarget =
   | { kind: "workspace"; workspaceId: WorkspaceId; position: SidebarDropPosition }
-  | { kind: "board"; boardId: BoardId; position: SidebarDropPosition };
+  | { kind: "board"; boardId: BoardId; position: SidebarDropPosition }
+  // Board行をワークスペース見出しへ落とす（そのワークスペースの末尾へ移す）。折りたたみ中の
+  // ワークスペースはBoard行が無く、行間のガイド線を出しようがないので見出しごと強調する
+  | { kind: "workspace-boards"; workspaceId: WorkspaceId };
 
 /** ドロップ先の行の上半分なら手前、下半分なら後ろへ挿入する */
 function dropPositionAt(e: React.DragEvent<HTMLElement>): SidebarDropPosition {
@@ -134,6 +142,7 @@ export function SidebarWorkspaceList({
   onClearBoardStartup,
   onMoveWorkspace,
   onMoveBoard,
+  onMoveBoardToWorkspace,
 }: SidebarWorkspaceListProps) {
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Set<WorkspaceId>>(() =>
     loadCollapsedIds(COLLAPSED_WORKSPACES_STORAGE_KEY),
@@ -147,9 +156,6 @@ export function SidebarWorkspaceList({
   const layoutRequestSeq = useRef(0);
   // D&D中に挿入位置のガイド線を出す対象。ドラッグが終わったら必ずnullへ戻す
   const [dropTarget, setDropTarget] = useState<SidebarDropTarget | null>(null);
-  // ドラッグ中のBoardが属するワークスペース。dragover中はdataTransferの中身を読めないため、
-  // 「別ワークスペースのBoard行の上か」の判定にはdragStartで控えたこの値を使う
-  const draggingBoardWorkspaceId = useRef<WorkspaceId | null>(null);
 
   function openLayoutMenu(boardId: BoardId): void {
     const seq = ++layoutRequestSeq.current;
@@ -201,15 +207,11 @@ export function SidebarWorkspaceList({
     );
   }
 
-  // Boardの移動は所属ワークスペース内で完結する（別ワークスペースのBoard行の上ではdropEffectを
-  // 立てないので、カーソルもドロップ不可のまま）
-  function handleBoardDragOver(
-    e: React.DragEvent<HTMLElement>,
-    workspaceId: WorkspaceId,
-    boardId: BoardId,
-  ): void {
+  // Board行の上へのドロップは、同一ワークスペースなら並び替え・別ワークスペースならその位置への
+  // 移動になる。dragover中はdataTransferの中身を読めない（ブラウザのprotected mode）ため、
+  // どちらなのかはdrop時にpayloadを読んで初めて決まる。見た目のガイド線はどちらも同じ
+  function handleBoardDragOver(e: React.DragEvent<HTMLElement>, boardId: BoardId): void {
     if (!e.dataTransfer.types.includes(BOARD_DRAG_MIME)) return;
-    if (draggingBoardWorkspaceId.current !== workspaceId) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const position = dropPositionAt(e);
@@ -236,13 +238,60 @@ export function SidebarWorkspaceList({
     } catch {
       return;
     }
-    if (payload.workspaceId !== workspaceId) return;
+    if (payload.workspaceId !== workspaceId) {
+      // 別ワークスペースからの移動は、移動元からBoardが抜けても移動先の並びは詰まらないため
+      // sidebarDropIndex（自分を取り除いた後の位置へ補正する計算）は使わない
+      onMoveBoardToWorkspace(
+        payload.boardId,
+        workspaceId,
+        position === "before" ? overIndex : overIndex + 1,
+      );
+      return;
+    }
     const boards = workspaces.find((w) => w.workspaceId === workspaceId)?.boards ?? [];
     const fromIndex = boards.findIndex((b) => b.boardId === payload.boardId);
     if (fromIndex === -1) return;
     const toIndex = sidebarDropIndex(fromIndex, overIndex, position);
     if (toIndex === null) return;
     onMoveBoard(payload.boardId, toIndex);
+  }
+
+  /** ワークスペース見出しへのBoardのドロップを許可する。挿入位置は常に末尾なので上下の判定は要らない */
+  function handleWorkspaceHeaderBoardDragOver(
+    e: React.DragEvent<HTMLElement>,
+    workspaceId: WorkspaceId,
+  ): void {
+    if (!e.dataTransfer.types.includes(BOARD_DRAG_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTarget((prev) =>
+      prev?.kind === "workspace-boards" && prev.workspaceId === workspaceId
+        ? prev
+        : { kind: "workspace-boards", workspaceId },
+    );
+  }
+
+  /** ワークスペース見出しへBoardを落とす。そのワークスペースの末尾へ移す（同じワークスペースなら末尾へ並び替え） */
+  function handleWorkspaceHeaderBoardDrop(
+    e: React.DragEvent<HTMLElement>,
+    workspaceId: WorkspaceId,
+  ): void {
+    const raw = e.dataTransfer.getData(BOARD_DRAG_MIME);
+    setDropTarget(null);
+    if (!raw) return;
+    e.preventDefault();
+    let payload: BoardDragPayload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const boards = workspaces.find((w) => w.workspaceId === workspaceId)?.boards ?? [];
+    if (payload.workspaceId === workspaceId) {
+      onMoveBoard(payload.boardId, boards.length - 1);
+      return;
+    }
+    onMoveBoardToWorkspace(payload.boardId, workspaceId, boards.length);
   }
 
   function handleWorkspaceDrop(e: React.DragEvent<HTMLElement>, overIndex: number): void {
@@ -418,14 +467,10 @@ export function SidebarWorkspaceList({
               e.dataTransfer.effectAllowed = "move";
               const payload: BoardDragPayload = { boardId: board.boardId, workspaceId };
               e.dataTransfer.setData(BOARD_DRAG_MIME, JSON.stringify(payload));
-              draggingBoardWorkspaceId.current = workspaceId;
             }}
             // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
-            onDragEnd={() => {
-              draggingBoardWorkspaceId.current = null;
-              setDropTarget(null);
-            }}
-            onDragOver={(e) => handleBoardDragOver(e, workspaceId, board.boardId)}
+            onDragEnd={() => setDropTarget(null)}
+            onDragOver={(e) => handleBoardDragOver(e, board.boardId)}
             onDrop={(e) => handleBoardDrop(e, workspaceId, boardIndex)}
             onClick={() => onSelectBoard(workspaceId, board.boardId)}
             onDoubleClick={(e) => {
@@ -559,6 +604,9 @@ export function SidebarWorkspaceList({
           dropTarget?.kind === "workspace" && dropTarget.workspaceId === workspace.workspaceId
             ? dropTarget.position
             : null;
+        const isBoardDropHeader =
+          dropTarget?.kind === "workspace-boards" &&
+          dropTarget.workspaceId === workspace.workspaceId;
         return (
           <div
             key={workspace.workspaceId}
@@ -571,7 +619,18 @@ export function SidebarWorkspaceList({
               dropPosition === "after" && "border-b-sky-400",
             )}
           >
-            <div className="flex w-full items-center gap-1 py-1.5 pr-2 pl-1">
+            {/*
+              見出し行はBoardの受け皿も兼ねる（落とすとそのワークスペースの末尾へ移る）。
+              折りたたみ中はBoard行が無く、行間へ落とす手段が他に無いため
+            */}
+            <div
+              onDragOver={(e) => handleWorkspaceHeaderBoardDragOver(e, workspace.workspaceId)}
+              onDrop={(e) => handleWorkspaceHeaderBoardDrop(e, workspace.workspaceId)}
+              className={cn(
+                "flex w-full items-center gap-1 rounded-md py-1.5 pr-2 pl-1",
+                isBoardDropHeader && "bg-sky-400/20 ring-1 ring-sky-400",
+              )}
+            >
               <button
                 type="button"
                 tabIndex={-1}

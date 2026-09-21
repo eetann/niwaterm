@@ -212,6 +212,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   "move-workspace-down",
   "move-board-up",
   "move-board-down",
+  // move-board-to-workspaceも同様（移動先ワークスペースを選ぶピッカーが開く操作で、
+  // 並び替え系と同じくキーを常用する人だけがconfigで割り当てる想定）
+  "move-board-to-workspace",
 ];
 
 describe("defaultKeybindings", () => {

@@ -142,9 +142,18 @@ export interface NiwaBoardApi {
   /**
    * Boardを所属ワークスペース内の表示順（サイドバーの並び・未設定時の連番ラベル）のindex番目へ
    * 移動する。indexは0始まりで、範囲外は先頭・末尾へクランプする。中身（レイアウト・タブ）と
-   * アクティブなBoardは変更しない。別のワークスペースへは移せない。boardIdが存在しない場合はfalse
+   * アクティブなBoardは変更しない。別のワークスペースへ移すのはmoveToWorkspace。
+   * boardIdが存在しない場合はfalse
    */
   move(boardId: string, index: number): boolean;
+  /**
+   * Boardを別のワークスペースへ移す（tmuxの`move-window`相当）。レイアウト・タブ・実行中の
+   * プロセスはそのまま移る。indexは移動先での挿入位置（0始まり）で、省略・範囲外は末尾。
+   * アクティブなBoardは移動元・移動先とも変更しない。
+   * 移動元がこれで空になる場合はそのワークスペースごと閉じる（ポップアップを開いていれば
+   * 一緒に閉じる）。boardId・workspaceIdのどちらかが存在しない場合はfalse
+   */
+  moveToWorkspace(boardId: string, workspaceId: string, index?: number): boolean;
 }
 
 export interface NiwaWorkspaceInfo {

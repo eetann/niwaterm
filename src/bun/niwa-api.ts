@@ -243,6 +243,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       move(boardId, index) {
         return workspaceManager.moveBoard(boardId, index);
       },
+      moveToWorkspace(boardId, workspaceId, index) {
+        return workspaceManager.moveBoardToWorkspace(boardId, workspaceId, index).ok;
+      },
     },
     workspace: {
       create(cwd) {

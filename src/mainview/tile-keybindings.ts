@@ -36,6 +36,7 @@ export type TileCommand =
   | { type: "newWorkspace" }
   | { type: "switchBoard"; delta: 1 | -1 }
   | { type: "moveBoard"; delta: 1 | -1 }
+  | { type: "moveBoardToWorkspace" }
   | { type: "renameBoard" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "moveWorkspace"; delta: 1 | -1 }
@@ -188,6 +189,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "moveBoard", delta: -1 };
     case "move-board-down":
       return { type: "moveBoard", delta: 1 };
+    case "move-board-to-workspace":
+      return { type: "moveBoardToWorkspace" };
     case "rename-board":
       return { type: "renameBoard" };
     case "new-workspace":

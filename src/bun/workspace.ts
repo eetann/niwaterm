@@ -32,6 +32,18 @@ export type { GetTabVarResult } from "./board";
 
 export type CloseBoardResult = { ok: true } | { ok: false; reason: "not-found" | "last-board" };
 
+/**
+ * ワークスペース間の移動中、どのWorkspaceにも属していないBoard（detachBoard→adoptBoardの受け渡し）。
+ * Boardインスタンスが自分のPTYセッションを抱えたまま移るため、タブ単体の移動と違いセッションの
+ * 移管は要らない
+ */
+export interface DetachedBoard {
+  boardId: BoardId;
+  board: Board;
+  name?: string;
+  startup?: PersistedBoardStartup;
+}
+
 export interface WorkspaceRenderState {
   activeBoardId: BoardId;
   /** 表示順 */
@@ -270,6 +282,57 @@ export function createWorkspace(opts: WorkspaceOptions) {
     }
     opts.onDirty();
     return { ok: true };
+  }
+
+  /**
+   * Boardを別ワークスペースへ移すために所有権だけ手放す（PTYは落とさない）。名前・起動時レイアウトの
+   * 紐づけも一緒に持ち出し、移動先のadoptBoardがそのまま引き継ぐ。
+   * 切り離した結果Boardが0個になってもここでは何もしない（そのWorkspaceごと畳むかどうかは
+   * workspace-manager.tsの判断）。onDirtyも呼ばない: 移動の途中経過（Boardがどこにも属さない状態・
+   * activeBoardIdが空を指す状態）で描画されないよう、移動が完了してから呼び出し側がまとめて促す
+   */
+  function detachBoard(boardId: BoardId): DetachedBoard | null {
+    const board = boards.get(boardId);
+    if (!board) return null;
+    boards.delete(boardId);
+    order = order.filter((id) => id !== boardId);
+    const name = boardNames.get(boardId);
+    const startup = boardStartups.get(boardId);
+    boardNames.delete(boardId);
+    boardStartups.delete(boardId);
+    if (activeBoardId === boardId && order.length > 0) {
+      activeBoardId = order[order.length - 1];
+    }
+    return {
+      boardId,
+      board,
+      ...(name !== undefined ? { name } : {}),
+      ...(startup !== undefined ? { startup } : {}),
+    };
+  }
+
+  /**
+   * detachBoardで切り離したBoardをこのWorkspaceへ迎え入れる。toIndexは0始まりの挿入位置で、
+   * 省略・範囲外は末尾（サイドバーの並びで一番下）。アクティブBoardは変更しない
+   * （移動しただけで表示中のBoardが切り替わるのは予期しづらいため）。
+   * detachBoardと同じくonDirtyは呼ばない
+   */
+  function adoptBoard(detached: DetachedBoard, toIndex?: number): void {
+    const { boardId, board } = detached;
+    // 空になった通知の宛先を移動元のWorkspaceからこちらへ張り替える。張り替え忘れると
+    // 移動先のboardsに死んだBoardが残り続ける
+    board.setOnAllTabsClosed(() => handleBoardEmptied(boardId));
+    boards.set(boardId, board);
+    // 数値として不正な値（NaN）はspliceが0扱いにして先頭へ入れてしまうため、末尾へ寄せる
+    const requested = Number.isFinite(toIndex) ? Math.trunc(toIndex as number) : order.length;
+    order.splice(Math.min(Math.max(0, requested), order.length), 0, boardId);
+    if (detached.name !== undefined) boardNames.set(boardId, detached.name);
+    if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
+  }
+
+  /** detachBoardで最後のBoardを失ったかどうか。この状態のWorkspaceは描画に耐えないため即座に畳む */
+  function isEmpty(): boolean {
+    return boards.size === 0;
   }
 
   /**
@@ -714,6 +777,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     newBoard,
     switchBoard,
     closeBoard,
+    detachBoard,
+    adoptBoard,
+    isEmpty,
     moveBoard,
     moveBoardBy,
     setBoardName,

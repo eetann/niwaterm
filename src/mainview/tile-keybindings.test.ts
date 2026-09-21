@@ -180,6 +180,14 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     expect(actionToTileCommand("prev-board")).toEqual({ type: "switchBoard", delta: -1 });
   });
 
+  test("move-board-* は並び替え・別ワークスペースへの移動コマンドへ変換される", () => {
+    expect(actionToTileCommand("move-board-up")).toEqual({ type: "moveBoard", delta: -1 });
+    expect(actionToTileCommand("move-board-down")).toEqual({ type: "moveBoard", delta: 1 });
+    expect(actionToTileCommand("move-board-to-workspace")).toEqual({
+      type: "moveBoardToWorkspace",
+    });
+  });
+
   test("prefix -> , でBoard名変更", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

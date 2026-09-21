@@ -27,6 +27,14 @@ export type { BoardId } from "./board";
 
 export type WorkspaceId = string;
 
+/**
+ * moveBoardToWorkspaceの結果。sourceWorkspaceClosedは移動元が空になって畳まれたかどうかで、
+ * CLI・webviewがその旨をユーザーへ伝えるために使う
+ */
+export type MoveBoardToWorkspaceResult =
+  | { ok: true; sourceWorkspaceClosed: boolean }
+  | { ok: false; reason: "board-not-found" | "workspace-not-found" };
+
 export type CloseWorkspaceResult =
   | { ok: true }
   | { ok: false; reason: "not-found" | "last-workspace" };
@@ -234,6 +242,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return undefined;
   }
 
+  /** moveBoardToWorkspace用。インスタンスではなくidが要る（移動元を畳む際にorder・名前も引くため） */
+  function findWorkspaceIdByBoardId(boardId: BoardId): WorkspaceId | null {
+    for (const [workspaceId, ws] of workspaces) {
+      if (ws.hasBoard(boardId)) return workspaceId;
+    }
+    return null;
+  }
+
   /** 種別（terminal/browser）を問わずtabIdの所在を返す。tab show用 */
   function locateTab(tabId: TabId): TabLocation | null {
     for (const [workspaceId, ws] of workspaces) {
@@ -310,7 +326,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
 
   /**
    * Boardの表示順（サイドバーの並び・未設定時の連番ラベル）の並び替え。所属ワークスペース内で
-   * 完結し、Boardが別のワークスペースへ移ることはない。toIndexは0始まりで範囲外はクランプする
+   * 完結する（別のワークスペースへ移すのはmoveBoardToWorkspace）。toIndexは0始まりで範囲外はクランプする
    */
   function moveBoard(boardId: BoardId, toIndex: number): boolean {
     return findOwnerByBoardId(boardId)?.moveBoard(boardId, toIndex) ?? false;
@@ -319,6 +335,49 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   /** moveBoardの相対指定版。deltaは-1で1つ前へ、+1で1つ後ろへ（CLIの`board move --up/--down`向け） */
   function moveBoardBy(boardId: BoardId, delta: number): boolean {
     return findOwnerByBoardId(boardId)?.moveBoardBy(boardId, delta) ?? false;
+  }
+
+  /**
+   * Boardを別のワークスペースへ移す。BoardインスタンスがPTYセッションごと移るため、レイアウト・
+   * タブ・実行中のプロセスはそのまま維持される（タブ単体のワークスペース跨ぎ移動が非対応なのとは
+   * 事情が違う。moveTab参照）。toIndexは移動先での0始まりの挿入位置で、省略・範囲外は末尾。
+   * アクティブなBoardは移動元・移動先とも変更しない。
+   * 移動元がこれで空になる場合はそのワークスペースごと畳み（sourceWorkspaceClosed: true）、
+   * 表示中だったなら移動先のワークスペースへ切り替える。空になるのが破壊的かどうかの確認は
+   * 呼び出し側の責務（webviewはmainview/index.tsが確認ダイアログを出す）
+   */
+  function moveBoardToWorkspace(
+    boardId: BoardId,
+    toWorkspaceId: WorkspaceId,
+    toIndex?: number,
+  ): MoveBoardToWorkspaceResult {
+    const target = workspaces.get(toWorkspaceId);
+    if (!target) return { ok: false, reason: "workspace-not-found" };
+    const sourceId = findWorkspaceIdByBoardId(boardId);
+    if (sourceId === null) return { ok: false, reason: "board-not-found" };
+    if (sourceId === toWorkspaceId) {
+      // 同一ワークスペース内なら並び替えと同じ意味になる（D&Dの取り違え・CLIの指定ミスを
+      // エラーにせず吸収する）。挿入位置の指定が無ければ何も動かさない
+      if (toIndex !== undefined) moveBoard(boardId, toIndex);
+      return { ok: true, sourceWorkspaceClosed: false };
+    }
+    const source = workspaces.get(sourceId) as Workspace;
+    const detached = source.detachBoard(boardId);
+    if (!detached) return { ok: false, reason: "board-not-found" };
+    target.adoptBoard(detached, toIndex);
+    const sourceWorkspaceClosed = source.isEmpty();
+    if (sourceWorkspaceClosed) {
+      // Boardが0個のワークスペースはactiveBoardIdが何も指さず描画に耐えないため畳む。
+      // 移したBoardは既に移動先が抱えているので、disposeで落ちるのはポップアップだけ
+      source.dispose();
+      workspaces.delete(sourceId);
+      workspaceNames.delete(sourceId);
+      order = order.filter((id) => id !== sourceId);
+      // 表示中のワークスペースが消えた場合は、今移したBoardがある側を見せる
+      if (activeId === sourceId) activeId = toWorkspaceId;
+    }
+    opts.onDirty();
+    return { ok: true, sourceWorkspaceClosed };
   }
 
   function setBoardName(boardId: BoardId, name: string): boolean {
@@ -721,6 +780,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     closeBoard,
     moveBoard,
     moveBoardBy,
+    moveBoardToWorkspace,
     setBoardName,
     setBoardStartup,
     getBoardStartup,

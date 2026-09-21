@@ -48,6 +48,7 @@ export const KEYBIND_ACTIONS = [
   "prev-board",
   "move-board-up",
   "move-board-down",
+  "move-board-to-workspace",
   "rename-board",
   "new-workspace",
   "next-workspace",

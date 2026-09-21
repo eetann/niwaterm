@@ -419,6 +419,129 @@ describe("moveBoard", () => {
   });
 });
 
+describe("moveBoardToWorkspace", () => {
+  /** ワークスペースAに2つ、ワークスペースBに1つBoardがある状態を作る */
+  function createTwoWorkspaces() {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const wsA = mgr.snapshot().activeWorkspaceId;
+    const boardA1 = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const boardA2 = mgr.newBoard(wsA) as string;
+    mgr.newWorkspace();
+    const wsB = mgr.snapshot().activeWorkspaceId;
+    const boardB1 = mgr.listWorkspaces()[1]?.activeBoardId as string;
+    mgr.switchWorkspace(wsA);
+    resolvePending(mgr);
+    const boardIdsOf = (workspaceId: string) =>
+      mgr
+        .listWorkspaces()
+        .find((e) => e.workspaceId === workspaceId)
+        ?.boards.map((b) => b.boardId);
+    return { mgr, created, wsA, wsB, boardA1, boardA2, boardB1, boardIdsOf };
+  }
+
+  test("Boardが移動先ワークスペースの末尾へ移り、移動元からは消える", () => {
+    const { mgr, wsA, wsB, boardA1, boardA2, boardB1, boardIdsOf } = createTwoWorkspaces();
+    expect(mgr.moveBoardToWorkspace(boardA2, wsB)).toEqual({
+      ok: true,
+      sourceWorkspaceClosed: false,
+    });
+    expect(boardIdsOf(wsA)).toEqual([boardA1]);
+    expect(boardIdsOf(wsB)).toEqual([boardB1, boardA2]);
+  });
+
+  test("toIndexで移動先の挿入位置を指定できる（範囲外は末尾へクランプ）", () => {
+    const { mgr, wsB, boardA2, boardB1, boardIdsOf } = createTwoWorkspaces();
+    mgr.moveBoardToWorkspace(boardA2, wsB, 0);
+    expect(boardIdsOf(wsB)).toEqual([boardA2, boardB1]);
+  });
+
+  test("移動してもタブのセッションは作り直されない（PTYごと移る）", () => {
+    const { mgr, created, wsB, boardA2 } = createTwoWorkspaces();
+    const before = created.length;
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    expect(created.length).toBe(before);
+    expect(created.some((c) => c.disposed)).toBe(false);
+  });
+
+  test("アクティブなBoardは移動元・移動先とも変わらない", () => {
+    const { mgr, wsA, wsB, boardA1, boardA2, boardB1 } = createTwoWorkspaces();
+    // newBoardは作ったBoardをアクティブにするため、移動前のwsAのアクティブはboardA2
+    mgr.switchBoard(boardA1);
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    const entries = mgr.listWorkspaces();
+    expect(entries.find((e) => e.workspaceId === wsA)?.activeBoardId).toBe(boardA1);
+    expect(entries.find((e) => e.workspaceId === wsB)?.activeBoardId).toBe(boardB1);
+  });
+
+  test("アクティブなBoardを移すと、移動元は残りのBoardへ切り替わる", () => {
+    const { mgr, wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces();
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === wsA)?.activeBoardId).toBe(boardA1);
+  });
+
+  test("移動元の最後のBoardを移すとそのワークスペースごと閉じられる", () => {
+    const { mgr, wsB, boardA1, boardA2 } = createTwoWorkspaces();
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    expect(mgr.moveBoardToWorkspace(boardA1, wsB)).toEqual({
+      ok: true,
+      sourceWorkspaceClosed: true,
+    });
+    expect(mgr.snapshot().workspaceIds).toEqual([wsB]);
+  });
+
+  test("表示中のワークスペースが空になって閉じられたら、移動先のワークスペースへ切り替わる", () => {
+    const { mgr, wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces();
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(wsA);
+    mgr.moveBoardToWorkspace(boardA1, wsB);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(wsB);
+  });
+
+  test("移動先で最後のタブが終了したとき、消えるのは移したBoardだけ（移動先が空扱いにならない）", () => {
+    const { mgr, created, wsB, boardA2, boardB1, boardIdsOf } = createTwoWorkspaces();
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    // boardA2のタブ（2番目に作られたセッション）のシェルを終了させる
+    created[1]?.opts.onExit?.(0);
+    expect(boardIdsOf(wsB)).toEqual([boardB1]);
+    expect(mgr.hasBoard(boardA2)).toBe(false);
+  });
+
+  test("同じワークスペースを指定した場合はtoIndexへの並び替えとして扱う", () => {
+    const { mgr, wsA, boardA1, boardA2, boardIdsOf } = createTwoWorkspaces();
+    expect(mgr.moveBoardToWorkspace(boardA2, wsA, 0)).toEqual({
+      ok: true,
+      sourceWorkspaceClosed: false,
+    });
+    expect(boardIdsOf(wsA)).toEqual([boardA2, boardA1]);
+  });
+
+  test("存在しないboardId・workspaceIdは理由付きで失敗する", () => {
+    const { mgr, wsB, boardA2 } = createTwoWorkspaces();
+    expect(mgr.moveBoardToWorkspace("not-found", wsB)).toEqual({
+      ok: false,
+      reason: "board-not-found",
+    });
+    expect(mgr.moveBoardToWorkspace(boardA2, "not-found")).toEqual({
+      ok: false,
+      reason: "workspace-not-found",
+    });
+  });
+
+  test("Board名・起動時レイアウトの紐づけは移動先へ引き継がれる", () => {
+    const { mgr, wsB, boardA2 } = createTwoWorkspaces();
+    mgr.setBoardName(boardA2, "repoA");
+    mgr.setBoardStartup(boardA2, { preset: "dev", restoreMode: "layout" });
+    mgr.moveBoardToWorkspace(boardA2, wsB);
+    const moved = mgr
+      .listWorkspaces()
+      .find((e) => e.workspaceId === wsB)
+      ?.boards.find((b) => b.boardId === boardA2);
+    expect(moved?.name).toBe("repoA");
+    expect(moved?.startup).toEqual({ preset: "dev", restoreMode: "layout" });
+  });
+});
+
 describe("moveWorkspace", () => {
   function createThreeWorkspaces() {
     const { factory } = createFakeSessionFactory();

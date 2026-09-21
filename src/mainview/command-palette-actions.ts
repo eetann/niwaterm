@@ -21,6 +21,7 @@ import {
   ClipboardPaste,
   Columns2,
   Copy,
+  FolderInput,
   FolderPlus,
   Globe,
   Maximize2,
@@ -226,6 +227,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "Board",
     icon: ChevronDown,
     keywords: ["reorder", "並び替え", "順番"],
+  },
+  {
+    action: "move-board-to-workspace",
+    labelEn: "Move Board to Workspace...",
+    label: "Boardを別のワークスペースへ移動",
+    category: "Board",
+    icon: FolderInput,
+    keywords: ["move-window", "window", "workspace", "ワークスペース", "移動"],
   },
   {
     action: "rename-board",

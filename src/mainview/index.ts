@@ -36,7 +36,8 @@ import { PopupToolbar } from "./react/popup-toolbar";
 import { PromptDialog } from "./react/prompt-dialog";
 import { SelectionMenu, type SelectionMenuUserItem } from "./react/selection-menu";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
-import { boardLabel, buildSidebarWorkspaceItems } from "./react/sidebar-props";
+import { WorkspacePicker, type WorkspacePickerItem } from "./react/workspace-picker";
+import { boardLabel, buildSidebarWorkspaceItems, workspaceLabel } from "./react/sidebar-props";
 import { SidebarSwitcher } from "./react/sidebar-switcher";
 import {
   SidebarWorkspaceList,
@@ -78,6 +79,7 @@ const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivEl
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
+const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
@@ -343,6 +345,44 @@ function openPromptDialog(
   promptDialogOnSubmit = onSubmit;
   promptDialogOpen = true;
   renderPromptDialog();
+}
+
+// ---- 移動先ワークスペースのピッカー: Boardをどのワークスペースへ移すか選ぶ ----
+const workspacePickerRoot = createMemoRoot(workspacePickerRootEl, "workspace-picker");
+let workspacePickerOpen = false;
+let workspacePickerHeading = "";
+let workspacePickerItems: WorkspacePickerItem[] = [];
+let workspacePickerOnSelect: ((workspaceId: WorkspaceId) => void) | null = null;
+
+function renderWorkspacePicker(): void {
+  workspacePickerRoot.renderOnEvent(
+    createElement(WorkspacePicker, {
+      open: workspacePickerOpen,
+      heading: workspacePickerHeading,
+      items: workspacePickerItems,
+      onOpenChange: (open: boolean) => {
+        workspacePickerOpen = open;
+        if (!open) {
+          workspacePickerOnSelect = null;
+          imeEl.focus({ preventScroll: true });
+        }
+        renderWorkspacePicker();
+      },
+      onSelect: (workspaceId: WorkspaceId) => workspacePickerOnSelect?.(workspaceId),
+    }),
+  );
+}
+
+function openWorkspacePicker(
+  heading: string,
+  items: WorkspacePickerItem[],
+  onSelect: (workspaceId: WorkspaceId) => void,
+): void {
+  workspacePickerHeading = heading;
+  workspacePickerItems = items;
+  workspacePickerOnSelect = onSelect;
+  workspacePickerOpen = true;
+  renderWorkspacePicker();
 }
 
 // ---- サイドバーのユーザー定義HTML UI（customView）----
@@ -1476,6 +1516,7 @@ function renderSidebar(
       onClearBoardStartup: clearSidebarBoardStartup,
       onMoveWorkspace: moveSidebarWorkspace,
       onMoveBoard: moveSidebarBoard,
+      onMoveBoardToWorkspace: requestMoveBoardToWorkspace,
     }),
   );
 }
@@ -1516,6 +1557,71 @@ function moveSidebarWorkspace(workspaceId: WorkspaceId, toIndex: number): void {
 function moveSidebarBoard(boardId: BoardId, toIndex: number): void {
   sendMessage("moveBoard", { boardId, toIndex });
   imeEl.focus({ preventScroll: true });
+}
+
+/**
+ * Boardの別ワークスペースへの移動要求。サイドバーのD&Dと移動先ピッカーの共通の出口。
+ * toIndexは移動先ワークスペース内の0始まりの挿入位置で、省略時は末尾（ピッカー経由は
+ * 「どの行の間か」という文脈が無いため省略する）。
+ * 移動元に他のBoardが無い場合、移し終えるとそのワークスペースは空になりbun側が畳む。
+ * ワークスペース名と開いているポップアップが失われる破壊的操作なので、その時だけ確認を挟む
+ */
+function requestMoveBoardToWorkspace(
+  boardId: BoardId,
+  workspaceId: WorkspaceId,
+  toIndex?: number,
+): void {
+  const sourceIndex = lastWorkspaces.findIndex((w) => w.boards.some((b) => b.boardId === boardId));
+  const source = sourceIndex >= 0 ? lastWorkspaces[sourceIndex] : undefined;
+  if (!source || source.workspaceId === workspaceId) return;
+  const send = () => {
+    sendMessage("moveBoardToWorkspace", {
+      boardId,
+      workspaceId,
+      ...(toIndex !== undefined ? { toIndex } : {}),
+    });
+    imeEl.focus({ preventScroll: true });
+  };
+  if (source.boards.length > 1) {
+    send();
+    return;
+  }
+  const boardIndex = source.boards.findIndex((b) => b.boardId === boardId);
+  openConfirmDialog(
+    `ワークスペース「${workspaceLabel(source, sourceIndex)}」を閉じますか？`,
+    `${boardLabel(source.boards[boardIndex], boardIndex)}は移動元で最後のBoardのため、移すとそのワークスペースは空になり閉じられます（開いているポップアップも閉じられます）。`,
+    send,
+  );
+}
+
+/**
+ * キーバインド・コマンドパレットからのアクティブBoardの移動。移動先はピッカーで選ぶ
+ * （サイドバーの表示状態に依存しないよう、名前変更と同じくダイアログで受ける）。
+ * 自分が今いるワークスペースは移動先の候補から外す
+ */
+function openMoveActiveBoardToWorkspacePicker(): void {
+  const boardId = activeBoardId;
+  if (!boardId) return;
+  const sourceIndex = lastWorkspaces.findIndex((w) => w.workspaceId === activeWorkspaceId);
+  const source = sourceIndex >= 0 ? lastWorkspaces[sourceIndex] : undefined;
+  const boardIndex = source?.boards.findIndex((b) => b.boardId === boardId) ?? -1;
+  if (!source || boardIndex === -1) return;
+  const items = lastWorkspaces.flatMap<WorkspacePickerItem>((workspace, index) =>
+    workspace.workspaceId === source.workspaceId
+      ? []
+      : [
+          {
+            workspaceId: workspace.workspaceId,
+            label: workspaceLabel(workspace, index),
+            boardCount: workspace.boards.length,
+          },
+        ],
+  );
+  openWorkspacePicker(
+    `Board「${boardLabel(source.boards[boardIndex], boardIndex)}」の移動先`,
+    items,
+    (workspaceId) => requestMoveBoardToWorkspace(boardId, workspaceId),
+  );
 }
 
 /** サイドバーからのBoard名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
@@ -2347,6 +2453,11 @@ function handleTileCommand(cmd: TileCommand): void {
   // focusedTileIdのガードより手前で処理する
   if (cmd.type === "renameBoard") {
     openRenameActiveBoardDialog();
+    return;
+  }
+  // Boardの移動先選びもアクティブBoardが対象。renameBoardと同じくfocusedTileIdのガードより手前で処理する
+  if (cmd.type === "moveBoardToWorkspace") {
+    openMoveActiveBoardToWorkspacePicker();
     return;
   }
   if (cmd.type === "increaseFontSize") {

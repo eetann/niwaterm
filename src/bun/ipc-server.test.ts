@@ -1670,6 +1670,99 @@ describe("POST /move-board", () => {
   });
 });
 
+describe("POST /move-board-to-workspace", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function moveBoardToWorkspace(boardId: string, workspaceId: string): Promise<Response> {
+    return fetch("http://localhost/move-board-to-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId, workspaceId }),
+    });
+  }
+
+  /** ワークスペースAに2つ、ワークスペースBに1つBoardがある状態を作る */
+  function createTwoWorkspaces(mgr: WorkspaceManager) {
+    const wsA = mgr.snapshot().activeWorkspaceId;
+    const boardA1 = mgr.snapshot().workspace.activeBoardId;
+    const boardA2 = mgr.newBoard(wsA) as string;
+    const wsB = mgr.newWorkspace();
+    mgr.switchWorkspace(wsA);
+    return { wsA, wsB, boardA1, boardA2 };
+  }
+
+  function boardIdsOf(mgr: WorkspaceManager, workspaceId: string): string[] | undefined {
+    return mgr
+      .listWorkspaces()
+      .find((e) => e.workspaceId === workspaceId)
+      ?.boards.map((b) => b.boardId);
+  }
+
+  test("指定したワークスペースの末尾へ移動する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const { wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces(mgr);
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await moveBoardToWorkspace(boardA2, wsB);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, sourceWorkspaceClosed: false });
+    expect(boardIdsOf(mgr, wsA)).toEqual([boardA1]);
+    expect(boardIdsOf(mgr, wsB)?.at(-1)).toBe(boardA2);
+  });
+
+  test("移動元が空になった場合はsourceWorkspaceClosedで知らせる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const { wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces(mgr);
+    server = await createIpcServer(socketPath, mgr);
+
+    await moveBoardToWorkspace(boardA2, wsB);
+    const res = await moveBoardToWorkspace(boardA1, wsB);
+
+    expect(await res.json()).toEqual({ ok: true, sourceWorkspaceClosed: true });
+    expect(mgr.snapshot().workspaceIds).toEqual([wsB]);
+    expect(boardIdsOf(mgr, wsA)).toBeUndefined();
+  });
+
+  test("存在しないboardId・workspaceIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const { wsB, boardA2 } = createTwoWorkspaces(mgr);
+    server = await createIpcServer(socketPath, mgr);
+
+    expect((await moveBoardToWorkspace("not-found", wsB)).status).toBe(404);
+    expect((await moveBoardToWorkspace(boardA2, "not-found")).status).toBe(404);
+  });
+
+  test("workspaceIdが無いbodyは400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/move-board-to-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ boardId }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-board", () => {
   let dir: string;
   let socketPath: string;

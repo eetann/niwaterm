@@ -103,7 +103,8 @@ export default defineConfig({
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
 | `niwa.popup.run(command, opts?)` | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列 |
 | `niwa.board.create(cwd?)` | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない） |
-| `niwa.board.move(boardId, index)` | Boardを所属ワークスペース内の表示順（サイドバーの並び・名前未設定時の連番ラベル）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更せず、別のワークスペースへは移せない（CLIの`niwaterm board move`、サイドバーのドラッグ&ドロップと同じ並び替え） |
+| `niwa.board.move(boardId, index)` | Boardを所属ワークスペース内の表示順（サイドバーの並び・名前未設定時の連番ラベル）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え） |
+| `niwa.board.moveToWorkspace(boardId, workspaceId, index?)` | Boardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`、サイドバーで別ワークスペースへドラッグ&ドロップするのと同じ）。レイアウト・タブ・実行中のプロセスはそのまま移る。`index`は移動先での挿入位置（0始まり）で、省略・範囲外は末尾。アクティブなBoardは移動元・移動先とも変更しない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる） |
 | `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
 | `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
 | `niwa.workspace.move(workspaceId, index)` | ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなワークスペースは変更しない（CLIの`niwaterm workspace move`、サイドバーのドラッグ&ドロップと同じ並び替え） |
@@ -290,7 +291,8 @@ keybindings: {
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
-| `move-board-up` / `move-board-down` | アクティブなBoardの表示順をワークスペース内で1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm board move`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
+| `move-board-up` / `move-board-down` | アクティブなBoardの表示順をワークスペース内で1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm board move --up/--down`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
+| `move-board-to-workspace` | アクティブなBoardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`と同じ）。移動先はピッカーで選ぶ（Escapeでキャンセル）。移すとワークスペースが空になる場合は確認ダイアログを挟む。既定キーは無いため使うには自分で割り当てる必要がある |
 | `move-workspace-up` / `move-workspace-down` | アクティブなワークスペースの表示順を1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm workspace move`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
 | `toggle-popup` | ポップアップの表示/非表示切替 |

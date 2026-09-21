@@ -172,6 +172,14 @@ export function boardLabel(board: BoardListEntry, index: number): string {
 }
 
 /**
+ * ワークスペース行の表示名。boardLabelと同じく、名前未設定なら表示順の連番へフォールバックする。
+ * サイドバー以外（移動先ワークスペースのピッカー・確認ダイアログ）でも同じラベルを出すためexportする
+ */
+export function workspaceLabel(workspace: WorkspaceListEntry, index: number): string {
+  return workspace.name || `Workspace ${index + 1}`;
+}
+
+/**
  * サイドバーへ渡すワークスペース一覧を、ラベル整形とactive判定まで済ませた形で組み立てる（DOM非依存）。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
  * Tile/Tabはサイドバーに表示しない（ADR 0006。「1つのBoard=1つの独立した作業」という
@@ -187,7 +195,7 @@ export function buildSidebarWorkspaceItems(
 ): SidebarWorkspaceItem[] {
   return workspaces.map((entry, workspaceIndex) => ({
     workspaceId: entry.workspaceId,
-    label: entry.name || `Workspace ${workspaceIndex + 1}`,
+    label: workspaceLabel(entry, workspaceIndex),
     active: entry.workspaceId === currentActiveWorkspaceId,
     popup: entry.popup
       ? {

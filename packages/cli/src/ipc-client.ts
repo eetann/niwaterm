@@ -591,6 +591,18 @@ export function moveBoard(
   return postJson(endpoint, "/move-board", { boardId, direction });
 }
 
+export type MoveBoardToWorkspaceResult =
+  /** sourceWorkspaceClosedは移動元が空になって閉じられたかどうか */
+  { ok: true; sourceWorkspaceClosed: boolean } | { ok: false; error: string };
+
+export function moveBoardToWorkspace(
+  endpoint: IpcEndpoint,
+  boardId: string,
+  workspaceId: string,
+): Promise<MoveBoardToWorkspaceResult> {
+  return postJson(endpoint, "/move-board-to-workspace", { boardId, workspaceId });
+}
+
 export type NewBoardResult = { ok: true; boardId: string } | { ok: false; error: string };
 
 export function newBoard(

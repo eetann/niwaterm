@@ -403,6 +403,18 @@ function parseMoveBoardBody(body: unknown): MoveBoardRequestBody | null {
   return { ...boardIdBody, direction: b.direction };
 }
 
+interface MoveBoardToWorkspaceRequestBody extends BoardIdRequestBody {
+  workspaceId: string;
+}
+
+function parseMoveBoardToWorkspaceBody(body: unknown): MoveBoardToWorkspaceRequestBody | null {
+  const boardIdBody = parseBoardIdBody(body);
+  if (!boardIdBody) return null;
+  const b = body as { workspaceId?: unknown };
+  if (typeof b.workspaceId !== "string" || b.workspaceId === "") return null;
+  return { ...boardIdBody, workspaceId: b.workspaceId };
+}
+
 function parseSetVarBody(body: unknown): SetVarRequestBody | null {
   const tabIdBody = parseTabIdBody(body);
   if (!tabIdBody) return null;
@@ -782,6 +794,27 @@ function buildApp(
     const ok = workspaceManager.moveBoardBy(parsed.boardId, parsed.direction === "up" ? -1 : 1);
     if (!ok) return c.json({ ok: false, error: `board not found: ${parsed.boardId}` }, 404);
     return c.json({ ok: true });
+  });
+
+  // 移動先ワークスペース内での挿入位置は受け付けず常に末尾へ付ける（位置を細かく決めたいなら
+  // 移動後にmove-boardで並び替える。GUIのD&Dと違いCLIには「どの行の間か」という文脈が無いため）。
+  // 移動元が空になる場合はそのワークスペースごと畳み、その旨をレスポンスで返す
+  app.post("/move-board-to-workspace", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseMoveBoardToWorkspaceBody(body);
+    if (!parsed) {
+      return c.json({ ok: false, error: "expected { boardId: string, workspaceId: string }" }, 400);
+    }
+    const result = workspaceManager.moveBoardToWorkspace(parsed.boardId, parsed.workspaceId);
+    if (!result.ok) {
+      const error =
+        result.reason === "board-not-found"
+          ? `board not found: ${parsed.boardId}`
+          : `workspace not found: ${parsed.workspaceId}`;
+      return c.json({ ok: false, error }, 404);
+    }
+    return c.json({ ok: true, sourceWorkspaceClosed: result.sourceWorkspaceClosed });
   });
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));

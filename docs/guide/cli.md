@@ -145,7 +145,7 @@ niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
 niwaterm board switch --board <boardId>
 niwaterm board close [--board <boardId>]
 niwaterm board rename [--board <boardId>] <name>
-niwaterm board move [--board <boardId>] --up | --down
+niwaterm board move [--board <boardId>] --up | --down | --to-workspace <workspaceId>
 niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>] [--cwd <dir>] [--trust]
 ```
 
@@ -155,7 +155,9 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 - `board switch` — 指定したBoardへ切り替える
 - `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない。`--board`省略時は実行しているタブが属するBoard（niwatermの外から実行した場合はアクティブなBoard）
 - `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る。`--board`の省略時の扱いは`board close`と同じ
-- `board move` — 所属ワークスペース内での表示順（サイドバーの並び・名前未設定時の連番ラベル）を1つ上（`--up`）または1つ下（`--down`）へ移動する。`--up`/`--down`はどちらか一方が必須。中身（タイル・タブ）とアクティブなBoardは変わらず、別のワークスペースへは移らない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.board.move(boardId, index)`を使う）
+- `board move` — Boardを動かす。`--up`/`--down`/`--to-workspace`のいずれか1つが必須
+  - `--up` / `--down` — 所属ワークスペース内での表示順（サイドバーの並び・名前未設定時の連番ラベル）を1つ上・1つ下へ移動する。中身（タイル・タブ）とアクティブなBoardは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.board.move(boardId, index)`を使う）
+  - `--to-workspace <workspaceId>` — Boardを別のワークスペースへ移す（tmuxの`move-window`相当）。レイアウト・タブ・実行中のプロセスはそのまま移り、移動先ワークスペースの末尾に付く。アクティブなBoardは移動元・移動先とも変わらない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる）ので、その旨をメッセージで知らせる
 - `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
