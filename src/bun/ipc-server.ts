@@ -1435,6 +1435,16 @@ function removeFileIfExists(path: string): void {
 }
 
 /**
+ * Bun.serveの既定のidleTimeout（10秒）を無効化する。`popup open --wait`・`--capture-stdout`は
+ * ポップアップが閉じるまでレスポンスを返さない＝その間コネクションに一切データが流れないため、
+ * 既定のままだと利用者がポップアップ内で10秒以上操作した時点でサーバー側から接続が切られ、
+ * CLIが失敗扱いになる（fzf-niwatermならローカルfzfへのフォールバックが走り、fzfが二重に起動する）。
+ * 待ち時間の上限は利用者の操作次第でいくらでも伸びるので、上限そのものを設けない。
+ * 詳細: docs/known-issues/long-waiting-ipc-request-is-cut-at-10-seconds.md
+ */
+const IPC_SERVE_IDLE_TIMEOUT = 0;
+
+/**
  * WSLディストロからは path のUnix domain socketへ接続できないため、Windows限定で
  * ループバックとWSL用仮想アダプタのIPに追加でTCP listenする（bridgeBindAddresses参照）。
  * ポート番号は1つ目のlistenでOSに割り当てさせ、2つ目以降は同じ番号を別アドレスで使う
@@ -1446,7 +1456,12 @@ function startWslBridge(app: ReturnType<typeof buildApp>): ReturnType<typeof Bun
   const servers: ReturnType<typeof Bun.serve>[] = [];
   for (const hostname of bridgeBindAddresses()) {
     try {
-      const server = Bun.serve({ hostname, port: servers[0]?.port ?? 0, fetch: app.fetch });
+      const server = Bun.serve({
+        hostname,
+        port: servers[0]?.port ?? 0,
+        idleTimeout: IPC_SERVE_IDLE_TIMEOUT,
+        fetch: app.fetch,
+      });
       servers.push(server);
       console.log(`[bun] wsl bridge listening on ${hostname}:${server.port}`);
     } catch (err) {
@@ -1493,7 +1508,7 @@ export async function createIpcServer(
     sendNotification,
     getKeybindings,
   );
-  const server = Bun.serve({ unix: path, fetch: app.fetch });
+  const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];
   wslBridgePort = tcpServers[0]?.port ?? null;
   if (wslBridgePort !== null) await writeFile(portFile, String(wslBridgePort));

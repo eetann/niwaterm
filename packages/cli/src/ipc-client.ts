@@ -208,7 +208,8 @@ function ipcFetchInit(
  * IPCリクエストのタイムアウト。アプリが起動していない・終了後の古い接続先情報が残っている
  * 場合に無限に待たないための保険。WSLのミラーモードでは、誰もlistenしていないポートへの接続が
  * 接続拒否ではなく無応答になることがあり、これが無いとCLIがハングする（実機で遭遇）。
- * IPCの操作はいずれも短時間で終わる想定なのでこの長さで足りる
+ * IPCの操作はいずれも短時間で終わる想定なのでこの長さで足りるが、応答までの時間が
+ * 利用者の操作次第で伸びるリクエストだけは例外扱いする（waitPostJson参照）
  */
 const IPC_TIMEOUT_MS = 10_000;
 
@@ -216,12 +217,14 @@ async function ipcFetch(
   endpoint: IpcEndpoint,
   url: string,
   init: RequestInit & { unix?: string },
+  timeoutMs: number | null = IPC_TIMEOUT_MS,
 ): Promise<Response> {
   if (endpoint.kind === "unavailable") throw new Error(endpoint.reason);
   // 候補を順に試すため、AbortSignalはホストごとに作り直す（使い回すと2つ目に渡る時点で
   // 1つ目の待ち時間を消化済みになる）
+  const timeoutSignal = () => (timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs));
   if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(IPC_TIMEOUT_MS) });
+    return await fetch(url, { ...init, signal: timeoutSignal() });
   }
   let lastError: unknown;
   for (const host of endpoint.hosts) {
@@ -230,13 +233,33 @@ async function ipcFetch(
     try {
       return await fetch(target.toString(), {
         ...init,
-        signal: AbortSignal.timeout(IPC_TIMEOUT_MS),
+        signal: timeoutSignal(),
       });
     } catch (err) {
       lastError = err;
     }
   }
   throw lastError;
+}
+
+/**
+ * 応答までの時間が利用者の操作次第でいくらでも伸びるリクエスト（waitPostJson）を投げる前に、
+ * 疎通できるホストを1つへ絞り込む。ipcFetchはTCPブリッジのホスト候補を順に試すが、
+ * タイムアウトを外した状態で1つ目が無応答だと2つ目へ移れず永久に止まる
+ * （ミラーモードでは誰もlistenしていないポートへの接続が接続拒否ではなく無応答になる）。
+ * pingは通常のタイムアウト付きで投げられるので、これで生きているホストを先に確定させる。
+ * unix socketは接続先が死んでいればfetchが即座に失敗するため絞り込みは不要
+ */
+async function pinReachableHost(endpoint: IpcEndpoint): Promise<IpcEndpoint> {
+  if (endpoint.kind !== "tcp") return endpoint;
+  let lastError = "";
+  for (const host of endpoint.hosts) {
+    const candidate: IpcEndpoint = { kind: "tcp", hosts: [host], port: endpoint.port };
+    const result = await pingNiwaterm(candidate);
+    if (result.ok) return candidate;
+    lastError = result.error;
+  }
+  return { kind: "unavailable", reason: lastError };
 }
 
 /**
@@ -430,6 +453,7 @@ async function postJson<T extends { ok: boolean }>(
   endpoint: IpcEndpoint,
   path: string,
   body: unknown,
+  timeoutMs: number | null = IPC_TIMEOUT_MS,
 ): Promise<T | { ok: false; error: string }> {
   try {
     const res = await ipcFetch(
@@ -440,6 +464,7 @@ async function postJson<T extends { ok: boolean }>(
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
+      timeoutMs,
     );
     const parsed = (await res.json().catch(() => null)) as (T | { error?: unknown }) | null;
     if (res.ok && parsed) return parsed as T;
@@ -451,6 +476,23 @@ async function postJson<T extends { ok: boolean }>(
   } catch (err) {
     return { ok: false, error: describeError(endpoint, err) };
   }
+}
+
+/**
+ * レスポンスが返るまで待ち続けるリクエスト用のpostJson。IPC_TIMEOUT_MSは「アプリが起動して
+ * いないのに待ち続ける」のを防ぐ保険だが、`popup open --wait`のように利用者がポップアップを
+ * 閉じるまでレスポンスが返らないリクエストでは、待ち時間の上限そのものが決められない
+ * （fzfで選び終えるまで何分かかってもおかしくない）。上限を当てると、ポップアップが開いたまま
+ * CLIだけが失敗し、呼び出し元がフォールバックへ進む（fzf-niwatermならfzfが二重に起動する）。
+ * 代わりにpinReachableHostで疎通を先に確かめ、接続先が無応答のまま永久に止まるのを防ぐ。
+ * 詳細: docs/known-issues/long-waiting-ipc-request-is-cut-at-10-seconds.md
+ */
+async function waitPostJson<T extends { ok: boolean }>(
+  endpoint: IpcEndpoint,
+  path: string,
+  body: unknown,
+): Promise<T | { ok: false; error: string }> {
+  return postJson<T>(await pinReachableHost(endpoint), path, body, null);
 }
 
 export type SplitTileResult =
@@ -822,6 +864,8 @@ export function openPopup(
   if (height !== undefined) body.height = height;
   if (wait !== undefined) body.wait = wait;
   if (captureStdout !== undefined) body.captureStdout = captureStdout;
+  // captureStdoutはサーバー側でwaitを暗黙に有効にするため、どちらか一方でも待機扱いにする
+  if (wait || captureStdout) return waitPostJson(endpoint, "/popup", body);
   return postJson(endpoint, "/popup", body);
 }
 
