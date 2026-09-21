@@ -823,7 +823,18 @@ function fixGlyphs(root: HTMLElement) {
 // 走るとChromiumが起点を.termの先頭へ寄せ、以降のドラッグが画面上端からの巨大な選択になる。
 // ボタンを押している間は差し替えを止め、その間に届いたHTMLは最新の1件だけ持っておく
 let selectionDragging = false;
+let selectionDragStartedAt = 0;
 const pendingTermHtmlByTabId = new Map<TabId, string>();
+
+/**
+ * 保留を続ける上限。これを超えたドラッグは終了イベントの取りこぼしとみなして打ち切る。
+ *
+ * 選択済みテキストを掴み直すとHTML5のドラッグ&ドロップへ移行してmouseupもmousemoveも
+ * 飛ばなくなるなど、押しっぱなしでないのに解除の入口へ到達しない操作がある。取りこぼすと
+ * 画面の文字だけが更新されなくなり（カーソルやコピーモードのオーバーレイは別経路なので
+ * 動き続ける）、次にマウスを動かすまで固まったように見える
+ */
+const SELECTION_DRAG_MAX_MS = 2000;
 
 function setTermHtml(termEl: HTMLElement, html: string): void {
   termEl.innerHTML = html;
@@ -850,6 +861,10 @@ function applyPaletteCss(css: string | null): void {
 function applyTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
   if (selectionDragging) {
     pendingTermHtmlByTabId.set(tabId, html);
+    if (performance.now() - selectionDragStartedAt < SELECTION_DRAG_MAX_MS) return;
+    // mouseup由来の解除と違い、選択範囲を読む他のリスナーを待つ必要が無いのでその場で流す
+    selectionDragging = false;
+    flushPendingTermHtml();
     return;
   }
   setTermHtml(termEl, html);
@@ -2060,6 +2075,7 @@ document.addEventListener("mousedown", (e) => {
   if (!hit) return;
   if (!e.shiftKey && isMouseTracking(hit.tabId)) return;
   selectionDragging = true;
+  selectionDragStartedAt = performance.now();
 });
 
 function endSelectionDrag(): void {
@@ -2077,6 +2093,11 @@ document.addEventListener("mousemove", (e) => {
   if (e.buttons === 0) endSelectionDrag();
 });
 window.addEventListener("blur", endSelectionDrag);
+// 選択済みテキストを掴み直すとドラッグ&ドロップへ移行し、以降mouseup/mousemoveの代わりに
+// dragendだけが飛ぶ。ペン・タッチ由来の取り消しも同じく通常の解除経路へ来ない
+document.addEventListener("dragend", endSelectionDrag);
+document.addEventListener("pointerup", endSelectionDrag);
+document.addEventListener("pointercancel", endSelectionDrag);
 
 // ---- マウスホイール（スクロールバック閲覧 / マウスレポート）----
 // トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
