@@ -33,6 +33,13 @@ export interface ApplyLayoutOptions {
    * 指定するとinvocationCwdより優先してcwdの基準になり、tabConfig.cwdの相対パスもここから解決される
    */
   projectRoot?: string;
+  /**
+   * タブのcwdの基準を明示する。指定するとprojectRoot・invocationCwdのどちらより優先される。
+   *
+   * ワークツリーのBoard向け。プリセットはメインワークツリーの`.niwaterm/`から引きつつ、
+   * タブはそのワークツリーで開く必要があり、「解決元」と「開く場所」が別になるため
+   */
+  tabBaseCwd?: string;
 }
 
 export type ApplyLayoutResult = { ok: true; boardId: BoardId } | { ok: false; error: string };
@@ -302,8 +309,9 @@ export function applyLayoutPreset(
     boardId,
     focusTarget: null,
     // プロジェクトローカル由来のプリセットはprojectRootを基準にする。リポジトリへコミットした
-    // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため
-    baseCwd: options.projectRoot ?? options.invocationCwd,
+    // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため。
+    // tabBaseCwdはこれを打ち消す（開く場所が指定されているワークツリーのBoard向け）
+    baseCwd: options.tabBaseCwd ?? options.projectRoot ?? options.invocationCwd,
   };
   try {
     buildNode(ctx, getRootTileId(workspaceManager, boardId), preset.layout);

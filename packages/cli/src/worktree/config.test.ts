@@ -130,6 +130,7 @@ describe("resolveWorktreeSettings", () => {
       ).toEqual({
         dir: { value: DEFAULT_WORKTREE_DIR_TEMPLATE, source: "default" },
         open: { value: DEFAULT_WORKTREE_OPEN_MODE, source: "default" },
+        layout: { value: undefined, source: "default" },
         onCreate: [],
       });
     });
@@ -146,6 +147,7 @@ describe("resolveWorktreeSettings", () => {
       ).toEqual({
         dir: { value: "../from-git/${branch}", source: "git-config" },
         open: { value: "current-tab", source: "git-config" },
+        layout: { value: undefined, source: "default" },
         onCreate: [],
       });
     });
@@ -182,12 +184,14 @@ describe("resolveWorktreeSettings", () => {
     await withTempDir(async (root) => {
       await initRepo(join(root, "repo"), { "niwaterm.worktree.open": "none" });
       const sources = await sourcesIn(root, {
+        project: 'export default { worktree: { layout: "from-project" } };\n',
         global: 'export default { worktree: { dir: "../from-global/${branch}" } };\n',
       });
-      // dirはグローバル設定、openはgit configと、別のtierから採れる
+      // dirはグローバル設定、openはgit config、layoutはプロジェクトローカルと、別のtierから採れる
       expect(await resolveWorktreeSettings(sources, { includeProject: true })).toEqual({
         dir: { value: "../from-global/${branch}", source: "global" },
         open: { value: "none", source: "git-config" },
+        layout: { value: "from-project", source: "project" },
         onCreate: [],
       });
     });
@@ -200,6 +204,36 @@ describe("resolveWorktreeSettings", () => {
         (await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true })).open,
       ).toEqual({
         value: DEFAULT_WORKTREE_OPEN_MODE,
+        source: "default",
+      });
+    });
+  });
+
+  test("layoutはgit configからも読め、グローバル設定に上書きされる", async () => {
+    await withTempDir(async (root) => {
+      await initRepo(join(root, "repo"), { "niwaterm.worktree.layout": "from-git" });
+      expect(
+        (await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true })).layout,
+      ).toEqual({ value: "from-git", source: "git-config" });
+
+      const sources = await sourcesIn(root, {
+        global: 'export default { worktree: { layout: "from-global" } };\n',
+      });
+      expect((await resolveWorktreeSettings(sources, { includeProject: true })).layout).toEqual({
+        value: "from-global",
+        source: "global",
+      });
+    });
+  });
+
+  test("未承認ならプロジェクトローカルのlayoutは読まない", async () => {
+    await withTempDir(async (root) => {
+      await initRepo(join(root, "repo"));
+      const sources = await sourcesIn(root, {
+        project: 'export default { worktree: { layout: "from-project" } };\n',
+      });
+      expect((await resolveWorktreeSettings(sources, { includeProject: false })).layout).toEqual({
+        value: undefined,
         source: "default",
       });
     });

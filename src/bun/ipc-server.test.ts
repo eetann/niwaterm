@@ -3093,6 +3093,37 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(sessionOpts.some((o) => o.cwd === "/invocation/dir")).toBe(true);
   });
 
+  test("POST /apply-layout: tabCwdはcwdより優先してタブへ渡る", async () => {
+    const { mgr, sessionOpts, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", cwd: "/repo/main", tabCwd: "/repo/work/feature" }),
+    });
+    resolvePending(mgr);
+
+    expect(res.status).toBe(200);
+    expect(sessionOpts.some((o) => o.cwd === "/repo/work/feature")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/repo/main")).toBe(false);
+  });
+
+  test("POST /apply-layout: tabCwdが空文字列なら400を返す", async () => {
+    const { serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "dev", tabCwd: "" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("POST /apply-layout: target:replaceは現在アクティブなBoardを置き換える", async () => {
     const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;

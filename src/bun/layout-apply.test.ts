@@ -363,6 +363,33 @@ describe("applyLayoutPreset (target: new-board)", () => {
     expect(sessionOpts.some((o) => o.cwd === "/somewhere/else")).toBe(false);
   });
 
+  test("tabBaseCwdはprojectRoot・invocationCwdのどちらより優先される", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr, "/repo/work/feature");
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "editor" }] },
+        second: { kind: "tile", tabs: [{ name: "cli", cwd: "./packages/cli" }] },
+      },
+    };
+
+    // ワークツリーのBoardは、プリセットをメインワークツリーから引きつつ
+    // タブはそのワークツリーで開く
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      invocationCwd: "/repo/main",
+      projectRoot: "/repo/main",
+      tabBaseCwd: "/repo/work/feature",
+    });
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/repo/work/feature")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd === "/repo/work/feature/packages/cli")).toBe(true);
+    expect(sessionOpts.some((o) => o.cwd?.startsWith("/repo/main"))).toBe(false);
+  });
+
   test('"replace"で使い回す既存タブのcwdもbaseCwdへ揃う', () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
     // 適用前のBoardはホームディレクトリで作られている、という状況を作る

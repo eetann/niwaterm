@@ -46,6 +46,14 @@ export interface WorktreeConfig {
    */
   open?: WorktreeOpenMode;
   /**
+   * ワークツリーのBoardを開くときに適用するレイアウトプリセット名（`layouts`のキー）。
+   * `niwaterm worktree new`・`worktree open`の`--layout`の既定値で、Boardを新規に作ったときだけ
+   * 適用される（既にそのワークツリーのBoardが開いていれば既存のタブは壊さない）。
+   * プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。
+   * 例: "dev"
+   */
+  layout?: string;
+  /**
    * ワークツリーを新規作成した直後に走るフック。既存のワークツリーを開き直した場合は走らない。
    * グローバル設定とプロジェクトローカル設定の両方に書いた場合は、グローバル→プロジェクトの順に
    * **両方**走る（dir・openのような上書きではない）。

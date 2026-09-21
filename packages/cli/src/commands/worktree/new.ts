@@ -9,7 +9,7 @@ import {
   type WorktreeHook,
   type WorktreeHookContext,
 } from "../../worktree/config";
-import { openWorktree } from "../../worktree/open";
+import { openWorktree, resolveWorktreeLayout } from "../../worktree/open";
 import { ensureProjectTrust } from "../../worktree/trust";
 import {
   addWorktree,
@@ -63,6 +63,11 @@ export default define({
       type: "string",
       description: `作成後の開き方（${WORKTREE_OPEN_MODES.join(" | ")}）。省略時は設定のworktree.open（既定はboard）`,
     },
+    layout: {
+      type: "string",
+      description:
+        "Boardへ適用するレイアウトプリセット名（省略時は設定のworktree.layout）。Boardを新規に作ったときだけ適用される",
+    },
     workspace: {
       type: "string",
       short: "w",
@@ -101,6 +106,15 @@ export default define({
         `worktree newに失敗しました: --openの値が不正です: ${openMode}（${WORKTREE_OPEN_MODES.join(" | ")}）`,
       );
     }
+
+    // ワークツリーを作る前に確かめる。未承認でレイアウトが使えないなら、
+    // 中途半端にワークツリーだけ増やさず手前で止める
+    const layoutPreset = resolveWorktreeLayout({
+      commandName: "worktree new",
+      explicit: ctx.values.layout,
+      configured: plan.layout.value,
+      trust,
+    });
 
     const existing = findWorktreeByBranch(list.worktrees, branch);
     let path: string;
@@ -146,9 +160,14 @@ export default define({
       endpoint: resolveIpcEndpoint(),
       commandName: "worktree new",
       mode: openMode,
+      repoRoot,
       path,
       branch,
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+      layout: {
+        ...(ctx.values.layout !== undefined ? { explicit: ctx.values.layout } : {}),
+        resolve: async () => layoutPreset,
+      },
     });
   },
 });

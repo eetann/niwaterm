@@ -798,6 +798,11 @@ export interface ApplyLayoutOptions {
   startup?: boolean;
   /** trust promptに同意済み。プロジェクトローカル由来プリセット×startup時のみ必要 */
   trust?: boolean;
+  /**
+   * タブのcwdの基準。cwd（プリセットの解決に使う）とは別に指定でき、プリセットの解決元より優先される。
+   * ワークツリーのBoardのように「プリセットを引く場所」と「開く場所」が違う場合に使う
+   */
+  tabCwd?: string;
 }
 
 export function applyLayout(
@@ -813,12 +818,14 @@ export function applyLayout(
     boardId?: string;
     startup?: boolean;
     trust?: boolean;
+    tabCwd?: string;
   } = { name, target: opts.target };
   if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
   if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
   if (opts.boardId !== undefined) body.boardId = opts.boardId;
   if (opts.startup !== undefined) body.startup = opts.startup;
   if (opts.trust !== undefined) body.trust = opts.trust;
+  if (opts.tabCwd !== undefined) body.tabCwd = toAppAccessiblePath(endpoint, opts.tabCwd);
   return postJson<ApplyLayoutResult>(endpoint, "/apply-layout", body);
 }
 

@@ -1,4 +1,5 @@
-// ワークツリー設定（置き場所テンプレート・作成後の開き方）を、どの設定から採るか決める層。
+// ワークツリー設定（置き場所テンプレート・開き方・レイアウトプリセット・作成後フック）を、
+// どの設定から採るか決める層。
 //
 // 優先順位は項目ごとに独立して次のとおり。
 //
@@ -18,7 +19,7 @@
 // リポジトリのTypeScriptがimportだけで走るため、承認はimportの前に取る。未承認ならこのレイヤーごと
 // 無かったものとして扱う。
 //
-// 値（dir・open）は上書きだが、フック（onCreate）は**グローバル→プロジェクトの順に両方走る**。
+// 値（dir・open・layout）は上書きだが、フック（onCreate）は**グローバル→プロジェクトの順に両方走る**。
 // 値は「どれか1つが効く」が自然なのに対し、フックは行動であって上書きが不自然なため
 // （グローバルは自分の習慣、プロジェクトはそのリポジトリの手順、と役割が違う）。
 //
@@ -66,6 +67,8 @@ export interface ResolvedSetting<T> {
 export interface ResolvedWorktreeSettings {
   dir: ResolvedSetting<string>;
   open: ResolvedSetting<WorktreeOpenMode>;
+  /** Boardを新規に作るときに適用するレイアウトプリセット名。既定は無指定（undefined） */
+  layout: ResolvedSetting<string | undefined>;
   /** 実行順に並んだフック。該当が無ければ空配列 */
   onCreate: WorktreeHook[];
 }
@@ -74,6 +77,7 @@ export interface ResolvedWorktreeSettings {
 export interface WorktreeSettingsInput {
   dir?: string;
   open?: WorktreeOpenMode;
+  layout?: string;
   onCreate?: WorktreeHook;
 }
 
@@ -93,6 +97,7 @@ interface WorktreeConfigLayer {
   source: WorktreeSettingSource;
   dir: string | undefined;
   open: WorktreeOpenMode | undefined;
+  layout: string | undefined;
   onCreate: WorktreeHook | undefined;
 }
 
@@ -122,11 +127,13 @@ export function pickWorktreeSettings(config: unknown): WorktreeSettingsInput {
   if (typeof config !== "object" || config === null) return {};
   const worktree = (config as { worktree?: unknown }).worktree;
   if (typeof worktree !== "object" || worktree === null) return {};
-  const raw = worktree as { dir?: unknown; open?: unknown; onCreate?: unknown };
+  const raw = worktree as { dir?: unknown; open?: unknown; layout?: unknown; onCreate?: unknown };
   const dir = nonEmptyString(raw.dir);
+  const layout = nonEmptyString(raw.layout);
   return {
     ...(dir !== undefined ? { dir } : {}),
     ...(isWorktreeOpenMode(raw.open) ? { open: raw.open } : {}),
+    ...(layout !== undefined ? { layout } : {}),
     ...(typeof raw.onCreate === "function" ? { onCreate: raw.onCreate as WorktreeHook } : {}),
   };
 }
@@ -146,7 +153,13 @@ export async function readWorktreeSettingsFromFile(path: string): Promise<Worktr
 }
 
 function toLayer(source: WorktreeSettingSource, input: WorktreeSettingsInput): WorktreeConfigLayer {
-  return { source, dir: input.dir, open: input.open, onCreate: input.onCreate };
+  return {
+    source,
+    dir: input.dir,
+    open: input.open,
+    layout: input.layout,
+    onCreate: input.onCreate,
+  };
 }
 
 async function loadLayers(
@@ -160,14 +173,15 @@ async function loadLayers(
   const global = await readWorktreeSettingsFromFile(sources.globalConfigPath);
   const gitConfig = await gitConfigSection(WORKTREE_CONFIG_PREFIX, sources.gitCwd);
   const gitOpen = gitConfig.get("open");
+  const gitDir = nonEmptyString(gitConfig.get("dir"));
+  const gitLayout = nonEmptyString(gitConfig.get("layout"));
   return [
     toLayer("project", project),
     toLayer("global", global),
     toLayer("git-config", {
-      ...(nonEmptyString(gitConfig.get("dir")) !== undefined
-        ? { dir: gitConfig.get("dir") as string }
-        : {}),
+      ...(gitDir !== undefined ? { dir: gitDir } : {}),
       ...(isWorktreeOpenMode(gitOpen) ? { open: gitOpen } : {}),
+      ...(gitLayout !== undefined ? { layout: gitLayout } : {}),
     }),
   ];
 }
@@ -198,6 +212,7 @@ export async function resolveWorktreeSettings(
   return {
     dir: pickLayer(layers, (layer) => layer.dir, DEFAULT_WORKTREE_DIR_TEMPLATE),
     open: pickLayer(layers, (layer) => layer.open, DEFAULT_WORKTREE_OPEN_MODE),
+    layout: pickLayer<string | undefined>(layers, (layer) => layer.layout, undefined),
     // フックだけは上書きせず、グローバル→プロジェクトの順に積む（走る順もこの順）
     onCreate: [...layers].reverse().flatMap((layer) => (layer.onCreate ? [layer.onCreate] : [])),
   };

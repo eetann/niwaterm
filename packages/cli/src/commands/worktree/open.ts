@@ -3,11 +3,14 @@ import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint } from "../../ipc-client";
 import {
   isWorktreeOpenMode,
+  resolveWorktreeSettings,
   WORKTREE_OPEN_MODES,
   type WorktreeOpenMode,
+  worktreeDirSourcesFor,
 } from "../../worktree/config";
-import { findWorktreeByQuery, listWorktrees } from "../../worktree/git";
-import { openWorktree } from "../../worktree/open";
+import { findWorktreeByQuery, listWorktrees, mainWorktree } from "../../worktree/git";
+import { openWorktree, resolveWorktreeLayout } from "../../worktree/open";
+import { ensureProjectTrust } from "../../worktree/trust";
 
 /**
  * 設定のworktree.openは「作成後の開き方」の既定値なのでここには効かせない。
@@ -28,10 +31,20 @@ export default define({
       type: "string",
       description: `開き方（${WORKTREE_OPEN_MODES.join(" | ")}）。省略時は${DEFAULT_OPEN_MODE}`,
     },
+    layout: {
+      type: "string",
+      description:
+        "Boardへ適用するレイアウトプリセット名（省略時は設定のworktree.layout）。Boardを新規に作ったときだけ適用される",
+    },
     workspace: {
       type: "string",
       short: "w",
       description: "Boardの作成先workspaceId（省略時は現在アクティブなワークスペース）",
+    },
+    trust: {
+      type: "boolean",
+      description:
+        "プロジェクトローカル設定（<repoRoot>/.niwaterm/config.ts）の確認を省いて信頼する（レイアウトを適用する場合のみ必要）",
     },
     cwd: {
       type: "string",
@@ -50,6 +63,9 @@ export default define({
 
     const list = await listWorktrees(cwd);
     if (!list.ok) failAndExit(`worktree openに失敗しました: ${list.error}`);
+    const main = mainWorktree(list.worktrees);
+    if (!main) failAndExit("worktree openに失敗しました: メインワークツリーを特定できませんでした");
+    const repoRoot = main.path;
 
     const query = ctx.values.worktree;
     const found = findWorktreeByQuery(list.worktrees, query, cwd);
@@ -70,9 +86,29 @@ export default define({
       endpoint: resolveIpcEndpoint(),
       commandName: "worktree open",
       mode,
+      repoRoot,
       path: found.worktree.path,
       branch: found.worktree.branch,
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+      layout: {
+        ...(ctx.values.layout !== undefined ? { explicit: ctx.values.layout } : {}),
+        // Boardを新規に作るときだけ呼ばれる。ワークツリーへ移るだけの用途で
+        // プロジェクトローカル設定の確認が出ないよう、設定の読み取りはここまで遅らせる
+        resolve: async () => {
+          const trust = await ensureProjectTrust(repoRoot, {
+            assumeTrusted: ctx.values.trust === true,
+          });
+          const settings = await resolveWorktreeSettings(worktreeDirSourcesFor(repoRoot), {
+            includeProject: trust === "trusted",
+          });
+          return resolveWorktreeLayout({
+            commandName: "worktree open",
+            explicit: ctx.values.layout,
+            configured: settings.layout.value,
+            trust,
+          });
+        },
+      },
     });
   },
 });

@@ -453,6 +453,11 @@ interface ApplyLayoutRequestBody {
   startup?: boolean;
   /** プロジェクトローカル由来プリセットのtrust promptに同意済みか */
   trust?: boolean;
+  /**
+   * タブのcwdの基準。cwd・プリセットの解決元のどちらより優先される
+   * （`worktree new`・`worktree open`のBoard向け。layout-apply.tsのtabBaseCwd）
+   */
+  tabCwd?: string;
 }
 
 function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
@@ -464,6 +469,7 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
     boardId?: unknown;
     startup?: unknown;
     trust?: unknown;
+    tabCwd?: unknown;
   };
   if (typeof b.name !== "string" || b.name.length === 0) return null;
   if (b.target !== undefined && b.target !== "new-board" && b.target !== "replace") {
@@ -489,6 +495,10 @@ function parseApplyLayoutBody(body: unknown): ApplyLayoutRequestBody | null {
   if (b.trust !== undefined) {
     if (typeof b.trust !== "boolean") return null;
     result.trust = b.trust;
+  }
+  if (b.tabCwd !== undefined) {
+    if (typeof b.tabCwd !== "string" || b.tabCwd.length === 0) return null;
+    result.tabCwd = b.tabCwd;
   }
   return result;
 }
@@ -909,6 +919,7 @@ function buildApp(
       {
         ...(parsed.cwd !== undefined ? { invocationCwd: parsed.cwd } : {}),
         ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+        ...(parsed.tabCwd !== undefined ? { tabBaseCwd: parsed.tabCwd } : {}),
       },
     );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);

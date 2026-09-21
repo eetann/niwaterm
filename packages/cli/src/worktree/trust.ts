@@ -1,9 +1,12 @@
 // プロジェクトローカル設定（<repoRoot>/.niwaterm/config.ts）を評価してよいかの承認。
 //
-// この設定はリポジトリにコミットされるため、cloneしてきたリポジトリで`worktree new`を叩くと、
-// 他人が書いたTypeScriptがこちらのマシンで動くことになる。importした時点でトップレベルのコードが
-// 走るので、承認は**importの前**に取る。承認できていないリポジトリではプロジェクトローカル設定を
-// 一切読まず、グローバル設定とgit configだけで解決する。
+// この設定はリポジトリにコミットされることを想定しているため、cloneしてきたリポジトリで
+// worktree系のコマンドを叩くと、他人が書いたTypeScriptがこちらのマシンで動くことになる。
+// importした時点でトップレベルのコードが走るので、承認は**importの前**に取る。承認できていない
+// リポジトリではプロジェクトローカル設定を一切読まず、グローバル設定とgit configだけで解決する。
+//
+// レイアウトプリセットの適用（worktree/open.ts）も同じ承認で門番する。プリセットの解決は
+// アプリ側が<repoRoot>/.niwaterm/config.tsを評価して行うため、CLIがimportしなくてもコードは走る。
 //
 // 承認の記録はレイアウトプリセット（layout-trust.ts）と違って専用ストアを持つ。あちらは
 // 「起動時レイアウトの紐づけ」という永続オブジェクトがそのまま信頼の記録になるが、
@@ -103,7 +106,7 @@ async function confirm(repoRoot: string): Promise<boolean> {
   console.log("このリポジトリはniwatermのプロジェクトローカル設定を持っています:");
   console.log(`  ${path}`);
   console.log(
-    "ワークツリーの操作でこのファイルが評価され、worktree.onCreateに書かれたコマンドが実行されます。",
+    "ワークツリーの操作でこのファイルが評価され、worktree.onCreateのフックやlayoutsのプリセットに書かれたコマンドが実行されます。",
   );
   console.log("信頼できるリポジトリでのみ許可してください。");
   if (!process.stdin.isTTY) {
