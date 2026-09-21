@@ -56,11 +56,28 @@ for (const key of INHERITED_TERMINAL_ENV_KEYS) delete env[key];
 Object.assign(env, extraEnv);
 ```
 
-対象は`TMUX` / `TMUX_PANE` / `TERM_PROGRAM_VERSION` / `STY`（GNU screen） /
-`ZELLIJ`系。同じ種類の変数を持つマルチプレクサを見つけたらここへ足す。
+対象は`TMUX` / `TMUX_PANE` / `TERM_PROGRAM_VERSION` / `STY`（GNU screen） / `ZELLIJ`系と、
+下記の`NIWATERM_APP_NAME`。同じ種類の変数を持つマルチプレクサを見つけたらここへ足す。
 
 **起動中のアプリには反映されない**（環境変数はPTY起動時に確定するため）。
 tmuxの中から起動していたインスタンスは、修正後に起動し直す必要がある。
+
+## 同じ穴の別の症状: タブ内の`mise run start`がwipではなくdailyを組む
+
+`NIWATERM_APP_NAME`も同じ経路で漏れる。これは`electrobun.config.ts`がアプリ名を決めるための
+**ビルド時専用の変数**で、タブのシェルが読む必要は無い（[タスクバーからdev/dailyビルドを起動すると
+Windows Terminalが開く](/known-issues/windows-taskbar-launch-opens-windows-terminal.md)にある通り、
+実行時のAPP_VARIANTはビルド時に焼き込んでいる）。
+
+ところが`mise.toml`の`start`タスクは`APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"`と
+環境変数を優先するため、**dailyのタブから`mise run start`すると、ブランチがdevでも
+niwaterm-dailyを組みに行く**。起動中のdailyがHutchの共有ロックを握っているので、
+後発のビルドは`preBuild`にも到達せず無言でスタックする
+（[Hutchのelectrobunリリースロック](/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md)）。
+
+`NIWATERM_APP_NAME`も落とす対象に含めることで、タブ内から叩いても本来のブランチ判定が効く。
+タブ側がアプリ名を知る必要がある場合は、`board.ts`・`popup.ts`が明示的に注入する
+`NIWATERM_APP_VARIANT`を使う。
 
 ## 同じ症状に見える別原因: macOSに`timeout`が無い
 

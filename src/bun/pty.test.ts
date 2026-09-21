@@ -165,6 +165,16 @@ describe("buildEnv", () => {
     );
   });
 
+  test("ビルド時設定のNIWATERM_APP_NAMEはタブへ渡さない", () => {
+    withProcessEnv({ NIWATERM_APP_NAME: "niwaterm-daily" }, () => {
+      const env = buildEnv(["/bin/zsh"], "xterm-256color", {
+        NIWATERM_APP_VARIANT: "niwaterm-wip",
+      });
+      expect(env["NIWATERM_APP_NAME"]).toBeUndefined();
+      expect(env["NIWATERM_APP_VARIANT"]).toBe("niwaterm-wip");
+    });
+  });
+
   test("extraEnvはprocess.envより優先される", () => {
     withProcessEnv({ NIWATERM_TAB_ID: "tab-old" }, () => {
       const env = buildEnv(["/bin/zsh"], "xterm-256color", { NIWATERM_TAB_ID: "tab-1" });

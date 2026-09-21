@@ -147,11 +147,16 @@ export function appendCommandArgs(
 }
 
 /**
- * niwaterm自身が起動元から受け継いでしまう「今いるターミナルの素性」を示す変数。
- * 別のマルチプレクサ（tmux等）のペインからniwatermを起動すると、これらがアプリの
- * process.env経由でタブのシェルまで漏れる。$TMUXの有無で描画先を切り替えるツール
- * （fzfの`--tmux`は描画をtmuxのpopupへ丸投げする）がniwatermのタブをtmuxの中だと誤認し、
- * 画面が起動元のtmuxセッションへ吸われて操作不能になるため、渡す前に落とす。
+ * アプリのprocess.envには入っているが、タブのシェルへ引き継いではいけない変数。
+ *
+ * 1. 起動元ターミナルの素性（TMUX等）。別のマルチプレクサのペインからniwatermを起動すると
+ *    これらが漏れ、$TMUXの有無で描画先を切り替えるツール（fzfの`--tmux`は描画をtmuxの
+ *    popupへ丸投げする）がniwatermのタブをtmuxの中だと誤認する。画面が起動元のtmuxへ
+ *    吸われてタブが操作不能に見える。
+ * 2. niwaterm自身のビルド時設定（NIWATERM_APP_NAME）。タブのシェルが読む必要は無く、
+ *    残っているとタブ内で`mise run start`したときにブランチではなく起動中インスタンスの
+ *    アプリ名が採用され、wipのつもりでdailyを組んでしまう。
+ *
  * 詳細: docs/known-issues/inherited-multiplexer-env-leaks-into-tabs.md
  */
 const INHERITED_TERMINAL_ENV_KEYS = [
@@ -164,6 +169,8 @@ const INHERITED_TERMINAL_ENV_KEYS = [
   "ZELLIJ",
   "ZELLIJ_PANE_ID",
   "ZELLIJ_SESSION_NAME",
+  // タブ側が参照するアプリ名はAPP_VARIANT（board.ts・popup.tsが明示的に注入する）
+  "NIWATERM_APP_NAME",
 ];
 
 /**
