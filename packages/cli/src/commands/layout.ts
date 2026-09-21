@@ -2,7 +2,14 @@ import { createInterface } from "node:readline/promises";
 import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
 import { confirmTrust } from "../layout-trust";
-import { applyLayout, listLayouts, resolveIpcEndpoint } from "../ipc-client";
+import {
+  applyLayout,
+  type BoardListEntry,
+  listLayouts,
+  listWorkspaces,
+  resolveIpcEndpoint,
+  type WorkspaceListEntry,
+} from "../ipc-client";
 
 const listCommand = define({
   name: "list",
@@ -34,6 +41,36 @@ const listCommand = define({
   },
 });
 
+/**
+ * --replaceの対象Boardを引く。boardId省略時のフォールバックはアプリ側（/apply-layoutの
+ * target: "replace"）と同じく「アクティブWorkspaceのactiveBoard」に揃える。
+ * 見つからない場合はundefined（適用自体がアプリ側で弾かれる）
+ */
+function findReplaceTargetBoard(
+  workspaces: WorkspaceListEntry[],
+  boardId: string | undefined,
+): BoardListEntry | undefined {
+  if (boardId) {
+    return workspaces.flatMap((w) => w.boards).find((b) => b.boardId === boardId);
+  }
+  const active = workspaces.find((w) => w.active);
+  return active?.boards.find((b) => b.boardId === active.activeBoardId);
+}
+
+/**
+ * --replaceの適用で閉じられる既存タブがあるか。対象Boardが単一タイル・単一タブなら
+ * 適用で失われるものが無いため、破壊的操作の確認自体が不要になる。
+ * 対象Boardが見つからないときはtrue（存在しないboardIdの指定等。適用はアプリ側で弾かれる）
+ */
+export function replaceClosesExistingTabs(
+  workspaces: WorkspaceListEntry[],
+  boardId: string | undefined,
+): boolean {
+  const board = findReplaceTargetBoard(workspaces, boardId);
+  if (!board) return true;
+  return !(board.layout.kind === "leaf" && board.layout.tabIds.length === 1);
+}
+
 /** 非対話環境（パイプ・スクリプト実行等）ではハングせずエラーで終了し、--replace-forceの利用を促す */
 async function confirmReplace(boardLabel: string): Promise<boolean> {
   if (!process.stdin.isTTY) {
@@ -63,7 +100,7 @@ const applyCommand = define({
     replace: {
       type: "boolean",
       description:
-        "既存Boardを置き換えて適用する（既存タブ・PTYは無条件で閉じる。実行前にy/nで確認する）",
+        "既存Boardを置き換えて適用する（既存タブ・PTYは無条件で閉じる。閉じるタブがある場合のみ実行前にy/nで確認する）",
     },
     "replace-force": {
       type: "boolean",
@@ -134,11 +171,15 @@ const applyCommand = define({
     }
 
     if (ctx.values.replace && !ctx.values["replace-force"]) {
-      const boardLabel = ctx.values.board ? `Board ${ctx.values.board}` : "現在アクティブなBoard";
-      const confirmed = await confirmReplace(boardLabel);
-      if (!confirmed) {
-        console.log("キャンセルしました");
-        return;
+      // 一覧を取れないときは安全側に倒して確認する（接続不能ならこの後の適用自体も失敗する）
+      const listed = await listWorkspaces(endpoint);
+      if (!listed.ok || replaceClosesExistingTabs(listed.workspaces, ctx.values.board)) {
+        const boardLabel = ctx.values.board ? `Board ${ctx.values.board}` : "現在アクティブなBoard";
+        const confirmed = await confirmReplace(boardLabel);
+        if (!confirmed) {
+          console.log("キャンセルしました");
+          return;
+        }
       }
     }
 
