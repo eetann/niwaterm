@@ -125,9 +125,12 @@ describe("resolveWorktreeSettings", () => {
   test("どこにも無ければ既定値", async () => {
     await withTempDir(async (root) => {
       await initRepo(join(root, "repo"));
-      expect(await resolveWorktreeSettings(await sourcesIn(root, {}))).toEqual({
+      expect(
+        await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true }),
+      ).toEqual({
         dir: { value: DEFAULT_WORKTREE_DIR_TEMPLATE, source: "default" },
         open: { value: DEFAULT_WORKTREE_OPEN_MODE, source: "default" },
+        onCreate: [],
       });
     });
   });
@@ -138,9 +141,12 @@ describe("resolveWorktreeSettings", () => {
         "niwaterm.worktree.dir": "../from-git/${branch}",
         "niwaterm.worktree.open": "current-tab",
       });
-      expect(await resolveWorktreeSettings(await sourcesIn(root, {}))).toEqual({
+      expect(
+        await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true }),
+      ).toEqual({
         dir: { value: "../from-git/${branch}", source: "git-config" },
         open: { value: "current-tab", source: "git-config" },
+        onCreate: [],
       });
     });
   });
@@ -151,7 +157,7 @@ describe("resolveWorktreeSettings", () => {
       const sources = await sourcesIn(root, {
         global: 'export default { worktree: { dir: "../from-global/${branch}" } };\n',
       });
-      expect((await resolveWorktreeSettings(sources)).dir).toEqual({
+      expect((await resolveWorktreeSettings(sources, { includeProject: true })).dir).toEqual({
         value: "../from-global/${branch}",
         source: "global",
       });
@@ -165,7 +171,7 @@ describe("resolveWorktreeSettings", () => {
         project: 'export default { worktree: { dir: "../from-project/${branch}" } };\n',
         global: 'export default { worktree: { dir: "../from-global/${branch}" } };\n',
       });
-      expect((await resolveWorktreeSettings(sources)).dir).toEqual({
+      expect((await resolveWorktreeSettings(sources, { includeProject: true })).dir).toEqual({
         value: "../from-project/${branch}",
         source: "project",
       });
@@ -179,9 +185,10 @@ describe("resolveWorktreeSettings", () => {
         global: 'export default { worktree: { dir: "../from-global/${branch}" } };\n',
       });
       // dirはグローバル設定、openはgit configと、別のtierから採れる
-      expect(await resolveWorktreeSettings(sources)).toEqual({
+      expect(await resolveWorktreeSettings(sources, { includeProject: true })).toEqual({
         dir: { value: "../from-global/${branch}", source: "global" },
         open: { value: "none", source: "git-config" },
+        onCreate: [],
       });
     });
   });
@@ -189,7 +196,9 @@ describe("resolveWorktreeSettings", () => {
   test("git configの未知のopenは無視して既定値へ落とす", async () => {
     await withTempDir(async (root) => {
       await initRepo(join(root, "repo"), { "niwaterm.worktree.open": "somewhere" });
-      expect((await resolveWorktreeSettings(await sourcesIn(root, {}))).open).toEqual({
+      expect(
+        (await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true })).open,
+      ).toEqual({
         value: DEFAULT_WORKTREE_OPEN_MODE,
         source: "default",
       });
@@ -200,7 +209,9 @@ describe("resolveWorktreeSettings", () => {
     await withTempDir(async (root) => {
       await initRepo(join(root, "repo"), { "niwaterm.worktree.dir": "../from-git/${branch}" });
       const sources = await sourcesIn(root, { project: "export default { layouts: {} };\n" });
-      expect((await resolveWorktreeSettings(sources)).dir.source).toBe("git-config");
+      expect((await resolveWorktreeSettings(sources, { includeProject: true })).dir.source).toBe(
+        "git-config",
+      );
     });
   });
 });
@@ -210,5 +221,92 @@ describe("worktreeDirSourcesFor", () => {
     const sources = worktreeDirSourcesFor("/repo/main");
     expect(sources.projectConfigPath).toBe(join("/repo/main", ".niwaterm", "config.ts"));
     expect(sources.gitCwd).toBe("/repo/main");
+  });
+});
+
+describe("onCreateの解決", () => {
+  async function withTempDir(fn: (root: string) => Promise<void>): Promise<void> {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-hook-test-"));
+    try {
+      await mkdir(join(dir, "repo"), { recursive: true });
+      await initRepo(join(dir, "repo"));
+      await fn(dir);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** 呼ばれたことをファイルへ書き残すフックを定義した設定 */
+  function hookConfig(marker: string): string {
+    return `export default { worktree: { onCreate: async (ctx) => { await Bun.write(ctx.worktreePath, ${JSON.stringify(marker)}); } } };\n`;
+  }
+
+  async function sources(root: string, files: { project?: string; global?: string }) {
+    const projectConfigPath = join(root, "project", ".niwaterm", "config.ts");
+    const globalConfigPath = join(root, "global", "niwaterm.config.ts");
+    if (files.project !== undefined) await writeConfig(projectConfigPath, files.project);
+    if (files.global !== undefined) await writeConfig(globalConfigPath, files.global);
+    return { projectConfigPath, globalConfigPath, gitCwd: join(root, "repo") };
+  }
+
+  test("フックが無ければ空配列", async () => {
+    await withTempDir(async (root) => {
+      const resolved = await resolveWorktreeSettings(await sources(root, {}), {
+        includeProject: true,
+      });
+      expect(resolved.onCreate).toEqual([]);
+    });
+  });
+
+  test("グローバルとプロジェクトの両方が、グローバル→プロジェクトの順に並ぶ", async () => {
+    await withTempDir(async (root) => {
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, { global: hookConfig("global"), project: hookConfig("project") }),
+        { includeProject: true },
+      );
+      expect(resolved.onCreate).toHaveLength(2);
+
+      // 実際に順番どおり呼ばれるところまで見る
+      const calls: string[] = [];
+      const markerFile = join(root, "marker");
+      for (const hook of resolved.onCreate) {
+        await hook({ repoRoot: join(root, "repo"), worktreePath: markerFile, branch: "x" });
+        calls.push(await Bun.file(markerFile).text());
+      }
+      expect(calls).toEqual(["global", "project"]);
+    });
+  });
+
+  test("includeProject=falseならプロジェクトのフックは読まない", async () => {
+    await withTempDir(async (root) => {
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, { global: hookConfig("global"), project: hookConfig("project") }),
+        { includeProject: false },
+      );
+      expect(resolved.onCreate).toHaveLength(1);
+    });
+  });
+
+  test("includeProject=falseならプロジェクトのdirも無視してグローバルへ落ちる", async () => {
+    await withTempDir(async (root) => {
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, {
+          global: 'export default { worktree: { dir: "../from-global/${branch}" } };\n',
+          project: 'export default { worktree: { dir: "../from-project/${branch}" } };\n',
+        }),
+        { includeProject: false },
+      );
+      expect(resolved.dir).toEqual({ value: "../from-global/${branch}", source: "global" });
+    });
+  });
+
+  test("onCreateが関数でなければ無視する", async () => {
+    await withTempDir(async (root) => {
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, { global: 'export default { worktree: { onCreate: "cmd" } };\n' }),
+        { includeProject: true },
+      );
+      expect(resolved.onCreate).toEqual([]);
+    });
   });
 });

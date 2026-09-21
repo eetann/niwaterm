@@ -13,8 +13,11 @@ import {
   isWorktreeOpenMode,
   resolveWorktreePlan,
   WORKTREE_OPEN_MODES,
+  type WorktreeHook,
+  type WorktreeHookContext,
   type WorktreeOpenMode,
 } from "../../worktree/config";
+import { ensureProjectTrust } from "../../worktree/trust";
 import {
   addWorktree,
   branchExists,
@@ -30,6 +33,28 @@ import {
  */
 function shellQuotePath(path: string): string {
   return `'${path.replaceAll("'", "'\\''")}'`;
+}
+
+/**
+ * 作成後フックを順に実行する。Boardを開く前に終わらせるので、タブが立ち上がる時点で
+ * セットアップ（bun install等）が済んでいる。
+ * 失敗したらワークツリーは残したまま終了コード1で止める。準備できていないワークツリーを
+ * 開いて作業を始めてしまうより、直して開き直せるほうがよいため
+ */
+async function runCreateHooks(hooks: WorktreeHook[], ctx: WorktreeHookContext): Promise<void> {
+  if (hooks.length === 0) return;
+  console.log(`running worktree hook (${hooks.length})...`);
+  for (const hook of hooks) {
+    try {
+      await hook(ctx);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failAndExit(
+        `worktree newに失敗しました: 作成後フックが失敗しました: ${message}\n` +
+          `ワークツリーは ${ctx.worktreePath} に残っています`,
+      );
+    }
+  }
 }
 
 /** 作成したワークツリーをniwatermで開く。開き方はモードごとに完結させる */
@@ -88,6 +113,11 @@ export default define({
       short: "w",
       description: "Boardの作成先workspaceId（省略時は現在アクティブなワークスペース）",
     },
+    trust: {
+      type: "boolean",
+      description:
+        "プロジェクトローカル設定（<repoRoot>/.niwaterm/config.ts）の確認を省いて信頼する",
+    },
     cwd: {
       type: "string",
       description:
@@ -104,7 +134,12 @@ export default define({
     if (!main) failAndExit("worktree newに失敗しました: メインワークツリーを特定できませんでした");
     const repoRoot = main.path;
 
-    const plan = await resolveWorktreePlan({ repoRoot, branch });
+    // プロジェクトローカル設定はimportした時点でコードが走るため、読む前に承認を取る
+    const trust = await ensureProjectTrust(repoRoot, { assumeTrusted: ctx.values.trust === true });
+    const plan = await resolveWorktreePlan(
+      { repoRoot, branch },
+      { includeProject: trust === "trusted" },
+    );
     const openMode = ctx.values.open ?? plan.open.value;
     if (!isWorktreeOpenMode(openMode)) {
       failAndExit(
@@ -148,6 +183,9 @@ export default define({
       if (!added.ok) failAndExit(`worktree newに失敗しました: ${added.error}`);
       console.log(`created: ${path}`);
     }
+
+    // 既存のワークツリーを開き直しただけのときはフックを走らせない（bun install等の再実行を避ける）
+    if (!existing) await runCreateHooks(plan.onCreate, { repoRoot, worktreePath: path, branch });
 
     await openWorktree(resolveIpcEndpoint(), openMode, path, branch, ctx.values.workspace);
   },

@@ -330,7 +330,7 @@ gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在�
 #### ワークツリーの作成
 
 ```sh
-niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--workspace <workspaceId>] [--cwd <dir>]
+niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--workspace <workspaceId>] [--trust] [--cwd <dir>]
 ```
 
 ワークツリーを作り、それをniwatermで開く。ブランチが未作成なら`git worktree add -b`で同時に作り、既にあればそれをチェックアウトする。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
@@ -353,6 +353,46 @@ niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--
 Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`は遷移しないためサイドバーの表示が唯一の手がかりになる。
 
 `current-tab`は`cd <path>`をそのタブへ送る（`tab send-keys`と同じ経路）。コマンドを実行しているシェルはCLIが終わるまで入力を読まないので、キーはtty側で待たされてからプロンプトへ流れる。`--open none`以外はniwatermアプリが起動している必要がある。
+
+#### 作成後フック
+
+ワークツリーを**新規作成した直後**に走るフックを設定できる（`bun install`・`.env`のコピー・`direnv allow`あたりを想定）。既存のワークツリーを開き直した場合は走らない。
+
+```ts
+// ~/.config/niwaterm/niwaterm.config.ts
+worktree: {
+  onCreate: async (ctx) => {
+    await Bun.$`bun install`.cwd(ctx.worktreePath);
+  },
+},
+```
+
+`ctx`には`repoRoot`（メインワークツリー）・`worktreePath`（作ったワークツリー）・`branch`が入る。宣言的なコピー・リンクのDSLは用意していない。設定がTypeScriptなので、条件分岐もファイル操作も素のコードで書けるため（キーバインドの関数ハンドラと同じ方針）。
+
+**niwaterm CLIのプロセスで、Boardを開く前にawaitされる**。タブが立ち上がる時点でセットアップが済んでいるので、`--open`のどのモード（`none`・`current-tab`含む）でも同じように走る。標準出力はコマンドを実行したターミナルへそのまま流れるため、完了するまでプロンプトは戻らない。
+
+フックが例外を投げた場合は**ワークツリーを残したまま終了コード1で止まり、Boardは開かない**。準備できていないワークツリーで作業を始めてしまうより、直して開き直せるほうがよいため。残ったワークツリーは`worktree new`を再実行すれば開けるが、そのときフックは走らない（新規作成ではないため）。
+
+#### プロジェクトローカル設定の承認
+
+フックは`<repoRoot>/.niwaterm/config.ts`にも書ける（チームでセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`を叩くと他人の書いたコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
+
+```
+$ niwaterm worktree new feat/x
+このリポジトリはniwatermのプロジェクトローカル設定を持っています:
+  /path/to/repo/.niwaterm/config.ts
+ワークツリーの操作でこのファイルが評価され、worktree.onCreateに書かれたコマンドが実行されます。
+信頼できるリポジトリでのみ許可してください。
+このリポジトリを信頼しますか？ (y/N)
+```
+
+承認は`~/.config/niwaterm/trusted-projects/`へ記録され、次回以降は確認なしで読まれる。記録の鍵は**リポジトリのパスと`.niwaterm/`配下の内容のハッシュ**なので、承認後にフックを書き換えられても黙って実行されることはない（改めて確認が出る）。`.niwaterm/`の外をimportしている場合（`../scripts/setup.ts`等）、その変更までは検出できない。
+
+`--trust`を付けると確認を省いて承認する（非対話環境向け）。非対話環境で`--trust`も無い場合は、確認できない旨を表示してプロジェクトローカル設定を無視したまま続行する（ハングもエラーもしない）。
+
+承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、`onCreate`の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
+
+> **note**: レイアウトプリセットのプロジェクトローカル設定（`layout list`／`layout apply`）は、この承認を通らず従来どおり読まれる。あちらの確認は「起動時レイアウトへの紐づけ」にかかっていて、設定を読むこと自体は素通しになっている。
 
 #### ワークツリーの置き場所
 

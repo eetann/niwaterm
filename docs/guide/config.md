@@ -734,11 +734,15 @@ niwaterm layout apply dev --startup
 |---|---|---|---|
 | `dir` | `string` | 新規ワークツリーの置き場所テンプレート | `../${repo}@${branch}` |
 | `open` | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値 | `"board"` |
+| `onCreate` | `(ctx) => void \| Promise<void>` | ワークツリーを新規作成した直後に走るフック | なし |
 
 ```ts
 worktree: {
   dir: ".worktrees/${branch}",
   open: "board-switch",
+  onCreate: async (ctx) => {
+    await Bun.$`bun install`.cwd(ctx.worktreePath);
+  },
 },
 ```
 
@@ -746,7 +750,11 @@ worktree: {
 
 テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
-ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`open`はリポジトリ固有、という混ぜ方ができる）。
+`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/cli.md`「作成後フック」節。
+
+ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`open`はリポジトリ固有、という混ぜ方ができる）。ただし`onCreate`だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
+
+プロジェクトローカル設定はリポジトリにコミットされるため、**承認したリポジトリでしか読まれない**（`worktree new`の初回に確認が出る）。詳細は`docs/guide/cli.md`「プロジェクトローカル設定の承認」節。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
