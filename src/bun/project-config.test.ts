@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LayoutsConfig } from "@niwaterm/config";
@@ -16,7 +16,10 @@ import {
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "niwaterm-project-config-test-"));
+  // macOSのtmpdir()は/var -> /private/varのシンボリックリンクを含む。gitはワークツリーの
+  // パスをシンボリックリンクを解決した実体側で記録するため、起点を実体パスに揃えないと
+  // resolveProjectRootの戻り値と文字列比較できない
+  root = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-project-config-test-")));
 });
 
 afterEach(async () => {
