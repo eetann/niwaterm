@@ -726,6 +726,37 @@ niwaterm layout apply dev --startup
 
 `--startup`を付けると、そのBoardは次回以降の**起動時にもこのプリセットで組み直される**。niwatermは通常、終了時のレイアウト骨格（タイル構成・タブ名・シェル・cwd・タブ変数）を保存して復元するが、`command`は再実行しない。起動時レイアウトにしたBoardは骨格の復元ではなくプリセットの再適用になるため、`command`ごと毎回同じ状態で立ち上がる。Boardごとに別のプリセットを紐づけられるので、「開発用Boardは`dev`、メモ用Boardは`notes`」のような使い分けができる。後から切り替える・解除するには`niwaterm board startup layout|restore|clear`を使う（`docs/guide/cli.md`「起動時レイアウト」節）。起動時にタブが開くディレクトリは`--startup`を付けて実行したディレクトリが記録されて使われる（プロジェクトローカルのプリセットならその解決元）。
 
+## ワークツリー
+
+`worktree`は、`niwaterm worktree`系コマンドが新規ワークツリーを作る場所を指定するオブジェクト。**未指定なら`../${repo}@${branch}`**（メインワークツリーの隣に`<repo>@<branch>`という名前で並べる）。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `dir` | `string` | 新規ワークツリーの置き場所テンプレート |
+
+```ts
+worktree: {
+  dir: ".worktrees/${branch}",
+},
+```
+
+テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
+
+ここで定義するのは全リポジトリ共通の置き方。リポジトリ固有の置き方は`<repoRoot>/.niwaterm/config.ts`にも書け、そちらが優先される。
+
+```ts
+// <repoRoot>/.niwaterm/config.ts
+import type { NiwatermProjectConfig } from "@niwaterm/config";
+
+export default {
+  worktree: { dir: ".worktrees/${branch}" },
+} satisfies NiwatermProjectConfig;
+```
+
+どちらにも書かれていない場合はgit configの`niwaterm.worktree.dir`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/cli.md`「ワークツリーの置き場所」節を参照。
+
+レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
+
 ## ホットリロード
 
 `~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewいずれも）。`~/.config/niwaterm/`ディレクトリをサブディレクトリ含めて監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。

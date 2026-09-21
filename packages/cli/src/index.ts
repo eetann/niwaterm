@@ -17,6 +17,7 @@ import shellProfilesCommand from "./commands/shell-profiles";
 import tabCommand from "./commands/tab";
 import tileCommand from "./commands/tile";
 import workspaceCommand from "./commands/workspace";
+import worktreeCommand from "./commands/worktree";
 
 const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
 
@@ -52,6 +53,7 @@ try {
       tab: tabCommand,
       workspace: workspaceCommand,
       board: boardCommand,
+      worktree: worktreeCommand,
       tile: tileCommand,
       keybind: keybindCommand,
       popup: popupCommand,

@@ -7,6 +7,7 @@ import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
 import type { WorkspaceConfig } from "./workspace";
+import type { WorktreeConfig } from "./worktree";
 
 /**
  * キーバインドを登録する関数。niwa.keybind/niwa.prefix/niwa.unbindで登録するほか、
@@ -72,6 +73,12 @@ export interface NiwatermConfig {
    * 例: { defaultCwd: "/home/eetann/projects" }
    */
   workspace?: WorkspaceConfig;
+  /**
+   * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）を指定する。
+   * リポジトリ固有の置き方は<repoRoot>/.niwaterm/config.tsでも書け、そちらが優先される。
+   * 例: { dir: ".worktrees/${branch}" }
+   */
+  worktree?: WorktreeConfig;
 }
 
 /** 型推論とエディタ補完のためのヘルパー。渡された値をそのまま返す */

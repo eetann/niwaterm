@@ -309,6 +309,47 @@ niwaterm tab var find --board <boardId> <key> <value>
 
 `tab var set/get/list`の`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
+### ワークツリー
+
+```sh
+niwaterm worktree list
+niwaterm worktree list --cwd /path/to/repo
+```
+
+gitのワークツリー一覧をTSV（`path`／`branch`／`HEAD`／フラグ）で表示する。**このコマンドだけはniwatermアプリに接続せず、CLIプロセスから直接gitを呼ぶ**ため、アプリが起動していない普通のターミナルからも使える。値の無い列は`-`で埋めるので、`cut -f2`のような読み取りが列ずれで壊れない。
+
+```
+/home/eetann/ghq/github.com/eetann/niwaterm       main  3aa3f4f4...  main
+/home/eetann/ghq/github.com/eetann/niwaterm@dev   dev   2dbbd095...  -
+```
+
+先頭行は必ずメインワークツリー（gitがcwdに関わらずメインを先頭に出す）。4列目のフラグは`main`／`bare`／`detached`／`locked`／`prunable`をカンマ区切りで並べ、いずれにも該当しなければ`-`になる。detached HEADとbareのワークツリーは`branch`列が`-`、bareは`HEAD`列も`-`。
+
+gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在しない場合は、それぞれの理由を示すエラーメッセージと共に終了コード1を返す。
+
+#### ワークツリーの置き場所
+
+新規ワークツリーを作る場所は、`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）を展開するテンプレートで決める。既定は`../${repo}@${branch}`で、メインワークツリーの隣に`<repo>@<branch>`という名前で並ぶ。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は`niwaterm@feat-worktree`になる。
+
+テンプレートは次の順で探し、最初に見つかったものを使う。
+
+| 優先 | 置き場所 | 用途 |
+|---|---|---|
+| 1 | `<repoRoot>/.niwaterm/config.ts`の`worktree.dir` | そのリポジトリ固有の置き方（チームで共有できる） |
+| 2 | `~/.config/niwaterm/niwaterm.config.ts`の`worktree.dir` | ユーザー共通の置き方 |
+| 3 | git configの`niwaterm.worktree.dir` | niwatermを入れていない環境とも設定を共有したい場合の補助口 |
+| 4 | （既定値） | `../${repo}@${branch}` |
+
+git configを一番弱くしているのは、niwatermの設定の正本が`niwaterm.config.ts`だから。git config内部のローカル／グローバルの優先順位はgit自身が解決するので、niwaterm側では段階を持たない。
+
+```sh
+git config niwaterm.worktree.dir '.worktrees/${branch}'
+```
+
+テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は`docs/guide/config.md`「ワークツリー」節を参照。
+
+プロジェクトローカル設定は、レイアウトプリセットと違って**cwdから上向きに探さず、メインワークツリー直下の`.niwaterm/config.ts`だけを見る**。置き場所はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
+
 ## 対象IDの省略
 
 多くのコマンドは`--tile`/`--tab`/`--board`/`--workspace`を省略でき、その場合は**そのコマンドを実行しているタブ**が対象になる。niwatermが起動したシェルには`NIWATERM_TAB_ID`環境変数が入っており、CLIはそれを起点に所属タイル・Board・ワークスペースを解決する。niwatermの外（普通のターミナル・スクリプト）から実行した場合は、アクティブなワークスペース→アクティブなBoard→フォーカス中タイル→そのアクティブタブへフォールバックする（tmuxの`current-pane`相当）。

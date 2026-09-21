@@ -18,6 +18,7 @@
 //   } satisfies NiwatermProjectConfig;
 
 import type { LayoutsConfig } from "./layout";
+import type { WorktreeConfig } from "./worktree";
 
 export interface NiwatermProjectConfig {
   /**
@@ -26,4 +27,10 @@ export interface NiwatermProjectConfig {
    * タブのcwdはprojectRoot基準の相対パスで書ける（cwd省略時のデフォルトもprojectRoot）。
    */
   layouts?: LayoutsConfig;
+  /**
+   * このリポジトリの新規ワークツリーの置き場所。グローバル設定（niwaterm.config.tsのworktree）と
+   * git configの`niwaterm.worktree.dir`より優先される。
+   * 例: { dir: ".worktrees/${branch}" }
+   */
+  worktree?: WorktreeConfig;
 }

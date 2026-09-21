@@ -27,6 +27,7 @@ export {
 export type { NiwatermProjectConfig } from "./project";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export { type WorkspaceConfig } from "./workspace";
+export { type WorktreeConfig } from "./worktree";
 export {
   canonicalizeParsed,
   canonicalizeSecondKey,
