@@ -2,6 +2,7 @@ import { define } from "gunshi";
 import listCommand from "./list";
 import newCommand from "./new";
 import openCommand from "./open";
+import removeCommand from "./remove";
 
 export default define({
   name: "worktree",
@@ -10,6 +11,7 @@ export default define({
     new: newCommand,
     open: openCommand,
     list: listCommand,
+    remove: removeCommand,
   },
   run: () => {
     console.log('Run "niwaterm worktree --help" for available subcommands.');

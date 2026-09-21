@@ -2,7 +2,6 @@ import { failAndExit } from "../cli-error";
 import {
   applyLayout,
   type IpcEndpoint,
-  listWorkspaces,
   newBoard,
   renameBoard,
   sendKeys,
@@ -11,6 +10,7 @@ import {
   toAppAccessiblePath,
 } from "../ipc-client";
 import { createTargetResolver } from "../resolve-target";
+import { findWorktreeBoards, type WorktreeBoard } from "./board";
 import type { WorktreeOpenMode } from "./config";
 import type { ProjectTrustDecision } from "./trust";
 
@@ -23,32 +23,16 @@ function shellQuotePath(path: string): string {
   return `'${path.replaceAll("'", "'\\''")}'`;
 }
 
-interface FoundBoard {
-  boardId: string;
-  workspaceId: string;
-  /** そのBoardが属するワークスペースが今アクティブかどうか */
-  workspaceActive: boolean;
-}
-
 /**
- * そのワークツリーのBoardが既に開いていないか探す。Board作成時に記録したworktreePathが判定キーで、
- * タブのcwdは見ない（cdで変わるため）。同じパスのBoardが複数ある場合は最初の1つを返す
+ * そのワークツリーのBoardが既に開いていないか探す。同じパスのBoardが複数ある場合は最初の1つ。
+ * アプリへ繋がらない場合は「開いていない」として扱い、続くBoard作成で接続エラーを出させる
  */
-async function findOpenBoard(endpoint: IpcEndpoint, appPath: string): Promise<FoundBoard | null> {
-  const list = await listWorkspaces(endpoint);
-  if (!list.ok) return null;
-  for (const workspace of list.workspaces) {
-    for (const board of workspace.boards) {
-      if (board.worktreePath === appPath) {
-        return {
-          boardId: board.boardId,
-          workspaceId: workspace.workspaceId,
-          workspaceActive: workspace.active,
-        };
-      }
-    }
-  }
-  return null;
+async function findOpenBoard(
+  endpoint: IpcEndpoint,
+  appPath: string,
+): Promise<WorktreeBoard | null> {
+  const found = await findWorktreeBoards(endpoint, appPath);
+  return found.ok ? (found.boards[0] ?? null) : null;
 }
 
 /**

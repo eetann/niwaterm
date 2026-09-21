@@ -342,3 +342,76 @@ export async function gitConfigSection(prefix: string, cwd: string): Promise<Map
   }
   return values;
 }
+
+/** リモートが1つでも設定されているか。未設定なら「未pushのコミット」という概念自体が無い */
+export async function hasRemotes(cwd: string): Promise<boolean> {
+  const result = await runGit(["remote"], cwd);
+  return result !== null && result.exitCode === 0 && result.stdout.trim().length > 0;
+}
+
+/**
+ * 未コミットの変更（追跡ファイルの変更＋未追跡ファイル）の件数。数えられなければnull。
+ * `-z`を使わないのは、`-z`だとリネームが2フィールドに割れて件数が水増しされるため。
+ * 行区切りのporcelainは特殊文字を含むパスをgitがC引用符でくるむので、行が壊れる心配はない
+ */
+export async function countUncommittedChanges(worktreePath: string): Promise<number | null> {
+  const result = await runGit(["status", "--porcelain"], worktreePath);
+  if (result === null || result.exitCode !== 0) return null;
+  return result.stdout.split("\n").filter((line) => line.trim() !== "").length;
+}
+
+/**
+ * どのリモート追跡ブランチからも辿れないコミットの件数。数えられなければnull。
+ * upstreamとの差分ではなくリモート全体との差分を見るのは、upstream未設定のまま作った
+ * ローカルブランチ（`worktree new`で作った直後がこれ）でも取りこぼさないため
+ */
+export async function countUnpushedCommits(repoRoot: string, head: string): Promise<number | null> {
+  const result = await runGit(["rev-list", "--count", head, "--not", "--remotes"], repoRoot);
+  if (result === null || result.exitCode !== 0) return null;
+  const count = Number.parseInt(result.stdout.trim(), 10);
+  return Number.isNaN(count) ? null : count;
+}
+
+export interface RemoveWorktreeOptions {
+  /** gitを実行する作業ディレクトリ。メインワークツリーを渡す */
+  repoRoot: string;
+  /** 削除するワークツリーの絶対パス */
+  path: string;
+  force: boolean;
+}
+
+export type RemoveWorktreeResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * ワークツリーを削除する（ディレクトリごと消える）。
+ * `--force`を2つ渡すのは、ロック済みワークツリーにgitが2つ要求するため。
+ * 何が引っかかっているかはコマンド側のガードが先に提示済みで、それを越えてforceが来ている
+ */
+export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<RemoveWorktreeResult> {
+  const force = opts.force ? ["--force", "--force"] : [];
+  const result = await runGit(["worktree", "remove", ...force, opts.path], opts.repoRoot);
+  if (result === null) return { ok: false, error: GIT_NOT_FOUND.error };
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.trim() || "git worktree removeが失敗しました" };
+  }
+  return { ok: true };
+}
+
+export interface DeleteBranchOptions {
+  repoRoot: string;
+  branch: string;
+  /** マージ済みかどうかを問わずに消す（`git branch -D`） */
+  force: boolean;
+}
+
+export type DeleteBranchResult = { ok: true } | { ok: false; error: string };
+
+/** ローカルブランチを削除する。forceでないとgitは未マージのブランチを拒む */
+export async function deleteBranch(opts: DeleteBranchOptions): Promise<DeleteBranchResult> {
+  const result = await runGit(["branch", opts.force ? "-D" : "-d", opts.branch], opts.repoRoot);
+  if (result === null) return { ok: false, error: GIT_NOT_FOUND.error };
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.trim() || "git branchが失敗しました" };
+  }
+  return { ok: true };
+}
