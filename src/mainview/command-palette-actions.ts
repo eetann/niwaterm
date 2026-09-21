@@ -21,6 +21,7 @@ import {
   ClipboardPaste,
   Columns2,
   Copy,
+  FolderGit2,
   FolderInput,
   FolderPlus,
   Globe,
@@ -251,6 +252,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "Board",
     icon: Pencil,
     keywords: ["rename-window", "window", "名前"],
+  },
+  {
+    action: "set-board-worktree",
+    labelEn: "Set Board Worktree Directory",
+    label: "Boardに紐づくワークツリーを設定",
+    category: "Board",
+    icon: FolderGit2,
+    keywords: ["worktree", "directory", "cwd", "ディレクトリ", "紐づけ"],
   },
   {
     action: "new-workspace",

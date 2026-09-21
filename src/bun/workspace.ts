@@ -123,6 +123,12 @@ export interface WorkspaceOptions {
   onAllTabsClosed: () => void;
   getDefaultShell?: BoardOptions["getDefaultShell"];
   getDefaultCwd?: BoardOptions["getDefaultCwd"];
+  /**
+   * 新しいタブ（タブ追加・タイル分割・ポップアップ）のcwdを、そのBoardの紐づけワークツリーから決める。
+   * 戻り値undefinedなら従来どおり今のタブのcwdを引き継ぐ。設定（board.newTabCwd）と
+   * ディレクトリの存在確認はここを渡す側（index.ts）の責務
+   */
+  getNewTabCwd?: (worktreePath: string | undefined) => string | undefined;
   onBell?: BoardOptions["onBell"];
   createSession?: BoardOptions["createSession"];
 }
@@ -164,6 +170,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       onAllTabsClosed: () => handleBoardEmptied(id),
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
+      getNewTabCwd: () => newTabCwdOf(id),
       onBell: opts.onBell,
       createSession: opts.createSession,
     });
@@ -415,6 +422,27 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return boardStartups.get(boardId) ?? null;
   }
 
+  /** nullを渡すとワークツリーの紐づけを解除する */
+  function setBoardWorktreePath(boardId: BoardId, worktreePath: string | null): boolean {
+    if (!boards.has(boardId)) return false;
+    if (worktreePath === null) {
+      boardWorktreePaths.delete(boardId);
+    } else {
+      boardWorktreePaths.set(boardId, worktreePath);
+    }
+    opts.onDirty();
+    return true;
+  }
+
+  function getBoardWorktreePath(boardId: BoardId): string | null {
+    return boardWorktreePaths.get(boardId) ?? null;
+  }
+
+  /** そのBoardで新しいタブを開くときのcwd。undefinedなら呼び出し側の既定（cwdの引き継ぎ）に任せる */
+  function newTabCwdOf(boardId: BoardId): string | undefined {
+    return opts.getNewTabCwd?.(boardWorktreePaths.get(boardId));
+  }
+
   /**
    * Boardのフォーカス中タイル・アクティブタブが報告しているcwd（未報告ならundefined）。
    * サイドバーからそのBoardを対象に操作したとき、プロジェクトローカル設定の解決起点に使う
@@ -422,6 +450,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
    */
   function getBoardFocusedCwd(boardId: BoardId): string | undefined {
     return boards.get(boardId)?.getFocusedTabSnapshot()?.cwd;
+  }
+
+  /** getBoardFocusedCwdと同じタブの起動シェルコマンド。WSLタブのパス変換の判定に使う */
+  function getBoardFocusedShell(boardId: BoardId): string | undefined {
+    return boards.get(boardId)?.getFocusedTabShell();
   }
 
   function splitTile(
@@ -445,7 +478,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // 「現在アクティブなBoard」のフォーカス中タブとする（openPopup実行時点でのアクティブBoard）
   function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
     const inherited = boards.get(activeBoardId)?.getFocusedTabSnapshot();
-    return popup.open(popupOpts, inherited ?? { cols: opts.initialCols, rows: opts.initialRows });
+    const base = inherited ?? { cols: opts.initialCols, rows: opts.initialRows };
+    // cwdの上書きはここで行う。getFocusedTabSnapshotはタブが実際に報告したcwdの参照元でもあり
+    // （getBoardFocusedCwd）、そちらまで紐づけへ寄せると解決起点が実態からずれる
+    const boardCwd = newTabCwdOf(activeBoardId);
+    return popup.open(popupOpts, boardCwd !== undefined ? { ...base, cwd: boardCwd } : base);
   }
 
   function closePopup(): boolean {
@@ -818,6 +855,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setBoardName,
     setBoardStartup,
     getBoardStartup,
+    setBoardWorktreePath,
+    getBoardWorktreePath,
+    getBoardFocusedShell,
     getBoardFocusedCwd,
     splitTile,
     newTab,

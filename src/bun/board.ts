@@ -103,6 +103,12 @@ export type BoardOptions = {
    * getDefaultShellと同様、呼び出し毎に評価する（設定ファイルのホットリロードを反映するため）
    */
   getDefaultCwd?: () => string | undefined;
+  /**
+   * タブ追加・タイル分割で開くタブのcwdを、今のタブからの引き継ぎより優先して決める
+   * （board.newTabCwd: "worktree"のときのBoardの紐づけワークツリー）。
+   * 戻り値undefinedは従来どおり引き継ぐ。getDefaultShellと同様、呼び出し毎に評価する
+   */
+  getNewTabCwd?: () => string | undefined;
   /** タブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: (tabId: TabId) => void;
   /** テスト時にfakeへ差し替えるためのDI */
@@ -306,7 +312,11 @@ export function createBoard(opts: BoardOptions) {
     tree = result.tree;
     // 新タイルは分割元の分割前サイズより物理的に小さくなるため、分割元の現在サイズを
     // そのまま渡さずwebview側の実測cols/rowsが届くまでPTY起動を保留する
-    spawnSessionPending(newTabId, undefined, cwd ?? actualCwdOf(target.activeTabId));
+    spawnSessionPending(
+      newTabId,
+      undefined,
+      cwd ?? opts.getNewTabCwd?.() ?? actualCwdOf(target.activeTabId),
+    );
     focusedTileId = newTileId;
     // ズーム中のtileを分割した場合、新しいtileが隠れたままになってしまうため自動でズーム解除する
     // （tmuxのresize-pane -Zも同様に、ペイン数が変わる操作でズームを解除する）
@@ -326,7 +336,7 @@ export function createBoard(opts: BoardOptions) {
     // （＝タイル自体がPTY起動保留中。アプリ起動直後や分割直後）場合は、initialColsの
     // 固定値で起動せずこちらも保留する。固定値で起動するとSIGWINCHを取りこぼす
     const size = sizeByTabId.get(target.activeTabId);
-    const tabCwd = cwd ?? actualCwdOf(target.activeTabId);
+    const tabCwd = cwd ?? opts.getNewTabCwd?.() ?? actualCwdOf(target.activeTabId);
     if (size) {
       spawnSession(newTabId, size.cols, size.rows, shellOverride, tabCwd);
     } else {
@@ -346,6 +356,16 @@ export function createBoard(opts: BoardOptions) {
     if (activeTabId === undefined) return undefined;
     const size = sizeByTabId.get(activeTabId) ?? { cols: opts.initialCols, rows: opts.initialRows };
     return { cols: size.cols, rows: size.rows, cwd: actualCwdOf(activeTabId) };
+  }
+
+  /**
+   * フォーカス中タイルのアクティブタブの起動シェルコマンド（例: "wsl.exe -d NixOS"）。
+   * ワークツリー紐づけの入力欄へ打たれたLinuxパスをUNC形式へ直す判定に使う（board-worktree.ts）
+   */
+  function getFocusedTabShell(): string | undefined {
+    const focusedLeaf = findNode(tree, focusedTileId);
+    if (focusedLeaf?.kind !== "leaf") return undefined;
+    return shellByTabId.get(focusedLeaf.activeTabId);
   }
 
   /**
@@ -836,6 +856,7 @@ export function createBoard(opts: BoardOptions) {
     newBrowserTab,
     setBrowserTabUrl,
     getFocusedTabSnapshot,
+    getFocusedTabShell,
     adoptTab,
     switchTab,
     cycleTab,

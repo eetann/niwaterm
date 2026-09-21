@@ -1613,6 +1613,7 @@ function renderSidebar(
       onRequestBoardLayouts: requestSidebarBoardLayouts,
       onApplyBoardLayout: applySidebarBoardLayout,
       onClearBoardStartup: clearSidebarBoardStartup,
+      onSetBoardWorktree: openSetBoardWorktreeDialog,
       onMoveWorkspace: moveSidebarWorkspace,
       onMoveBoard: moveSidebarBoard,
       onMoveBoardToWorkspace: requestMoveBoardToWorkspace,
@@ -1814,6 +1815,43 @@ function openRenameActiveBoardDialog(): void {
       sendMessage("renameBoard", { boardId, name });
     },
   );
+}
+
+/**
+ * ワークツリー紐づけの入力欄の初期値。そのBoardのフォーカス中タイルのアクティブタブが報告している
+ * cwdを候補に出す。値はタブ変数の生値（WSLタブならLinuxパスのまま）で、絶対パスへの解決と
+ * UNC形式への変換はbun側（board-worktree.ts）が行う
+ */
+function boardFocusedCwd(boardId: BoardId): string {
+  for (const workspace of lastWorkspaces) {
+    const board = workspace.boards.find((b) => b.boardId === boardId);
+    if (!board) continue;
+    const node = findNode(board.layout, board.focusedTileId);
+    if (node?.kind !== "leaf") return "";
+    return board.tabVars[node.activeTabId]?.["cwd"] ?? "";
+  }
+  return "";
+}
+
+/**
+ * Boardに紐づくワークツリーの変更ダイアログ。初期値は今の紐づけではなくそのBoardのカレント
+ * ディレクトリにする（「今いるディレクトリを紐づける」が最も多い操作のため）。
+ * 空のまま確定すると紐づけを解除する
+ */
+function openSetBoardWorktreeDialog(boardId: BoardId): void {
+  openPromptDialog(
+    "Boardに紐づくワークツリーを設定",
+    "空のまま確定すると紐づけを解除します。相対パスはこのBoardのカレントディレクトリ起点で解決します。",
+    boardFocusedCwd(boardId),
+    (path) => {
+      sendMessage("setBoardWorktreePath", { boardId, path });
+    },
+  );
+}
+
+/** キーバインド・コマンドパレットからのアクティブBoardのワークツリー設定 */
+function openSetActiveBoardWorktreeDialog(): void {
+  if (activeBoardId) openSetBoardWorktreeDialog(activeBoardId);
 }
 
 /**
@@ -2574,6 +2612,11 @@ function handleTileCommand(cmd: TileCommand): void {
   // focusedTileIdのガードより手前で処理する
   if (cmd.type === "renameBoard") {
     openRenameActiveBoardDialog();
+    return;
+  }
+  // ワークツリーの紐づけもアクティブBoardが対象。renameBoardと同じ理由でここで処理する
+  if (cmd.type === "setBoardWorktree") {
+    openSetActiveBoardWorktreeDialog();
     return;
   }
   // Boardの移動先選びもアクティブBoardが対象。renameBoardと同じくfocusedTileIdのガードより手前で処理する

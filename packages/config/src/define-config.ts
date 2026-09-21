@@ -1,4 +1,5 @@
 import type { AppearanceConfig } from "./appearance";
+import type { BoardConfig } from "./board";
 import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
@@ -73,6 +74,12 @@ export interface NiwatermConfig {
    * 例: { defaultCwd: "/home/eetann/projects" }
    */
   workspace?: WorkspaceConfig;
+  /**
+   * Board設定。タブ追加・タイル分割・ポップアップで新しいタブを開くときのcwdを、
+   * 今のタブからの引き継ぎ（既定）にするか、Boardに紐づくワークツリーにするかを選べる。
+   * 例: { newTabCwd: "worktree" }
+   */
+  board?: BoardConfig;
   /**
    * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）と、
    * 作成後の開き方の既定値（worktree.open）を指定する。

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
+  defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
   platformDefaultKeybindings,
@@ -14,6 +15,7 @@ import {
   configFilePath,
   loadUserConfig,
   resolveAppearance,
+  resolveBoard,
   resolveBrowser,
   resolveCustomView,
   resolveKeybindings,
@@ -490,6 +492,30 @@ describe("resolveBrowser", () => {
     try {
       const resolved = resolveBrowser({ browser: { defaultUrl: "" } });
       expect(resolved.defaultUrl).toBe(defaultBrowserConfig.defaultUrl);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveBoard", () => {
+  test("nullを渡すとdefaultBoardConfigがそのまま返る（既定はcwdの引き継ぎ）", () => {
+    expect(resolveBoard(null)).toEqual(defaultBoardConfig);
+    expect(defaultBoardConfig.newTabCwd).toBe("inherit");
+  });
+
+  test('newTabCwdに"worktree"を指定できる', () => {
+    expect(resolveBoard({ board: { newTabCwd: "worktree" } }).newTabCwd).toBe("worktree");
+  });
+
+  test("未知の値は警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveBoard({
+        board: { newTabCwd: "board" as unknown as "inherit" },
+      });
+      expect(resolved.newTabCwd).toBe("inherit");
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

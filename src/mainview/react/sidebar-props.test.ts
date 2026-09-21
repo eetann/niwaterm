@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
-import type { BoardListEntry } from "../../bun/workspace";
-import type { WorkspaceListEntry } from "../../bun/workspace-manager";
+import type { BoardStatusEntry, WorkspaceListEntry } from "../../bun/workspace-manager";
 import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
@@ -26,9 +25,11 @@ function board(
     tabVars?: Record<string, Record<string, string>>;
     name?: string | null;
     zoomedTileId?: string | null;
-    startup?: BoardListEntry["startup"];
+    startup?: BoardStatusEntry["startup"];
+    worktreePath?: string | null;
+    worktreeMissing?: boolean;
   } = {},
-): BoardListEntry {
+): BoardStatusEntry {
   return {
     boardId,
     active: options.active ?? true,
@@ -40,12 +41,14 @@ function board(
     name: options.name ?? null,
     zoomedTileId: options.zoomedTileId ?? null,
     startup: options.startup ?? null,
+    worktreePath: options.worktreePath ?? null,
+    worktreeMissing: options.worktreeMissing ?? false,
   };
 }
 
 function workspace(
   workspaceId: string,
-  boards: BoardListEntry[],
+  boards: BoardStatusEntry[],
   options: {
     name?: string | null;
     popup?: WorkspaceListEntry["popup"];
@@ -86,6 +89,8 @@ describe("buildSidebarWorkspaceItems", () => {
             zoomed: false,
             bell: false,
             startup: null,
+            worktreePath: null,
+            worktreeMissing: false,
           },
         ],
       },
@@ -104,6 +109,8 @@ describe("buildSidebarWorkspaceItems", () => {
             zoomed: false,
             bell: false,
             startup: null,
+            worktreePath: null,
+            worktreeMissing: false,
           },
         ],
       },
@@ -315,6 +322,31 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.zoomed).toBe(false);
+  });
+
+  test("ワークツリーの紐づけと存在チェックの結果がBoard行へそのまま載る", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+          worktreePath: "/repo/.worktrees/feat",
+          worktreeMissing: true,
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.worktreePath).toBe("/repo/.worktrees/feat");
+    expect(items[0]?.boards[0]?.worktreeMissing).toBe(true);
+  });
+
+  test("ワークツリーの紐づけが無いBoardはworktreePath:null・worktreeMissing:falseになる", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards[0]?.worktreePath).toBeNull();
+    expect(items[0]?.boards[0]?.worktreeMissing).toBe(false);
   });
 
   test("グローバル設定由来の起動時レイアウトはprojectRoot:nullで返る", () => {

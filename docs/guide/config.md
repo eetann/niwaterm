@@ -291,6 +291,7 @@ keybindings: {
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
+| `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `new-workspace` | 新規ワークスペース作成 |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
 | `move-board-up` / `move-board-down` | アクティブなBoardの表示順をワークスペース内で1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm board move --up/--down`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
@@ -633,6 +634,22 @@ workspace: {
 ```
 
 不正な値（空文字列等）を指定した場合、警告付きでOS標準のホームディレクトリにフォールバックする。この設定が影響するのは新規ワークスペース作成時のみで、既存タイルからの新規タブ作成・タイル分割は引き続き分割元/対象タイルの実際のcwd（OSC7シェル統合で追跡した値）を継承する。
+
+## Board設定
+
+`board`は、新しいタブを開くときのcwdの決め方を指定するオブジェクト。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `newTabCwd` | `"inherit"` \| `"worktree"` | 新しいタブのcwd。`"inherit"`（既定）は今のタブのcwdを引き継ぐ、`"worktree"`はそのBoardに紐づくワークツリーを使う |
+
+```ts
+board: {
+  newTabCwd: "worktree",
+},
+```
+
+`"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は`docs/guide/cli.md`「Boardに紐づくワークツリー」節を参照。
 
 ## レイアウト
 

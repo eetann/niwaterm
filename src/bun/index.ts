@@ -14,6 +14,7 @@ import type {
   NiwaBellHandler,
   NiwaNotifyOptions,
   ResolvedAppearanceConfig,
+  ResolvedBoardConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
   ResolvedMouseConfig,
@@ -25,12 +26,14 @@ import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { watchConfigFile } from "./config-watcher";
+import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
 import { applyLayoutPreset } from "./layout-apply";
 import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
+import { resolveBoardNewTabCwd, resolveWorktreeInputPath } from "./board-worktree";
 import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
@@ -175,6 +178,11 @@ export type NiwaRPC = {
       renameTile: { tileId: TileId; name: string };
       renameWorkspace: { workspaceId: WorkspaceId; name: string };
       renameBoard: { boardId: BoardId; name: string };
+      /**
+       * set-board-worktreeアクション・サイドバーの右クリックからのワークツリー紐づけの張り替え。
+       * pathは入力欄の生の値（相対パス可。空文字列とnullは紐づけ解除）で、絶対パスへの解決はbun側で行う
+       */
+      setBoardWorktreePath: { boardId: BoardId; path: string | null };
       /**
        * サイドバーの右クリックからのレイアウト適用。選んだプリセットをそのBoardへ今すぐ適用し、
        * 起動時レイアウトとしても紐づける（CLIの`layout apply --replace --startup`と同じ）。
@@ -361,6 +369,7 @@ function cleanup() {
   if (cleaned) return;
   cleaned = true;
   configWatcher.close();
+  worktreeExistence.dispose();
   workspaceManager.dispose();
   ipcServer?.close();
   cleanupConfigImportDir();
@@ -369,6 +378,7 @@ function cleanup() {
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
+let boardConfig: ResolvedBoardConfig;
 let customView: ResolvedCustomViewConfig | null;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
@@ -395,6 +405,10 @@ const restoreFrom = await loadPersistedState(persistedFilePath());
 const sendNotification: (opts: NiwaNotifyOptions) => void =
   process.platform === "win32" ? sendWindowsNotification : Utils.showNotification;
 
+// Boardに紐づくワークツリーが消えていないかの監視。renderのたびに同期statを打つわけにいかないため
+// キャッシュ越しに引く（dir-existence.ts）
+const worktreeExistence = createDirExistenceCache({ onChange: onDirty });
+
 // niwa.tile/tab/popup等のAPI（設定ファイルの関数ハンドラから呼ばれる）がworkspaceManagerを
 // 操作するため、config読み込み（refreshConfig）より先にworkspaceManagerを作る必要がある。
 // getDefaultShell/getDefaultCwdは遅延評価のクロージャなので、生成時点でdefaultShell等が
@@ -406,6 +420,11 @@ const workspaceManager = createWorkspaceManager({
   restoreFrom,
   getDefaultShell: () => defaultShell,
   getDefaultCwd: () => workspaceDefaultCwd,
+  // 新しいタブを開く瞬間にしか通らないので、ここだけは同期のstatで最新の存在を確かめる
+  // （紐づけ先が消えていると気づかずPTYの起動自体が失敗するため）
+  getNewTabCwd: (worktreePath) =>
+    resolveBoardNewTabCwd(boardConfig.newTabCwd, worktreePath, dirExistsSync),
+  isWorktreeMissing: (worktreePath) => worktreeExistence.isMissing(worktreePath),
   onBell: handleBell,
   onAllWorkspacesClosed: () => {
     console.log("all workspaces closed, exiting");
@@ -444,6 +463,7 @@ async function refreshConfig(): Promise<void> {
     keybindings,
     appearance,
     browser,
+    board: boardConfig,
     customView,
     defaultShell,
     shellProfiles,
@@ -795,6 +815,18 @@ const rpc = BrowserView.defineRPC<NiwaRPC>({
       },
       renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
         workspaceManager.setBoardName(boardId, name);
+      },
+      setBoardWorktreePath: ({ boardId, path }: { boardId: BoardId; path: string | null }) => {
+        // 入力欄の初期値はそのBoardのフォーカス中タブのcwdなので、相対パスもそのタブ起点で解決する
+        const resolved =
+          path === null
+            ? null
+            : resolveWorktreeInputPath(
+                path,
+                workspaceManager.getBoardFocusedCwd(boardId),
+                workspaceManager.getBoardFocusedShell(boardId),
+              );
+        workspaceManager.setBoardWorktreePath(boardId, resolved);
       },
       applyBoardLayout: ({
         boardId,

@@ -215,6 +215,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // move-board-to-workspaceも同様（移動先ワークスペースを選ぶピッカーが開く操作で、
   // 並び替え系と同じくキーを常用する人だけがconfigで割り当てる想定）
   "move-board-to-workspace",
+  // set-board-worktreeも既定キーを持たない（一度紐づければ張り替える機会は少なく、
+  // サイドバーの右クリック・コマンドパレット・CLIから行える操作のため）
+  "set-board-worktree",
 ];
 
 describe("defaultKeybindings", () => {

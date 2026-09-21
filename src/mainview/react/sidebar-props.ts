@@ -1,7 +1,11 @@
 import type { BoardRestoreMode } from "../../bun/persistence";
 import { findNode, listLeaves, type TabId } from "../../bun/tile-layout";
-import type { BoardId, BoardListEntry } from "../../bun/workspace";
-import type { WorkspaceId, WorkspaceListEntry } from "../../bun/workspace-manager";
+import type { BoardId } from "../../bun/workspace";
+import type {
+  BoardStatusEntry,
+  WorkspaceId,
+  WorkspaceListEntry,
+} from "../../bun/workspace-manager";
 
 export type AgentStatus = "idle" | "working" | "blocked";
 
@@ -32,6 +36,10 @@ export interface SidebarBoardItem {
   bell: boolean;
   /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
   startup: SidebarBoardStartupInfo | null;
+  /** 紐づくgitワークツリーの絶対パス。未設定はnull */
+  worktreePath: string | null;
+  /** 紐づけ先のディレクトリが見つからないか（紐づけが無いBoardは常にfalse） */
+  worktreeMissing: boolean;
 }
 
 export interface SidebarPopupItem {
@@ -103,7 +111,7 @@ export function agentStatusBadgeClass(status: AgentStatus): string {
  * （ユーザーが今そのBoardで見ているタブの状態が、サイドバーの一覧でも最も自然に対応するため）。
  * フォーカス中タイルが見つからない・leafでない場合は代表タブなしとして扱う
  */
-function findRepresentativeTabId(board: BoardListEntry): TabId | null {
+function findRepresentativeTabId(board: BoardStatusEntry): TabId | null {
   const node = findNode(board.layout, board.focusedTileId);
   return node && node.kind === "leaf" ? node.activeTabId : null;
 }
@@ -133,7 +141,7 @@ function toAgentInfo(vars: Record<string, string> | undefined): SidebarBoardAgen
  * 同順位なら代表タブを優先し、それも無ければレイアウト上の出現順で先勝ちにする（表示のちらつき防止）。
  */
 function findBoardAgent(
-  board: BoardListEntry,
+  board: BoardStatusEntry,
   representativeTabId: TabId | null,
 ): SidebarBoardAgentInfo | null {
   let best: SidebarBoardAgentInfo | null = null;
@@ -157,7 +165,7 @@ function findBoardAgent(
  * Board内のいずれかのタブでベルが鳴ったまま未読か。エージェント状態と同じく、フォーカスしていない
  * タイル・非アクティブタブで鳴ったベルも取りこぼさないよう全タブを見る
  */
-function hasUnreadBell(board: BoardListEntry): boolean {
+function hasUnreadBell(board: BoardStatusEntry): boolean {
   return listLeaves(board.layout).some((leaf) =>
     leaf.tabIds.some((tabId) => Boolean(board.tabVars[tabId]?.["bell"])),
   );
@@ -167,7 +175,7 @@ function hasUnreadBell(board: BoardListEntry): boolean {
  * Board行の表示名。ユーザーが名前を設定していなければワークスペース内の並び順で連番へフォールバックする。
  * サイドバー以外（キーバインド・コマンドパレット起点の名前変更ダイアログ）でも同じラベルを出すためexportする
  */
-export function boardLabel(board: BoardListEntry, index: number): string {
+export function boardLabel(board: BoardStatusEntry, index: number): string {
   return board.name || `Board ${index + 1}`;
 }
 
@@ -226,6 +234,8 @@ export function buildSidebarWorkspaceItems(
               projectRoot: board.startup.projectRoot ?? null,
             }
           : null,
+        worktreePath: board.worktreePath,
+        worktreeMissing: board.worktreeMissing,
       };
     }),
   }));

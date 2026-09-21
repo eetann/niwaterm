@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Bell,
   ChevronRight,
+  FolderX,
   LayoutTemplate,
   Maximize2,
   PictureInPicture2,
@@ -52,6 +53,8 @@ export interface SidebarWorkspaceListProps {
   onRequestBoardLayouts: (boardId: BoardId) => Promise<LayoutListEntry[]>;
   onApplyBoardLayout: (request: SidebarApplyLayoutRequest) => void;
   onClearBoardStartup: (boardId: BoardId) => void;
+  /** Board行の右クリックからのワークツリー紐づけの変更。入力ダイアログはindex.ts側が出す */
+  onSetBoardWorktree: (boardId: BoardId) => void;
   /** ワークスペース見出しのD&Dによる並び替え。toIndexは0始まりの移動先（bun側のmoveWorkspaceへそのまま渡る） */
   onMoveWorkspace: (workspaceId: WorkspaceId, toIndex: number) => void;
   /** Board行のD&Dによる並び替え。toIndexは所属ワークスペース内での0始まりの移動先 */
@@ -140,6 +143,7 @@ export function SidebarWorkspaceList({
   onRequestBoardLayouts,
   onApplyBoardLayout,
   onClearBoardStartup,
+  onSetBoardWorktree,
   onMoveWorkspace,
   onMoveBoard,
   onMoveBoardToWorkspace,
@@ -456,6 +460,8 @@ export function SidebarWorkspaceList({
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
     if (board.startup) titleParts.push(startupLabel(board.startup));
+    if (board.worktreeMissing)
+      titleParts.push(`ワークツリーが見つかりません: ${board.worktreePath}`);
     return (
       <ContextMenu key={board.boardId}>
         <ContextMenuTrigger asChild>
@@ -500,6 +506,12 @@ export function SidebarWorkspaceList({
                       ? "text-sky-400"
                       : "text-muted-foreground/40",
                   )}
+                />
+              )}
+              {board.worktreeMissing && (
+                <FolderX
+                  aria-label="ワークツリーが見つかりません"
+                  className="size-3 shrink-0 text-amber-500"
                 />
               )}
               {board.zoomed && (
@@ -549,6 +561,9 @@ export function SidebarWorkspaceList({
             onSelect={() => startEditing({ kind: "board", id: board.boardId }, board.label)}
           >
             名前を変更
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onSetBoardWorktree(board.boardId)}>
+            ワークツリーを設定
           </ContextMenuItem>
           {renderStartupLayoutMenu(board)}
           <ContextMenuItem

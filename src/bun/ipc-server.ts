@@ -408,6 +408,30 @@ function parseRenameBoardBody(body: unknown): RenameBoardRequestBody | null {
   return { ...boardIdBody, name: b.name };
 }
 
+/** `niwaterm board worktree set/clear/show`。boardId省略時はアクティブBoardへ向ける */
+interface BoardWorktreeRequestBody {
+  boardId?: string;
+  mode: "set" | "clear" | "show";
+  /** mode: "set"のみ必須。CLI側で絶対パスへ解決済み（WSLからはUNC形式へ変換済み） */
+  path?: string;
+}
+
+function parseBoardWorktreeBody(body: unknown): BoardWorktreeRequestBody | null {
+  const b = body as { boardId?: unknown; mode?: unknown; path?: unknown };
+  if (b.mode !== "set" && b.mode !== "clear" && b.mode !== "show") return null;
+  const result: BoardWorktreeRequestBody = { mode: b.mode };
+  if (b.boardId !== undefined) {
+    if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+    result.boardId = b.boardId;
+  }
+  if (b.path !== undefined) {
+    if (typeof b.path !== "string" || b.path.length === 0) return null;
+    result.path = b.path;
+  }
+  if (b.mode === "set" && result.path === undefined) return null;
+  return result;
+}
+
 interface MoveBoardRequestBody extends BoardIdRequestBody {
   direction: "up" | "down";
 }
@@ -935,6 +959,43 @@ function buildApp(
       ok: true,
       boardId: result.boardId,
       ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+    });
+  });
+
+  app.post("/board-worktree", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardWorktreeBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error: 'expected { mode: "set"|"clear"|"show", boardId?: string, path?: string }',
+        },
+        400,
+      );
+    }
+    const boardId =
+      parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    if (!boardId || !workspaceManager.hasBoard(boardId)) {
+      return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
+    }
+    if (parsed.mode === "set") {
+      workspaceManager.setBoardWorktreePath(boardId, parsed.path as string);
+    } else if (parsed.mode === "clear") {
+      workspaceManager.setBoardWorktreePath(boardId, null);
+    }
+    // missingは存在チェックのキャッシュ越し（listWorkspaces）に引く。setした直後はまだ未チェックで
+    // 必ずfalseになるが、CLIの用途では「今まさに指定したパス」なので実害がない
+    const entry = workspaceManager
+      .listWorkspaces()
+      .flatMap((w) => w.boards)
+      .find((b) => b.boardId === boardId);
+    return c.json({
+      ok: true,
+      boardId,
+      worktreePath: entry?.worktreePath ?? null,
+      missing: entry?.worktreeMissing ?? false,
     });
   });
 

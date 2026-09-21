@@ -5,6 +5,13 @@ export {
   type ResolvedAppearanceConfig,
   type TabBarMode,
 } from "./appearance";
+export {
+  type BoardConfig,
+  defaultBoardConfig,
+  isNewTabCwdMode,
+  type NewTabCwdMode,
+  type ResolvedBoardConfig,
+} from "./board";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export { type CustomViewConfig, type ResolvedCustomViewConfig } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";

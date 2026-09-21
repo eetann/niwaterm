@@ -5,10 +5,12 @@ import newCommand from "./new";
 import renameCommand from "./rename";
 import startupCommand from "./startup";
 import switchCommand from "./switch";
+import worktreeCommand from "./worktree";
 
 export default define({
   name: "board",
-  description: "Boardの作成・切替・削除・名前変更・並び替え・起動時レイアウト設定",
+  description:
+    "Boardの作成・切替・削除・名前変更・並び替え・起動時レイアウト・ワークツリー紐づけ設定",
   subCommands: {
     new: newCommand,
     close: closeCommand,
@@ -16,6 +18,7 @@ export default define({
     rename: renameCommand,
     move: moveCommand,
     startup: startupCommand,
+    worktree: worktreeCommand,
   },
   run: () => {
     console.log('Run "niwaterm board --help" for available subcommands.');

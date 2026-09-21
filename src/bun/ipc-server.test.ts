@@ -3265,6 +3265,96 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(res.status).toBe(400);
   });
 
+  test("POST /board-worktree: mode:setで紐づけを設定し、boardId省略時はアクティブBoardが対象", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+
+    const res = await fetch("http://localhost/board-worktree", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "set", path: "/repo/work/feature" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      boardId,
+      worktreePath: "/repo/work/feature",
+      missing: false,
+    });
+    expect(mgr.getBoardWorktreePath(boardId)).toBe("/repo/work/feature");
+  });
+
+  test("POST /board-worktree: mode:clearで紐づけを解除する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardWorktreePath(boardId, "/repo/work/feature");
+
+    const res = await fetch("http://localhost/board-worktree", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "clear", boardId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, boardId, worktreePath: null, missing: false });
+    expect(mgr.getBoardWorktreePath(boardId)).toBeNull();
+  });
+
+  test("POST /board-worktree: mode:showは紐づけを変えずに現在値を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    mgr.setBoardWorktreePath(boardId, "/repo/work/feature");
+
+    const res = await fetch("http://localhost/board-worktree", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "show", boardId }),
+    });
+
+    expect(await res.json()).toEqual({
+      ok: true,
+      boardId,
+      worktreePath: "/repo/work/feature",
+      missing: false,
+    });
+    expect(mgr.getBoardWorktreePath(boardId)).toBe("/repo/work/feature");
+  });
+
+  test("POST /board-worktree: mode:setでpath省略は400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/board-worktree", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "set" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("POST /board-worktree: 存在しないboardIdは404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/board-worktree", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "show", boardId: "board-nope" }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
   test("POST /board-startup: presetを指定してmode:layoutに切り替えられる", async () => {
     const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;

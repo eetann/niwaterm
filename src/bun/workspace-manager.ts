@@ -50,12 +50,18 @@ export interface AppRenderState {
   workspaces: WorkspaceListEntry[];
 }
 
+/** listWorkspacesが返すBoard。workspace.tsのBoardListEntryへ、fsを見ないと分からない項目を足したもの */
+export interface BoardStatusEntry extends BoardListEntry {
+  /** 紐づけワークツリーが見つからないか。紐づけの無いBoardは常にfalse */
+  worktreeMissing: boolean;
+}
+
 export interface WorkspaceListEntry {
   workspaceId: WorkspaceId;
   active: boolean;
   activeBoardId: BoardId;
   /** サイドバー表示用。このWorkspaceが持つ全Boardのレイアウト骨格（ADR 0006） */
-  boards: BoardListEntry[];
+  boards: BoardStatusEntry[];
   /** ユーザーがサイドバーから設定したワークスペース名。未設定はnull（表示側で連番にフォールバック） */
   name: string | null;
   /** このWorkspaceのポップアップ（ADR 0005）。Boardをまたいでも共有される（ADR 0006） */
@@ -91,6 +97,13 @@ export interface WorkspaceManagerOptions {
   getDefaultShell?: WorkspaceOptions["getDefaultShell"];
   /** 新規ワークスペース作成時の最初のタブに使うデフォルトcwdを取得する。省略時はpty.ts側のOS標準ホームディレクトリを使う */
   getDefaultCwd?: WorkspaceOptions["getDefaultCwd"];
+  /** 新しいタブのcwdをBoardの紐づけワークツリーから決める（省略時は今のタブのcwdを引き継ぐ） */
+  getNewTabCwd?: WorkspaceOptions["getNewTabCwd"];
+  /**
+   * 紐づけワークツリーが消えているかの判定。listWorkspacesのworktreeMissingに載る。
+   * 省略時は常に存在扱い（サイドバーに警告アイコンが出ない）
+   */
+  isWorktreeMissing?: (worktreePath: string) => boolean;
   /** いずれかのタブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: WorkspaceOptions["onBell"];
   /** テスト時にfakeへ差し替えるためのDI */
@@ -129,6 +142,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       onAllTabsClosed: () => handleWorkspaceEmptied(id),
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
+      getNewTabCwd: opts.getNewTabCwd,
       onBell: opts.onBell,
       createSession: opts.createSession,
     });
@@ -400,8 +414,20 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByBoardId(boardId)?.getBoardStartup(boardId) ?? null;
   }
 
+  function setBoardWorktreePath(boardId: BoardId, worktreePath: string | null): boolean {
+    return findOwnerByBoardId(boardId)?.setBoardWorktreePath(boardId, worktreePath) ?? false;
+  }
+
+  function getBoardWorktreePath(boardId: BoardId): string | null {
+    return findOwnerByBoardId(boardId)?.getBoardWorktreePath(boardId) ?? null;
+  }
+
   function getBoardFocusedCwd(boardId: BoardId): string | undefined {
     return findOwnerByBoardId(boardId)?.getBoardFocusedCwd(boardId);
+  }
+
+  function getBoardFocusedShell(boardId: BoardId): string | undefined {
+    return findOwnerByBoardId(boardId)?.getBoardFocusedShell(boardId);
   }
 
   /**
@@ -657,7 +683,12 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         workspaceId: id,
         active: id === activeId,
         activeBoardId: ws.getActiveBoardId(),
-        boards: ws.listBoards(),
+        // worktreeMissingだけはfsを見る必要があるためWorkspaceの外で足す（workspace.tsをfs非依存に保つ）
+        boards: ws.listBoards().map((board) => ({
+          ...board,
+          worktreeMissing:
+            board.worktreePath !== null && (opts.isWorktreeMissing?.(board.worktreePath) ?? false),
+        })),
         name: workspaceNames.get(id) ?? null,
         popup: ws.getPopupInfo(),
       };
@@ -792,7 +823,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setBoardName,
     setBoardStartup,
     getBoardStartup,
+    setBoardWorktreePath,
+    getBoardWorktreePath,
     getBoardFocusedCwd,
+    getBoardFocusedShell,
     listStartupLayoutBoards,
     splitTile,
     newTab,

@@ -337,8 +337,10 @@ export interface BoardListEntry {
   name: string | null;
   /** 紐づくレイアウトプリセットと起動時の組み直し方（board startup / layout apply --startup）。未設定はnull */
   startup: { preset: string; restoreMode: "layout" | "restore" } | null;
-  /** 対応するgitワークツリーの絶対パス（`worktree new`・`worktree open`で開いたBoardのみ）。それ以外はnull */
+  /** 紐づくgitワークツリーの絶対パス（`board worktree set`・`worktree new`・`worktree open`）。未設定はnull */
   worktreePath: string | null;
+  /** 紐づけ先のディレクトリが見つからないか。紐づけの無いBoardは常にfalse */
+  worktreeMissing: boolean;
 }
 
 export interface WorkspaceListEntry {
@@ -872,6 +874,28 @@ export function setBoardStartup(
   if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
   if (opts.trust !== undefined) body.trust = opts.trust;
   return postJson<BoardStartupResult>(endpoint, "/board-startup", body);
+}
+
+/** `board worktree`のサブコマンド。showは読むだけで紐づけを変えない */
+export type BoardWorktreeMode = "set" | "clear" | "show";
+
+export type BoardWorktreeResult =
+  | { ok: true; boardId: string; worktreePath: string | null; missing: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Boardに紐づくワークツリーの設定・解除・参照。boardId省略時はアクティブBoardが対象。
+ * pathはmode: "set"のみ必須で、相対パスは呼び出し側で解決してから渡すこと
+ */
+export function setBoardWorktree(
+  endpoint: IpcEndpoint,
+  mode: BoardWorktreeMode,
+  opts: { boardId?: string; path?: string } = {},
+): Promise<BoardWorktreeResult> {
+  const body: { mode: BoardWorktreeMode; boardId?: string; path?: string } = { mode };
+  if (opts.boardId !== undefined) body.boardId = opts.boardId;
+  if (opts.path !== undefined) body.path = toAppAccessiblePath(endpoint, opts.path);
+  return postJson<BoardWorktreeResult>(endpoint, "/board-worktree", body);
 }
 
 export type OpenPopupResult =

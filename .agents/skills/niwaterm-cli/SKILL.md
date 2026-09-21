@@ -30,6 +30,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `workspace new` / `switch` / `close` / `rename` / `move` — ワークスペースの作成・切替・削除・名前変更・表示順の並び替え（`move`は`--up`/`--down`で1つずつ移動）
 - `board new` / `switch` / `close` / `rename` / `move` / `startup` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成・切替・削除・名前変更・表示順の並び替え・別ワークスペースへの移動（`move`は`--up`/`--down`でワークスペース内を1つずつ移動、`--to-workspace <workspaceId>`で別ワークスペースの末尾へ移動）・起動時レイアウト設定
+- `board worktree set <path>` / `clear` / `show` — そのBoardに紐づくワークツリーの設定・解除・表示。`worktree new`/`open`で開いたBoardには自動で付いており、`worktree open`の「既に開いているBoardか」の判定キーになる。紐づけ先が消えるとサイドバーに警告アイコンが出る。設定の`board.newTabCwd: "worktree"`と組み合わせると新しいタブがここで開く
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作

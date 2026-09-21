@@ -147,6 +147,9 @@ niwaterm board close [--board <boardId>]
 niwaterm board rename [--board <boardId>] <name>
 niwaterm board move [--board <boardId>] --up | --down | --to-workspace <workspaceId>
 niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>] [--cwd <dir>] [--trust]
+niwaterm board worktree set <path> [--board <boardId>]
+niwaterm board worktree clear [--board <boardId>]
+niwaterm board worktree show [--board <boardId>]
 ```
 
 Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。対象の`boardId`は`niwaterm list`（複数Board時のみBoard行が表示される）または`board new`実行時に表示される値で確認する。
@@ -159,6 +162,7 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
   - `--up` / `--down` — 所属ワークスペース内での表示順（サイドバーの並び・名前未設定時の連番ラベル）を1つ上・1つ下へ移動する。中身（タイル・タブ）とアクティブなBoardは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.board.move(boardId, index)`を使う）
   - `--to-workspace <workspaceId>` — Boardを別のワークスペースへ移す（tmuxの`move-window`相当）。レイアウト・タブ・実行中のプロセスはそのまま移り、移動先ワークスペースの末尾に付く。アクティブなBoardは移動元・移動先とも変わらない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる）ので、その旨をメッセージで知らせる
 - `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
+- `board worktree` — そのBoardに紐づくワークツリーを設定・解除・表示する（`--board`省略時の扱いは`board close`と同じ）。「Boardに紐づくワークツリー」節を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペース内最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
@@ -309,6 +313,27 @@ niwaterm tab var find --board <boardId> <key> <value>
 検索対象のBoardは`--board <boardId>`で明示できる。省略時は`NIWATERM_TAB_ID`環境変数のタブが属するBoard、それも無ければ（niwaterm外のシェルから実行した等）アクティブなBoardを検索する。**「アクティブなBoard」ではなく「実行しているタブの所属Board」を先に見るのが重要**で、レイアウトプリセットの`command`が実際に走るのはPTY起動・シェル初期化を待った後のため、その時点でユーザーが別のBoardへ切り替えていても自分のBoardを正しく指せる。`--board`は`tab var get/set/list`の`--tab`（操作対象のタブ）とは意味が異なり、検索範囲の指定である点に注意する。存在しないboardId・tabIdを指定した場合はエラーメッセージと共に終了コード1を返す。
 
 `tab var set/get/list`の`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
+
+### Boardに紐づくワークツリー
+
+Boardは「このBoardはこのワークツリーの作業だ」という紐づけを1つ持てる。`worktree new`・`worktree open`で開いたBoardには自動で付き、それ以外のBoardには`board worktree set`で後から付ける。
+
+```sh
+# 今いるディレクトリをこのBoardへ紐づける
+niwaterm board worktree set .
+
+# 紐づけの確認・解除
+niwaterm board worktree show
+niwaterm board worktree clear
+```
+
+`set`に渡すパスは相対でもよく、コマンドを実行したディレクトリ起点で解決される。紐づけは次の3つに効く。
+
+- **`worktree open`の付け替え防止** — 「そのワークツリーのBoardが既に開いているか」の判定にこの値を使う（「ワークツリーを開く」節）。タブのcwdは見ないので、`cd`で別ディレクトリへ移っても判定は変わらない
+- **消えたディレクトリの警告** — 紐づけ先が見つからなくなるとサイドバーのBoard行に警告アイコンが出る。ワークツリーを`git worktree remove`した後のBoardを見分けるためのもの
+- **新しいタブのcwd** — `board.newTabCwd: "worktree"`を設定していれば、タブ追加・タイル分割・ポップアップのcwdが今のタブの引き継ぎではなく紐づけ先になる（`docs/guide/config.md`「Board」節）
+
+GUIからはサイドバーのBoard行を右クリック →「ワークツリーを設定」、またはコマンドパレットの`Set Board Worktree Directory`で変更できる。入力欄にはそのBoardのカレントディレクトリが入った状態で開くので、そのまま確定すれば「今いるディレクトリを紐づける」になる。空のまま確定すると紐づけを解除する。既定のキーバインドは持たないので、キーから使いたい場合は`set-board-worktree`アクションを設定ファイルで割り当てる。
 
 ### ワークツリー
 

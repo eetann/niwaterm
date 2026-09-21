@@ -8,9 +8,11 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   defaultAppearance,
+  defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
   isKeybindAction,
+  isNewTabCwdMode,
   isTabBarMode,
   type KeybindingsConfig,
   type LayoutPreset,
@@ -25,6 +27,7 @@ import {
   platformDefaultKeybindings,
   resolveBindingEntry,
   type ResolvedAppearanceConfig,
+  type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
@@ -378,6 +381,22 @@ export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrows
 }
 
 /**
+ * defaultBoardConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
+ */
+export function resolveBoard(userConfig: NiwatermConfig | null): ResolvedBoardConfig {
+  const user = userConfig?.board;
+  return {
+    newTabCwd: resolveField(
+      "board",
+      "newTabCwd",
+      user?.newTabCwd,
+      defaultBoardConfig.newTabCwd,
+      isNewTabCwdMode,
+    ),
+  };
+}
+
+/**
  * defaultMouseConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
 export function resolveMouse(userConfig: NiwatermConfig | null): ResolvedMouseConfig {
@@ -555,6 +574,7 @@ export async function loadAndResolveConfig(
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
+  board: ResolvedBoardConfig;
   customView: ResolvedCustomViewConfig | null;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
@@ -592,6 +612,7 @@ export async function loadAndResolveConfig(
     keybindings,
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
+    board: resolveBoard(userConfig),
     customView: resolveCustomView(userConfig),
     defaultShell: resolveShell(userConfig),
     shellProfiles,

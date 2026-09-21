@@ -430,6 +430,61 @@ describe("getDefaultCwdによる新規Boardのcwd指定", () => {
   });
 });
 
+describe("getNewTabCwdによる新規タブのcwd指定", () => {
+  test("newTabのcwdがgetNewTabCwdの値になる（OSC7報告済みのcwdの引き継ぎより優先）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(
+      baseOpts({ createSession: factory, getNewTabCwd: () => "/repo/work/feature" }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const firstTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    resolvePending(ws);
+    ws.setTabVar(firstTabId, "cwd", "/tmp/reported");
+
+    ws.newTab(tileId);
+
+    expect(created[1]?.opts.cwd).toBe("/repo/work/feature");
+  });
+
+  test("splitTileのcwdもgetNewTabCwdの値になる", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(
+      baseOpts({ createSession: factory, getNewTabCwd: () => "/repo/work/feature" }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.splitTile(tileId, "vertical");
+    resolvePending(ws);
+
+    expect(created[1]?.opts.cwd).toBe("/repo/work/feature");
+  });
+
+  test("明示的に渡したcwdはgetNewTabCwdより優先される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(
+      baseOpts({ createSession: factory, getNewTabCwd: () => "/repo/work/feature" }),
+    );
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    resolvePending(ws);
+
+    ws.newTab(tileId, undefined, "/explicit");
+
+    expect(created[1]?.opts.cwd).toBe("/explicit");
+  });
+
+  test("getNewTabCwdがundefinedを返せば従来どおりOSC7報告済みのcwdを引き継ぐ", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory, getNewTabCwd: () => undefined }));
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    const firstTabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    resolvePending(ws);
+    ws.setTabVar(firstTabId, "cwd", "/tmp/reported");
+
+    ws.newTab(tileId);
+
+    expect(created[1]?.opts.cwd).toBe("/tmp/reported");
+  });
+});
+
 describe("splitTile", () => {
   test("対象タイルを分割し、新規tileId/tabIdを返す", () => {
     const { created, factory } = createFakeSessionFactory();

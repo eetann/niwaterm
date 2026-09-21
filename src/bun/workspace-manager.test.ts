@@ -257,6 +257,48 @@ describe("Board操作", () => {
     expect(restored.serializeForPersistence()).toEqual(persisted);
   });
 
+  test("setBoardWorktreePathで紐づけを張り替えられ、nullで解除できる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+
+    expect(mgr.setBoardWorktreePath(boardId, "/repo/work/feature")).toBe(true);
+    expect(mgr.getBoardWorktreePath(boardId)).toBe("/repo/work/feature");
+
+    expect(mgr.setBoardWorktreePath(boardId, "/repo/work/other")).toBe(true);
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.worktreePath).toBe("/repo/work/other");
+    // 張り替えた値も永続化に載る
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.worktreePath).toBe(
+      "/repo/work/other",
+    );
+
+    expect(mgr.setBoardWorktreePath(boardId, null)).toBe(true);
+    expect(mgr.getBoardWorktreePath(boardId)).toBeNull();
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.worktreePath).toBeUndefined();
+  });
+
+  test("存在しないboardIdへのsetBoardWorktreePathはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setBoardWorktreePath("not-found", "/repo")).toBe(false);
+  });
+
+  test("isWorktreeMissingの判定結果が一覧のworktreeMissingへ載る（紐づけの無いBoardは常にfalse）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, isWorktreeMissing: (path) => path === "/gone" }),
+    );
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+    const goneId = mgr.newBoard(workspaceId, undefined, { worktreePath: "/gone" });
+    const liveId = mgr.newBoard(workspaceId, undefined, { worktreePath: "/here" });
+
+    const boards = mgr.listWorkspaces()[0]?.boards;
+    expect(boards?.find((b) => b.boardId === goneId)?.worktreeMissing).toBe(true);
+    expect(boards?.find((b) => b.boardId === liveId)?.worktreeMissing).toBe(false);
+    expect(boards?.find((b) => b.boardId === firstBoardId)?.worktreeMissing).toBe(false);
+  });
+
   test("Boardを閉じるとworktreePathの紐づけも消える", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
@@ -1782,6 +1824,40 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     expect(ok).toBe(true);
     expect(mgr.snapshot().workspace.popup).toBeNull();
     expect(created[created.length - 1]?.disposed).toBe(true);
+  });
+
+  test("openPopupのcwdもgetNewTabCwdの値になる（Board紐づけのワークツリーで開く）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getNewTabCwd: (path) => path }),
+    );
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.newBoard(workspaceId, undefined, {
+      worktreePath: "/repo/work/feature",
+    }) as string;
+    mgr.switchBoard(boardId);
+
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+
+    expect(created[created.length - 1]?.opts.cwd).toBe("/repo/work/feature");
+  });
+
+  test("紐づけの無いBoardのopenPopupは従来どおりフォーカス中タブのcwdを引き継ぐ", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getNewTabCwd: (path) => path }),
+    );
+    const focusedTabId = mgr.snapshot().workspace.board.focusedTileId;
+    const leaf = listLeaves(mgr.snapshot().workspace.board.layout).find(
+      (l) => l.id === focusedTabId,
+    ) as TileLeaf;
+    mgr.setTabVar(leaf.activeTabId, "cwd", "/tmp/reported");
+
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+
+    expect(created[created.length - 1]?.opts.cwd).toBe("/tmp/reported");
   });
 
   test("togglePopupVisibilityはpopup無しでnull、popup有りでトグル後の可視状態を返す", () => {
