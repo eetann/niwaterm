@@ -1821,6 +1821,42 @@ describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-b
     expect(entry?.activeBoardId).toBe(firstBoardId);
   });
 
+  test("new-board: worktreePathを渡すと/listのBoardに載る", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ worktreePath: "/repo/work/feature" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { boardId: string };
+    const listed = await fetch("http://localhost/list", { unix: socketPath });
+    const listBody = (await listed.json()) as {
+      workspaces: { boards: { boardId: string; worktreePath: string | null }[] }[];
+    };
+    const boards = listBody.workspaces.flatMap((w) => w.boards);
+    expect(boards.find((b) => b.boardId === body.boardId)?.worktreePath).toBe("/repo/work/feature");
+    expect(boards.filter((b) => b.worktreePath === null)).toHaveLength(1);
+  });
+
+  test("new-board: worktreePathが文字列以外なら400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ worktreePath: 1 }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("new-board: activateがboolean以外なら400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);

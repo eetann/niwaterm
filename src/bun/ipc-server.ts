@@ -364,11 +364,18 @@ interface NewBoardRequestBody {
   cwd?: string;
   /** 省略時はtrue（作ったBoardをアクティブにする） */
   activate?: boolean;
+  /** このBoardが対応するgitワークツリーの絶対パス（`niwaterm worktree new`・`worktree open`用） */
+  worktreePath?: string;
 }
 
 /** workspaceId省略時はgetActiveWorkspaceId()で解決する（エンドポイント側の責務） */
 function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
-  const b = body as { workspaceId?: unknown; cwd?: unknown; activate?: unknown };
+  const b = body as {
+    workspaceId?: unknown;
+    cwd?: unknown;
+    activate?: unknown;
+    worktreePath?: unknown;
+  };
   const result: NewBoardRequestBody = {};
   if (b.workspaceId !== undefined) {
     if (typeof b.workspaceId !== "string" || b.workspaceId.length === 0) return null;
@@ -381,6 +388,10 @@ function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
   if (b.activate !== undefined) {
     if (typeof b.activate !== "boolean") return null;
     result.activate = b.activate;
+  }
+  if (b.worktreePath !== undefined) {
+    if (typeof b.worktreePath !== "string" || b.worktreePath.length === 0) return null;
+    result.worktreePath = b.worktreePath;
   }
   return result;
 }
@@ -740,12 +751,19 @@ function buildApp(
     const parsed = parseNewBoardBody(body);
     if (!parsed) {
       return c.json(
-        { ok: false, error: "expected { workspaceId?: string, cwd?: string, activate?: boolean }" },
+        {
+          ok: false,
+          error:
+            "expected { workspaceId?: string, cwd?: string, activate?: boolean, worktreePath?: string }",
+        },
         400,
       );
     }
     const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
-    const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd, parsed.activate ?? true);
+    const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd, {
+      ...(parsed.activate !== undefined ? { activate: parsed.activate } : {}),
+      ...(parsed.worktreePath !== undefined ? { worktreePath: parsed.worktreePath } : {}),
+    });
     if (boardId === null) {
       return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);
     }

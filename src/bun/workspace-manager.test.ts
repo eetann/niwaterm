@@ -226,11 +226,47 @@ describe("Board操作", () => {
     const workspaceId = mgr.snapshot().activeWorkspaceId;
     const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
 
-    const newBoardId = mgr.newBoard(workspaceId, undefined, false);
+    const newBoardId = mgr.newBoard(workspaceId, undefined, { activate: false });
 
     const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
     expect(entry?.boards.map((b) => b.boardId)).toEqual([firstBoardId, newBoardId]);
     expect(entry?.activeBoardId).toBe(firstBoardId);
+  });
+
+  test("newBoardのworktreePathは一覧・永続化に載り、ラウンドトリップしても残る", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const firstBoardId = mgr.listWorkspaces()[0]?.activeBoardId;
+
+    const boardId = mgr.newBoard(workspaceId, undefined, { worktreePath: "/repo/work/feature" });
+
+    const boards = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId)?.boards;
+    expect(boards?.find((b) => b.boardId === boardId)?.worktreePath).toBe("/repo/work/feature");
+    // worktreeコマンド由来でないBoardには付かない
+    expect(boards?.find((b) => b.boardId === firstBoardId)?.worktreePath).toBeNull();
+
+    const persisted = mgr.serializeForPersistence();
+    expect(persisted.workspaces[0]?.boards.map((b) => b.worktreePath)).toEqual([
+      undefined,
+      "/repo/work/feature",
+    ]);
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+    expect(restored.serializeForPersistence()).toEqual(persisted);
+  });
+
+  test("Boardを閉じるとworktreePathの紐づけも消える", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const boardId = mgr.newBoard(workspaceId, undefined, { worktreePath: "/repo/work/feature" });
+
+    expect(mgr.closeBoard(boardId as string)).toEqual({ ok: true });
+
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards).toHaveLength(1);
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.worktreePath).toBeNull();
   });
 
   test("存在しないworkspaceIdへのnewBoardはnullを返す", () => {
@@ -467,6 +503,21 @@ describe("moveBoardToWorkspace", () => {
     const { mgr, wsB, boardA2, boardB1, boardIdsOf } = createTwoWorkspaces();
     mgr.moveBoardToWorkspace(boardA2, wsB, 0);
     expect(boardIdsOf(wsB)).toEqual([boardA2, boardB1]);
+  });
+
+  test("Board名とworktreePathの紐づけも一緒に移る", () => {
+    const { mgr, wsA, wsB } = createTwoWorkspaces();
+    const boardA3 = mgr.newBoard(wsA, undefined, { worktreePath: "/repo/work/feature" }) as string;
+    mgr.setBoardName(boardA3, "feat/x");
+
+    mgr.moveBoardToWorkspace(boardA3, wsB);
+
+    const moved = mgr
+      .listWorkspaces()
+      .find((e) => e.workspaceId === wsB)
+      ?.boards.find((b) => b.boardId === boardA3);
+    expect(moved?.name).toBe("feat/x");
+    expect(moved?.worktreePath).toBe("/repo/work/feature");
   });
 
   test("移動してもタブのセッションは作り直されない（PTYごと移る）", () => {

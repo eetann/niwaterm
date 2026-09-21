@@ -1,22 +1,15 @@
 import { isAbsolute, resolve } from "node:path";
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
-import {
-  type IpcEndpoint,
-  newBoard,
-  renameBoard,
-  resolveIpcEndpoint,
-  sendKeys,
-} from "../../ipc-client";
-import { createTargetResolver } from "../../resolve-target";
+import { resolveIpcEndpoint } from "../../ipc-client";
 import {
   isWorktreeOpenMode,
   resolveWorktreePlan,
   WORKTREE_OPEN_MODES,
   type WorktreeHook,
   type WorktreeHookContext,
-  type WorktreeOpenMode,
 } from "../../worktree/config";
+import { openWorktree } from "../../worktree/open";
 import { ensureProjectTrust } from "../../worktree/trust";
 import {
   addWorktree,
@@ -25,15 +18,6 @@ import {
   listWorktrees,
   mainWorktree,
 } from "../../worktree/git";
-
-/**
- * `cd`へ渡すパスを引用する。POSIXシェルもPowerShellもシングルクォート文字列を解釈するため`'`で包む。
- * 内部の`'`の閉じ直し方はPOSIX式（`'\''`）で、`'`を含むパスをPowerShellのタブへ送ると崩れるが、
- * 引用せずに空白入りパスを送るほうが壊れる範囲が広いのでこちらを採る
- */
-function shellQuotePath(path: string): string {
-  return `'${path.replaceAll("'", "'\\''")}'`;
-}
 
 /**
  * 作成後フックを順に実行する。Boardを開く前に終わらせるので、タブが立ち上がる時点で
@@ -55,35 +39,6 @@ async function runCreateHooks(hooks: WorktreeHook[], ctx: WorktreeHookContext): 
       );
     }
   }
-}
-
-/** 作成したワークツリーをniwatermで開く。開き方はモードごとに完結させる */
-async function openWorktree(
-  endpoint: IpcEndpoint,
-  mode: WorktreeOpenMode,
-  path: string,
-  branch: string,
-  workspaceId: string | undefined,
-): Promise<void> {
-  if (mode === "none") return;
-
-  if (mode === "current-tab") {
-    const target = createTargetResolver(endpoint, "worktree new", {});
-    // シェルは実行中のこのCLIが終わるまで入力を読まないため、キーはtty側で待たされてから流れる
-    const result = await sendKeys(endpoint, await target.tabId(), [
-      `cd ${shellQuotePath(path)}`,
-      "Enter",
-    ]);
-    if (!result.ok) failAndExit(`worktree newに失敗しました: ${result.error}`);
-    return;
-  }
-
-  const created = await newBoard(endpoint, workspaceId, path, mode === "board-switch");
-  if (!created.ok) failAndExit(`worktree newに失敗しました: ${created.error}`);
-  // 遷移しないモードではサイドバーの見分けが唯一の手がかりになるため、必ずブランチ名を付ける
-  const renamed = await renameBoard(endpoint, created.boardId, branch);
-  if (!renamed.ok) console.error(`warning: Board名を設定できませんでした: ${renamed.error}`);
-  console.log(`board: ${created.boardId}`);
 }
 
 export default define({
@@ -187,6 +142,13 @@ export default define({
     // 既存のワークツリーを開き直しただけのときはフックを走らせない（bun install等の再実行を避ける）
     if (!existing) await runCreateHooks(plan.onCreate, { repoRoot, worktreePath: path, branch });
 
-    await openWorktree(resolveIpcEndpoint(), openMode, path, branch, ctx.values.workspace);
+    await openWorktree({
+      endpoint: resolveIpcEndpoint(),
+      commandName: "worktree new",
+      mode: openMode,
+      path,
+      branch,
+      ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+    });
   },
 });

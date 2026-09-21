@@ -108,6 +108,15 @@ export interface PersistedBoard {
    * configから消えているケースに備え、layout（骨格）は常に保存しておく
    */
   startup?: PersistedBoardStartup;
+  /**
+   * このBoardが対応するgitワークツリーの絶対パス。`niwaterm worktree new`・`worktree open`で
+   * 開いたBoardにのみ付き、それ以外のBoardでは省略する。
+   *
+   * 「そのワークツリーのBoardが既に開いているか」の判定キー。Board内のタブのcwdから推測する方式は
+   * 採らない（cdで変わるため。startup.projectRootと同じ理由）。Board名（ブランチ名）での判定も
+   * 採らない（別リポジトリの同名ブランチが衝突し、ユーザーがリネームすると紐づけが切れるため）
+   */
+  worktreePath?: string;
 }
 
 export interface PersistedWorkspace {
@@ -264,6 +273,7 @@ function isPersistedBoard(value: unknown): value is PersistedBoard {
   const v = value as Record<string, unknown>;
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
   if (v["startup"] !== undefined && !isPersistedBoardStartup(v["startup"])) return false;
+  if (v["worktreePath"] !== undefined && typeof v["worktreePath"] !== "string") return false;
   return isPersistedTileNode(v["layout"]);
 }
 

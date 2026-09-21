@@ -42,6 +42,7 @@ export interface DetachedBoard {
   board: Board;
   name?: string;
   startup?: PersistedBoardStartup;
+  worktreePath?: string;
 }
 
 export interface WorkspaceRenderState {
@@ -75,6 +76,16 @@ export interface BoardListEntry {
   zoomedTileId: TileId | null;
   /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
   startup: PersistedBoardStartup | null;
+  /** 対応するgitワークツリーの絶対パス。worktreeコマンド由来でないBoardはnull */
+  worktreePath: string | null;
+}
+
+/** newBoardの任意指定。cwdだけは呼び出し側で必須になりがちなので引数のまま分けている */
+export interface NewBoardOptions {
+  /** falseなら作るだけでアクティブにしない */
+  activate?: boolean;
+  /** このBoardが対応するgitワークツリーの絶対パス */
+  worktreePath?: string;
 }
 
 export interface BoardLocation {
@@ -92,6 +103,7 @@ export interface InitialBoard {
   name?: string;
   restoredMeta?: RestoredTreeMeta;
   startup?: PersistedBoardStartup;
+  worktreePath?: string;
 }
 
 export interface WorkspaceOptions {
@@ -124,6 +136,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // Boardに紐づくレイアウトプリセットと起動時の組み直し方。boardNamesと同じく
   // getPersistableBoards経由で永続化対象になる
   const boardStartups = new Map<BoardId, PersistedBoardStartup>();
+  // Boardが対応するgitワークツリーの絶対パス。boardNamesと同じく永続化対象になる
+  const boardWorktreePaths = new Map<BoardId, string>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
@@ -165,6 +179,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boards.delete(id);
     boardNames.delete(id);
     boardStartups.delete(id);
+    boardWorktreePaths.delete(id);
     order = order.filter((bid) => bid !== id);
     if (order.length === 0) {
       opts.onAllTabsClosed();
@@ -183,6 +198,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
       // dirty通知しない既存方針）
       if (initialBoard.name !== undefined) boardNames.set(id, initialBoard.name);
       if (initialBoard.startup !== undefined) boardStartups.set(id, initialBoard.startup);
+      if (initialBoard.worktreePath !== undefined)
+        boardWorktreePaths.set(id, initialBoard.worktreePath);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
     activeBoardId = order[clampedIndex];
@@ -256,11 +273,12 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   /**
    * Boardを作る。activate=falseなら作るだけでアクティブにしない
-   * （`worktree new --open board-bg`のように、作業中のBoardを奪わず裏で用意する用途）
+   * （`worktree new --open board`のように、作業中のBoardを奪わず裏で用意する用途）
    */
-  function newBoard(cwd?: string, activate = true): BoardId {
+  function newBoard(cwd?: string, options: NewBoardOptions = {}): BoardId {
     const boardId = createAndRegisterBoard(undefined, cwd);
-    if (activate) activeBoardId = boardId;
+    if (options.worktreePath !== undefined) boardWorktreePaths.set(boardId, options.worktreePath);
+    if (options.activate !== false) activeBoardId = boardId;
     opts.onDirty();
     return boardId;
   }
@@ -281,6 +299,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boards.delete(boardId);
     boardNames.delete(boardId);
     boardStartups.delete(boardId);
+    boardWorktreePaths.delete(boardId);
     order = order.filter((id) => id !== boardId);
     if (activeBoardId === boardId) {
       activeBoardId = order[order.length - 1];
@@ -303,8 +322,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     order = order.filter((id) => id !== boardId);
     const name = boardNames.get(boardId);
     const startup = boardStartups.get(boardId);
+    const worktreePath = boardWorktreePaths.get(boardId);
     boardNames.delete(boardId);
     boardStartups.delete(boardId);
+    boardWorktreePaths.delete(boardId);
     if (activeBoardId === boardId && order.length > 0) {
       activeBoardId = order[order.length - 1];
     }
@@ -313,6 +334,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       board,
       ...(name !== undefined ? { name } : {}),
       ...(startup !== undefined ? { startup } : {}),
+      ...(worktreePath !== undefined ? { worktreePath } : {}),
     };
   }
 
@@ -333,6 +355,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     order.splice(Math.min(Math.max(0, requested), order.length), 0, boardId);
     if (detached.name !== undefined) boardNames.set(boardId, detached.name);
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
+    if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
   }
 
   /** detachBoardで最後のBoardを失ったかどうか。この状態のWorkspaceは描画に耐えないため即座に畳む */
@@ -650,6 +673,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         name: boardNames.get(id) ?? null,
         zoomedTileId: board.getZoomedTileId(),
         startup: boardStartups.get(id) ?? null,
+        worktreePath: boardWorktreePaths.get(id) ?? null,
       };
     });
   }
@@ -741,6 +765,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     layout: PersistedTileNode;
     name?: string;
     startup?: PersistedBoardStartup;
+    worktreePath?: string;
   }[] {
     return order.map((id) => {
       const board = boards.get(id) as Board;
@@ -751,14 +776,17 @@ export function createWorkspace(opts: WorkspaceOptions) {
       });
       const name = boardNames.get(id);
       const startup = boardStartups.get(id);
+      const worktreePath = boardWorktreePaths.get(id);
       const entry: {
         boardId: BoardId;
         layout: PersistedTileNode;
         name?: string;
         startup?: PersistedBoardStartup;
+        worktreePath?: string;
       } = { boardId: id, layout };
       if (name !== undefined) entry.name = name;
       if (startup !== undefined) entry.startup = startup;
+      if (worktreePath !== undefined) entry.worktreePath = worktreePath;
       return entry;
     });
   }

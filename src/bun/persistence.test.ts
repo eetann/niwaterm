@@ -439,6 +439,52 @@ describe("loadPersistedState / savePersistedState", () => {
     expect(await loadPersistedState(path)).toEqual(state);
   });
 
+  test("BoardのworktreePathがラウンドトリップする", async () => {
+    const path = join(dir, "board-worktree-path.json");
+    const state: PersistedState = {
+      version: 3,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+              name: "feat/x",
+              worktreePath: "/repo/work/feature",
+            },
+            { layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } },
+          ],
+        },
+      ],
+    };
+    await savePersistedState(path, state);
+    expect(await loadPersistedState(path)).toEqual(state);
+  });
+
+  test("worktreePathが文字列でない場合はnullを返す", async () => {
+    const path = join(dir, "invalid-worktree-path.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 3,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            activeBoardIndex: 0,
+            boards: [
+              {
+                layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                worktreePath: 1,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await loadPersistedState(path)).toBeNull();
+  });
+
   test("startupのrestoreModeが未知の値の場合はnullを返す", async () => {
     const path = join(dir, "invalid-startup-mode.json");
     await writeFile(

@@ -6,10 +6,12 @@ import {
   addWorktree,
   branchExists,
   findWorktreeByBranch,
+  findWorktreeByQuery,
   gitConfigSection,
   listWorktrees,
   mainWorktree,
   parseWorktreePorcelain,
+  type WorktreeEntry,
   worktreeFlags,
 } from "./git";
 
@@ -114,6 +116,82 @@ describe("parseWorktreePorcelain", () => {
 
   test("空文字列ではレコードを作らない", () => {
     expect(parseWorktreePorcelain("", "\n")).toEqual([]);
+  });
+});
+
+function fakeEntry(path: string, branch: string | null, extra: Partial<WorktreeEntry> = {}) {
+  return {
+    path,
+    branch,
+    head: "a".repeat(40),
+    detached: branch === null,
+    bare: false,
+    locked: false,
+    lockedReason: null,
+    prunable: false,
+    prunableReason: null,
+    main: false,
+    ...extra,
+  } satisfies WorktreeEntry;
+}
+
+describe("findWorktreeByQuery", () => {
+  const entries = [
+    fakeEntry("/repo/main", "main", { main: true }),
+    fakeEntry("/repo/work/feature", "feat/x"),
+    fakeEntry("/repo/work/other", "other"),
+  ];
+
+  test("ブランチ名で引ける", () => {
+    expect(findWorktreeByQuery(entries, "feat/x", "/repo")).toMatchObject({
+      kind: "found",
+      worktree: { path: "/repo/work/feature" },
+    });
+  });
+
+  test("絶対パス・相対パスの両方で引ける", () => {
+    expect(findWorktreeByQuery(entries, "/repo/work/other", "/tmp")).toMatchObject({
+      kind: "found",
+      worktree: { branch: "other" },
+    });
+    expect(findWorktreeByQuery(entries, "work/other", "/repo")).toMatchObject({
+      kind: "found",
+      worktree: { branch: "other" },
+    });
+  });
+
+  test("ディレクトリ名で引ける", () => {
+    expect(findWorktreeByQuery(entries, "feature", "/repo")).toMatchObject({
+      kind: "found",
+      worktree: { branch: "feat/x" },
+    });
+  });
+
+  test("ブランチ名がディレクトリ名より優先される", () => {
+    const confusing = [
+      fakeEntry("/repo/work/alpha", "beta"),
+      fakeEntry("/repo/work/beta", "gamma"),
+    ];
+    expect(findWorktreeByQuery(confusing, "beta", "/repo")).toMatchObject({
+      kind: "found",
+      worktree: { path: "/repo/work/alpha" },
+    });
+  });
+
+  test("同じディレクトリ名が複数あればambiguousで返す", () => {
+    const duplicated = [fakeEntry("/repo/a/shared", "one"), fakeEntry("/repo/b/shared", "two")];
+    const result = findWorktreeByQuery(duplicated, "shared", "/repo");
+    expect(result.kind).toBe("ambiguous");
+    expect(result.kind === "ambiguous" && result.candidates).toHaveLength(2);
+  });
+
+  test("bareは候補から外す", () => {
+    const withBare = [fakeEntry("/repo/bare", null, { bare: true, detached: false, head: null })];
+    expect(findWorktreeByQuery(withBare, "bare", "/repo")).toEqual({ kind: "not-found" });
+  });
+
+  test("どれにも当たらなければnot-found", () => {
+    expect(findWorktreeByQuery(entries, "nope", "/repo")).toEqual({ kind: "not-found" });
   });
 });
 

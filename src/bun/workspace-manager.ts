@@ -16,13 +16,14 @@ import {
   type CloseBoardResult,
   type GetTabVarResult,
   type InitialBoard,
+  type NewBoardOptions,
   type OpenPopupOptions,
   type Workspace,
   type WorkspaceOptions,
   type WorkspaceRenderState,
 } from "./workspace";
 
-export type { CloseBoardResult, GetTabVarResult } from "./workspace";
+export type { CloseBoardResult, GetTabVarResult, NewBoardOptions } from "./workspace";
 export type { BoardId } from "./board";
 
 export type WorkspaceId = string;
@@ -160,6 +161,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         const initialBoard: InitialBoard = {};
         if (persistedBoard.name !== undefined) initialBoard.name = persistedBoard.name;
         if (persistedBoard.startup !== undefined) initialBoard.startup = persistedBoard.startup;
+        if (persistedBoard.worktreePath !== undefined)
+          initialBoard.worktreePath = persistedBoard.worktreePath;
         // 起動時にプリセットで組み直すBoardは骨格を復元しない。単一タブの
         // まっさらな状態で作り、bun/index.tsが設定読み込み後にapplyLayoutPresetで組み立てる。
         // 骨格を復元してから畳むと前回セッションのタブ名・vars・cwdがプリセット適用後も
@@ -306,8 +309,12 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return { ok: true };
   }
 
-  function newBoard(workspaceId: WorkspaceId, cwd?: string, activate = true): BoardId | null {
-    return workspaces.get(workspaceId)?.newBoard(cwd, activate) ?? null;
+  function newBoard(
+    workspaceId: WorkspaceId,
+    cwd?: string,
+    options: NewBoardOptions = {},
+  ): BoardId | null {
+    return workspaces.get(workspaceId)?.newBoard(cwd, options) ?? null;
   }
 
   function hasBoard(boardId: BoardId): boolean {
@@ -753,6 +760,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           const board: PersistedBoard = { layout: b.layout };
           if (b.name !== undefined) board.name = b.name;
           if (b.startup !== undefined) board.startup = b.startup;
+          if (b.worktreePath !== undefined) board.worktreePath = b.worktreePath;
           return board;
         });
         const name = workspaceNames.get(id);

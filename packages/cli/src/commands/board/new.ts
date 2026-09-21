@@ -17,7 +17,10 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await newBoard(resolveIpcEndpoint(), ctx.values.workspace, ctx.values.cwd);
+    const result = await newBoard(resolveIpcEndpoint(), {
+      ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+      ...(ctx.values.cwd !== undefined ? { cwd: ctx.values.cwd } : {}),
+    });
     if (!result.ok) {
       failAndExit(`board newに失敗しました: ${result.error}`);
     }

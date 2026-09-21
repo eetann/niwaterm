@@ -8,6 +8,7 @@
 // 改行が含まれると壊れるため。-zはgit 2.36以降なので、失敗したら行区切りへ落とす。
 
 import { stat } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 
 const WORKTREE_FIELD_PREFIX = "worktree ";
 const HEAD_FIELD_PREFIX = "HEAD ";
@@ -255,6 +256,39 @@ export function findWorktreeByBranch(
   branch: string,
 ): WorktreeEntry | null {
   return worktrees.find((worktree) => worktree.branch === branch) ?? null;
+}
+
+export type FindWorktreeResult =
+  | { kind: "found"; worktree: WorktreeEntry }
+  | { kind: "not-found" }
+  | { kind: "ambiguous"; candidates: WorktreeEntry[] };
+
+/**
+ * ブランチ名・パス・ディレクトリ名のいずれかでワークツリーを引く。
+ * 優先順はブランチ名 → パス（相対はcwd基準）→ ディレクトリ名で、当たった段階で確定する。
+ * 段階を分けないと、ブランチ名で指定したつもりの文字列が別ワークツリーのディレクトリ名に
+ * 一致して化ける。bareはワーキングツリーを持たないので候補から外す
+ */
+export function findWorktreeByQuery(
+  worktrees: WorktreeEntry[],
+  query: string,
+  cwd: string,
+): FindWorktreeResult {
+  const candidates = worktrees.filter((entry) => !entry.bare);
+  const resolved = resolve(cwd, query);
+  const tiers = [
+    candidates.filter((entry) => entry.branch === query),
+    candidates.filter((entry) => entry.path === resolved),
+    candidates.filter((entry) => basename(entry.path) === query),
+  ];
+  for (const tier of tiers) {
+    const first = tier[0];
+    if (first === undefined) continue;
+    return tier.length === 1
+      ? { kind: "found", worktree: first }
+      : { kind: "ambiguous", candidates: tier };
+  }
+  return { kind: "not-found" };
 }
 
 export interface AddWorktreeOptions {

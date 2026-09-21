@@ -175,13 +175,17 @@ export function resolveIpcEndpoint(): IpcEndpoint {
  * ENOENTになる（実機確認済み）。WSLディストロの9pマウント経由でWindowsから参照できる
  * \\wsl.localhost\<distro>\... 形式のUNCパスへ変換する。
  * WSLブリッジ以外（macOS・Windows実機からの直接接続）やWSL_DISTRO_NAME未設定、
- * 絶対パスでない場合はそのまま返す（変換できない時に無理に書き換えない）
+ * 絶対パスでない場合はそのまま返す（変換できない時に無理に書き換えない）。
+ *
+ * niwaterm側へディレクトリのパスを渡すときと、niwaterm側が持つパスと突き合わせるときの
+ * 両方で通す（`worktree open`の「同じワークツリーのBoardが既に開いているか」判定）。
+ * 片方だけ通すと同じディレクトリが別物として扱われる
  */
-function toWindowsAccessibleCwd(endpoint: IpcEndpoint, cwd: string): string {
-  if (endpoint.kind !== "tcp") return cwd;
+export function toAppAccessiblePath(endpoint: IpcEndpoint, path: string): string {
+  if (endpoint.kind !== "tcp") return path;
   const distro = process.env["WSL_DISTRO_NAME"];
-  if (!distro || !cwd.startsWith("/")) return cwd;
-  return `\\\\wsl.localhost\\${distro}${cwd.replaceAll("/", "\\")}`;
+  if (!distro || !path.startsWith("/")) return path;
+  return `\\\\wsl.localhost\\${distro}${path.replaceAll("/", "\\")}`;
 }
 
 function ipcUrl(endpoint: IpcEndpoint, path: string): string {
@@ -333,6 +337,8 @@ export interface BoardListEntry {
   name: string | null;
   /** 紐づくレイアウトプリセットと起動時の組み直し方（board startup / layout apply --startup）。未設定はnull */
   startup: { preset: string; restoreMode: "layout" | "restore" } | null;
+  /** 対応するgitワークツリーの絶対パス（`worktree new`・`worktree open`で開いたBoardのみ）。それ以外はnull */
+  worktreePath: string | null;
 }
 
 export interface WorkspaceListEntry {
@@ -509,7 +515,7 @@ export function splitTile(
     tileId,
     orientation,
   };
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, cwd);
   return postJson(endpoint, "/split-tile", body);
 }
 
@@ -533,7 +539,7 @@ export function newTab(
   if (url !== undefined) body.url = url;
   if (customView !== undefined) body.customView = customView;
   if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, cwd);
   return postJson(endpoint, "/new-tab", body);
 }
 
@@ -605,17 +611,32 @@ export function moveBoardToWorkspace(
 
 export type NewBoardResult = { ok: true; boardId: string } | { ok: false; error: string };
 
+export interface NewBoardOptions {
+  workspaceId?: string;
+  /** 最初のタブの作業ディレクトリ */
+  cwd?: string;
+  /** falseなら作るだけでアクティブにしない（`worktree new --open board`の裏作成） */
+  activate?: boolean;
+  /** 対応するgitワークツリーの絶対パス。`worktree open`が既存Boardを見つける判定キーになる */
+  worktreePath?: string;
+}
+
 export function newBoard(
   endpoint: IpcEndpoint,
-  workspaceId?: string,
-  cwd?: string,
-  /** falseなら作るだけでアクティブにしない（`worktree new --open board`の裏作成） */
-  activate?: boolean,
+  opts: NewBoardOptions = {},
 ): Promise<NewBoardResult> {
-  const body: { workspaceId?: string; cwd?: string; activate?: boolean } = {};
-  if (workspaceId !== undefined) body.workspaceId = workspaceId;
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
-  if (activate !== undefined) body.activate = activate;
+  const body: {
+    workspaceId?: string;
+    cwd?: string;
+    activate?: boolean;
+    worktreePath?: string;
+  } = {};
+  if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
+  if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
+  if (opts.activate !== undefined) body.activate = opts.activate;
+  if (opts.worktreePath !== undefined) {
+    body.worktreePath = toAppAccessiblePath(endpoint, opts.worktreePath);
+  }
   return postJson(endpoint, "/new-board", body);
 }
 
@@ -732,7 +753,7 @@ export type ListLayoutsResult =
 export async function listLayouts(endpoint: IpcEndpoint, cwd?: string): Promise<ListLayoutsResult> {
   try {
     const query =
-      cwd === undefined ? "" : `?cwd=${encodeURIComponent(toWindowsAccessibleCwd(endpoint, cwd))}`;
+      cwd === undefined ? "" : `?cwd=${encodeURIComponent(toAppAccessiblePath(endpoint, cwd))}`;
     const res = await ipcFetch(
       endpoint,
       ipcUrl(endpoint, `/layouts${query}`),
@@ -793,7 +814,7 @@ export function applyLayout(
     startup?: boolean;
     trust?: boolean;
   } = { name, target: opts.target };
-  if (opts.cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, opts.cwd);
+  if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
   if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
   if (opts.boardId !== undefined) body.boardId = opts.boardId;
   if (opts.startup !== undefined) body.startup = opts.startup;
@@ -841,7 +862,7 @@ export function setBoardStartup(
   } = { mode };
   if (opts.boardId !== undefined) body.boardId = opts.boardId;
   if (opts.preset !== undefined) body.preset = opts.preset;
-  if (opts.cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, opts.cwd);
+  if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
   if (opts.trust !== undefined) body.trust = opts.trust;
   return postJson<BoardStartupResult>(endpoint, "/board-startup", body);
 }
@@ -873,7 +894,7 @@ export function openPopup(
     wait?: boolean;
     captureStdout?: boolean;
   } = {};
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, cwd);
   if (command !== undefined) body.command = command;
   if (width !== undefined) body.width = width;
   if (height !== undefined) body.height = height;
@@ -966,7 +987,7 @@ export function respawnTab(
     tabId,
   };
   if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
-  if (cwd !== undefined) body.cwd = toWindowsAccessibleCwd(endpoint, cwd);
+  if (cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, cwd);
   if (command !== undefined) body.command = command;
   return postJson(endpoint, "/respawn-tab", body);
 }
