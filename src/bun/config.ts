@@ -11,6 +11,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  type CustomViewHandlers,
   isKeybindAction,
   isNewTabCwdMode,
   isTabBarMode,
@@ -37,6 +38,7 @@ import {
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
 import { resolveBackgroundImage } from "./background-image";
+import { createCustomViewHandlers, type CustomViewHandlersHandle } from "./custom-view-handlers";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
@@ -434,6 +436,14 @@ export function resolveSelectionMenu(userConfig: NiwatermConfig | null): Selecti
   return fn;
 }
 
+/** customView.handlersのうち関数の項目だけを残す。不正な項目の警告はresolveCustomViewが出す */
+function validCustomViewHandlers(handlers: CustomViewHandlers | undefined): CustomViewHandlers {
+  if (typeof handlers !== "object" || handlers === null) return {};
+  return Object.fromEntries(
+    Object.entries(handlers).filter(([, handler]) => typeof handler === "function"),
+  );
+}
+
 /**
  * ユーザー定義HTML UI設定を解決する。未設定ならnull（機能オフ）。
  * pathが有効ならconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。
@@ -446,16 +456,29 @@ export function resolveCustomView(
   if (!user) return null;
 
   const name = isNonEmptyString(user.name) ? user.name : "Custom View";
+  const handlers = validCustomViewHandlers(user.handlers);
+  for (const key of Object.keys(user.handlers ?? {})) {
+    if (!(key in handlers)) console.log(`[bun] ignoring non-function customView.handlers.${key}`);
+  }
+  const handlerNames = Object.keys(handlers);
 
   if (isNonEmptyString(user.path)) {
     const resolvedPath = resolve(configDirPath(), user.path);
-    return { name, url: pathToFileURL(resolvedPath).href };
+    return { name, url: pathToFileURL(resolvedPath).href, handlerNames };
   }
   if (isNonEmptyString(user.url)) {
-    return { name, url: user.url };
+    return { name, url: user.url, handlerNames };
   }
   console.log("[bun] customView requires either path or url; ignoring");
   return null;
+}
+
+/**
+ * HTML側から呼べるハンドラの実体。RPCで渡せないためResolvedCustomViewConfigには含めず、
+ * bun側に残したままcreateCustomViewHandlersへ渡す（mouse.selectionMenuと同じ分け方）
+ */
+export function resolveCustomViewHandlers(userConfig: NiwatermConfig | null): CustomViewHandlers {
+  return validCustomViewHandlers(userConfig?.customView?.handlers);
 }
 
 /**
@@ -586,6 +609,8 @@ export async function loadAndResolveConfig(
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
   customView: ResolvedCustomViewConfig | null;
+  /** customView.handlersの実行（HTML側のniwaterm.callの実体） */
+  customViewHandlers: CustomViewHandlersHandle;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
@@ -618,13 +643,19 @@ export async function loadAndResolveConfig(
   // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
   // 登録内容の取り出しはその後でなければならない
   const keybindings = resolveKeybindings(userConfig, niwaApi);
+  const customView = resolveCustomView(userConfig);
   return {
     userConfigLoaded: userConfig !== null,
     keybindings,
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     board: resolveBoard(userConfig),
-    customView: resolveCustomView(userConfig),
+    customView,
+    // customViewがpath・urlのどちらも持たず機能オフなら、ハンドラも呼べないようにする
+    customViewHandlers: createCustomViewHandlers(
+      customView ? resolveCustomViewHandlers(userConfig) : {},
+      niwaApi.niwa,
+    ),
     defaultShell: resolveShell(userConfig),
     shellProfiles,
     layouts: resolveLayouts(userConfig),

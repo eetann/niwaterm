@@ -2,34 +2,13 @@ import type { WebviewTagElement } from "electrobun/view";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { extractNavigatedUrl } from "../navigated-url";
 import { normalizeUrl } from "../normalize-url";
 
 export interface BrowserToolbarProps {
   webviewEl: WebviewTagElement;
   initialUrl: string;
   onRequestTerminalFocus: () => void;
-}
-
-/**
- * did-navigateのdetailは、プラットフォーム（WebView2/CEF/WKWebView）によって
- * プレーンなURL文字列の場合とJSON文字列 `{"url": "..."}` の場合がある
- * （Windows実機で後者を確認済み）。両方に対応する。
- */
-function extractNavigatedUrl(detail: unknown): string {
-  if (typeof detail !== "string") return "";
-  try {
-    const parsed: unknown = JSON.parse(detail);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as { url?: unknown }).url === "string"
-    ) {
-      return (parsed as { url: string }).url;
-    }
-  } catch {
-    // JSONでなければプレーンなURL文字列としてそのまま扱う
-  }
-  return detail;
 }
 
 /**

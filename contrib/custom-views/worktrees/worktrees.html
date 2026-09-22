@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Worktrees</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #1f2328;
+        --muted: #6b7280;
+        --border: #d8dce1;
+        --hover: #f1f3f5;
+        --selected: #e2e8f0;
+        --accent: #3b82f6;
+        --error: #dc2626;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1a1b1e;
+          --fg: #e6e6e6;
+          --muted: #9aa0a6;
+          --border: #34363b;
+          --hover: #26282c;
+          --selected: #2f3237;
+          --accent: #60a5fa;
+          --error: #f87171;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--fg);
+        font: 12px/1.5 system-ui, sans-serif;
+      }
+      input {
+        width: 100%;
+        padding: 4px 6px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+      input:focus {
+        outline: 1px solid var(--accent);
+        outline-offset: -1px;
+      }
+      header,
+      footer {
+        padding: 6px;
+        flex: none;
+      }
+      header {
+        border-bottom: 1px solid var(--border);
+      }
+      footer {
+        border-top: 1px solid var(--border);
+      }
+      #repo {
+        margin-top: 4px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      #list {
+        flex: 1;
+        overflow-y: auto;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        padding: 4px 6px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+      }
+      li:hover {
+        background: var(--hover);
+      }
+      li[aria-selected="true"] {
+        background: var(--selected);
+      }
+      .branch {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .path {
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      .flags {
+        color: var(--muted);
+      }
+      #status {
+        padding: 4px 6px;
+        color: var(--muted);
+        min-height: 1.5em;
+        overflow-wrap: anywhere;
+      }
+      #status.error {
+        color: var(--error);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <input id="filter" type="search" placeholder="絞り込み（Enterで開く）" autocomplete="off" />
+      <div id="repo"></div>
+    </header>
+    <ul id="list"></ul>
+    <div id="status"></div>
+    <footer>
+      <input id="branch" type="text" placeholder="新しいブランチ名（Enterで作成）" autocomplete="off" />
+    </footer>
+
+    <script>
+      const filterEl = document.getElementById("filter");
+      const branchEl = document.getElementById("branch");
+      const listEl = document.getElementById("list");
+      const repoEl = document.getElementById("repo");
+      const statusEl = document.getElementById("status");
+
+      let items = [];
+      let shown = [];
+      let selected = 0;
+
+      /**
+       * window.niwatermはniwaterm本体がdom-ready後に注入するため、読み込み直後には
+       * まだ無いことがある。既にあればそのまま、無ければniwaterm:readyを待つ
+       */
+      function whenReady() {
+        if (window.niwaterm) return Promise.resolve();
+        return new Promise((resolve) => {
+          window.addEventListener("niwaterm:ready", resolve, { once: true });
+        });
+      }
+
+      function setStatus(text, isError) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("error", Boolean(isError));
+      }
+
+      function render() {
+        const query = filterEl.value.trim().toLowerCase();
+        shown = items.filter(
+          (item) =>
+            item.branch.toLowerCase().includes(query) || item.path.toLowerCase().includes(query),
+        );
+        if (selected >= shown.length) selected = Math.max(0, shown.length - 1);
+
+        listEl.replaceChildren();
+        shown.forEach((item, index) => {
+          const li = document.createElement("li");
+          li.setAttribute("aria-selected", String(index === selected));
+
+          const branch = document.createElement("div");
+          branch.className = "branch";
+          branch.textContent = item.branch || item.head.slice(0, 8) || "(detached)";
+          li.appendChild(branch);
+
+          const path = document.createElement("div");
+          path.className = "path";
+          path.textContent = item.path;
+          li.appendChild(path);
+
+          if (item.flags.length > 0) {
+            const flags = document.createElement("div");
+            flags.className = "flags";
+            flags.textContent = item.flags.join(" / ");
+            li.appendChild(flags);
+          }
+
+          li.addEventListener("click", () => open(item));
+          listEl.appendChild(li);
+        });
+      }
+
+      async function reload() {
+        setStatus("読み込み中…");
+        try {
+          const result = await niwaterm.call("list");
+          items = result.items;
+          repoEl.textContent = result.cwd;
+          selected = 0;
+          render();
+          setStatus(`${items.length}件`);
+        } catch (err) {
+          setStatus(err.message, true);
+        }
+      }
+
+      async function open(item) {
+        setStatus(`${item.branch || item.path} を開いています…`);
+        try {
+          await niwaterm.call("open", { path: item.path });
+          setStatus(`${item.branch || item.path} を開きました`);
+        } catch (err) {
+          setStatus(err.message, true);
+        }
+      }
+
+      async function create(branch) {
+        setStatus(`${branch} を作成しています…`);
+        try {
+          await niwaterm.call("create", { branch });
+          branchEl.value = "";
+          setStatus(`${branch} を作成しました`);
+          await reload();
+        } catch (err) {
+          setStatus(err.message, true);
+        }
+      }
+
+      filterEl.addEventListener("input", render);
+      filterEl.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const next = selected + (e.key === "ArrowDown" ? 1 : -1);
+          selected = Math.min(Math.max(next, 0), Math.max(0, shown.length - 1));
+          render();
+          listEl.children[selected]?.scrollIntoView({ block: "nearest" });
+        } else if (e.key === "Enter" && shown[selected]) {
+          open(shown[selected]);
+        }
+      });
+      branchEl.addEventListener("keydown", (e) => {
+        const branch = branchEl.value.trim();
+        if (e.key === "Enter" && branch) create(branch);
+      });
+
+      whenReady().then(reload);
+    </script>
+  </body>
+</html>

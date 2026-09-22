@@ -16,7 +16,12 @@ export {
   type ResolvedBoardConfig,
 } from "./board";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
-export { type CustomViewConfig, type ResolvedCustomViewConfig } from "./custom-view";
+export {
+  type CustomViewConfig,
+  type CustomViewHandler,
+  type CustomViewHandlers,
+  type ResolvedCustomViewConfig,
+} from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export type {
   LayoutNodeConfig,

@@ -180,6 +180,11 @@ function customViewSection(customView: ResolvedCustomViewConfig | null): ConfigS
     entries: [
       { key: "name", value: customView.name },
       { key: "url", value: customView.url },
+      {
+        key: "handlers",
+        value: customView.handlerNames.length > 0 ? customView.handlerNames.join(", ") : UNSET,
+        note: "HTML側のniwaterm.callで呼べる関数",
+      },
     ],
   };
 }

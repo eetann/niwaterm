@@ -608,6 +608,7 @@ mouse: {
 | `name` | `string` | サイドバーの切替ボタンに表示する名前。未指定時は`"Custom View"` |
 | `path` | `string` | ローカルHTMLファイルへのパス。`~/.config/niwaterm/`（設定ファイルのあるディレクトリ）からの相対 or 絶対パス。`file://`として読み込む |
 | `url` | `string` | 任意URL。`path`未指定時のみ使われる（`path`優先） |
+| `handlers` | `Record<string, (payload, niwa) => unknown>` | HTML側から`niwaterm.call`で呼べる関数。後述 |
 
 `path`と`url`のどちらも指定しなかった場合は警告付きで機能オフになる。
 
@@ -628,7 +629,61 @@ customView: {
   ```
 - CLI: `niwaterm tab new --tile <tileId> --custom-view`（`--url`と同時指定は不可）
 
-内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っており、`customView`のHTMLからniwatermのAPI（タイル・タブ操作等）を呼び出す仕組みは未実装（roadmap参照）。
+内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っている。
+
+### HTMLからniwatermを操作する（handlers）
+
+HTMLはniwaterm本体とは別プロセス（webview）で動くため、そこから直接niwatermやOSを操作することはできない。
+代わりに、`handlers`へ書いた関数をHTML側から名前で呼ぶ。
+
+```ts
+customView: {
+  name: "Worktrees",
+  path: "./worktrees.html",
+  handlers: {
+    list: async (_payload, niwa) => {
+      const result = await niwa.shell.run("niwaterm worktree list");
+      return result.stdout;
+    },
+    open: async (payload: { path: string }, niwa) => {
+      await niwa.shell.run(`niwaterm worktree open "${payload.path}"`);
+    },
+  },
+},
+```
+
+```js
+// worktrees.html
+const stdout = await niwaterm.call("list");
+await niwaterm.call("open", { path: "/path/to/worktree" });
+```
+
+サイドバーのパネルとタブのどちらで開いても同じように使える。
+関数の第1引数はHTML側が渡した`payload`、第2引数は`niwa`（キーバインドの関数ハンドラ・`mouse.selectionMenu`と同じAPI）。
+設定ファイルと同じ実行環境なので、`Bun.spawn`・`node:fs`もそのまま書ける。
+
+- `payload`と戻り値はJSONへ変換できる形に限る（関数・循環参照は渡せない）。戻り値を省略すると`null`が返る
+- ハンドラが例外を投げると、HTML側の`niwaterm.call`がその`message`でrejectする
+- 時間のかかる処理でも打ち切られない（gitの操作・依存のインストールをそのまま書ける）
+- 関数以外を書いた項目は警告付きで無視される。呼べる名前は`niwaterm config show`で確認できる
+
+`window.niwaterm`はページの読み込みが終わってから注入されるため、HTML側のスクリプトがすぐ呼ぶと間に合わないことがある。`niwaterm:ready`イベントで待つ。
+
+```js
+function whenReady() {
+  if (window.niwaterm) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.addEventListener("niwaterm:ready", resolve, { once: true });
+  });
+}
+```
+
+呼べる名前は`window.niwaterm.handlers`にも入っているので、HTML側で機能の有無を見分けられる。
+設定のホットリロードで`handlers`だけを変えた場合、HTMLは読み込み直さずこの配列だけが差し替わる。
+
+`url`でリモートのページを指している場合も同じように呼べる。そのページから`handlers`に書いた操作が実行できるということなので、自分で用意したページ以外を指すときは何を渡しているか意識する。
+
+そのまま使える例が`contrib/custom-views/`にある（gitワークツリーの一覧・絞り込み・作成）。
 
 ## シェル設定
 

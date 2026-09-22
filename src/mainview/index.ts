@@ -36,10 +36,17 @@ import type {
   WorkspaceListEntry,
 } from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
+import {
+  buildCustomViewBootstrapScript,
+  buildCustomViewResolveScript,
+  type CustomViewCallResultPayload,
+  parseCustomViewCallMessage,
+} from "./custom-view-bridge";
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
 import { keyToBytes } from "./key-to-bytes";
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
+import { extractNavigatedUrl } from "./navigated-url";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
 import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
@@ -437,6 +444,13 @@ function openWorkspacePicker(
 let customViewWebviewEl: WebviewTagElement | null = null;
 let customViewUrl: string | null = null;
 let customViewName: string | null = null;
+/** customViewのHTMLから呼べるハンドラ名（customView.handlers）。注入するwindow.niwatermへ渡す */
+let customViewHandlerNames: string[] = [];
+/**
+ * 結果待ちのniwaterm.callと、返送先のwebview。callIdはwebviewIdを含むため全webviewで一意で、
+ * bun側は結果を全ウィンドウへ配る（自分が出したcallIdでなければここに無く、無視される）
+ */
+const customViewCallWebviewByCallId = new Map<string, WebviewTagElement>();
 let sidebarShowingCustom = false;
 
 let focusedTileId: TileId | null = null;
@@ -708,6 +722,16 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       },
       copied: ({ chars, lines }: { chars: number; lines: number }) => {
         showCopiedBadge(chars, lines);
+      },
+      customViewCallResult: ({
+        callId,
+        ...result
+      }: CustomViewCallResultPayload & { callId: string }) => {
+        // 結果は全ウィンドウへ配られる。自分が出したcallIdでなければ返送先が無い
+        const webviewEl = customViewCallWebviewByCallId.get(callId);
+        if (!webviewEl) return;
+        customViewCallWebviewByCallId.delete(callId);
+        webviewEl.executeJavascript(buildCustomViewResolveScript(callId, result));
       },
     },
   },
@@ -1236,13 +1260,25 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
   );
 
   browserDomReadyByTabId.set(tabId, false);
+  // customViewをタブとして開いた場合（new-custom-view-tab）も、サイドバーと同じwindow.niwatermを
+  // 使えるようにする。URL欄やページ内リンクで別のURLへ移ったらAPIの対象から外す
+  let isCustomViewTab = url === customViewUrl;
+  webviewEl.on("did-navigate", (e) => {
+    const navigatedUrl = extractNavigatedUrl((e as CustomEvent).detail);
+    if (navigatedUrl) isCustomViewTab = navigatedUrl === customViewUrl;
+  });
   webviewEl.on("dom-ready", () => {
     browserDomReadyByTabId.set(tabId, true);
+    if (isCustomViewTab) {
+      webviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
+    }
   });
 
   // execBrowserJsの結果送信を待ち受ける。host-message detailはbrowser-js-bridge.tsが
   // window.__electrobunEventBridge経由で送ってくる{requestId, ok, result|error}
   webviewEl.on("host-message", (e) => {
+    if (isCustomViewTab && handleCustomViewCallMessage(webviewEl, (e as CustomEvent).detail))
+      return;
     const detail = (e as CustomEvent).detail as {
       requestId?: unknown;
       ok?: unknown;
@@ -2003,6 +2039,31 @@ function setCustomViewWebviewActive(active: boolean): void {
   customViewWebviewEl?.togglePassthrough(!active);
 }
 
+/**
+ * customViewのHTMLから届いたniwaterm.callをbunへ中継する。call以外のhost-message
+ * （execBrowserJsの結果）ならfalseを返し、呼び出し元の処理を続けさせる
+ */
+function handleCustomViewCallMessage(webviewEl: WebviewTagElement, detail: unknown): boolean {
+  const call = parseCustomViewCallMessage(detail);
+  if (!call) return false;
+  customViewCallWebviewByCallId.set(call.callId, webviewEl);
+  sendMessage("customViewCall", call);
+  return true;
+}
+
+/**
+ * customViewのHTMLへwindow.niwatermを注入し、そこからの呼び出しを受け取れるようにする。
+ * dom-readyはロードのたびに発火するため、HTML側でのリロード・ページ内遷移の後も注入し直される
+ */
+function attachCustomViewBridge(webviewEl: WebviewTagElement): void {
+  webviewEl.on("dom-ready", () => {
+    webviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
+  });
+  webviewEl.on("host-message", (e) => {
+    handleCustomViewCallMessage(webviewEl, (e as CustomEvent).detail);
+  });
+}
+
 /** customView設定に合わせてサイドバーパネル用の<electrobun-webview>を作成/更新/破棄する */
 function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
   if (!customView) {
@@ -2011,11 +2072,15 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     customViewWebviewEl?.remove();
     customViewWebviewEl = null;
     customViewUrl = null;
+    customViewHandlerNames = [];
     return;
   }
 
   sidebarSwitcherEl.hidden = false;
   customViewName = customView.name;
+  const handlerNamesChanged =
+    customViewHandlerNames.join("\n") !== customView.handlerNames.join("\n");
+  customViewHandlerNames = customView.handlerNames;
   renderSidebarSwitcher();
 
   if (!customViewWebviewEl) {
@@ -2030,12 +2095,18 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
       webviewEl.toggleHidden(!sidebarShowingCustom);
       webviewEl.togglePassthrough(!sidebarShowingCustom);
     });
+    attachCustomViewBridge(webviewEl);
     sidebarCustomViewEl.appendChild(webviewEl);
     customViewWebviewEl = webviewEl;
     customViewUrl = customView.url;
   } else if (customViewUrl !== customView.url) {
+    // 読み込み直せばdom-readyでwindow.niwatermも注入し直される
     customViewWebviewEl.loadURL(customView.url);
     customViewUrl = customView.url;
+  } else if (handlerNamesChanged) {
+    // 設定のホットリロードでhandlersだけが変わった場合。読み込み直すとHTML側の状態
+    // （入力途中の値・スクロール位置）が消えるため、呼べる名前だけを差し替える
+    customViewWebviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
   }
 }
 

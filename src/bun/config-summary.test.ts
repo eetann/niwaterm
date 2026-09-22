@@ -176,10 +176,26 @@ describe("buildConfigSummary", () => {
 
   test("customView設定済みなら解決後の名前とURLを出す", () => {
     const summary = buildConfigSummary(
-      input({ customView: { name: "Notes", url: "file:///home/user/notes.html" } }),
+      input({
+        customView: { name: "Notes", url: "file:///home/user/notes.html", handlerNames: [] },
+      }),
     );
     expect(entry(summary, "customView", "name")?.value).toBe("Notes");
     expect(entry(summary, "customView", "url")?.value).toBe("file:///home/user/notes.html");
+    expect(entry(summary, "customView", "handlers")?.value).toBe("(未設定)");
+  });
+
+  test("customView.handlersは呼べる名前を並べる", () => {
+    const summary = buildConfigSummary(
+      input({
+        customView: {
+          name: "Worktrees",
+          url: "file:///home/user/worktrees.html",
+          handlerNames: ["list", "open"],
+        },
+      }),
+    );
+    expect(entry(summary, "customView", "handlers")?.value).toBe("list, open");
   });
 
   test("関数で指定する設定（mouse.selectionMenu）は含めない", () => {

@@ -28,6 +28,7 @@ import { readClipboardText, setClipboardWriteListener, writeClipboardText } from
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
 import { buildConfigSummary, type ConfigSummary } from "./config-summary";
 import { watchConfigFile } from "./config-watcher";
+import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-view-handlers";
 import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
@@ -196,6 +197,14 @@ export type NiwaRPC = {
       runKeybindHandler: { handlerId: string };
       /** 右クリックメニューで選ばれたユーザー定義項目。idはselectionMenuItemsで返したもの */
       runSelectionMenuItem: { id: string };
+      /**
+       * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customView.handlers）。
+       * 関数の実体はbun側にあるため、webviewは名前とpayloadだけを送ってくる。
+       * requestではなくmessageなのは、ハンドラがgit操作・依存インストール等でいくらでも長くなりうるためで、
+       * 結果はcustomViewCallResultで返す（RPCのmaxRequestTimeで打ち切られると、
+       * 実際には完了した操作がHTML側でエラー表示される）
+       */
+      customViewCall: { callId: string; name: string; payload: unknown };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
       reloadConfig: {};
       /** そのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
@@ -231,6 +240,8 @@ export type NiwaRPC = {
         configSummary: ConfigSummary;
       };
       copied: { chars: number; lines: number };
+      /** customViewCallの結果。callIdは呼び出し元のwebviewが発行したもの */
+      customViewCallResult: CustomViewCallResult & { callId: string };
     };
   }>;
 };
@@ -332,6 +343,17 @@ function sendConfig(windowId?: WindowId) {
       shellProfiles,
       configSummary: currentConfigSummary(),
     });
+  }
+}
+
+/**
+ * customViewのniwaterm.callの結果を返す。callIdはwebview側がウィンドウごとに重複しない形で
+ * 発行するため、どのウィンドウのcustomViewからの呼び出しかを保持せず全ウィンドウへ送ってよい
+ * （自分が出したcallIdでなければwebview側が無視する）
+ */
+function sendCustomViewCallResult(callId: string, result: CustomViewCallResult): void {
+  for (const id of views.keys()) {
+    rpcSendOf(id)?.customViewCallResult({ callId, ...result });
   }
 }
 
@@ -440,6 +462,7 @@ let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 let boardConfig: ResolvedBoardConfig;
 let customView: ResolvedCustomViewConfig | null;
+let customViewHandlers: CustomViewHandlersHandle;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
@@ -555,6 +578,7 @@ async function refreshConfig(): Promise<void> {
     browser,
     board: boardConfig,
     customView,
+    customViewHandlers,
     defaultShell,
     shellProfiles,
     layouts,
@@ -998,6 +1022,19 @@ function createWindowRpc(windowId: WindowId) {
         },
         runSelectionMenuItem: ({ id }: { id: string }) => {
           void selectionMenu.run(id);
+        },
+        customViewCall: ({
+          callId,
+          name,
+          payload,
+        }: {
+          callId: string;
+          name: string;
+          payload: unknown;
+        }) => {
+          void customViewHandlers
+            .run(name, payload)
+            .then((result) => sendCustomViewCallResult(callId, result));
         },
         reloadConfig: () => {
           handleConfigFileChanged().catch((err: unknown) => {

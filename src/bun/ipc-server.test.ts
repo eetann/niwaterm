@@ -577,6 +577,7 @@ describe("POST /new-tab", () => {
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
+      handlerNames: [],
     }));
 
     const res = await fetch("http://localhost/new-tab", {
@@ -616,6 +617,7 @@ describe("POST /new-tab", () => {
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
+      handlerNames: [],
     }));
 
     const res = await fetch("http://localhost/new-tab", {
@@ -764,6 +766,7 @@ describe("POST /new-tab", () => {
     server = await createIpcServer(socketPath, mgr, () => ({
       name: "Notes",
       url: "file:///tmp/notes.html",
+      handlerNames: [],
     }));
 
     const res = await fetch("http://localhost/new-tab", {

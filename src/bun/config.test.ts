@@ -760,7 +760,7 @@ describe("resolveCustomView", () => {
     const resolved = resolveCustomView({
       customView: { name: "Docs", url: "https://example.com" },
     });
-    expect(resolved).toEqual({ name: "Docs", url: "https://example.com" });
+    expect(resolved).toEqual({ name: "Docs", url: "https://example.com", handlerNames: [] });
   });
 
   test("pathとurlが両方指定されている場合はpathが優先される", () => {
@@ -774,6 +774,29 @@ describe("resolveCustomView", () => {
   test("nameを省略すると'Custom View'にフォールバックする", () => {
     const resolved = resolveCustomView({ customView: { url: "https://example.com" } });
     expect(resolved?.name).toBe("Custom View");
+  });
+
+  test("handlersのキーがhandlerNamesになる", () => {
+    const resolved = resolveCustomView({
+      customView: { url: "https://example.com", handlers: { list: () => [], open: () => {} } },
+    });
+    expect(resolved?.handlerNames).toEqual(["list", "open"]);
+  });
+
+  test("関数でないhandlersの項目は警告付きで除外される", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveCustomView({
+        customView: {
+          url: "https://example.com",
+          handlers: { list: () => [], broken: "nope" as unknown as () => void },
+        },
+      });
+      expect(resolved?.handlerNames).toEqual(["list"]);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   test("pathとurlどちらも無効なら警告付きでnullを返す", () => {
