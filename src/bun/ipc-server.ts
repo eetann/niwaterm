@@ -18,6 +18,7 @@ import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { changeBoardStartup, checkLayoutTrust, startupCwdFields } from "./board-startup";
+import type { ConfigSummary } from "./config-summary";
 import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
 import { buildKeybindList } from "./keybind-list";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
@@ -685,6 +686,7 @@ function buildApp(
   resetFontSize: () => number,
   sendNotification: (opts: NiwaNotifyOptions) => void,
   getKeybindings: () => KeybindingsConfig,
+  getConfigSummary: () => ConfigSummary,
 ) {
   const app = new Hono();
 
@@ -881,6 +883,10 @@ function buildApp(
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));
 
   app.get("/keybindings", (c) => c.json({ ok: true, ...buildKeybindList(getKeybindings()) }));
+
+  // 現在有効な設定値の一覧（`niwaterm config show`）。キーバインドの個々の割り当ては
+  // /keybindingsの担当で、ここには件数だけが載る
+  app.get("/config", (c) => c.json({ ok: true, ...getConfigSummary() }));
 
   // cwdを渡すと、そこから解決できるプロジェクトローカルのプリセット（<projectRoot>/.niwaterm/config.ts）も
   // 併せて一覧する。同名はプロジェクト側だけを返し、実際にapplyされる方に揃える
@@ -1617,6 +1623,11 @@ export async function createIpcServer(
   resetFontSize: () => number = () => 0,
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
   getKeybindings: () => KeybindingsConfig = () => ({}),
+  getConfigSummary: () => ConfigSummary = () => ({
+    configFile: "",
+    configFileLoaded: false,
+    sections: [],
+  }),
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1639,6 +1650,7 @@ export async function createIpcServer(
     resetFontSize,
     sendNotification,
     getKeybindings,
+    getConfigSummary,
   );
   const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];

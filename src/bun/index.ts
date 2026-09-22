@@ -25,6 +25,7 @@ import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
 import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
+import { buildConfigSummary, type ConfigSummary } from "./config-summary";
 import { watchConfigFile } from "./config-watcher";
 import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
@@ -226,6 +227,8 @@ export type NiwaRPC = {
         mouse: ResolvedMouseConfig;
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
+        /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
+        configSummary: ConfigSummary;
       };
       copied: { chars: number; lines: number };
     };
@@ -292,6 +295,7 @@ function sendConfig() {
     mouse,
     customView,
     shellProfiles,
+    configSummary: currentConfigSummary(),
   });
 }
 
@@ -375,6 +379,7 @@ function cleanup() {
   cleanupConfigImportDir();
 }
 
+let userConfigLoaded: boolean;
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
@@ -458,8 +463,27 @@ function handleBell(tabId: TabId): void {
   });
 }
 
+function currentConfigSummary(): ConfigSummary {
+  return buildConfigSummary({
+    configFile: configFilePath(),
+    configFileLoaded: userConfigLoaded,
+    appearance: effectiveAppearance(),
+    baseFontSize: appearance.fontSize,
+    keybindings,
+    browser,
+    customView,
+    defaultShell,
+    shellProfiles,
+    layouts,
+    mouse,
+    workspaceDefaultCwd,
+    board: boardConfig,
+  });
+}
+
 async function refreshConfig(): Promise<void> {
   ({
+    userConfigLoaded,
     keybindings,
     appearance,
     browser,
@@ -575,6 +599,7 @@ try {
     () => resetFontSizeZoom(),
     sendNotification,
     () => keybindings,
+    currentConfigSummary,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {

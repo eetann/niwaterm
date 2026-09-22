@@ -17,6 +17,7 @@ import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
+import type { ConfigSummary } from "../bun/config-summary";
 import type { LayoutListEntry } from "../bun/project-config";
 import type { TabRenderState } from "../bun/workspace";
 import {
@@ -40,6 +41,7 @@ import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
 import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
+import { ConfigDialog } from "./react/config-dialog";
 import { ConfirmDialog } from "./react/confirm-dialog";
 import { PopupToolbar } from "./react/popup-toolbar";
 import { PromptDialog } from "./react/prompt-dialog";
@@ -89,6 +91,7 @@ const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivEl
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
+const configDialogRootEl = document.getElementById("config-dialog-root") as HTMLDivElement;
 const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
 const hintLayerEl = document.getElementById("hint-layer") as HTMLDivElement;
@@ -369,6 +372,26 @@ function openPromptDialog(
   renderPromptDialog();
 }
 
+// ---- 設定モーダル: 現在有効な設定値の一覧（CLIのniwaterm config showと同じ内容）----
+const configDialogRoot = createMemoRoot(configDialogRootEl, "config-dialog");
+let configDialogOpen = false;
+// bun側からのconfigメッセージ到達前は中身が無い。開かれたら読み込み中として出す
+let lastConfigSummary: ConfigSummary | null = null;
+
+function renderConfigDialog(): void {
+  configDialogRoot.renderOnEvent(
+    createElement(ConfigDialog, {
+      open: configDialogOpen,
+      summary: lastConfigSummary,
+      onOpenChange: (open: boolean) => {
+        configDialogOpen = open;
+        if (!open) imeEl.focus({ preventScroll: true });
+        renderConfigDialog();
+      },
+    }),
+  );
+}
+
 // ---- 移動先ワークスペースのピッカー: Boardをどのワークスペースへ移すか選ぶ ----
 const workspacePickerRoot = createMemoRoot(workspacePickerRootEl, "workspace-picker");
 let workspacePickerOpen = false;
@@ -640,12 +663,14 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         mouse,
         customView,
         shellProfiles: profiles,
+        configSummary,
       }: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         mouse: ResolvedMouseConfig;
         customView: ResolvedCustomViewConfig | null;
         shellProfiles: ShellProfile[];
+        configSummary: ConfigSummary;
       }) => {
         hostRpcReplyReceived = true;
         keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
@@ -660,6 +685,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
         // ショートカット表示（prefix+2打目キー）を最新のkeybindingsで再renderする
         renderCommandPalette();
+        // フォントサイズのズーム・設定ファイルのホットリロードはどちらもconfigメッセージで届く。
+        // 開いたままのモーダルも最新値へ追従させる
+        lastConfigSummary = configSummary;
+        renderConfigDialog();
       },
       copied: ({ chars, lines }: { chars: number; lines: number }) => {
         showCopiedBadge(chars, lines);
@@ -2685,6 +2714,8 @@ document.addEventListener("keydown", (e) => {
   // 入力ダイアログ表示中も同様。入力欄自体は上のHTMLInputElement判定で拾えるが、
   // ボタンへフォーカスが移った状態のキー入力はここで止める
   if (promptDialogOpen) return;
+  // 設定モーダル表示中も同様（閉じる・スクロール以外の操作を持たないため、打鍵はすべて捨ててよい）
+  if (configDialogOpen) return;
   // ヒント表示中の打鍵はすべてラベルの絞り込み。ターミナルにも他のキーバインドにも渡さない
   if (hintMode.isActive()) {
     e.preventDefault();
@@ -2788,6 +2819,11 @@ function handleTileCommand(cmd: TileCommand): void {
   }
   if (cmd.type === "reloadConfig") {
     sendMessage("reloadConfig");
+    return;
+  }
+  if (cmd.type === "showConfig") {
+    configDialogOpen = true;
+    renderConfigDialog();
     return;
   }
   // niwa.keybindの関数ハンドラ。実際の処理はbun側（niwa-api.ts）で行うため、
@@ -3292,6 +3328,7 @@ attachSidebarDividerDrag();
 applySidebarVisibility();
 measureCell();
 renderCommandPalette();
+renderConfigDialog();
 sendMessage("ready");
 // 他アプリの裏で起動した場合もベルの通知判定が合うよう、初期のフォーカス状態を伝える
 sendMessage("windowFocusChanged", { focused: document.hasFocus() });

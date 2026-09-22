@@ -288,6 +288,40 @@ ctrl+shift+c      copy-selection
 右側にはアクション名を表示するが、`niwaterm.config.ts`で`niwa.keybind(key, handler, { description })`と説明を付けたバインドはその説明を表示する（説明の無い関数ハンドラは`function`とだけ表示される）。表示されるのは実際に発火するバインドのみで、キー表記が不正なエントリ（`bindings`側に`ctrl+x`を書いた等）は起動時に無視されるため一覧にも出ない。設定の反映状況の確認に使う。
 
 ```sh
+niwaterm config show
+```
+
+現在有効な設定値の一覧を、設定ファイル（`niwaterm.config.ts`）のトップレベルキーごとに表示する。1行目は読み込んでいる設定ファイルのパスで、読み込めていない場合（ファイルが無い・importに失敗した）はその旨が付く。
+
+```
+config: /Users/you/.config/niwaterm/niwaterm.config.ts
+
+[appearance]
+fontFamily         "HackGen Console NF", monospace
+fontSize           16px (設定値 13px + ズーム +3)
+lineHeight         18
+foreground         #cdd6f4
+background         #1e1e2e
+backgroundOpacity  1
+backgroundImage    none
+ansiColors         #45475a #f38ba8 ...
+tabBar             auto
+
+[keybindings]
+prefix             ctrl+b
+repeatTimeoutMs    500
+bindings           30件 (一覧は niwaterm keybind list)
+direct             0件 (prefix不要で即時発火するバインド)
+...
+```
+
+表示されるのは**マージ後の実際に効いている値**で、設定ファイルに書いていない項目は既定値が出る。未設定でも既定値で動く項目（`shell.default`等）は`(未設定)`とフォールバック先を併記する。`fontSize`だけは設定ファイルを見ても今の値が分からない（キーバインド・`font-size`コマンドのズームは設定ファイルを書き換えない）ため、実効値に加えて設定値とズーム量を添える。
+
+値として出せない設定は含まない。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`niwa.on`のハンドラ）、キーバインドの個々の割り当て（件数のみ。一覧は`keybind list`）、`worktree`設定（実行するディレクトリとプロジェクトローカル設定に依存するため、アプリ側に「現在の値」が無い）が該当する。`layouts`もアプリが保持しているグローバル設定のプリセット名だけで、プロジェクトローカル分は`layout list`で確認する。
+
+同じ内容はアプリ内のモーダルでも見られる（キーバインド既定: prefix `ctrl+b` → `i`、コマンドパレットの「Show Settings」）。こちらは色の項目にスウォッチが付く。
+
+```sh
 niwaterm shell-profiles
 ```
 

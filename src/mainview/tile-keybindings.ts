@@ -54,7 +54,8 @@ export type TileCommand =
   | { type: "increaseFontSize" }
   | { type: "decreaseFontSize" }
   | { type: "resetFontSize" }
-  | { type: "reloadConfig" };
+  | { type: "reloadConfig" }
+  | { type: "showConfig" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -240,6 +241,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "resetFontSize" };
     case "reload-config":
       return { type: "reloadConfig" };
+    case "show-config":
+      return { type: "showConfig" };
     default: {
       const exhaustive: never = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);

@@ -39,6 +39,7 @@ import {
   RotateCcw,
   RotateCw,
   Rows2,
+  SlidersHorizontal,
   TextCursorInput,
   X,
   ZoomIn,
@@ -404,5 +405,13 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "設定",
     icon: RotateCw,
     keywords: ["source-file", "config reload"],
+  },
+  {
+    action: "show-config",
+    labelEn: "Show Settings",
+    label: "現在の設定値を表示",
+    category: "設定",
+    icon: SlidersHorizontal,
+    keywords: ["config show", "font size", "settings"],
   },
 ];

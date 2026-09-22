@@ -571,6 +571,8 @@ export async function loadAndResolveConfig(
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
   reloadConfig: () => Promise<void> = async () => {},
 ): Promise<{
+  /** 設定ファイルを読み込めたか。falseならファイル不在か読み込み失敗で、全項目が既定値 */
+  userConfigLoaded: boolean;
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
@@ -609,6 +611,7 @@ export async function loadAndResolveConfig(
   // 登録内容の取り出しはその後でなければならない
   const keybindings = resolveKeybindings(userConfig, niwaApi);
   return {
+    userConfigLoaded: userConfig !== null,
     keybindings,
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),

@@ -72,6 +72,7 @@ export const KEYBIND_ACTIONS = [
   "decrease-font-size",
   "reset-font-size",
   "reload-config",
+  "show-config",
 ] as const;
 
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -123,6 +124,8 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   // viのvisualモードを連想できるvを既定にする
   v: "copy-mode",
   "`": "toggle-popup",
+  // tmuxのbind-key i display-message（現在の状態を出す）に倣う。"info"の頭文字でもある
+  i: "show-config",
   ":": "command-palette",
   "=": "increase-font-size",
   "-": "decrease-font-size",

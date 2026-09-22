@@ -270,12 +270,13 @@ keybindings: {
 | `f` | jump-hint |
 | `v` | copy-mode |
 | `` ` `` | toggle-popup |
+| `i` | show-config |
 | `:` | command-palette |
 | `=` / `-` / `0` | increase-font-size / decrease-font-size / reset-font-size |
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（46種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（47種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -309,6 +310,7 @@ keybindings: {
 | `command-palette` | コマンドパレットを開く |
 | `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
 | `reload-config` | 設定ファイルを手動で再読み込みする（ファイル保存時の自動リロードと同じ処理。既定キーは無いため使うには自分で割り当てる必要がある） |
+| `show-config` | 現在有効な設定値の一覧をモーダルで表示する（既定は prefix + `i`。CLIの`niwaterm config show`と同じ内容。Escapeで閉じる） |
 
 ### ジャンプヒント
 
@@ -822,6 +824,12 @@ export default {
 `~/.config/niwaterm/`ディレクトリ自体が存在しない場合（未セットアップ）は監視そのものがスキップされ、コンソールにログが出るだけでアプリは通常通り起動する。
 
 ファイル監視による自動リロードのほか、`reload-config`アクション（コマンドパレット、または`niwa.keybind`で割り当てたキー）から同じ処理を手動で呼び出すこともできる。挙動は保存時の自動リロードと同一（毎回デフォルトから解決し直すため、`niwa.keybind`/`niwa.unbind`で加えた変更をconfigファイルから削除して再読み込みすれば、その分は未設定またはデフォルトの割り当てに戻る）。
+
+## 現在の設定値を確認する
+
+マージ後の実際に効いている値は、アプリ内のモーダル（prefix + `i`の`show-config`アクション、またはコマンドパレットの「Show Settings」）か、CLIの`niwaterm config show`で確認できる。設定ファイルに書いていない項目も既定値として出るため、「書いたつもりが反映されていない」の切り分けに使える。
+
+キーバインドの個々の割り当てはここには出ない（件数のみ）。一覧は`niwaterm keybind list`で確認する。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`niwa.on`のハンドラ）も値として表示できないため含まない。
 
 ## 既知の制約
 

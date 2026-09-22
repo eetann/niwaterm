@@ -4,6 +4,7 @@ import { failAndExit } from "./cli-error";
 import agentCommand from "./commands/agent";
 import boardCommand from "./commands/board";
 import browserCommand from "./commands/browser";
+import configCommand from "./commands/config";
 import docsCommand from "./commands/docs";
 import fontSizeCommand from "./commands/font-size";
 import initCommand from "./commands/init";
@@ -56,6 +57,7 @@ try {
       worktree: worktreeCommand,
       tile: tileCommand,
       keybind: keybindCommand,
+      config: configCommand,
       popup: popupCommand,
       browser: browserCommand,
       "shell-profiles": shellProfilesCommand,

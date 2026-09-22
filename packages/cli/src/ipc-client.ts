@@ -734,6 +734,52 @@ export async function listKeybindings(endpoint: IpcEndpoint): Promise<ListKeybin
   }
 }
 
+// 設定値サマリの型はsrc/bun/config-summary.tsと合わせる（CLIパッケージからアプリ本体の
+// ソースはimportできないため、ipcSocketPathと同じく意図的な重複）
+export interface ConfigSummaryEntry {
+  /** 設定ファイルでのフィールド名（セクション名は含めない） */
+  key: string;
+  value: string;
+  /** 値だけでは分からない補足（フォールバック先・ズーム量など） */
+  note?: string;
+  /** 色として見せられる値。CLIでは使わないがwebviewの設定モーダルがスウォッチに使う */
+  swatches?: string[];
+}
+
+export interface ConfigSummarySection {
+  /** 設定ファイルのトップレベルキー名 */
+  name: string;
+  entries: ConfigSummaryEntry[];
+}
+
+export type ShowConfigResult =
+  | { ok: true; configFile: string; configFileLoaded: boolean; sections: ConfigSummarySection[] }
+  | { ok: false; error: string };
+
+export async function showConfig(endpoint: IpcEndpoint): Promise<ShowConfigResult> {
+  try {
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/config"), ipcFetchInit(endpoint));
+    const body = (await res.json().catch(() => null)) as {
+      configFile?: unknown;
+      configFileLoaded?: unknown;
+      sections?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.sections)) {
+      return {
+        ok: true,
+        configFile: typeof body.configFile === "string" ? body.configFile : "",
+        configFileLoaded: body.configFileLoaded === true,
+        sections: body.sections as ConfigSummarySection[],
+      };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export interface LayoutSummary {
   name: string;
   description?: string;
