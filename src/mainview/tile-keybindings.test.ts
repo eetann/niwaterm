@@ -219,6 +219,26 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("prefix -> Shift+B でサイドバーのビュー切替", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("B", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "cycleSidebarView", delta: 1 },
+    });
+  });
+
+  test("next/prev-sidebar-view は向き付きのビュー切替コマンドへ変換される", () => {
+    expect(actionToTileCommand("next-sidebar-view")).toEqual({
+      type: "cycleSidebarView",
+      delta: 1,
+    });
+    expect(actionToTileCommand("prev-sidebar-view")).toEqual({
+      type: "cycleSidebarView",
+      delta: -1,
+    });
+  });
+
   test("prefix -> ` でポップアップトグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

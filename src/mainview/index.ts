@@ -2152,6 +2152,18 @@ function toggleSidebar(): void {
   if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
 }
 
+/**
+ * サイドバーのビュー（ワークスペース一覧・customView）を切り替える。customView未設定なら
+ * 切り替え先が無いので何もしない。閉じている間に切り替えても結果が見えないため、
+ * 閉じていれば先に開く（setSidebarShowingCustomより前に開く順序も必須で、逆順だと
+ * サイドバーが非表示のままcustomViewのOOPIFだけが表示されてしまう）。
+ */
+function cycleSidebarView(): void {
+  if (customViewUrl === null) return;
+  if (!sidebarOpen) toggleSidebar();
+  setSidebarShowingCustom(!sidebarShowingCustom);
+}
+
 function updateFocusHighlight(): void {
   for (const tileEl of tileTreeEl.querySelectorAll<HTMLElement>(".tile")) {
     tileEl.classList.toggle("focused", tileEl.dataset["tileId"] === focusedTileId);
@@ -2916,6 +2928,11 @@ function handleTileCommand(cmd: TileCommand): void {
   // サイドバー開閉・ポップアップ開閉はbun側の状態を必要としないため、フォーカス中タイル無しでも動作させる
   if (cmd.type === "toggleSidebar") {
     toggleSidebar();
+    return;
+  }
+  // サイドバーのビューは一覧とcustomViewの2つなので、next/prevどちらも往復になる
+  if (cmd.type === "cycleSidebarView") {
+    cycleSidebarView();
     return;
   }
   if (cmd.type === "togglePopup") {

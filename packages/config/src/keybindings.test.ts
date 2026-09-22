@@ -218,6 +218,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // set-board-worktreeも既定キーを持たない（一度紐づければ張り替える機会は少なく、
   // サイドバーの右クリック・コマンドパレット・CLIから行える操作のため）
   "set-board-worktree",
+  // prev-sidebar-viewも既定キーを持たない（サイドバーのビューが一覧とcustomViewの2つしかない間は
+  // next-sidebar-viewだけで往復できるため）
+  "prev-sidebar-view",
 ];
 
 describe("defaultKeybindings", () => {
@@ -225,10 +228,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の31個のアクションに1つずつ割り当てられている", () => {
+  test("UNASSIGNED_BINDING_ACTIONS以外の32個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(31);
-    expect(new Set(actions).size).toBe(31);
+    expect(actions.length).toBe(32);
+    expect(new Set(actions).size).toBe(32);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -245,6 +248,10 @@ describe("defaultKeybindings", () => {
 
   test("copy-modeはprefix + v（[はワークスペース切替に使っているため、viのvisualモードを連想させるv）", () => {
     expect(defaultKeybindings.bindings?.["v"]).toBe("copy-mode");
+  });
+
+  test("next-sidebar-viewはprefix + shift+b（サイドバートグルのbと同系列で覚えられる）", () => {
+    expect(defaultKeybindings.bindings?.["shift+b"]).toBe("next-sidebar-view");
   });
 
   test("copy-selection/paste-clipboardはCmd+C/VがApplicationMenu経由で既に機能するため既定キーを持たない", () => {
@@ -342,17 +349,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings31件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings32件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(31);
+    expect(compiled.bindings.size).toBe(32);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings31件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings32件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(31);
+    expect(compiled.bindings.size).toBe(32);
     expect(compiled.direct.size).toBe(2);
   });
 

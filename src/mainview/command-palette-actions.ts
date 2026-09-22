@@ -316,6 +316,22 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     icon: PanelLeft,
   },
   {
+    action: "next-sidebar-view",
+    labelEn: "Next Sidebar View",
+    label: "次のサイドバービューへ切り替え",
+    category: "表示",
+    icon: ChevronsRight,
+    keywords: ["custom view", "workspaces", "カスタムビュー"],
+  },
+  {
+    action: "prev-sidebar-view",
+    labelEn: "Previous Sidebar View",
+    label: "前のサイドバービューへ切り替え",
+    category: "表示",
+    icon: ChevronsLeft,
+    keywords: ["custom view", "workspaces", "カスタムビュー"],
+  },
+  {
     action: "toggle-popup",
     labelEn: "Toggle Popup",
     label: "ポップアップの表示切り替え",

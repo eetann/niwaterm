@@ -268,6 +268,7 @@ keybindings: {
 | `shift+w` | new-window |
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
+| `shift+b` | next-sidebar-view |
 | `f` | jump-hint |
 | `v` | copy-mode |
 | `` ` `` | toggle-popup |
@@ -277,7 +278,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（48種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（50種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -302,6 +303,7 @@ keybindings: {
 | `move-board-to-workspace` | アクティブなBoardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`と同じ）。移動先はピッカーで選ぶ（Escapeでキャンセル）。移すとワークスペースが空になる場合は確認ダイアログを挟む。既定キーは無いため使うには自分で割り当てる必要がある |
 | `move-workspace-up` / `move-workspace-down` | アクティブなワークスペースの表示順を1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm workspace move`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
+| `next-sidebar-view` / `prev-sidebar-view` | サイドバーに出すビュー（ワークスペース一覧と`customView`パネル）を循環で切り替える（既定はnext側のみ prefix + `shift+b`。ビューが2つの間はnextだけで往復できるため、prevを使うには自分で割り当てる必要がある。`customView`未設定時はビューが1つしかないので何もしない。サイドバーを閉じている場合は開いた上で切り替える） |
 | `toggle-popup` | ポップアップの表示/非表示切替 |
 | `jump-hint` | ジャンプ先へラベルを出し、打ったラベルの場所へ飛ぶ（既定は prefix + `f`。vimiumの`f`相当。操作は下記「ジャンプヒント」参照） |
 | `copy-selection` | 選択範囲をクリップボードへコピー（既定は`direct`にWindowsのみ`ctrl+shift+c`が割り当て済み。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
@@ -619,7 +621,7 @@ customView: {
 },
 ```
 
-設定すると、サイドバーの上部にワークスペース一覧との切替スイッチャーが表示され、クリックで一覧表示とcustomViewパネルを切り替えられる。同じHTMLはタブとしても開ける:
+設定すると、サイドバーの上部にワークスペース一覧との切替スイッチャーが表示され、クリックで一覧表示とcustomViewパネルを切り替えられる。キーバインド（既定は prefix + `shift+b`の`next-sidebar-view`）・コマンドパレットの「Next Sidebar View」からも同じ切り替えができる。同じHTMLはタブとしても開ける:
 
 - キーバインド: `new-custom-view-tab`アクションを自分で割り当てる（既定キーは無い）
   ```ts

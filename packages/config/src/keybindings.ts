@@ -59,6 +59,8 @@ export const KEYBIND_ACTIONS = [
   "move-workspace-up",
   "move-workspace-down",
   "toggle-sidebar",
+  "next-sidebar-view",
+  "prev-sidebar-view",
   "toggle-popup",
   "jump-hint",
   "copy-selection",
@@ -121,6 +123,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   "]": "next-workspace",
   "[": "prev-workspace",
   b: "toggle-sidebar",
+  // サイドバー自体のトグル(b)と同系列で覚えられるようshift+bを充てる。
+  // prevは既定キーを持たない（ビューが一覧とcustomViewの2つしかない間はnextだけで往復できるため）
+  "shift+b": "next-sidebar-view",
   // タイル・タブ・サイドバーの行へラベルを出して1打で飛ぶ。vimiumのfヒントを踏襲する
   // （tmuxにはdisplay-panesが近いが、キーも対象範囲も違うので合わせない）
   f: "jump-hint",

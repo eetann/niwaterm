@@ -44,6 +44,7 @@ export type TileCommand =
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "moveWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
+  | { type: "cycleSidebarView"; delta: 1 | -1 }
   | { type: "togglePopup" }
   | { type: "jumpHint" }
   | { type: "copySelection" }
@@ -216,6 +217,10 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "moveWorkspace", delta: 1 };
     case "toggle-sidebar":
       return { type: "toggleSidebar" };
+    case "next-sidebar-view":
+      return { type: "cycleSidebarView", delta: 1 };
+    case "prev-sidebar-view":
+      return { type: "cycleSidebarView", delta: -1 };
     case "toggle-popup":
       return { type: "togglePopup" };
     case "jump-hint":
