@@ -666,6 +666,7 @@ await niwaterm.call("open", { path: "/path/to/worktree" });
 - ハンドラが例外を投げると、HTML側の`niwaterm.call`がその`message`でrejectする
 - 時間のかかる処理でも打ち切られない（gitの操作・依存のインストールをそのまま書ける）
 - 関数以外を書いた項目は警告付きで無視される。呼べる名前は`niwaterm config show`で確認できる
+- `niwa.shell.run`の出力をパースする場合、シェル統合を入れているとプロンプトフックのOSC（cwd通知）が標準出力へ混ざる。`contrib/custom-views/worktrees/handlers.ts`の`stripOsc`が取り除き方の例
 
 `window.niwaterm`はページの読み込みが終わってから注入されるため、HTML側のスクリプトがすぐ呼ぶと間に合わないことがある。`niwaterm:ready`イベントで待つ。
 

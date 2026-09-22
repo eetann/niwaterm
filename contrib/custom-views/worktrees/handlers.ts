@@ -17,12 +17,20 @@ export interface WorktreeItem {
 }
 
 /**
+ * 最後に分かった起点ディレクトリ。このビューをタブとして開くと、そのタイルのアクティブタブが
+ * ブラウザタブになりcwdを持たないため、直前に使えた値へフォールバックする
+ */
+let lastKnownCwd: string | null = null;
+
+/**
  * 操作の起点にするディレクトリ。フォーカス中タイルのアクティブタブが今いる場所を使う
  * （サイドバーから呼ぶため、直前に触っていたタブのリポジトリが対象になる）。
  * cwdの報告にはシェル統合（contrib/shell-integration）が必要
  */
-function currentCwd(niwa: Niwa): string | undefined {
-  return niwa.tile.current()?.cwd;
+function currentCwd(niwa: Niwa): string | null {
+  const cwd = niwa.tile.current()?.cwd;
+  if (cwd) lastKnownCwd = cwd;
+  return cwd ?? lastKnownCwd;
 }
 
 /** 空白を含むパス・ブランチ名をシェルへ渡すためのクォート */
@@ -31,13 +39,26 @@ function quote(value: string): string {
   return `"${value}"`;
 }
 
+/**
+ * OSCシーケンス（ESC ] ... BEL / ESC \）を取り除く。shell.runはログイン・インタラクティブシェル
+ * 経由でコマンドを実行するため、シェル統合を入れているとプロンプトフックが出すOSC 7（cwd通知）が
+ * 標準出力へ紛れ込み、そのままだと出力の先頭が壊れる
+ */
+function stripOsc(text: string): string {
+  // biome-ignore-start
+  return text.replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "");
+  // biome-ignore-end
+}
+
 async function runCli(niwa: Niwa, args: string): Promise<string> {
-  const cwd = currentCwd(niwa);
-  const result = await niwa.shell.run(`${CLI} ${args}`, cwd ? { cwd } : {});
+  const cwd = requireCwd(niwa);
+  // --cwdでも同じディレクトリを渡す。シェルのcwd任せにすると、そのシェルの起動方法
+  // （wsl.exe経由等）によって解釈が変わるため
+  const result = await niwa.shell.run(`${CLI} ${args} --cwd "${cwd}"`, { cwd });
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || result.stdout.trim() || `${args} に失敗しました`);
   }
-  return result.stdout;
+  return stripOsc(result.stdout);
 }
 
 /** `niwaterm worktree list`のTSV（path/branch/HEAD/フラグ、値の無い列は"-"） */
@@ -56,16 +77,20 @@ function parseWorktreeList(stdout: string): WorktreeItem[] {
     });
 }
 
+/** 起点ディレクトリが分からないままCLIを叩くと分かりにくいエラーになるため、先に止める */
+function requireCwd(niwa: Niwa): string {
+  const cwd = currentCwd(niwa);
+  if (!cwd) {
+    throw new Error("対象のディレクトリが分かりません（シェル統合を入れるとタブのcwdが取れます）");
+  }
+  return cwd;
+}
+
 export const worktreeHandlers: CustomViewHandlers = {
   /** ワークツリー一覧。cwdも返してHTML側に「どのリポジトリを見ているか」を出せるようにする */
   list: async (_payload: null, niwa) => {
-    const cwd = currentCwd(niwa);
-    if (!cwd) {
-      throw new Error(
-        "対象のディレクトリが分かりません（シェル統合を入れるとタブのcwdが取れます）",
-      );
-    }
-    return { cwd, items: parseWorktreeList(await runCli(niwa, "worktree list")) };
+    const items = parseWorktreeList(await runCli(niwa, "worktree list"));
+    return { cwd: requireCwd(niwa), items };
   },
 
   /** 既存のワークツリーを開く。`worktree open`の既定どおり、開いたBoardへ遷移する */

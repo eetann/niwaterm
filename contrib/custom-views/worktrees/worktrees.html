@@ -51,6 +51,23 @@
         outline: 1px solid var(--accent);
         outline-offset: -1px;
       }
+      .row {
+        display: flex;
+        gap: 4px;
+      }
+      button {
+        flex: none;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--hover);
+      }
       header,
       footer {
         padding: 6px;
@@ -109,7 +126,10 @@
   </head>
   <body>
     <header>
-      <input id="filter" type="search" placeholder="絞り込み（Enterで開く）" autocomplete="off" />
+      <div class="row">
+        <input id="filter" type="search" placeholder="絞り込み（Enterで開く）" autocomplete="off" />
+        <button id="reload" type="button" title="一覧を取り直す">⟳</button>
+      </div>
       <div id="repo"></div>
     </header>
     <ul id="list"></ul>
@@ -216,6 +236,7 @@
         }
       }
 
+      document.getElementById("reload").addEventListener("click", reload);
       filterEl.addEventListener("input", render);
       filterEl.addEventListener("keydown", (e) => {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
