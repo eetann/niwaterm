@@ -5,7 +5,11 @@ import {
   parseCustomViewCallMessage,
 } from "./custom-view-bridge";
 
-const THEME = { background: "#0d2635", foreground: "#d6e2e7" };
+const THEME = {
+  background: "#0d2635",
+  foreground: "#d6e2e7",
+  backgroundImage: "linear-gradient(to bottom, #fff 0%, #000 100%)",
+};
 
 describe("buildCustomViewBootstrapScript", () => {
   test("ハンドラ名を埋め込み、window.niwatermを定義する", () => {

@@ -451,6 +451,7 @@ let customViewHandlerNames: string[] = [];
 let customViewTheme: CustomViewTheme = {
   background: defaultAppearance.background,
   foreground: defaultAppearance.foreground,
+  backgroundImage: defaultAppearance.backgroundImage,
 };
 /**
  * 結果待ちのniwaterm.callと、返送先のwebview。callIdはwebviewIdを含むため全webviewで一意で、
@@ -599,7 +600,11 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-line-height", `${config.lineHeight}px`);
   root.setProperty("--term-fg", config.foreground);
   root.setProperty("--term-bg", config.background);
-  customViewTheme = { background: config.background, foreground: config.foreground };
+  customViewTheme = {
+    background: config.background,
+    foreground: config.foreground,
+    backgroundImage: config.backgroundImage,
+  };
   // color-mix()へ渡す割合。calc()を挟まず済むよう、パーセント文字列にしてから渡す
   root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
   root.setProperty("--term-bg-image", config.backgroundImage);
@@ -2109,6 +2114,10 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     webviewEl.on("dom-ready", () => {
       webviewEl.toggleHidden(!sidebarShowingCustom);
       webviewEl.togglePassthrough(!sidebarShowingCustom);
+      // 地を塗らないHTMLの背後を透かす。WindowsのWebView2では効かないため
+      // （docs/known-issues/webview2-ignores-webview-transparency.md）、
+      // HTML側はniwaterm.themeの背景色・背景画像で地を塗る前提で書く
+      webviewEl.toggleTransparent(true);
       // ネイティブ側のwebviewが用意できる前に送った位置は捨てられる（WebView2は
       // "Controller is NULL, cannot resize"）のに、送った側は最新の矩形として覚えてしまい
       // 二度と送り直さない。生成が済んだここで現在の矩形を強制的に送り直す

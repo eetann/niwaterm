@@ -5,18 +5,19 @@
     <title>Worktrees</title>
     <style>
       /*
-       * 配色はniwatermのターミナルと同じ値をniwaterm.themeから受け取って--bg/--fgへ流し込む
-       * （applyTheme）。ここに書いてあるのは、まだ受け取れていない間に使う既定値。
-       * 中間色はcolor-mixで2色から作るので、どんな配色でもサイドバーへ馴染む
+       * 地はniwatermのターミナルと同じ背景色＋背景画像（niwaterm.theme）で塗る。webviewの背後は
+       * WindowsのWebView2では透けないため、サイドバーへ馴染ませるには同じ塗り方を自分で再現する。
+       * 中間色は文字色からの透明度だけで作り、背景のグラデーションを潰さないようにする
        */
       :root {
         --bg: #1a1b1e;
+        --bg-image: none;
         --fg: #e6e6e6;
-        --muted: color-mix(in srgb, var(--fg) 55%, var(--bg));
-        --border: color-mix(in srgb, var(--fg) 20%, var(--bg));
-        --hover: color-mix(in srgb, var(--fg) 8%, var(--bg));
-        --selected: color-mix(in srgb, var(--fg) 16%, var(--bg));
-        --accent: color-mix(in srgb, var(--fg) 35%, #3b82f6);
+        --muted: color-mix(in srgb, var(--fg) 60%, transparent);
+        --border: color-mix(in srgb, var(--fg) 22%, transparent);
+        --hover: color-mix(in srgb, var(--fg) 10%, transparent);
+        --selected: color-mix(in srgb, var(--fg) 18%, transparent);
+        --accent: #60a5fa;
         --error: #f87171;
       }
       * {
@@ -27,7 +28,10 @@
         height: 100vh;
         display: flex;
         flex-direction: column;
-        background: var(--bg);
+        background-color: var(--bg);
+        background-image: var(--bg-image);
+        background-size: cover;
+        background-position: center;
         color: var(--fg);
         font: 12px/1.5 system-ui, sans-serif;
       }
@@ -36,7 +40,7 @@
         padding: 4px 6px;
         border: 1px solid var(--border);
         border-radius: 4px;
-        background: var(--bg);
+        background: transparent;
         color: var(--fg);
         font: inherit;
       }
@@ -53,7 +57,7 @@
         padding: 4px 8px;
         border: 1px solid var(--border);
         border-radius: 4px;
-        background: var(--bg);
+        background: transparent;
         color: var(--fg);
         font: inherit;
         cursor: pointer;
@@ -159,6 +163,7 @@
         if (!theme) return;
         const root = document.documentElement.style;
         root.setProperty("--bg", theme.background);
+        root.setProperty("--bg-image", theme.backgroundImage);
         root.setProperty("--fg", theme.foreground);
       }
 

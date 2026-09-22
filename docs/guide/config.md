@@ -682,16 +682,20 @@ function whenReady() {
 呼べる名前は`window.niwaterm.handlers`にも入っているので、HTML側で機能の有無を見分けられる。
 設定のホットリロードで`handlers`だけを変えた場合、HTMLは読み込み直さずこの配列だけが差し替わる。
 
-`window.niwaterm.theme`には`appearance`の背景色・文字色（`background`・`foreground`）が入っている。
-これをCSS変数へ流し込むと、niwatermのサイドバーへ馴染む見た目にできる（中間色は`color-mix()`で2色から作れる）。
-配色が変わったときは`niwaterm:theme`イベントが飛ぶので、そこで当て直す。
+`window.niwaterm.theme`には`appearance`の背景色・文字色・背景画像（`background`・`foreground`・`backgroundImage`）が入っている。
+これをCSS変数へ流し込むと、ターミナルと同じ地の上にUIを載せられる。配色が変わったときは`niwaterm:theme`イベントが飛ぶので、そこで当て直す。
+
+HTMLは必ず自分で地を塗ること。**webviewの背後は透けない**（`docs/known-issues/webview2-ignores-webview-transparency.md`）ので、
+地を指定しないとそこだけ白く浮く。ホバー・枠線のような中間色は、地と混ぜず文字色からの透明度だけで作ると背景のグラデーションを潰さない。
 
 ```js
 function applyTheme() {
   const theme = window.niwaterm && window.niwaterm.theme;
   if (!theme) return;
-  document.documentElement.style.setProperty("--bg", theme.background);
-  document.documentElement.style.setProperty("--fg", theme.foreground);
+  const root = document.documentElement.style;
+  root.setProperty("--bg", theme.background);
+  root.setProperty("--bg-image", theme.backgroundImage);
+  root.setProperty("--fg", theme.foreground);
 }
 window.addEventListener("niwaterm:theme", applyTheme);
 ```

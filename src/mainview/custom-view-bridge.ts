@@ -18,6 +18,8 @@ function safeJsonParse(text: string): unknown {
 export interface CustomViewTheme {
   background: string;
   foreground: string;
+  /** appearance.backgroundImage（CSSのbackground-imageの値。未設定は"none"） */
+  backgroundImage: string;
 }
 
 /** HTML側の`niwaterm.call(name, payload)`1回分 */
