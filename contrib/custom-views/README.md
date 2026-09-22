@@ -1,8 +1,8 @@
 # niwaterm カスタムビューの例
 
-`customView`は、自分で用意したHTMLをniwatermのサイドバー（とタブ）へ表示する設定。
+`customViews`は、自分で用意したHTMLをniwatermのサイドバー（とタブ）へ表示する設定。複数登録でき、サイドバー上部のタブで切り替える。
 ここにあるのはそのまま使える例で、コピーして自分の設定へ組み込む形を想定している。
-設定項目そのものの説明は[docs/guide/config.md](../../docs/guide/config.md)の「ユーザー定義HTML UI（customView）」を参照。
+設定項目そのものの説明は[docs/guide/config.md](../../docs/guide/config.md)の「ユーザー定義HTML UI（customViews）」を参照。
 
 | 例 | 内容 |
 |---|---|
@@ -11,7 +11,7 @@
 ## 仕組み
 
 HTMLはniwaterm本体とは別プロセス（webview）で動くため、そこから直接gitやniwatermを操作することはできない。
-代わりに、設定ファイルへ書いた関数（`customView.handlers`）をHTML側から名前で呼ぶ。
+代わりに、設定ファイルへ書いた関数（`customViews[].handlers`）をHTML側から名前で呼ぶ。
 
 ```
 worktrees.html          niwaterm.config.ts             niwaterm本体
@@ -28,7 +28,7 @@ HTML側から見えるのは自分が定義したハンドラだけで、niwater
 どの例も手順は同じ。
 
 1. HTMLとハンドラを`~/.config/niwaterm/`配下へコピーする
-2. `niwaterm.config.ts`でハンドラをimportし、`customView`へ渡す
+2. `niwaterm.config.ts`でハンドラをimportし、`customViews`の要素として渡す
 3. 設定を保存するとホットリロードで反映される（サイドバー上部のスイッチャーから開く）
 
 各例のREADMEに、コピー先とconfigへの書き方が載っている。

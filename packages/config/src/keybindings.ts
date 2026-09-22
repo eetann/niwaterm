@@ -78,7 +78,23 @@ export const KEYBIND_ACTIONS = [
   "show-config",
 ] as const;
 
-export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
+/** アクション名と対象idを`:`で繋ぐ形のアクション（例: `show-sidebar-view:notes`）の接頭辞 */
+export const SHOW_SIDEBAR_VIEW_PREFIX = "show-sidebar-view:";
+
+/**
+ * サイドバーの特定ビューを直接出すアクション。対象idはcustomViewのid（またはワークスペース一覧の
+ * `workspaces`）で、設定ファイル側で増減するためKEYBIND_ACTIONSの固定リストには入らない
+ */
+export type ShowSidebarViewAction = `${typeof SHOW_SIDEBAR_VIEW_PREFIX}${string}`;
+
+export type KeybindAction = (typeof KEYBIND_ACTIONS)[number] | ShowSidebarViewAction;
+
+/** `show-sidebar-view:<id>`ならその対象idを返す。他のアクション・id部分が空ならnull */
+export function parseShowSidebarViewAction(action: string): string | null {
+  if (!action.startsWith(SHOW_SIDEBAR_VIEW_PREFIX)) return null;
+  const viewId = action.slice(SHOW_SIDEBAR_VIEW_PREFIX.length);
+  return viewId === "" ? null : viewId;
+}
 
 export interface KeybindingsConfig {
   /** prefixキー本体。例: "ctrl+b" */
@@ -124,7 +140,8 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   "[": "prev-workspace",
   b: "toggle-sidebar",
   // サイドバー自体のトグル(b)と同系列で覚えられるようshift+bを充てる。
-  // prevは既定キーを持たない（ビューが一覧とcustomViewの2つしかない間はnextだけで往復できるため）
+  // prevは既定キーを持たない（customViewが1つだけならnextの往復で足り、増えたときの直接指定は
+  // show-sidebar-view:<id>が担うため）
   "shift+b": "next-sidebar-view",
   // タイル・タブ・サイドバーの行へラベルを出して1打で飛ぶ。vimiumのfヒントを踏襲する
   // （tmuxにはdisplay-panesが近いが、キーも対象範囲も違うので合わせない）
@@ -237,7 +254,9 @@ export function canonicalizeSecondKey(p: ParsedSecondKey): string {
 }
 
 export function isKeybindAction(value: unknown): value is KeybindAction {
-  return typeof value === "string" && (KEYBIND_ACTIONS as readonly string[]).includes(value);
+  if (typeof value !== "string") return false;
+  if (parseShowSidebarViewAction(value) !== null) return true;
+  return (KEYBIND_ACTIONS as readonly string[]).includes(value);
 }
 
 /**

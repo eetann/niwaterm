@@ -16,7 +16,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     baseLineHeight: defaultAppearance.lineHeight,
     keybindings: { prefix: "ctrl+b", bindings: { d: "split-vertical" } },
     browser: defaultBrowserConfig,
-    customView: null,
+    customViews: [],
     defaultShell: undefined,
     shellProfiles: [],
     layouts: {},
@@ -49,7 +49,7 @@ describe("buildConfigSummary", () => {
       "board",
       "workspace",
       "mouse",
-      "customView",
+      "customViews",
     ]);
   });
 
@@ -168,36 +168,30 @@ describe("buildConfigSummary", () => {
     expect(entry(summary, "layouts", "presets")?.value).toBe("dev");
   });
 
-  test("customView未設定でもname/urlの行は残す（機能オフだと分かるようにする）", () => {
+  test("customViewが1つも無くても行を残す（機能オフだと分かるようにする）", () => {
     const summary = buildConfigSummary(input());
-    expect(entry(summary, "customView", "name")?.value).toBe("(未設定)");
-    expect(entry(summary, "customView", "url")?.value).toBe("(未設定)");
+    expect(entry(summary, "customViews", "views")?.value).toBe("(未設定)");
   });
 
-  test("customView設定済みなら解決後の名前とURLを出す", () => {
+  test("customViewはidをキーに名前とURLを並べる", () => {
     const summary = buildConfigSummary(
       input({
-        customView: { name: "Notes", url: "file:///home/user/notes.html", handlerNames: [] },
+        customViews: [
+          { id: "notes", name: "Notes", url: "file:///home/user/notes.html", handlerNames: [] },
+          {
+            id: "worktrees",
+            name: "Worktrees",
+            url: "file:///home/user/worktrees.html",
+            handlerNames: ["list", "open"],
+          },
+        ],
       }),
     );
-    expect(entry(summary, "customView", "name")?.value).toBe("Notes");
-    expect(entry(summary, "customView", "url")?.value).toBe("file:///home/user/notes.html");
-    expect(entry(summary, "customView", "handlers")?.value).toBe("(未設定)");
-  });
-
-  test("customView.handlersは呼べる名前を並べる", () => {
-    const summary = buildConfigSummary(
-      input({
-        customView: {
-          name: "Worktrees",
-          url: "file:///home/user/worktrees.html",
-          handlerNames: ["list", "open"],
-        },
-      }),
+    expect(entry(summary, "customViews", "notes")?.value).toBe(
+      "Notes (file:///home/user/notes.html)",
     );
-    expect(entry(summary, "customView", "handlers")?.value).toBe("list, open");
+    expect(entry(summary, "customViews", "worktrees")?.note).toBe("handlers: list, open");
   });
-
   test("関数で指定する設定（mouse.selectionMenu）は含めない", () => {
     const summary = buildConfigSummary(input());
     const mouseKeys = summary.sections.find((s) => s.name === "mouse")?.entries.map((e) => e.key);

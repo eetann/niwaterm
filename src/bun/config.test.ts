@@ -17,7 +17,7 @@ import {
   resolveAppearance,
   resolveBoard,
   resolveBrowser,
-  resolveCustomView,
+  resolveCustomViews,
   resolveKeybindings,
   resolveLayouts,
   resolveMouse,
@@ -739,77 +739,132 @@ describe("resolveLayouts", () => {
   });
 });
 
-describe("resolveCustomView", () => {
-  test("nullを渡すとnull（機能オフ）を返す", () => {
-    expect(resolveCustomView(null)).toBeNull();
+describe("resolveCustomViews", () => {
+  test("nullを渡すと空（機能オフ）を返す", () => {
+    expect(resolveCustomViews(null).views).toEqual([]);
   });
 
-  test("customView未指定ならnullを返す", () => {
-    expect(resolveCustomView({})).toBeNull();
+  test("customViews未指定なら空を返す", () => {
+    expect(resolveCustomViews({}).views).toEqual([]);
   });
 
   test("pathを指定するとconfigDirPath基準のfile://に解決される", () => {
-    const resolved = resolveCustomView({ customView: { name: "Notes", path: "./notes.html" } });
-    expect(resolved).not.toBeNull();
-    expect(resolved?.name).toBe("Notes");
+    const { views } = resolveCustomViews({
+      customViews: [{ name: "Notes", path: "./notes.html" }],
+    });
+    expect(views).toHaveLength(1);
+    expect(views[0]?.name).toBe("Notes");
     // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
-    expect(resolved?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
   });
 
   test("urlを指定するとそのまま使われる", () => {
-    const resolved = resolveCustomView({
-      customView: { name: "Docs", url: "https://example.com" },
+    const { views } = resolveCustomViews({
+      customViews: [{ name: "Docs", url: "https://example.com" }],
     });
-    expect(resolved).toEqual({ name: "Docs", url: "https://example.com", handlerNames: [] });
+    expect(views[0]).toEqual({
+      id: "docs",
+      name: "Docs",
+      url: "https://example.com",
+      handlerNames: [],
+    });
   });
 
   test("pathとurlが両方指定されている場合はpathが優先される", () => {
-    const resolved = resolveCustomView({
-      customView: { path: "./notes.html", url: "https://example.com" },
+    const { views } = resolveCustomViews({
+      customViews: [{ path: "./notes.html", url: "https://example.com" }],
     });
     // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
-    expect(resolved?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
   });
 
-  test("nameを省略すると'Custom View'にフォールバックする", () => {
-    const resolved = resolveCustomView({ customView: { url: "https://example.com" } });
-    expect(resolved?.name).toBe("Custom View");
-  });
-
-  test("handlersのキーがhandlerNamesになる", () => {
-    const resolved = resolveCustomView({
-      customView: { url: "https://example.com", handlers: { list: () => [], open: () => {} } },
+  test("nameを省略すると並び順の連番へフォールバックする", () => {
+    const { views } = resolveCustomViews({
+      customViews: [{ url: "https://example.com" }, { url: "https://example.org" }],
     });
-    expect(resolved?.handlerNames).toEqual(["list", "open"]);
+    expect(views.map((view) => view.name)).toEqual(["Custom View 1", "Custom View 2"]);
+  });
+
+  test("idを省略するとnameから導かれる", () => {
+    const { views } = resolveCustomViews({
+      customViews: [{ name: "My Notes", url: "https://example.com" }],
+    });
+    expect(views[0]?.id).toBe("my-notes");
+  });
+
+  test("idを明示すると正規化した上でそれが使われる", () => {
+    const { views } = resolveCustomViews({
+      customViews: [{ id: "My_Notes", name: "Notes", url: "https://example.com" }],
+    });
+    expect(views[0]?.id).toBe("my-notes");
+  });
+
+  test("nameからidを作れない（英数字を含まない）場合は連番のidになる", () => {
+    const { views } = resolveCustomViews({
+      customViews: [{ name: "メモ", url: "https://example.com" }],
+    });
+    expect(views[0]?.id).toBe("custom-view-1");
+  });
+
+  test("idが重複する場合はサフィックスで一意にする", () => {
+    const { views } = resolveCustomViews({
+      customViews: [
+        { name: "Notes", url: "https://example.com" },
+        { name: "notes", url: "https://example.org" },
+      ],
+    });
+    expect(views.map((view) => view.id)).toEqual(["notes", "notes-2"]);
+  });
+
+  test("ワークスペース一覧のidは予約されている", () => {
+    const { views } = resolveCustomViews({
+      customViews: [{ id: "workspaces", name: "Workspaces", url: "https://example.com" }],
+    });
+    expect(views[0]?.id).toBe("workspaces-2");
+  });
+
+  test("handlersのキーがhandlerNamesになり、実体はidごとに引ける", () => {
+    const { views, handlersById } = resolveCustomViews({
+      customViews: [
+        { name: "Notes", url: "https://example.com", handlers: { list: () => [], open: () => {} } },
+      ],
+    });
+    expect(views[0]?.handlerNames).toEqual(["list", "open"]);
+    expect(Object.keys(handlersById["notes"] ?? {})).toEqual(["list", "open"]);
   });
 
   test("関数でないhandlersの項目は警告付きで除外される", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
-      const resolved = resolveCustomView({
-        customView: {
-          url: "https://example.com",
-          handlers: { list: () => [], broken: "nope" as unknown as () => void },
-        },
+      const { views } = resolveCustomViews({
+        customViews: [
+          {
+            name: "Notes",
+            url: "https://example.com",
+            handlers: { list: () => [], broken: "nope" as unknown as () => void },
+          },
+        ],
       });
-      expect(resolved?.handlerNames).toEqual(["list"]);
+      expect(views[0]?.handlerNames).toEqual(["list"]);
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
     }
   });
 
-  test("pathとurlどちらも無効なら警告付きでnullを返す", () => {
+  test("pathとurlどちらも無効な要素は警告付きで飛ばされる", () => {
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     try {
-      expect(resolveCustomView({ customView: { name: "Broken" } })).toBeNull();
+      const { views } = resolveCustomViews({
+        customViews: [{ name: "Broken" }, { name: "Docs", url: "https://example.com" }],
+      });
+      expect(views.map((view) => view.id)).toEqual(["docs"]);
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
     }
   });
 });
-
 describe('設定ファイルのniwa.on("bell")', () => {
   test("keybindings関数の中で登録したハンドラをextractBellHandlerで取り出せる", () => {
     const api = createTestNiwaApi();

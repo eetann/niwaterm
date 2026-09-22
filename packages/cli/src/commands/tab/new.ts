@@ -23,7 +23,12 @@ export default define({
       type: "boolean",
       short: "c",
       description:
-        "指定すると、niwaterm.config.tsのcustomView設定を開くブラウザタブを作成する（--urlとは同時指定不可）",
+        "指定すると、niwaterm.config.tsのcustomViews設定を開くブラウザタブを作成する（--urlとは同時指定不可）",
+    },
+    view: {
+      type: "string",
+      description:
+        "--custom-viewで開くビューのid（idはniwaterm config showで確認）。省略時は設定の先頭のビュー",
     },
     shell: {
       type: "string",
@@ -52,6 +57,9 @@ export default define({
     ) {
       failAndExit("tab newに失敗しました: --cwdは--url・--custom-viewと同時に指定できません");
     }
+    if (ctx.values.view !== undefined && !ctx.values["custom-view"]) {
+      failAndExit("tab newに失敗しました: --viewは--custom-viewと一緒に指定してください");
+    }
     const endpoint = resolveIpcEndpoint();
     const target = createTargetResolver(endpoint, "tab new", { tileId: ctx.values.tile });
     const result = await newTab(
@@ -61,6 +69,7 @@ export default define({
       ctx.values["custom-view"],
       ctx.values.shell,
       ctx.values.cwd,
+      ctx.values.view,
     );
     if (!result.ok) {
       failAndExit(`tab newに失敗しました: ${result.error}`);

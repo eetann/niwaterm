@@ -57,7 +57,7 @@ export interface ConfigSummaryInput {
   baseLineHeight: number;
   keybindings: KeybindingsConfig;
   browser: ResolvedBrowserConfig;
-  customView: ResolvedCustomViewConfig | null;
+  customViews: ResolvedCustomViewConfig[];
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
@@ -165,30 +165,25 @@ function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySectio
   };
 }
 
-function customViewSection(customView: ResolvedCustomViewConfig | null): ConfigSummarySection {
-  if (!customView) {
+function customViewsSection(customViews: ResolvedCustomViewConfig[]): ConfigSummarySection {
+  if (customViews.length === 0) {
     return {
-      name: "customView",
-      entries: [
-        { key: "name", value: UNSET, note: "path・urlのどちらも未設定のため機能オフ" },
-        { key: "url", value: UNSET },
-      ],
+      name: "customViews",
+      entries: [{ key: "views", value: UNSET, note: "1つも設定されていないため機能オフ" }],
     };
   }
   return {
-    name: "customView",
-    entries: [
-      { key: "name", value: customView.name },
-      { key: "url", value: customView.url },
-      {
-        key: "handlers",
-        value: customView.handlerNames.length > 0 ? customView.handlerNames.join(", ") : UNSET,
-        note: "HTML側のniwaterm.callで呼べる関数",
-      },
-    ],
+    name: "customViews",
+    entries: customViews.map((view) => ({
+      key: view.id,
+      value: `${view.name} (${view.url})`,
+      note:
+        view.handlerNames.length > 0
+          ? `handlers: ${view.handlerNames.join(", ")}`
+          : "HTML側から呼べる関数は未設定",
+    })),
   };
 }
-
 function shellSection(
   defaultShell: string | undefined,
   profiles: ShellProfile[],
@@ -251,7 +246,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
         name: "mouse",
         entries: [{ key: "copyOnSelect", value: String(input.mouse.copyOnSelect) }],
       },
-      customViewSection(input.customView),
+      customViewsSection(input.customViews),
     ],
   };
 }

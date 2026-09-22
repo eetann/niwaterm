@@ -12,7 +12,7 @@ description: Electrobun 2.0.1のwebviewタグはtoggleHidden(true)で見た目�
 しかしその矩形の中では**マウスイベントだけが背後のHTMLへ届かなくなる**。クリックが無反応になるだけでなく、
 `:hover`も効かずカーソル形状も既定の矢印のままになるため、「見えているのにクリックできないUI」になる。
 
-niwatermでは、`customView`（サイドバーのNotesタブ等）を設定しているユーザーだけ
+niwatermでは、`customViews`（サイドバーのNotesタブ等）を設定しているユーザーだけ
 サイドバーのBoard/Workspace一覧がクリックできない、という形で発現した。`#sidebar-custom-view`は
 OOPIFのサイズ同期のため常に`position:absolute; inset:0`でレイアウトを持たせる設計なので、
 `#sidebar-list`と完全に重なっているため。
@@ -30,14 +30,12 @@ OOPIFのサイズ同期のため常に`position:absolute; inset:0`でレイア�
 隠すときは`toggleHidden`と`togglePassthrough`を必ずセットで呼ぶ。
 
 ```ts
-function setCustomViewWebviewActive(active: boolean): void {
-  customViewWebviewEl?.toggleHidden(!active);
-  customViewWebviewEl?.togglePassthrough(!active);
-}
+webviewEl.toggleHidden(!active);
+webviewEl.togglePassthrough(!active);
 ```
 
 `toggleHidden()`/`togglePassthrough()`はどちらも`webviewId`が確定する前に呼んでも無視されるため、
-生成直後の初期状態の適用は`dom-ready`を待ってから行う（`src/mainview/index.ts`の`applyCustomView`）。
+生成直後の初期状態の適用は`dom-ready`を待ってから行う。
 
 ## 切り分け方
 

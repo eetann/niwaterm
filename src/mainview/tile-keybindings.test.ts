@@ -239,6 +239,17 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("show-sidebar-view:<id> は対象id付きのビュー表示コマンドへ変換される", () => {
+    expect(actionToTileCommand("show-sidebar-view:notes")).toEqual({
+      type: "showSidebarView",
+      viewId: "notes",
+    });
+    expect(actionToTileCommand("show-sidebar-view:workspaces")).toEqual({
+      type: "showSidebarView",
+      viewId: "workspaces",
+    });
+  });
+
   test("prefix -> ` でポップアップトグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

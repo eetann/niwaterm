@@ -289,7 +289,7 @@ keybindings: {
 | `toggle-zoom` | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除。タブを右クリックして「ズーム表示」／「ズームを解除」を選んでも同じことができる） |
 | `new-tab` | 新規タブ作成 |
 | `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
-| `new-custom-view-tab` | `customView`設定を開くタブを作成（`customView`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある） |
+| `new-custom-view-tab` | `customViews`の先頭のビューを開くタブを作成（`customViews`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある。ビューを選んで開くにはCLIの`niwaterm tab new --custom-view --view <id>`を使う） |
 | `next-tab` / `prev-tab` | タブ切替 |
 | `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
@@ -303,7 +303,8 @@ keybindings: {
 | `move-board-to-workspace` | アクティブなBoardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`と同じ）。移動先はピッカーで選ぶ（Escapeでキャンセル）。移すとワークスペースが空になる場合は確認ダイアログを挟む。既定キーは無いため使うには自分で割り当てる必要がある |
 | `move-workspace-up` / `move-workspace-down` | アクティブなワークスペースの表示順を1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm workspace move`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
-| `next-sidebar-view` / `prev-sidebar-view` | サイドバーに出すビュー（ワークスペース一覧と`customView`パネル）を循環で切り替える（既定はnext側のみ prefix + `shift+b`。ビューが2つの間はnextだけで往復できるため、prevを使うには自分で割り当てる必要がある。`customView`未設定時はビューが1つしかないので何もしない。サイドバーを閉じている場合は開いた上で切り替える） |
+| `next-sidebar-view` / `prev-sidebar-view` | サイドバーに出すビュー（ワークスペース一覧と各`customViews`パネル）を循環で切り替える（既定はnext側のみ prefix + `shift+b`。ビューが2つの間はnextだけで往復できるため、prevを使うには自分で割り当てる必要がある。`customViews`未設定時はビューが1つしかないので何もしない。サイドバーを閉じている場合は開いた上で切り替える） |
+| `show-sidebar-view:<id>` | サイドバーに出すビューをidで直接指定する（`<id>`は`customViews`のidか、ワークスペース一覧の`workspaces`。ビューが増えたときに循環で辿らず1打で届かせるためのもの。既定キーは無いため使うには自分で割り当てる必要がある。サイドバーを閉じている場合は開いた上で切り替える） |
 | `toggle-popup` | ポップアップの表示/非表示切替 |
 | `jump-hint` | ジャンプ先へラベルを出し、打ったラベルの場所へ飛ぶ（既定は prefix + `f`。vimiumの`f`相当。操作は下記「ジャンプヒント」参照） |
 | `copy-selection` | 選択範囲をクリップボードへコピー（既定は`direct`にWindowsのみ`ctrl+shift+c`が割り当て済み。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
@@ -601,37 +602,54 @@ mouse: {
 
 相対パスを開くには`cwd`が要るので、シェル統合（`contrib/shell-integration/`）を入れておくと扱いやすい。
 
-## ユーザー定義HTML UI（customView）
+## ユーザー定義HTML UI（customViews）
 
-`customView`は、ユーザーが用意したHTMLをniwaterm内（サイドバー・タブ）に表示するための設定。**未指定なら機能自体がオフ**になり、サイドバーの見た目・挙動は変化しない。
+`customViews`は、ユーザーが用意したHTMLをniwaterm内（サイドバー・タブ）に表示するための設定。配列に並べた順でサイドバーのビュー切替に並ぶ。**未指定・空配列なら機能自体がオフ**になり、サイドバーの見た目・挙動は変化しない。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
-| `name` | `string` | サイドバーの切替ボタンに表示する名前。未指定時は`"Custom View"` |
+| `id` | `string` | キーバインド（`show-sidebar-view:<id>`）・CLI（`niwaterm sidebar switch --view <id>`）から指すためのid。未指定時は`name`から作られる（小文字化し、英数字以外は`-`へ。`Worktrees` → `worktrees`） |
+| `name` | `string` | サイドバーの切替タブに表示する名前。未指定時は`"Custom View 1"`のような並び順の連番 |
 | `path` | `string` | ローカルHTMLファイルへのパス。`~/.config/niwaterm/`（設定ファイルのあるディレクトリ）からの相対 or 絶対パス。`file://`として読み込む |
 | `url` | `string` | 任意URL。`path`未指定時のみ使われる（`path`優先） |
 | `handlers` | `Record<string, (payload, niwa) => unknown>` | HTML側から`niwaterm.call`で呼べる関数。後述 |
 
-`path`と`url`のどちらも指定しなかった場合は警告付きで機能オフになる。
+`path`と`url`のどちらも指定しなかった要素は、警告付きで飛ばされる（他の要素は有効なまま）。
 
 ```ts
-customView: {
-  name: "Notes",
-  path: "./notes.html",
-},
+customViews: [
+  { name: "Notes", path: "./notes.html" },
+  { id: "wt", name: "Worktrees", path: "./worktrees.html" },
+],
 ```
 
-設定すると、サイドバーの上部にワークスペース一覧との切替スイッチャーが表示され、クリックで一覧表示とcustomViewパネルを切り替えられる。キーバインド（既定は prefix + `shift+b`の`next-sidebar-view`）・コマンドパレットの「Next Sidebar View」からも同じ切り替えができる。同じHTMLはタブとしても開ける:
+idは全ビューで一意になるよう解決される。重複した場合・`name`から英数字を拾えない場合（日本語名など）・ワークスペース一覧の予約id`workspaces`と衝突した場合は、末尾に連番が付く（`notes-2`・`custom-view-1`）。解決後のidは`niwaterm config show`で確認できる。
 
-- キーバインド: `new-custom-view-tab`アクションを自分で割り当てる（既定キーは無い）
+設定すると、サイドバーの上部にビュー切替のタブが表示され、クリックでワークスペース一覧と各パネルを切り替えられる。ビューが増えてタブが収まらなくなったら、タブ列は横スクロールする。切り替え方は他にもある。
+
+- キーバインド: 順送りは`next-sidebar-view`（既定は prefix + `shift+b`）、id指定は`show-sidebar-view:<id>`（既定キーは無い）
+  ```ts
+  keybindings: (niwa) => {
+    niwa.keybind("1", "show-sidebar-view:workspaces");
+    niwa.keybind("2", "show-sidebar-view:wt");
+  },
+  ```
+- コマンドパレット: 「Next Sidebar View」と、ビューごとの「Show Sidebar View: <名前>」
+- CLI: `niwaterm sidebar switch --view <id>`
+
+同じHTMLはタブとしても開ける。
+
+- キーバインド: `new-custom-view-tab`アクションを自分で割り当てる（既定キーは無い。開くのは常に先頭のビュー）
   ```ts
   keybindings: (niwa) => {
     niwa.keybind("shift+u", "new-custom-view-tab");
   },
   ```
-- CLI: `niwaterm tab new --tile <tileId> --custom-view`（`--url`と同時指定は不可）
+- CLI: `niwaterm tab new --tile <tileId> --custom-view [--view <id>]`（`--url`と同時指定は不可）
 
-内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っている。
+内部的には既存のブラウザタブ機構（`<electrobun-webview>`）をそのまま使っている。サイドバーのパネルは初めてそのビューを表示したときに読み込まれるため、登録しただけで開いていないビューのHTMLは起動時に読まれない。
+
+**ビューごとに別のHTMLを指すこと**。同じURLを2つのビューへ登録すると、後から開いた方のパネルが空のまま何も描画されない（`docs/known-issues/electrobun-duplicate-url-webview-stays-blank.md`）。同じUIを使い回したい場合は、本体を`<script src>`等で共有した薄いHTMLをビューの数だけ用意する。
 
 ### HTMLからniwatermを操作する（handlers）
 
@@ -639,19 +657,21 @@ HTMLはniwaterm本体とは別プロセス（webview）で動くため、そこ�
 代わりに、`handlers`へ書いた関数をHTML側から名前で呼ぶ。
 
 ```ts
-customView: {
-  name: "Worktrees",
-  path: "./worktrees.html",
-  handlers: {
-    list: async (_payload, niwa) => {
-      const result = await niwa.shell.run("niwaterm worktree list");
-      return result.stdout;
-    },
-    open: async (payload: { path: string }, niwa) => {
-      await niwa.shell.run(`niwaterm worktree open "${payload.path}"`);
+customViews: [
+  {
+    name: "Worktrees",
+    path: "./worktrees.html",
+    handlers: {
+      list: async (_payload, niwa) => {
+        const result = await niwa.shell.run("niwaterm worktree list");
+        return result.stdout;
+      },
+      open: async (payload: { path: string }, niwa) => {
+        await niwa.shell.run(`niwaterm worktree open "${payload.path}"`);
+      },
     },
   },
-},
+],
 ```
 
 ```js
@@ -668,6 +688,7 @@ await niwaterm.call("open", { path: "/path/to/worktree" });
 - ハンドラが例外を投げると、HTML側の`niwaterm.call`がその`message`でrejectする
 - 時間のかかる処理でも打ち切られない（gitの操作・依存のインストールをそのまま書ける）
 - 関数以外を書いた項目は警告付きで無視される。呼べる名前は`niwaterm config show`で確認できる
+- ハンドラ名はビューごとに独立している。別のビューに同じ名前があっても互いに影響しない
 - `niwa.shell.run`の出力をパースする場合、シェル統合を入れているとプロンプトフックのOSC（cwd通知）が標準出力へ混ざる。`contrib/custom-views/worktrees/handlers.ts`の`stripOsc`が取り除き方の例
 
 `window.niwaterm`はページの読み込みが終わってから注入されるため、HTML側のスクリプトがすぐ呼ぶと間に合わないことがある。`niwaterm:ready`イベントで待つ。
@@ -917,7 +938,7 @@ export default {
 
 ## ホットリロード
 
-`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewいずれも）。`~/.config/niwaterm/`ディレクトリをサブディレクトリ含めて監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
+`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewsいずれも）。`~/.config/niwaterm/`ディレクトリをサブディレクトリ含めて監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
 
 設定を複数ファイルへ分割している場合（「複数ファイルへの分割」節参照）、エントリファイル以外の`.ts`/`.js`等の変更もホットリロード対象になる。読み込みのたびに`~/.config/niwaterm/`配下のソースファイルを一時ディレクトリへコピーしてからimportし直すことで、importツリー全体を最新の内容に差し替えている（`node_modules`は巨大になりうるためコピーせずシンボリックリンクで参照する）。
 

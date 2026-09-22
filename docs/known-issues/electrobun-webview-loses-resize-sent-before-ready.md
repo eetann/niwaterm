@@ -11,7 +11,7 @@ description: OverlaySyncControllerは送信済みの矩形を最新として覚�
 `<electrobun-webview>`が、DOM上の要素より**ずれた位置**に表示され続ける。要素自身のCSSは正しく、
 DevTools上の矩形も正しいのに、ネイティブ側のオーバーレイだけが別の場所にいる。
 
-niwatermでは、`customView`のサイドバーパネルがワークスペース一覧との切替スイッチャーを覆い隠し、
+niwatermでは、`customViews`のサイドバーパネルがワークスペース一覧との切替スイッチャーを覆い隠し、
 一覧へ戻れなくなる形で出た（スイッチャーの高さぶん上にずれていた）。
 
 Windowsではアプリのログに次が出る。

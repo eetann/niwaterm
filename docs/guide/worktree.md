@@ -229,6 +229,6 @@ $ niwaterm worktree new feat/x
 
 Boardへのワークツリーの紐づけは、サイドバーのBoard行の右クリックとコマンドパレットから変更できる（「Boardに紐づくワークツリー」節）。
 
-ワークツリーの一覧・絞り込み・作成をniwaterm内のUIで行いたい場合は、ユーザー定義HTML UI（`customView`）のサンプルが`contrib/custom-views/worktrees/`にある。サイドバーへ一覧を出し、行のクリックで`worktree open`、入力欄へ入れたブランチ名で`worktree new`を実行する。導入手順と変更しどころは同ディレクトリのREADME、`customView`自体の仕様は`docs/guide/config.md`「ユーザー定義HTML UI（customView）」節を参照。
+ワークツリーの一覧・絞り込み・作成をniwaterm内のUIで行いたい場合は、ユーザー定義HTML UI（`customViews`）のサンプルが`contrib/custom-views/worktrees/`にある。サイドバーへ一覧を出し、行のクリックで`worktree open`、入力欄へ入れたブランチ名で`worktree new`を実行する。導入手順と変更しどころは同ディレクトリのREADME、`customViews`自体の仕様は`docs/guide/config.md`「ユーザー定義HTML UI（customViews）」節を参照。
 
 このサンプルが一覧するリポジトリは、一覧を取った時点でフォーカス中タイルのアクティブタブがいたディレクトリで決まる。タブのcwdの報告にはシェル統合（`docs/guide/cli.md`「シェル統合」節）が要るので、先に入れておく。

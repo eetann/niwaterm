@@ -13,6 +13,7 @@ import {
   KEYBIND_ACTIONS,
   parseKeyBindingString,
   parseSecondKeyString,
+  parseShowSidebarViewAction,
   platformDefaultKeybindings,
   resolveBindingEntry,
 } from "./keybindings";
@@ -178,10 +179,31 @@ describe("isKeybindAction", () => {
     }
   });
 
+  test("show-sidebar-view:<id>は対象idが付いていればtrue", () => {
+    expect(isKeybindAction("show-sidebar-view:notes")).toBe(true);
+    expect(isKeybindAction("show-sidebar-view:workspaces")).toBe(true);
+  });
+
   test("未知の文字列や非文字列はfalse", () => {
     expect(isKeybindAction("unknown-action")).toBe(false);
     expect(isKeybindAction(123)).toBe(false);
     expect(isKeybindAction(null)).toBe(false);
+  });
+
+  test("対象idの無いshow-sidebar-view:はfalse", () => {
+    expect(isKeybindAction("show-sidebar-view:")).toBe(false);
+    expect(isKeybindAction("show-sidebar-view")).toBe(false);
+  });
+});
+
+describe("parseShowSidebarViewAction", () => {
+  test("show-sidebar-view:<id>から対象idを取り出す", () => {
+    expect(parseShowSidebarViewAction("show-sidebar-view:notes")).toBe("notes");
+  });
+
+  test("他のアクション・id部分が空ならnull", () => {
+    expect(parseShowSidebarViewAction("toggle-sidebar")).toBeNull();
+    expect(parseShowSidebarViewAction("show-sidebar-view:")).toBeNull();
   });
 });
 
@@ -218,8 +240,7 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // set-board-worktreeも既定キーを持たない（一度紐づければ張り替える機会は少なく、
   // サイドバーの右クリック・コマンドパレット・CLIから行える操作のため）
   "set-board-worktree",
-  // prev-sidebar-viewも既定キーを持たない（サイドバーのビューが一覧とcustomViewの2つしかない間は
-  // next-sidebar-viewだけで往復できるため）
+  // prev-sidebar-viewも既定キーを持たない（customViewが1つだけならnext-sidebar-viewの往復で足りるため）
   "prev-sidebar-view",
 ];
 

@@ -586,16 +586,19 @@ export function newTab(
   customView?: boolean,
   shellProfileId?: string,
   cwd?: string,
+  customViewId?: string,
 ): Promise<NewTabResult> {
   const body: {
     tileId: TileId;
     url?: string;
     customView?: boolean;
+    customViewId?: string;
     shellProfileId?: string;
     cwd?: string;
   } = { tileId };
   if (url !== undefined) body.url = url;
   if (customView !== undefined) body.customView = customView;
+  if (customViewId !== undefined) body.customViewId = customViewId;
   if (shellProfileId !== undefined) body.shellProfileId = shellProfileId;
   if (cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, cwd);
   return postJson(endpoint, "/new-tab", body);
@@ -1066,6 +1069,16 @@ export function adjustFontSize(
   action: FontSizeAction,
 ): Promise<AdjustFontSizeResult> {
   return postJson(endpoint, "/font-size", { action });
+}
+
+export type SwitchSidebarViewResult = { ok: true; viewId: string } | { ok: false; error: string };
+
+/** サイドバーに出すビューを切り替える。viewIdはcustomViewのidか、ワークスペース一覧の`workspaces` */
+export function switchSidebarView(
+  endpoint: IpcEndpoint,
+  viewId: string,
+): Promise<SwitchSidebarViewResult> {
+  return postJson(endpoint, "/sidebar-view", { viewId });
 }
 
 export type PromotePopupResult =

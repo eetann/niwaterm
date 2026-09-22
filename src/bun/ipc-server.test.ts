@@ -574,11 +574,9 @@ describe("POST /new-tab", () => {
   test("customView:trueを指定すると設定済みのcustomViewを開くブラウザタブを作成する", async () => {
     const { mgr } = createTestWorkspaceManager();
     const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
-    server = await createIpcServer(socketPath, mgr, () => ({
-      name: "Notes",
-      url: "file:///tmp/notes.html",
-      handlerNames: [],
-    }));
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+    ]);
 
     const res = await fetch("http://localhost/new-tab", {
       unix: socketPath,
@@ -611,14 +609,69 @@ describe("POST /new-tab", () => {
     expect(res.status).toBe(400);
   });
 
+  test("customViewIdを指定するとそのidのcustomViewを開く", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+      { id: "worktrees", name: "Worktrees", url: "file:///tmp/worktrees.html", handlerNames: [] },
+    ]);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customView: true, customViewId: "worktrees" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tabId: string };
+    expect(mgr.snapshot().workspace.board.tabs[body.tabId]).toEqual({
+      kind: "browser",
+      url: "file:///tmp/worktrees.html",
+    });
+  });
+
+  test("存在しないcustomViewIdを指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+    ]);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customView: true, customViewId: "missing" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  test("customView無しでcustomViewIdだけ指定すると400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+    ]);
+
+    const res = await fetch("http://localhost/new-tab", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tileId, customViewId: "notes" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("urlとcustomViewを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
-    server = await createIpcServer(socketPath, mgr, () => ({
-      name: "Notes",
-      url: "file:///tmp/notes.html",
-      handlerNames: [],
-    }));
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+    ]);
 
     const res = await fetch("http://localhost/new-tab", {
       unix: socketPath,
@@ -636,7 +689,7 @@ describe("POST /new-tab", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       undefined,
       undefined,
@@ -711,7 +764,7 @@ describe("POST /new-tab", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       undefined,
       undefined,
@@ -763,11 +816,9 @@ describe("POST /new-tab", () => {
   test("cwdとcustomViewを同時に指定すると400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
-    server = await createIpcServer(socketPath, mgr, () => ({
-      name: "Notes",
-      url: "file:///tmp/notes.html",
-      handlerNames: [],
-    }));
+    server = await createIpcServer(socketPath, mgr, () => [
+      { id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] },
+    ]);
 
     const res = await fetch("http://localhost/new-tab", {
       unix: socketPath,
@@ -813,7 +864,7 @@ describe("GET /shell-profiles", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       undefined,
       undefined,
@@ -848,7 +899,7 @@ describe("GET /keybindings", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       undefined,
       undefined,
@@ -2110,7 +2161,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
     );
@@ -2134,7 +2185,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge({ navigate: async () => ({ ok: true }) }),
     );
@@ -2157,7 +2208,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2178,7 +2229,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2201,7 +2252,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2223,7 +2274,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2248,7 +2299,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
     );
@@ -2277,7 +2328,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
     );
@@ -2299,7 +2350,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2328,7 +2379,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
     );
@@ -2346,7 +2397,7 @@ describe("POST /browser-navigate, GET /browser-get-text, GET /browser-get-html",
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
     );
@@ -2404,7 +2455,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
       captureScreenshot,
@@ -2425,7 +2476,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
       createFakeCaptureScreenshot(),
@@ -2444,7 +2495,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
       createFakeCaptureScreenshot(),
@@ -2462,7 +2513,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
       createFakeCaptureScreenshot(),
@@ -2481,7 +2532,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
       createFakeCaptureScreenshot(),
@@ -2504,7 +2555,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       bridge,
       createFakeCaptureScreenshot(),
@@ -2529,7 +2580,7 @@ describe("GET /browser-screenshot", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {},
       createFakeBrowserBridge(),
       captureScreenshot,
@@ -2619,6 +2670,108 @@ describe("POST /notify", () => {
   });
 });
 
+describe("POST /sidebar-view", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const views = [{ id: "notes", name: "Notes", url: "file:///tmp/notes.html", handlerNames: [] }];
+
+  /** setSidebarViewはcreateIpcServerの最後の引数なので、間の既定値はundefinedで埋める */
+  function createServerWith(requested: string[]) {
+    const { mgr } = createTestWorkspaceManager();
+    return createIpcServer(
+      socketPath,
+      mgr,
+      () => views,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (viewId) => requested.push(viewId),
+    );
+  }
+
+  test("customViewのidを指定すると、そのビューへの切替がwebviewへ渡る", async () => {
+    const requested: string[] = [];
+    server = await createServerWith(requested);
+
+    const res = await fetch("http://localhost/sidebar-view", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "notes" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, viewId: "notes" });
+    expect(requested).toEqual(["notes"]);
+  });
+
+  test("ワークスペース一覧のidも指定できる", async () => {
+    const requested: string[] = [];
+    server = await createServerWith(requested);
+
+    const res = await fetch("http://localhost/sidebar-view", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "workspaces" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(requested).toEqual(["workspaces"]);
+  });
+
+  test("未知のidは404を返し、切替を送らない", async () => {
+    const requested: string[] = [];
+    server = await createServerWith(requested);
+
+    const res = await fetch("http://localhost/sidebar-view", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId: "missing" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(requested).toEqual([]);
+  });
+
+  test("viewId未指定は400を返す", async () => {
+    const requested: string[] = [];
+    server = await createServerWith(requested);
+
+    const res = await fetch("http://localhost/sidebar-view", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /show-tab", () => {
   let dir: string;
   let socketPath: string;
@@ -2646,7 +2799,7 @@ describe("POST /show-tab", () => {
     server = await createIpcServer(
       socketPath,
       mgr,
-      () => null,
+      () => [],
       () => {
         activated = true;
       },
@@ -3038,7 +3191,7 @@ describe("GET /layouts, POST /apply-layout", () => {
       serverPromise: createIpcServer(
         socketPath,
         mgr,
-        () => null,
+        () => [],
         () => {},
         undefined,
         undefined,

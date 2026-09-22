@@ -11,7 +11,7 @@ description: toggleTransparentは名前に反して背景ではなくwebview自�
 `<electrobun-webview>`で読み込んだページが`body { background: transparent }`を指定していても、
 **webviewの矩形は白いまま**で、背後に敷いたHTMLのUIは透けない。
 
-niwatermでは、`customView`のサイドバーパネルがサイドバーの地（半透明＋背景画像）を覆い隠し、
+niwatermでは、`customViews`のサイドバーパネルがサイドバーの地（半透明＋背景画像）を覆い隠し、
 そこだけ白く浮く形で出た。
 
 ## 原因
@@ -71,7 +71,7 @@ if (autoResize) { ... }
 
 **HTML側で地を塗る**。背後のUIへ馴染ませたい場合は、背後と同じ塗り方を再現する。
 
-niwatermは`customView`のHTMLへ`window.niwaterm.theme`で背景色・背景画像・文字色を渡しているので、
+niwatermは`customViews`のHTMLへ`window.niwaterm.theme`で背景色・背景画像・文字色を渡しているので、
 これをCSS変数へ流し込めばターミナルと同じ地になる（`contrib/custom-views/worktrees/worktrees.html`）。
 
 ```css
@@ -93,6 +93,6 @@ webview版の`setAlphaBlending`は存在しない）。
 ## 関連
 
 - `toggleTransparent`は**呼んではいけない**。将来のElectrobunで`put_IsVisible(FALSE)`が効くようになると、
-  customViewのパネルが表示されなくなる
+  customViewsのパネルが表示されなくなる
 - ウィンドウ全体の透過がどう成立しているかは
   [透過ウィンドウでタイトルバーが描画されない](./windows-electrobun-transparent-window-hides-titlebar.md)を参照

@@ -14,6 +14,8 @@ import {
   type CompiledKeybindings,
   isCustomBindingRef,
   type KeybindAction,
+  parseShowSidebarViewAction,
+  type ShowSidebarViewAction,
 } from "@niwaterm/config";
 
 // keydown駆動でrepeat窓のタイムアウトを判定する（setTimeoutは使わない）ためのテスト用時刻注入。
@@ -45,6 +47,7 @@ export type TileCommand =
   | { type: "moveWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "cycleSidebarView"; delta: 1 | -1 }
+  | { type: "showSidebarView"; viewId: string }
   | { type: "togglePopup" }
   | { type: "jumpHint" }
   | { type: "copySelection" }
@@ -150,6 +153,8 @@ function keyboardEventToSecondKeyCanonical(e: KeyboardEventLike): string {
 }
 
 export function actionToTileCommand(action: KeybindAction): TileCommand {
+  const sidebarViewId = parseShowSidebarViewAction(action);
+  if (sidebarViewId !== null) return { type: "showSidebarView", viewId: sidebarViewId };
   switch (action) {
     case "split-vertical":
       return { type: "split", orientation: "vertical" };
@@ -252,7 +257,9 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
     case "show-config":
       return { type: "showConfig" };
     default: {
-      const exhaustive: never = action;
+      // KEYBIND_ACTIONSへ足したアクションのcase書き忘れをコンパイル時に弾く。
+      // 対象id付きのshow-sidebar-view:<id>だけは先に処理済みで、ここに残る型もそれだけになる
+      const exhaustive: ShowSidebarViewAction = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);
     }
   }

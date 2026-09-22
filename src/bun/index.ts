@@ -133,7 +133,8 @@ export type NiwaRPC = {
       splitTile: { tileId: TileId; orientation: SplitOrientation };
       newTab: { tileId: TileId; shellProfileId?: string; cwd?: string };
       newBrowserTab: { tileId: TileId; url?: string };
-      newCustomViewTab: { tileId: TileId };
+      /** viewId省略時は先頭のcustomView（`new-custom-view-tab`キーバインドからの経路がこれ） */
+      newCustomViewTab: { tileId: TileId; viewId?: string };
       openPopup: {};
       closePopup: {};
       togglePopupVisibility: {};
@@ -198,13 +199,14 @@ export type NiwaRPC = {
       /** 右クリックメニューで選ばれたユーザー定義項目。idはselectionMenuItemsで返したもの */
       runSelectionMenuItem: { id: string };
       /**
-       * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customView.handlers）。
-       * 関数の実体はbun側にあるため、webviewは名前とpayloadだけを送ってくる。
+       * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customViews[].handlers）。
+       * 関数の実体はbun側にあるため、webviewはビューのidと名前・payloadだけを送ってくる
+       * （ハンドラ名はビューごとに独立しているため、名前だけでは実体を引けない）。
        * requestではなくmessageなのは、ハンドラがgit操作・依存インストール等でいくらでも長くなりうるためで、
        * 結果はcustomViewCallResultで返す（RPCのmaxRequestTimeで打ち切られると、
        * 実際には完了した操作がHTML側でエラー表示される）
        */
-      customViewCall: { callId: string; name: string; payload: unknown };
+      customViewCall: { callId: string; viewId: string; name: string; payload: unknown };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
       reloadConfig: {};
       /** そのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
@@ -234,12 +236,17 @@ export type NiwaRPC = {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         mouse: ResolvedMouseConfig;
-        customView: ResolvedCustomViewConfig | null;
+        customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
         /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
         configSummary: ConfigSummary;
       };
       copied: { chars: number; lines: number };
+      /**
+       * サイドバーに出すビューの指定（CLIの`niwaterm sidebar switch`から）。viewIdは
+       * customViewのidかワークスペース一覧のid。存在確認はIPCサーバー側で済んでいる
+       */
+      setSidebarView: { viewId: string };
       /** customViewCallの結果。callIdは呼び出し元のwebviewが発行したもの */
       customViewCallResult: CustomViewCallResult & { callId: string };
     };
@@ -339,7 +346,7 @@ function sendConfig(windowId?: WindowId) {
       keybindings,
       appearance: effectiveAppearance(),
       mouse,
-      customView,
+      customViews,
       shellProfiles,
       configSummary: currentConfigSummary(),
     });
@@ -355,6 +362,23 @@ function sendCustomViewCallResult(callId: string, result: CustomViewCallResult):
   for (const id of views.keys()) {
     rpcSendOf(id)?.customViewCallResult({ callId, ...result });
   }
+}
+
+/**
+ * viewId指定があればそのidのcustomView、省略時は先頭のもの。該当が無ければnull
+ * （`new-custom-view-tab`キーバインドはビューを指定しないため先頭へ落ちる）
+ */
+function findCustomView(viewId?: string): ResolvedCustomViewConfig | null {
+  if (viewId === undefined) return customViews[0] ?? null;
+  return customViews.find((view) => view.id === viewId) ?? null;
+}
+
+/**
+ * サイドバーに出すビューを切り替える（CLIの`niwaterm sidebar switch`から）。サイドバーの表示状態は
+ * ウィンドウごとにwebview側が持つため、呼び出し元タブのウィンドウ（不明ならフォーカス中）へ送る
+ */
+function sendSidebarView(viewId: string, windowId: WindowId | null): void {
+  rpcSendOf(windowId ?? windowManager.getFocusedWindowId())?.setSidebarView({ viewId });
 }
 
 /**
@@ -461,7 +485,7 @@ let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 let boardConfig: ResolvedBoardConfig;
-let customView: ResolvedCustomViewConfig | null;
+let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
@@ -560,7 +584,7 @@ function currentConfigSummary(): ConfigSummary {
     baseLineHeight: appearance.lineHeight,
     keybindings,
     browser,
-    customView,
+    customViews,
     defaultShell,
     shellProfiles,
     layouts,
@@ -577,7 +601,7 @@ async function refreshConfig(): Promise<void> {
     appearance,
     browser,
     board: boardConfig,
-    customView,
+    customViews,
     customViewHandlers,
     defaultShell,
     shellProfiles,
@@ -694,7 +718,7 @@ try {
   ipcServer = await createIpcServer(
     ipcSocketPath(),
     windowManager,
-    () => customView,
+    () => customViews,
     (windowId) => activateWindow(windowId),
     createBrowserBridge(browserRpcOfTab),
     captureUrlScreenshot,
@@ -707,6 +731,7 @@ try {
     () => keybindings,
     currentConfigSummary,
     ipcWindowOps,
+    sendSidebarView,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -832,12 +857,15 @@ function createWindowRpc(windowId: WindowId) {
         newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
           windowManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
         },
-        newCustomViewTab: ({ tileId }: { tileId: TileId }) => {
-          if (!customView) {
-            console.log("[bun] customView is not configured; ignoring newCustomViewTab");
+        newCustomViewTab: ({ tileId, viewId }: { tileId: TileId; viewId?: string }) => {
+          const view = findCustomView(viewId);
+          if (!view) {
+            console.log(
+              `[bun] customView not found; ignoring newCustomViewTab (viewId: ${viewId ?? "(first)"})`,
+            );
             return;
           }
-          windowManager.newBrowserTab(tileId, customView.url);
+          windowManager.newBrowserTab(tileId, view.url);
         },
         openPopup: () => {
           windowManager.openPopup(undefined, windowId);
@@ -1025,15 +1053,17 @@ function createWindowRpc(windowId: WindowId) {
         },
         customViewCall: ({
           callId,
+          viewId,
           name,
           payload,
         }: {
           callId: string;
+          viewId: string;
           name: string;
           payload: unknown;
         }) => {
           void customViewHandlers
-            .run(name, payload)
+            .run(viewId, name, payload)
             .then((result) => sendCustomViewCallResult(callId, result));
         },
         reloadConfig: () => {

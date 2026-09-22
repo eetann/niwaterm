@@ -41,11 +41,12 @@ export interface NiwatermConfig {
    */
   browser?: BrowserConfig;
   /**
-   * ユーザー定義HTML UI（サイドバーの固定パネル・「名前付きビュー」としてのタブ表示）設定。
-   * pathかurlのどちらかを指定する（pathが優先）。未指定なら機能自体がオフになる。
-   * 例: { name: "Notes", path: "./notes.html" }
+   * ユーザー定義HTML UI（サイドバーのパネル・「名前付きビュー」としてのタブ表示）設定。
+   * 配列に並べた順でサイドバーのビュー切替に並ぶ。各要素はpathかurlのどちらかを指定する
+   * （pathが優先）。空配列・未指定なら機能自体がオフになる。
+   * 例: [{ name: "Notes", path: "./notes.html" }]
    */
-  customView?: CustomViewConfig;
+  customViews?: CustomViewConfig[];
   /**
    * シェル設定。新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイル（PowerShell・SSH先等）を変更できる。
    * defaultの未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。

@@ -230,9 +230,15 @@ body {
  * さらにbackgroundも透明にする: toggleHidden()が隠すのはネイティブ側のオーバーレイのみで、
  * このカスタム要素自体（軽量DOM）の背景は別物として残り続けるため、非表示中も白背景が
  * #sidebar-listの上に居座ってしまう（tab-contentは親ごとdisplay:noneにするため問題にならないが、
- * #sidebar-custom-viewはOOPIF同期のため常にレイアウトを持たせる設計なので明示的な透過が必要）
+ * #sidebar-custom-viewはOOPIF同期のため常にレイアウトを持たせる設計なので明示的な透過が必要）。
+ * customViewを複数登録すると、一度でも開いたビューのぶんだけここに<electrobun-webview>が並ぶ。
+ * 通常フローのままだと2つ目以降がコンテナの下へ押し出され、画面外の矩形で同期されてしまう
+ * （ネイティブ側のコントローラが作られず"Controller is NULL, cannot resize"のまま何も出ない）ので、
+ * absoluteで全部を同じ矩形へ重ねる
  */
 #sidebar-custom-view electrobun-webview {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;

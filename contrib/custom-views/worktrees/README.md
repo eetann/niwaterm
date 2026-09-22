@@ -27,17 +27,19 @@ import { defineConfig } from "@niwaterm/config";
 import { worktreeHandlers } from "./custom-views/worktrees-handlers.ts";
 
 export default defineConfig({
-  customView: {
-    name: "Worktrees",
-    path: "./custom-views/worktrees.html",
-    handlers: worktreeHandlers,
-  },
+  customViews: [
+    {
+      name: "Worktrees",
+      path: "./custom-views/worktrees.html",
+      handlers: worktreeHandlers,
+    },
+  ],
 });
 ```
 
 保存するとホットリロードで反映される。サイドバー上部の「Worktrees」タブへ切り替えると一覧が出る。
 タブとして大きく開きたい場合は`new-custom-view-tab`アクションへキーを割り当てるか、
-`niwaterm tab new --custom-view`を使う。
+`niwaterm tab new --custom-view --view worktrees`を使う。
 
 ## 変えたくなりそうなところ
 
@@ -55,4 +57,4 @@ niwaterm側の`worktree`設定（`worktree.dir`・`worktree.onCreate`）で決�
 
 ## 削除
 
-`customView`の設定を消せば機能ごとオフになる（サイドバーのスイッチャーも消える）。
+`customViews`からこの要素を消せばこのビューだけ消える。`customViews`ごと消すと機能ごとオフになり、サイドバーのビュー切替タブも出なくなる。

@@ -12,6 +12,7 @@ import {
   type ShellProfile,
   type TabBarMode,
   type TitleBarMode,
+  WORKSPACES_VIEW_ID,
 } from "@niwaterm/config";
 import { createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -59,7 +60,7 @@ import { SelectionMenu, type SelectionMenuUserItem } from "./react/selection-men
 import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { WorkspacePicker, type WorkspacePickerItem } from "./react/workspace-picker";
 import { boardLabel, buildSidebarWorkspaceItems, workspaceLabel } from "./react/sidebar-props";
-import { SidebarSwitcher } from "./react/sidebar-switcher";
+import { SidebarSwitcher, type SidebarSwitcherView } from "./react/sidebar-switcher";
 import {
   SidebarWorkspaceList,
   type SidebarApplyLayoutRequest,
@@ -285,6 +286,7 @@ function renderCommandPalette(): void {
         if (!focusedTileId) return;
         sendMessage("newTab", { tileId: focusedTileId, shellProfileId });
       },
+      sidebarViews: commandPaletteSidebarViews(),
       shortcutLabelFor: shortcutLabelForAction,
     }),
   );
@@ -441,12 +443,16 @@ function openWorkspacePicker(
   renderWorkspacePicker();
 }
 
-// ---- サイドバーのユーザー定義HTML UI（customView）----
-let customViewWebviewEl: WebviewTagElement | null = null;
-let customViewUrl: string | null = null;
-let customViewName: string | null = null;
-/** customViewのHTMLから呼べるハンドラ名（customView.handlers）。注入するwindow.niwatermへ渡す */
-let customViewHandlerNames: string[] = [];
+// ---- サイドバーのユーザー定義HTML UI（customViews）----
+/** サイドバーへ出しているcustomViewのOOPIF。初めてそのビューを出すときに作り、以降は使い回す */
+interface CustomViewPanel {
+  webviewEl: WebviewTagElement;
+  /** 今読み込んでいるURL。設定のホットリロードで変わったかの判定に使う */
+  url: string;
+}
+/** bun側で解決されたcustomView一覧（configメッセージで受信）。設定に並べた順 */
+let customViews: ResolvedCustomViewConfig[] = [];
+const customViewPanelById = new Map<string, CustomViewPanel>();
 /** customViewのHTMLへ渡す配色。ターミナルと同じ値を使い、HTML側がサイドバーへ馴染ませられるようにする */
 let customViewTheme: CustomViewTheme = {
   background: defaultAppearance.background,
@@ -458,7 +464,8 @@ let customViewTheme: CustomViewTheme = {
  * bun側は結果を全ウィンドウへ配る（自分が出したcallIdでなければここに無く、無視される）
  */
 const customViewCallWebviewByCallId = new Map<string, WebviewTagElement>();
-let sidebarShowingCustom = false;
+/** サイドバーに出しているビューのid。ワークスペース一覧はWORKSPACES_VIEW_ID */
+let sidebarViewId: string = WORKSPACES_VIEW_ID;
 
 let focusedTileId: TileId | null = null;
 // フォーカス中タイルのactiveTabId（キー入力・ペーストの送信先）
@@ -703,14 +710,14 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         keybindings,
         appearance,
         mouse,
-        customView,
+        customViews: views,
         shellProfiles: profiles,
         configSummary,
       }: {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         mouse: ResolvedMouseConfig;
-        customView: ResolvedCustomViewConfig | null;
+        customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
         configSummary: ConfigSummary;
       }) => {
@@ -719,7 +726,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastKeybindingsConfig = keybindings;
         applyAppearance(appearance);
         mouseConfig = mouse;
-        applyCustomView(customView);
+        applyCustomViews(views);
         shellProfiles = profiles;
         shellProfilesVersion++;
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
@@ -734,6 +741,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       },
       copied: ({ chars, lines }: { chars: number; lines: number }) => {
         showCopiedBadge(chars, lines);
+      },
+      setSidebarView: ({ viewId }: { viewId: string }) => {
+        showSidebarView(viewId);
       },
       customViewCallResult: ({
         callId,
@@ -1274,23 +1284,27 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
   browserDomReadyByTabId.set(tabId, false);
   // customViewをタブとして開いた場合（new-custom-view-tab）も、サイドバーと同じwindow.niwatermを
   // 使えるようにする。URL欄やページ内リンクで別のURLへ移ったらAPIの対象から外す
-  let isCustomViewTab = url === customViewUrl;
+  let tabCustomViewId = customViewOfUrl(url)?.id ?? null;
   webviewEl.on("did-navigate", (e) => {
     const navigatedUrl = extractNavigatedUrl((e as CustomEvent).detail);
-    if (navigatedUrl) isCustomViewTab = navigatedUrl === customViewUrl;
+    if (navigatedUrl) tabCustomViewId = customViewOfUrl(navigatedUrl)?.id ?? null;
   });
   webviewEl.on("dom-ready", () => {
     browserDomReadyByTabId.set(tabId, true);
-    if (isCustomViewTab) {
-      injectCustomViewBridge(webviewEl);
+    if (tabCustomViewId) {
+      injectCustomViewBridge(webviewEl, tabCustomViewId);
     }
   });
 
   // execBrowserJsの結果送信を待ち受ける。host-message detailはbrowser-js-bridge.tsが
   // window.__electrobunEventBridge経由で送ってくる{requestId, ok, result|error}
   webviewEl.on("host-message", (e) => {
-    if (isCustomViewTab && handleCustomViewCallMessage(webviewEl, (e as CustomEvent).detail))
+    if (
+      tabCustomViewId &&
+      handleCustomViewCallMessage(webviewEl, tabCustomViewId, (e as CustomEvent).detail)
+    ) {
       return;
+    }
     const detail = (e as CustomEvent).detail as {
       requestId?: unknown;
       ok?: unknown;
@@ -2017,19 +2031,47 @@ function renameSidebarWorkspace(workspaceId: WorkspaceId, name: string): void {
   imeEl.focus({ preventScroll: true });
 }
 
+/** サイドバーに出せるビュー。先頭がワークスペース一覧で、続いて設定順のcustomView */
+function sidebarSwitcherViews(): SidebarSwitcherView[] {
+  return [
+    { id: WORKSPACES_VIEW_ID, name: "Workspaces" },
+    ...customViews.map((view) => ({ id: view.id, name: view.name })),
+  ];
+}
+
+function sidebarViewIds(): string[] {
+  return [WORKSPACES_VIEW_ID, ...customViews.map((view) => view.id)];
+}
+
+/**
+ * コマンドパレットに並べるサイドバーのビュー。customViewが1つも無ければ切り替え先が無いので
+ * 1件も出さない（ワークスペース一覧しか無い状態で切替の項目だけ並んでも選ぶ意味が無い）
+ */
+function commandPaletteSidebarViews(): SidebarSwitcherView[] {
+  return customViews.length === 0 ? [] : sidebarSwitcherViews();
+}
+
+function findCustomView(viewId: string): ResolvedCustomViewConfig | null {
+  return customViews.find((view) => view.id === viewId) ?? null;
+}
+
+/** URLからcustomViewを引く。タブとして開いたページがcustomViewかどうかの判定に使う */
+function customViewOfUrl(url: string): ResolvedCustomViewConfig | null {
+  return customViews.find((view) => view.url === url) ?? null;
+}
+
 function renderSidebarSwitcher(): void {
   sidebarSwitcherRoot.renderOnEvent(
     createElement(SidebarSwitcher, {
-      customViewName: customViewName ?? "",
-      showingCustom: sidebarShowingCustom,
-      onShowList: () => setSidebarShowingCustom(false),
-      onShowCustom: () => setSidebarShowingCustom(true),
+      views: sidebarSwitcherViews(),
+      activeViewId: sidebarViewId,
+      onSelect: setSidebarView,
     }),
   );
 }
 
 /**
- * サイドバーの一覧/カスタムビュー表示を切り替える。
+ * サイドバーに出すビューを切り替える。
  * #sidebar-listはhidden属性で、#sidebar-custom-view内のOOPIFはtoggleHiddenで隠す
  * （OOPIFはdisplay:noneだけでは隠れないため）。#sidebar-custom-view自体は常にレイアウトを
  * 持たせたままにする必要があるため、非アクティブ時の見た目上の無効化はpointer-events経由で行う。
@@ -2037,39 +2079,85 @@ function renderSidebarSwitcher(): void {
  * 見えなくしてもマウスイベントだけは奪い続ける（＝#sidebar-listのクリックが死ぬ）。
  * togglePassthroughを併用してネイティブ側でもイベントを素通りさせる必要がある。
  */
-function setSidebarShowingCustom(showing: boolean): void {
-  sidebarShowingCustom = showing;
-  sidebarListEl.hidden = showing;
-  sidebarCustomViewEl.classList.toggle("active", showing);
-  setCustomViewWebviewActive(showing);
+function setSidebarView(viewId: string): void {
+  sidebarViewId = viewId;
+  const showingCustom = viewId !== WORKSPACES_VIEW_ID;
+  sidebarListEl.hidden = showingCustom;
+  sidebarCustomViewEl.classList.toggle("active", showingCustom);
+  if (showingCustom) ensureCustomViewPanel(viewId);
+  updateCustomViewPanelVisibility();
   renderSidebarSwitcher();
 }
 
-/** customViewのOOPIFの表示・マウスイベント受け取りをまとめて切り替える */
-function setCustomViewWebviewActive(active: boolean): void {
-  customViewWebviewEl?.toggleHidden(!active);
-  customViewWebviewEl?.togglePassthrough(!active);
+/**
+ * 表示中のビューのOOPIFだけを見せ、残りは隠したうえでマウスイベントも通す。
+ * サイドバーごと閉じている間はどのビューも出さない（OOPIFはCSSの管轄外なので、
+ * サイドバーをdisplay:noneにしてもネイティブ側のオーバーレイは残り続ける。
+ * docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
+ */
+function updateCustomViewPanelVisibility(): void {
+  for (const [viewId, panel] of customViewPanelById) {
+    const active = sidebarOpen && viewId === sidebarViewId;
+    panel.webviewEl.toggleHidden(!active);
+    panel.webviewEl.togglePassthrough(!active);
+  }
+}
+
+/**
+ * そのビューのOOPIFを用意する（初回表示時に1度だけ作る。出していないビューまで先に
+ * 読み込むと、使わないHTMLのぶんだけOOPIFが増える）。
+ * #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
+ * 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenで正しく隠せる。
+ * ただしtoggleHidden()/togglePassthrough()はwebviewId確定後でないと送信先が無く
+ * 無視されるため、初回のみdom-readyを待ってから呼ぶ
+ */
+function ensureCustomViewPanel(viewId: string): void {
+  if (customViewPanelById.has(viewId)) return;
+  const view = findCustomView(viewId);
+  if (!view) return;
+  const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
+  webviewEl.setAttribute("sandbox", "");
+  webviewEl.src = view.url;
+  webviewEl.on("dom-ready", () => {
+    updateCustomViewPanelVisibility();
+    // ネイティブ側のwebviewが用意できる前に送った位置は捨てられる（WebView2は
+    // "Controller is NULL, cannot resize"）のに、送った側は最新の矩形として覚えてしまい
+    // 二度と送り直さない。生成が済んだここで現在の矩形を強制的に送り直す
+    webviewEl.syncDimensions(true);
+  });
+  attachCustomViewBridge(webviewEl, viewId);
+  sidebarCustomViewEl.appendChild(webviewEl);
+  customViewPanelById.set(viewId, { webviewEl, url: view.url });
 }
 
 /**
  * customViewのHTMLから届いたniwaterm.callをbunへ中継する。call以外のhost-message
- * （execBrowserJsの結果）ならfalseを返し、呼び出し元の処理を続けさせる
+ * （execBrowserJsの結果）ならfalseを返し、呼び出し元の処理を続けさせる。
+ * ハンドラ名はビューごとに独立しているため、どのビューからの呼び出しかも一緒に送る
+ * （HTML側に名乗らせず呼び出し元のwebviewから引くのは、外部URLのHTMLが別ビューの
+ * ハンドラを騙って呼べないようにするため）
  */
-function handleCustomViewCallMessage(webviewEl: WebviewTagElement, detail: unknown): boolean {
+function handleCustomViewCallMessage(
+  webviewEl: WebviewTagElement,
+  viewId: string,
+  detail: unknown,
+): boolean {
   const call = parseCustomViewCallMessage(detail);
   if (!call) return false;
   customViewCallWebviewByCallId.set(call.callId, webviewEl);
-  sendMessage("customViewCall", call);
+  sendMessage("customViewCall", { ...call, viewId });
   return true;
 }
 
-/** 最後に注入したブートストラップ。ハンドラ名・配色のどちらも変わっていなければ注入し直さない */
-let lastInjectedBootstrap: string | null = null;
+/** webviewごとの、最後に注入したブートストラップ。ハンドラ名・配色のどちらも変わっていなければ注入し直さない */
+const lastInjectedBootstrapByWebview = new WeakMap<WebviewTagElement, string>();
 
 /** customViewのHTMLへwindow.niwatermを注入する */
-function injectCustomViewBridge(webviewEl: WebviewTagElement): void {
-  const script = buildCustomViewBootstrapScript(customViewHandlerNames, customViewTheme);
-  lastInjectedBootstrap = script;
+function injectCustomViewBridge(webviewEl: WebviewTagElement, viewId: string): void {
+  const view = findCustomView(viewId);
+  if (!view) return;
+  const script = buildCustomViewBootstrapScript(view.handlerNames, customViewTheme);
+  lastInjectedBootstrapByWebview.set(webviewEl, script);
   webviewEl.executeJavascript(script);
 }
 
@@ -2077,72 +2165,48 @@ function injectCustomViewBridge(webviewEl: WebviewTagElement): void {
  * customViewのHTMLへwindow.niwatermを注入し、そこからの呼び出しを受け取れるようにする。
  * dom-readyはロードのたびに発火するため、HTML側でのリロード・ページ内遷移の後も注入し直される
  */
-function attachCustomViewBridge(webviewEl: WebviewTagElement): void {
+function attachCustomViewBridge(webviewEl: WebviewTagElement, viewId: string): void {
   webviewEl.on("dom-ready", () => {
-    injectCustomViewBridge(webviewEl);
+    injectCustomViewBridge(webviewEl, viewId);
   });
   webviewEl.on("host-message", (e) => {
-    handleCustomViewCallMessage(webviewEl, (e as CustomEvent).detail);
+    handleCustomViewCallMessage(webviewEl, viewId, (e as CustomEvent).detail);
   });
 }
 
-/** customView設定に合わせてサイドバーパネル用の<electrobun-webview>を作成/更新/破棄する */
-function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
-  if (!customView) {
-    sidebarSwitcherEl.hidden = true;
-    if (sidebarShowingCustom) setSidebarShowingCustom(false);
-    customViewWebviewEl?.remove();
-    customViewWebviewEl = null;
-    customViewUrl = null;
-    customViewHandlerNames = [];
-    return;
+/** customViews設定に合わせてサイドバーのビュー一覧とOOPIFを作成/更新/破棄する */
+function applyCustomViews(views: ResolvedCustomViewConfig[]): void {
+  customViews = views;
+  // ビューが一覧だけならスイッチャーを出す意味が無い
+  sidebarSwitcherEl.hidden = views.length === 0;
+  for (const [viewId, panel] of customViewPanelById) {
+    const view = findCustomView(viewId);
+    if (!view) {
+      panel.webviewEl.remove();
+      customViewPanelById.delete(viewId);
+      continue;
+    }
+    if (panel.url !== view.url) {
+      // 読み込み直せばdom-readyでwindow.niwatermも注入し直される
+      panel.webviewEl.loadURL(view.url);
+      panel.url = view.url;
+    } else if (
+      buildCustomViewBootstrapScript(view.handlerNames, customViewTheme) !==
+      lastInjectedBootstrapByWebview.get(panel.webviewEl)
+    ) {
+      // 設定のホットリロードでhandlers・配色だけが変わった場合。読み込み直すとHTML側の状態
+      // （入力途中の値・スクロール位置）が消えるため、注入済みの値だけを差し替える
+      injectCustomViewBridge(panel.webviewEl, viewId);
+    }
   }
-
-  sidebarSwitcherEl.hidden = false;
-  customViewName = customView.name;
-  customViewHandlerNames = customView.handlerNames;
-  renderSidebarSwitcher();
-
-  if (!customViewWebviewEl) {
-    // #sidebar-custom-viewは常に有効なレイアウトを持つ（position:absolute; inset:0;）ため、
-    // 生成時点から一度も0x0でOOPIFを同期させずに済み、toggleHiddenで正しく隠せる。
-    // ただしtoggleHidden()/togglePassthrough()はwebviewId確定後でないと送信先が無く
-    // 無視されるため、初回のみdom-readyを待ってから呼ぶ
-    const webviewEl = document.createElement("electrobun-webview") as WebviewTagElement;
-    webviewEl.setAttribute("sandbox", "");
-    webviewEl.src = customView.url;
-    webviewEl.on("dom-ready", () => {
-      webviewEl.toggleHidden(!sidebarShowingCustom);
-      webviewEl.togglePassthrough(!sidebarShowingCustom);
-      // ネイティブ側のwebviewが用意できる前に送った位置は捨てられる（WebView2は
-      // "Controller is NULL, cannot resize"）のに、送った側は最新の矩形として覚えてしまい
-      // 二度と送り直さない。生成が済んだここで現在の矩形を強制的に送り直す
-      webviewEl.syncDimensions(true);
-    });
-    attachCustomViewBridge(webviewEl);
-    sidebarCustomViewEl.appendChild(webviewEl);
-    customViewWebviewEl = webviewEl;
-    customViewUrl = customView.url;
-  } else if (customViewUrl !== customView.url) {
-    // 読み込み直せばdom-readyでwindow.niwatermも注入し直される
-    customViewWebviewEl.loadURL(customView.url);
-    customViewUrl = customView.url;
-  } else if (
-    buildCustomViewBootstrapScript(customViewHandlerNames, customViewTheme) !==
-    lastInjectedBootstrap
-  ) {
-    // 設定のホットリロードでhandlers・配色だけが変わった場合。読み込み直すとHTML側の状態
-    // （入力途中の値・スクロール位置）が消えるため、注入済みの値だけを差し替える
-    injectCustomViewBridge(customViewWebviewEl);
-  }
+  // 出していたビューが設定から消えたらワークスペース一覧へ戻す
+  setSidebarView(sidebarViewIds().includes(sidebarViewId) ? sidebarViewId : WORKSPACES_VIEW_ID);
 }
 
 function applySidebarVisibility(): void {
   sidebarEl.style.display = sidebarOpen ? "" : "none";
   sidebarDividerEl.style.display = sidebarOpen ? "" : "none";
-  // OOPIFはCSSの管轄外なので、サイドバーごとdisplay:noneにしてもネイティブ側のオーバーレイは
-  // 残り続ける（docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
-  setCustomViewWebviewActive(sidebarOpen && sidebarShowingCustom);
+  updateCustomViewPanelVisibility();
 }
 
 function toggleSidebar(): void {
@@ -2153,15 +2217,28 @@ function toggleSidebar(): void {
 }
 
 /**
- * サイドバーのビュー（ワークスペース一覧・customView）を切り替える。customView未設定なら
- * 切り替え先が無いので何もしない。閉じている間に切り替えても結果が見えないため、
- * 閉じていれば先に開く（setSidebarShowingCustomより前に開く順序も必須で、逆順だと
- * サイドバーが非表示のままcustomViewのOOPIFだけが表示されてしまう）。
+ * サイドバーのビュー（ワークスペース一覧・各customView）を並び順で1つ送る／戻す。
+ * customViewが1つも無ければ切り替え先が無いので何もしない
  */
-function cycleSidebarView(): void {
-  if (customViewUrl === null) return;
+function cycleSidebarView(delta: 1 | -1): void {
+  const viewIds = sidebarViewIds();
+  if (viewIds.length < 2) return;
+  // 出していたビューが設定から消えた直後はindexOfが-1になり、delta:1でワークスペース一覧へ戻る
+  const nextId =
+    viewIds[(viewIds.indexOf(sidebarViewId) + delta + viewIds.length) % viewIds.length];
+  if (nextId !== undefined) showSidebarView(nextId);
+}
+
+/**
+ * 指定のビューをサイドバーへ出す（show-sidebar-viewキーバインド・コマンドパレット・CLIから）。
+ * 未知のidは何もしない。閉じている間に切り替えても結果が見えないため、閉じていれば先に開く
+ * （setSidebarViewより前に開く順序も必須で、逆順だとサイドバーが非表示のまま
+ * customViewのOOPIFだけが表示されてしまう）
+ */
+function showSidebarView(viewId: string): void {
+  if (!sidebarViewIds().includes(viewId)) return;
   if (!sidebarOpen) toggleSidebar();
-  setSidebarShowingCustom(!sidebarShowingCustom);
+  setSidebarView(viewId);
 }
 
 function updateFocusHighlight(): void {
@@ -2930,9 +3007,12 @@ function handleTileCommand(cmd: TileCommand): void {
     toggleSidebar();
     return;
   }
-  // サイドバーのビューは一覧とcustomViewの2つなので、next/prevどちらも往復になる
   if (cmd.type === "cycleSidebarView") {
-    cycleSidebarView();
+    cycleSidebarView(cmd.delta);
+    return;
+  }
+  if (cmd.type === "showSidebarView") {
+    showSidebarView(cmd.viewId);
     return;
   }
   if (cmd.type === "togglePopup") {

@@ -46,7 +46,7 @@ import {
   ZoomOut,
   type LucideIcon,
 } from "lucide-react";
-import type { KeybindAction } from "@niwaterm/config";
+import { type KeybindAction, SHOW_SIDEBAR_VIEW_PREFIX } from "@niwaterm/config";
 
 export type CommandPaletteCategory =
   | "タイル"
@@ -439,3 +439,17 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["config show", "font size", "settings"],
   },
 ];
+
+/** サイドバーのビューを直接出す項目。ビューは設定ファイル次第で増減するため実行時に組み立てる */
+export function sidebarViewActionDefs(
+  views: readonly { id: string; name: string }[],
+): CommandPaletteActionDef[] {
+  return views.map((view) => ({
+    action: `${SHOW_SIDEBAR_VIEW_PREFIX}${view.id}`,
+    labelEn: `Show Sidebar View: ${view.name}`,
+    label: `サイドバーに${view.name}を表示`,
+    category: "表示",
+    icon: PanelLeft,
+    keywords: ["custom view", "sidebar", "カスタムビュー", view.id],
+  }));
+}

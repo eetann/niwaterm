@@ -11,6 +11,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  type CustomViewConfig,
   type CustomViewHandlers,
   isKeybindAction,
   isNewTabCwdMode,
@@ -35,10 +36,15 @@ import {
   type ResolvedMouseConfig,
   type SelectionMenuFn,
   type ShellProfile,
+  WORKSPACES_VIEW_ID,
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
 import { resolveBackgroundImage } from "./background-image";
-import { createCustomViewHandlers, type CustomViewHandlersHandle } from "./custom-view-handlers";
+import {
+  createCustomViewHandlers,
+  type CustomViewHandlersById,
+  type CustomViewHandlersHandle,
+} from "./custom-view-handlers";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
@@ -67,9 +73,8 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
     const br = v["browser"];
     if (typeof br !== "object" || br === null) return false;
   }
-  if ("customView" in v) {
-    const cv = v["customView"];
-    if (typeof cv !== "object" || cv === null) return false;
+  if ("customViews" in v) {
+    if (!Array.isArray(v["customViews"])) return false;
   }
   if ("shell" in v) {
     const sh = v["shell"];
@@ -436,7 +441,7 @@ export function resolveSelectionMenu(userConfig: NiwatermConfig | null): Selecti
   return fn;
 }
 
-/** customView.handlersのうち関数の項目だけを残す。不正な項目の警告はresolveCustomViewが出す */
+/** customViewのhandlersのうち関数の項目だけを残す。不正な項目の警告はresolveCustomViewsが出す */
 function validCustomViewHandlers(handlers: CustomViewHandlers | undefined): CustomViewHandlers {
   if (typeof handlers !== "object" || handlers === null) return {};
   return Object.fromEntries(
@@ -444,41 +449,77 @@ function validCustomViewHandlers(handlers: CustomViewHandlers | undefined): Cust
   );
 }
 
-/**
- * ユーザー定義HTML UI設定を解決する。未設定ならnull（機能オフ）。
- * pathが有効ならconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。
- * どちらも無効なら警告して機能オフ（nullを返す）。nameは省略時"Custom View"にフォールバックする。
- */
-export function resolveCustomView(
-  userConfig: NiwatermConfig | null,
-): ResolvedCustomViewConfig | null {
-  const user = userConfig?.customView;
-  if (!user) return null;
+/** id未指定のcustomViewに充てるidの素。英数字以外は区切りへ潰し、前後の区切りは落とす */
+function slugifyViewId(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
 
-  const name = isNonEmptyString(user.name) ? user.name : "Custom View";
-  const handlers = validCustomViewHandlers(user.handlers);
-  for (const key of Object.keys(user.handlers ?? {})) {
-    if (!(key in handlers)) console.log(`[bun] ignoring non-function customView.handlers.${key}`);
-  }
-  const handlerNames = Object.keys(handlers);
+/** 既に使われているidなら連番のサフィックスを足して一意にする */
+function uniqueViewId(base: string, used: ReadonlySet<string>): string {
+  if (!used.has(base)) return base;
+  let suffix = 2;
+  while (used.has(`${base}-${suffix}`)) suffix++;
+  return `${base}-${suffix}`;
+}
 
-  if (isNonEmptyString(user.path)) {
-    const resolvedPath = resolve(configDirPath(), user.path);
-    return { name, url: pathToFileURL(resolvedPath).href, handlerNames };
-  }
-  if (isNonEmptyString(user.url)) {
-    return { name, url: user.url, handlerNames };
-  }
-  console.log("[bun] customView requires either path or url; ignoring");
+/** pathがあればconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。どちらも無効ならnull */
+function resolveCustomViewUrl(user: CustomViewConfig): string | null {
+  if (isNonEmptyString(user.path)) return pathToFileURL(resolve(configDirPath(), user.path)).href;
+  if (isNonEmptyString(user.url)) return user.url;
   return null;
 }
 
+export interface ResolvedCustomViews {
+  /** 設定に並べた順のビュー一覧。1つも無ければ空配列（＝機能オフ） */
+  views: ResolvedCustomViewConfig[];
+  /**
+   * ビューid → handlersの実体。関数はRPCで渡せないためResolvedCustomViewConfigには含めず、
+   * bun側に残したままcreateCustomViewHandlersへ渡す（mouse.selectionMenuと同じ分け方）
+   */
+  handlersById: CustomViewHandlersById;
+}
+
 /**
- * HTML側から呼べるハンドラの実体。RPCで渡せないためResolvedCustomViewConfigには含めず、
- * bun側に残したままcreateCustomViewHandlersへ渡す（mouse.selectionMenuと同じ分け方）
+ * ユーザー定義HTML UI設定を解決する。path・urlのどちらも無い要素は警告して飛ばす。
+ * idは明示指定 > nameから導いたslug > 連番の順で決め、重複はサフィックスで一意にする
+ * （idはキーバインド・CLIからビューを指す唯一の手がかりなので、重複したまま残すと
+ * どちらが出るか決まらなくなる）。ワークスペース一覧のidは予約語として先に押さえておく。
+ * nameは省略時、サイドバーのラベルが同じにならないよう連番付きへフォールバックする
  */
-export function resolveCustomViewHandlers(userConfig: NiwatermConfig | null): CustomViewHandlers {
-  return validCustomViewHandlers(userConfig?.customView?.handlers);
+export function resolveCustomViews(userConfig: NiwatermConfig | null): ResolvedCustomViews {
+  const list = userConfig?.customViews;
+  if (!Array.isArray(list)) return { views: [], handlersById: {} };
+
+  const views: ResolvedCustomViewConfig[] = [];
+  const handlersById: CustomViewHandlersById = {};
+  const usedIds = new Set<string>([WORKSPACES_VIEW_ID]);
+  for (const [index, user] of list.entries()) {
+    if (typeof user !== "object" || user === null) {
+      console.log(`[bun] ignoring non-object customViews[${index}]`);
+      continue;
+    }
+    const url = resolveCustomViewUrl(user);
+    if (url === null) {
+      console.log(`[bun] customViews[${index}] requires either path or url; ignoring`);
+      continue;
+    }
+    const name = isNonEmptyString(user.name) ? user.name : `Custom View ${index + 1}`;
+    const handlers = validCustomViewHandlers(user.handlers);
+    for (const key of Object.keys(user.handlers ?? {})) {
+      if (!(key in handlers)) {
+        console.log(`[bun] ignoring non-function customViews[${index}].handlers.${key}`);
+      }
+    }
+    const preferredId = isNonEmptyString(user.id) ? slugifyViewId(user.id) : slugifyViewId(name);
+    const id = uniqueViewId(preferredId === "" ? `custom-view-${index + 1}` : preferredId, usedIds);
+    usedIds.add(id);
+    views.push({ id, name, url, handlerNames: Object.keys(handlers) });
+    handlersById[id] = handlers;
+  }
+  return { views, handlersById };
 }
 
 /**
@@ -608,8 +649,9 @@ export async function loadAndResolveConfig(
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
-  customView: ResolvedCustomViewConfig | null;
-  /** customView.handlersの実行（HTML側のniwaterm.callの実体） */
+  /** ユーザー定義HTML UI（サイドバーのビュー・タブ）の一覧。設定に並べた順 */
+  customViews: ResolvedCustomViewConfig[];
+  /** customViewのhandlersの実行（HTML側のniwaterm.callの実体） */
   customViewHandlers: CustomViewHandlersHandle;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
@@ -643,19 +685,15 @@ export async function loadAndResolveConfig(
   // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
   // 登録内容の取り出しはその後でなければならない
   const keybindings = resolveKeybindings(userConfig, niwaApi);
-  const customView = resolveCustomView(userConfig);
+  const customViews = resolveCustomViews(userConfig);
   return {
     userConfigLoaded: userConfig !== null,
     keybindings,
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     board: resolveBoard(userConfig),
-    customView,
-    // customViewがpath・urlのどちらも持たず機能オフなら、ハンドラも呼べないようにする
-    customViewHandlers: createCustomViewHandlers(
-      customView ? resolveCustomViewHandlers(userConfig) : {},
-      niwaApi.niwa,
-    ),
+    customViews: customViews.views,
+    customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
     defaultShell: resolveShell(userConfig),
     shellProfiles,
     layouts: resolveLayouts(userConfig),

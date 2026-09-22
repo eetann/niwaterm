@@ -64,7 +64,7 @@ niwaterm tab send-keys -t tab-3 C-c
 
 ```sh
 niwaterm tile split [--tile <tileId>] [--orientation horizontal|vertical] [--cwd <dir>]
-niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view | [--shell <shellProfileId>] [--cwd <dir>]]
+niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view [--view <viewId>] | [--shell <shellProfileId>] [--cwd <dir>]]
 niwaterm tab switch [--tile <tileId>] --tab <tabId>
 niwaterm tab switch [--tile <tileId>] --direction next|prev
 niwaterm tab close [--tile <tileId>] [--tab <tabId>]
@@ -78,7 +78,7 @@ niwaterm tile zoom [--tile <tileId>]
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。`--tile`/`--tab`を省略した場合の対象は「対象IDの省略」節を参照。
 
 - `tile split` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customView`設定を開くブラウザタブ、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
+- `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customViews`設定を開くブラウザタブ（どのビューを開くかは`--view <viewId>`で選ぶ。省略時は設定の先頭。idは`niwaterm config show`で確認）、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
 - `tab switch` — 指定タイル内でアクティブタブを切り替える。`--tab`（直接指定）と`--direction`（タブ並び順で1つ次/前へ巡回。端では反対側へ回り込む）はどちらか一方のみ指定でき、両方省略するとエラーになる。`--tile`省略時は`--tab`のタブが属するタイル、`--direction`指定時は実行しているタブのタイル。対象タイルのタブが1枚だけの場合は失敗する
 - `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない。引数を全て省略すると実行しているタブ自身が閉じる
 - `tab respawn` — 指定タブのプロセスを強制終了し、同じ`tabId`・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当、対象がブラウザタブの場合は失敗する）。`--shell`省略時はデフォルトシェル、`--cwd`省略時は元のタブが実際にいるディレクトリを引き継ぐ。`--command`を指定すると、シェルの代わりにそのコマンドを実行する（`popup open`の位置引数と同じ意味のワンショット実行）。GUIのキーバインドからこの操作を割り当てた場合は実行前にy/nの確認ダイアログを挟むが、CLIからの実行に確認は無い
@@ -279,6 +279,12 @@ Boardが複数のディレクトリのタブを開いていても解決先は曖
 - 確認は「起動時の自動実行を有効にする操作」ごとに出る。`board startup restore`で一度止めてから`board startup layout`で戻す場合も、改めて確認が出る（解決元の記録は残っているが、自動実行を再び有効にするのはガードすべき操作という判断）
 - 信頼の記録は専用のストアを持たない。起動時に自動実行される経路は起動時レイアウトの紐づけ1本だけで、それは必ずこの確認を通ってしか作られないため。紐づけを外す（`board startup restore`／`clear`）と起動時の自動実行も止まる
 - trust後に`git pull`等で`.niwaterm/config.ts`の内容が変わった場合の再確認は行わない（内容ハッシュを持たない）
+
+```sh
+niwaterm sidebar switch --view <viewId>
+```
+
+サイドバーに出すビューを切り替える。`<viewId>`はワークスペース一覧の`workspaces`か、`niwaterm.config.ts`の`customViews`のid（どちらも`niwaterm config show`で確認できる）。サイドバーを閉じている場合は開いた上で切り替える。キーバインド（順送りの`next-sidebar-view`・id指定の`show-sidebar-view:<id>`）・コマンドパレットからの操作と同じもので、設定の詳細は`docs/guide/config.md`「ユーザー定義HTML UI（customViews）」節を参照。存在しないidを指定した場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm font-size increase|decrease|reset

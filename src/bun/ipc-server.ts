@@ -14,6 +14,7 @@ import type {
   ResolvedCustomViewConfig,
   ShellProfile,
 } from "@niwaterm/config";
+import { WORKSPACES_VIEW_ID } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
@@ -37,6 +38,11 @@ const UNAVAILABLE_BROWSER_BRIDGE: BrowserBridge = {
 };
 
 type CaptureScreenshot = (url: string) => Promise<ScreenshotResult>;
+
+/** 対象のcustomViewが見つからないときのエラー文。id省略時は1つも設定されていないケース */
+function customViewNotFoundError(viewId: string | undefined): string {
+  return viewId === undefined ? "no customViews are configured" : `customView not found: ${viewId}`;
+}
 
 /**
  * CLIが全リクエストへ付ける呼び出し元タブのid（PTYへ注入したNIWATERM_TAB_ID）。
@@ -179,6 +185,8 @@ function parseBrowserNavigateBody(body: unknown): BrowserNavigateRequestBody | n
 interface NewTabRequestBody extends TileIdRequestBody {
   url?: string;
   customView?: boolean;
+  /** customView:true のときにどのビューを開くか。省略時は先頭のcustomView */
+  customViewId?: string;
   shellProfileId?: string;
   cwd?: string;
 }
@@ -186,7 +194,8 @@ interface NewTabRequestBody extends TileIdRequestBody {
 /**
  * url・customView・shellProfileIdいずれも省略されていればデフォルトシェルのターミナルタブ、
  * urlが指定されていればブラウザタブ（空文字列は不可）、customView:trueが指定されていれば
- * 設定済みのユーザー定義HTML UIを開く、shellProfileIdが指定されていればそのプロファイルの
+ * 設定済みのユーザー定義HTML UI（customViewIdで選ぶ。省略時は先頭）を開く、
+ * shellProfileIdが指定されていればそのプロファイルの
  * シェルでターミナルタブを開く。3つは互いに排他とする。
  * cwdはターミナルタブ（url・customView未指定）専用のオプションで、url・customViewとは同時指定不可
  */
@@ -196,11 +205,13 @@ function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   const b = body as {
     url?: unknown;
     customView?: unknown;
+    customViewId?: unknown;
     shellProfileId?: unknown;
     cwd?: unknown;
   };
   const hasUrl = b.url !== undefined;
   const hasCustomView = b.customView !== undefined;
+  if (b.customViewId !== undefined && !hasCustomView) return null;
   const hasShellProfileId = b.shellProfileId !== undefined;
   const hasCwd = b.cwd !== undefined;
   if ([hasUrl, hasCustomView, hasShellProfileId].filter(Boolean).length > 1) return null;
@@ -219,6 +230,10 @@ function parseNewTabBody(body: unknown): NewTabRequestBody | null {
   if (hasCustomView) {
     if (b.customView !== true) return null;
     result.customView = true;
+    if (b.customViewId !== undefined) {
+      if (typeof b.customViewId !== "string" || b.customViewId.length === 0) return null;
+      result.customViewId = b.customViewId;
+    }
     return result;
   }
   if (!hasUrl) return result;
@@ -701,7 +716,7 @@ function parseFontSizeAction(body: unknown): FontSizeAction | null {
 
 function buildApp(
   workspaceManager: WorkspaceManager,
-  getCustomView: () => ResolvedCustomViewConfig | null,
+  getCustomViews: () => ResolvedCustomViewConfig[],
   activateWindow: (windowId?: WindowId | null) => void,
   browserBridge: BrowserBridge,
   captureScreenshot: CaptureScreenshot,
@@ -714,6 +729,7 @@ function buildApp(
   getKeybindings: () => KeybindingsConfig,
   getConfigSummary: () => ConfigSummary,
   windowOps: WindowOps,
+  setSidebarView: (viewId: string, windowId: WindowId | null) => void,
 ) {
   const app = new Hono();
 
@@ -1172,15 +1188,19 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { tileId: string, url?: string, customView?: boolean, shellProfileId?: string, cwd?: string } (url, customView, shellProfileId are mutually exclusive; cwd is only valid for terminal tabs)",
+            "expected { tileId: string, url?: string, customView?: boolean, customViewId?: string, shellProfileId?: string, cwd?: string } (url, customView, shellProfileId are mutually exclusive; customViewId requires customView; cwd is only valid for terminal tabs)",
         },
         400,
       );
     }
     if (parsed.customView) {
-      const customView = getCustomView();
+      const customViews = getCustomViews();
+      const customView =
+        parsed.customViewId === undefined
+          ? customViews[0]
+          : customViews.find((view) => view.id === parsed.customViewId);
       if (!customView) {
-        return c.json({ ok: false, error: "customView is not configured" }, 400);
+        return c.json({ ok: false, error: customViewNotFoundError(parsed.customViewId) }, 400);
       }
       const tabId = workspaceManager.newBrowserTab(parsed.tileId, customView.url);
       if (!tabId) return c.json({ ok: false, error: `tile not found: ${parsed.tileId}` }, 404);
@@ -1560,6 +1580,22 @@ function buildApp(
     return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
   });
 
+  // サイドバーに出すビューを切り替える（ワークスペース一覧・各customView）。表示状態はwebview側が
+  // 持つため、ここでは存在するidかだけを確かめて呼び出し元のウィンドウへ流す
+  app.post("/sidebar-view", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const viewId = (body as { viewId?: unknown }).viewId;
+    if (typeof viewId !== "string" || viewId.length === 0) {
+      return c.json({ ok: false, error: "expected { viewId: string }" }, 400);
+    }
+    if (viewId !== WORKSPACES_VIEW_ID && !getCustomViews().some((view) => view.id === viewId)) {
+      return c.json({ ok: false, error: customViewNotFoundError(viewId) }, 404);
+    }
+    setSidebarView(viewId, scopeWindowId(c));
+    return c.json({ ok: true, viewId });
+  });
+
   // フォントサイズをキーバインド1回分だけ拡大・縮小、またはconfig値へリセットする
   // （現在の実効フォントサイズをpxで返す。configファイルのappearance.fontSize自体は変更しない）
   app.post("/font-size", async (c) => {
@@ -1690,7 +1726,7 @@ function startWslBridge(app: ReturnType<typeof buildApp>): ReturnType<typeof Bun
 export async function createIpcServer(
   path: string,
   workspaceManager: WorkspaceManager,
-  getCustomView: () => ResolvedCustomViewConfig | null = () => null,
+  getCustomViews: () => ResolvedCustomViewConfig[] = () => [],
   activateWindow: (windowId?: WindowId | null) => void = () => {},
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
@@ -1707,6 +1743,7 @@ export async function createIpcServer(
     sections: [],
   }),
   windowOps: WindowOps = singleWindowOps(workspaceManager),
+  setSidebarView: (viewId: string, windowId: WindowId | null) => void = () => {},
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1718,7 +1755,7 @@ export async function createIpcServer(
   removeFileIfExists(portFile);
   const app = buildApp(
     workspaceManager,
-    getCustomView,
+    getCustomViews,
     activateWindow,
     browserBridge,
     captureScreenshot,
@@ -1731,6 +1768,7 @@ export async function createIpcServer(
     getKeybindings,
     getConfigSummary,
     windowOps,
+    setSidebarView,
   );
   const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];

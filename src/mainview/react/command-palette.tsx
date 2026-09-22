@@ -14,7 +14,9 @@ import {
   COMMAND_PALETTE_ACTIONS,
   type CommandPaletteActionDef,
   type CommandPaletteCategory,
+  sidebarViewActionDefs,
 } from "../command-palette-actions";
+import type { SidebarSwitcherView } from "./sidebar-switcher";
 
 export type NonPaletteKeybindAction = Exclude<KeybindAction, "command-palette">;
 
@@ -25,6 +27,8 @@ export interface CommandPaletteProps {
   /** シェルプロファイルを指定した新規タブ作成。タブバーの▼と同じ操作をキーボードだけで届かせる */
   shellProfiles: ShellProfile[];
   onSelectShellProfile: (shellProfileId: string) => void;
+  /** サイドバーに出せるビュー。customViewが1つも無ければ切り替え先が無いので空で渡る */
+  sidebarViews: SidebarSwitcherView[];
   shortcutLabelFor: (action: NonPaletteKeybindAction) => string | undefined;
 }
 
@@ -36,14 +40,16 @@ type PaletteItem =
 /**
  * カテゴリ順はCOMMAND_PALETTE_ACTIONSの登場順のまま。シェルプロファイルは
  * new-tab系と並べたいので「タブ」カテゴリの末尾へ足す（そのカテゴリが無いことは無いが、
- * 無ければ新しいカテゴリとして末尾に出る）
+ * 無ければ新しいカテゴリとして末尾に出る）。
+ * サイドバーのビューはアクション由来の項目と同じ形に組み立ててから混ぜる
  */
 function groupByCategory(
   defs: readonly CommandPaletteActionDef[],
   shellProfiles: readonly ShellProfile[],
+  sidebarViews: readonly SidebarSwitcherView[],
 ): Map<CommandPaletteCategory, PaletteItem[]> {
   const map = new Map<CommandPaletteCategory, PaletteItem[]>();
-  for (const def of defs) {
+  for (const def of [...defs, ...sidebarViewActionDefs(sidebarViews)]) {
     const list = map.get(def.category) ?? [];
     list.push({ kind: "action", def });
     map.set(def.category, list);
@@ -62,11 +68,12 @@ export function CommandPalette({
   onSelectAction,
   shellProfiles,
   onSelectShellProfile,
+  sidebarViews,
   shortcutLabelFor,
 }: CommandPaletteProps) {
   const grouped = useMemo(
-    () => groupByCategory(COMMAND_PALETTE_ACTIONS, shellProfiles),
-    [shellProfiles],
+    () => groupByCategory(COMMAND_PALETTE_ACTIONS, shellProfiles, sidebarViews),
+    [shellProfiles, sidebarViews],
   );
 
   return (

@@ -21,6 +21,7 @@ export {
   type CustomViewHandler,
   type CustomViewHandlers,
   type ResolvedCustomViewConfig,
+  WORKSPACES_VIEW_ID,
 } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export type {
@@ -73,9 +74,12 @@ export {
   type ParsedSecondKey,
   parseKeyBindingString,
   parseSecondKeyString,
+  parseShowSidebarViewAction,
   platformDefaultKeybindings,
   resolveBindingEntry,
   type SecondKeyString,
+  SHOW_SIDEBAR_VIEW_PREFIX,
+  type ShowSidebarViewAction,
 } from "./keybindings";
 export {
   type FocusDirection,
