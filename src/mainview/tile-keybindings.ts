@@ -44,6 +44,7 @@ export type TileCommand =
   | { type: "moveWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "togglePopup" }
+  | { type: "jumpHint" }
   | { type: "copySelection" }
   | { type: "copyMode" }
   | { type: "pasteClipboard" }
@@ -213,6 +214,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "toggleSidebar" };
     case "toggle-popup":
       return { type: "togglePopup" };
+    case "jump-hint":
+      return { type: "jumpHint" };
     case "copy-selection":
       return { type: "copySelection" };
     case "copy-mode":

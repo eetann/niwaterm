@@ -267,6 +267,7 @@ keybindings: {
 | `shift+n` | new-workspace |
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
+| `f` | jump-hint |
 | `v` | copy-mode |
 | `` ` `` | toggle-popup |
 | `:` | command-palette |
@@ -274,7 +275,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（39種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（46種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -299,6 +300,7 @@ keybindings: {
 | `move-workspace-up` / `move-workspace-down` | アクティブなワークスペースの表示順を1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm workspace move`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
 | `toggle-popup` | ポップアップの表示/非表示切替 |
+| `jump-hint` | ジャンプ先へラベルを出し、打ったラベルの場所へ飛ぶ（既定は prefix + `f`。vimiumの`f`相当。操作は下記「ジャンプヒント」参照） |
 | `copy-selection` | 選択範囲をクリップボードへコピー（既定は`direct`にWindowsのみ`ctrl+shift+c`が割り当て済み。macOSはApplicationMenu経由でCmd+Cが既に機能する） |
 | `copy-mode` | vi風コピーモードに入る（既定は prefix + `v`。キーボードだけでスクロールバックを移動・選択・コピーできる。操作キーは下記「コピーモード」参照） |
 | `paste-clipboard` | クリップボードの内容をペースト（既定は`direct`にWindowsのみ`ctrl+shift+v`が割り当て済み。macOSはApplicationMenu経由でCmd+Vが既に機能する） |
@@ -307,6 +309,25 @@ keybindings: {
 | `command-palette` | コマンドパレットを開く |
 | `increase-font-size` / `decrease-font-size` / `reset-font-size` | フォントサイズの拡大/縮小/リセット |
 | `reload-config` | 設定ファイルを手動で再読み込みする（ファイル保存時の自動リロードと同じ処理。既定キーは無いため使うには自分で割り当てる必要がある） |
+
+### ジャンプヒント
+
+prefix + `f`（`jump-hint`アクション）で、ジャンプできる場所にラベルが重なって表示される。ラベルを打つとその場所へ飛ぶ。vimiumの`f`と同じ発想で、方向キーを何度も押したりサイドバーをクリックしたりせずに目的の場所へ1〜2打で届かせるためのもの。
+
+ラベルが出る対象は次の4つ。
+
+| 対象 | 打ったときの動き |
+|---|---|
+| タイル（ラベルは中央） | そのタイルへフォーカスを移す。表示中のタブはそのまま |
+| タブバーのタブ | そのタブへ切り替える（タイルのフォーカスもそのタイルへ移る） |
+| サイドバーのBoard行 | そのBoardへ切り替える。別ワークスペースのBoardならワークスペースごと切り替わる |
+| サイドバーのワークスペース見出し・ポップアップ | そのワークスペースへ切り替える／ポップアップを出す |
+
+- ラベルは`asdfghjkl`（ホームロー）で、対象が9個までなら1文字、超えると一部が2文字になる。2文字ラベルは1文字打った時点で候補が絞り込まれ、打った分は薄く表示される
+- **画面に出ているものにだけラベルが出る**。サイドバーを閉じていればBoard行は対象外（`toggle-sidebar`で開いてから使う）、ズーム表示中は隠れているタイルも対象外になる
+- タブが1つだけのタイルにはタブのラベルを出さない（タイルのラベルと行き先が同じため）。逆にブラウザタブを表示中のタイルはタイル中央のラベルが出ず、タブ側のラベルだけになる（ブラウザの描画がHTMLより手前に来るため、重ねたラベルが見えない）
+- `Escape`・`Backspace`（1文字も打っていないとき）・どのラベルにも繋がらないキー・修飾キー付きの打鍵で取りやめる。取りやめた打鍵はターミナルへは送られない
+- ラベルはヒントを出した時点の座標に描かれるため、ウィンドウをリサイズするかクリックすると畳まれる
 
 ### コピーモード（vi風のキーボード選択）
 

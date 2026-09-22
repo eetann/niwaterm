@@ -21,6 +21,7 @@ import {
   ClipboardPaste,
   Columns2,
   Copy,
+  Crosshair,
   FolderGit2,
   FolderInput,
   FolderPlus,
@@ -311,6 +312,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "ポップアップの表示切り替え",
     category: "表示",
     icon: PictureInPicture2,
+  },
+  {
+    action: "jump-hint",
+    labelEn: "Jump with Hints",
+    label: "ヒントでジャンプ",
+    category: "表示",
+    icon: Crosshair,
+    keywords: ["hint", "vimium", "label", "ラベル"],
   },
   {
     action: "copy-selection",

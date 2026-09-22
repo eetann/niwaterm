@@ -19,7 +19,14 @@ import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
 import type { LayoutListEntry } from "../bun/project-config";
 import type { TabRenderState } from "../bun/workspace";
-import { findNode, nextTabId, type TabId, type TileId, type TileNode } from "../bun/tile-layout";
+import {
+  findNode,
+  listLeaves,
+  nextTabId,
+  type TabId,
+  type TileId,
+  type TileNode,
+} from "../bun/tile-layout";
 import type {
   AppRenderState,
   BoardId,
@@ -27,6 +34,7 @@ import type {
   WorkspaceListEntry,
 } from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
+import { createHintMode, type HintTarget } from "./hint-mode";
 import { keyToBytes } from "./key-to-bytes";
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { normalizeUrl } from "./normalize-url";
@@ -82,6 +90,7 @@ const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HT
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
 const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
+const hintLayerEl = document.getElementById("hint-layer") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -2531,6 +2540,99 @@ function attachSidebarDividerDrag(): void {
   });
 }
 
+// ---- ジャンプヒント（vimiumのfヒント相当。ラベルを出して1〜2打で飛ぶ）----
+const hintMode = createHintMode(hintLayerEl);
+
+/** Board行のジャンプ先解決用。サイドバーのDOMにはboardIdしか持たせていないので状態側から引く */
+function workspaceIdOfBoard(boardId: BoardId): WorkspaceId | null {
+  for (const entry of lastWorkspaces) {
+    if (entry.boards.some((board) => board.boardId === boardId)) return entry.workspaceId;
+  }
+  return null;
+}
+
+/**
+ * ラベルを出すジャンプ先を集める。並び順がそのまま短いラベルの割り当て順になるため、
+ * 打つ頻度が高いアクティブBoardのタイル・タブを先に、サイドバーの行を後ろに置く。
+ * 画面に出ていない要素（ズームで畳まれたタイル・閉じたサイドバー・スクロールで流れた行）は
+ * createHintMode側の可視判定で落ちるので、ここでは並べるだけでよい
+ */
+function collectHintTargets(): HintTarget[] {
+  const targets: HintTarget[] = [];
+  for (const leaf of lastLayout ? listLeaves(lastLayout) : []) {
+    const tileId = leaf.id;
+    const tileEl = tileElByTileId.get(tileId);
+    // ブラウザタブを表示中のタイルはネイティブのオーバーレイ(OOPIF)がHTMLより手前に描かれるため、
+    // タイル中央へ置いたラベルが見えない（docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）。
+    // タブバーはオーバーレイ表示にならない＝ラベルを重ねられるので、タブ側のラベルで代替する
+    const browserActive = browserElByTabId.has(leaf.activeTabId);
+    if (tileEl && !browserActive) {
+      targets.push({
+        el: tileEl,
+        center: true,
+        jump: () => {
+          focusTileLocally(tileId);
+          imeEl.focus({ preventScroll: true });
+        },
+      });
+    }
+    // タブが1つだけのタイルは、タブのラベルを出してもタイルのラベルと行き先が同じなので出さない
+    // （appearance.tabBarが"auto"ならそもそもタブバーが重ね置きで隠れている）
+    if (leaf.tabIds.length < 2 && !browserActive) continue;
+    const barEl = tabBarElByTileId.get(tileId);
+    for (const tabEl of barEl?.querySelectorAll<HTMLElement>("[data-hint-tab-id]") ?? []) {
+      const tabId = tabEl.dataset["hintTabId"];
+      if (!tabId) continue;
+      targets.push({
+        el: tabEl,
+        center: false,
+        jump: () => {
+          switchToTab(tileId, tabId);
+          imeEl.focus({ preventScroll: true });
+        },
+      });
+    }
+  }
+  const rows = sidebarListEl.querySelectorAll<HTMLElement>(
+    "[data-hint-workspace-id], [data-hint-board-id], [data-hint-popup-workspace-id]",
+  );
+  for (const rowEl of rows) {
+    const workspaceId = rowEl.dataset["hintWorkspaceId"];
+    if (workspaceId) {
+      targets.push({
+        el: rowEl,
+        center: false,
+        jump: () => activateSidebarWorkspace(workspaceId),
+      });
+      continue;
+    }
+    const popupWorkspaceId = rowEl.dataset["hintPopupWorkspaceId"];
+    if (popupWorkspaceId) {
+      targets.push({
+        el: rowEl,
+        center: false,
+        jump: () => activateSidebarPopup(popupWorkspaceId),
+      });
+      continue;
+    }
+    const boardId = rowEl.dataset["hintBoardId"];
+    const boardWorkspaceId = boardId ? workspaceIdOfBoard(boardId) : null;
+    if (boardId && boardWorkspaceId) {
+      targets.push({
+        el: rowEl,
+        center: false,
+        jump: () => activateSidebarBoard(boardWorkspaceId, boardId),
+      });
+    }
+  }
+  return targets;
+}
+
+// ラベルはヒントに入った時点の座標で描くため、レイアウトが動いたら指し示す先がずれる。
+// 描き直しはせず畳む（ウィンドウリサイズ・クリックのどちらもジャンプの意思表示ではないため）
+window.addEventListener("resize", () => hintMode.exit());
+document.addEventListener("mousedown", () => hintMode.exit());
+
 // ---- キー入力 → タイル操作 or PTYバイト列 ----
 document.addEventListener("keydown", (e) => {
   // IME変換中のキーはcompositionイベント側で処理する（keyCode 229はWebKitのIME通知）。
@@ -2547,6 +2649,12 @@ document.addEventListener("keydown", (e) => {
   // 入力ダイアログ表示中も同様。入力欄自体は上のHTMLInputElement判定で拾えるが、
   // ボタンへフォーカスが移った状態のキー入力はここで止める
   if (promptDialogOpen) return;
+  // ヒント表示中の打鍵はすべてラベルの絞り込み。ターミナルにも他のキーバインドにも渡さない
+  if (hintMode.isActive()) {
+    e.preventDefault();
+    hintMode.handleKeydown(e);
+    return;
+  }
 
   const result = keybindResolver.handleKeydown(e);
   if (result.kind === "command") {
@@ -2606,6 +2714,12 @@ function handleTileCommand(cmd: TileCommand): void {
   }
   if (cmd.type === "commandPalette") {
     openCommandPalette();
+    return;
+  }
+  // ジャンプ先はアクティブBoardの外（他ワークスペースのBoard行）にもあるため、
+  // フォーカス中タイル無しでもヒントは出せる
+  if (cmd.type === "jumpHint") {
+    hintMode.enter(collectHintTargets());
     return;
   }
   // Board名の変更はフォーカス中タイルではなくアクティブBoardが対象なので、

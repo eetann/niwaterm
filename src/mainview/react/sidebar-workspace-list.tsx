@@ -478,6 +478,7 @@ export function SidebarWorkspaceList({
             onDragEnd={() => setDropTarget(null)}
             onDragOver={(e) => handleBoardDragOver(e, board.boardId)}
             onDrop={(e) => handleBoardDrop(e, workspaceId, boardIndex)}
+            data-hint-board-id={board.boardId}
             onClick={() => onSelectBoard(workspaceId, board.boardId)}
             onDoubleClick={(e) => {
               e.stopPropagation();
@@ -595,6 +596,7 @@ export function SidebarWorkspaceList({
         <button
           type="button"
           tabIndex={-1}
+          data-hint-popup-workspace-id={workspaceId}
           onClick={() => onSelectPopup(workspaceId)}
           title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
           className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md hover:bg-accent"
@@ -677,6 +679,7 @@ export function SidebarWorkspaceList({
                       }}
                       // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
                       onDragEnd={() => setDropTarget(null)}
+                      data-hint-workspace-id={workspace.workspaceId}
                       onClick={() => onSelectWorkspaceHeader(workspace.workspaceId)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();

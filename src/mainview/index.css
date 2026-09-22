@@ -745,3 +745,44 @@ body {
   z-index: 11;
   pointer-events: none;
 }
+
+/*
+ * ジャンプヒント（jump-hintアクション）のラベル。タイル・タブ・サイドバーの行の上へ重ねる。
+ * position:fixedのレイヤーに置き、ラベル自身の座標もgetBoundingClientRectのビューポート座標を
+ * そのまま使う（タイル木・サイドバーそれぞれの座標系へ変換せずに済ませるため）。
+ * z-indexは#composition(11)より上、Radixのダイアログ(z-50)より下に置く
+ */
+#hint-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+#hint-layer .hint {
+  position: absolute;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--term-font);
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #1e1e2e;
+  background: #f9e2af;
+  border: 1px solid #fab387;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* タイルのラベルは面の中央へ置く。左上だとタブバーのラベルと重なって読めなくなる */
+#hint-layer .hint.center {
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  font-size: 18px;
+}
+
+/* 打鍵済みの文字。残りとの区別が付けば十分なので薄くするだけに留める */
+#hint-layer .hint .typed {
+  opacity: 0.4;
+}

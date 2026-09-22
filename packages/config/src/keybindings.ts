@@ -59,6 +59,7 @@ export const KEYBIND_ACTIONS = [
   "move-workspace-down",
   "toggle-sidebar",
   "toggle-popup",
+  "jump-hint",
   "copy-selection",
   "copy-mode",
   "paste-clipboard",
@@ -115,6 +116,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   "]": "next-workspace",
   "[": "prev-workspace",
   b: "toggle-sidebar",
+  // タイル・タブ・サイドバーの行へラベルを出して1打で飛ぶ。vimiumのfヒントを踏襲する
+  // （tmuxにはdisplay-panesが近いが、キーも対象範囲も違うので合わせない）
+  f: "jump-hint",
   // tmuxのprefix + [ に相当する入り口。[はワークスペース切替に使っているため、
   // viのvisualモードを連想できるvを既定にする
   v: "copy-mode",

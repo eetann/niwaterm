@@ -157,6 +157,9 @@ export function TileTabBar({
                   <TabsTrigger
                     value={tab.tabId}
                     draggable
+                    // ジャンプヒント（jump-hintアクション）がラベルの置き場所を探すための目印。
+                    // index.ts側がこの属性でタブのDOM要素を引く
+                    data-hint-tab-id={tab.tabId}
                     // ContextMenuTrigger(asChild)は自身のdata-state(open/closed)を子へマージする
                     // ため、TabsTriggerが内部で付けるdata-state="active"が握り潰される。shadcnの
                     // タブの見た目（下線・文字色）はdata-state=activeを見ているので明示的に付け直す
