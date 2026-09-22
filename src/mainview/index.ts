@@ -64,6 +64,7 @@ import {
   isCellGlyphChar,
   isIdentityCellGlyphTransform,
   measureInkExtent,
+  shadeAlphaPercent,
 } from "./cell-glyph";
 import { cellAt, type TermCell } from "./term-cells";
 import { isWideChar } from "../shared/wide-char";
@@ -849,17 +850,20 @@ function updateCellGlyphTransform() {
   root.setProperty("--cell-glyph-shift", `${cellGlyphTransform.shiftY}px`);
 }
 
-// ---- グリフ補正（全角文字の幅・罫線/ブロック文字のセル充填）----
+// ---- グリフ補正（全角文字の幅・罫線/ブロック文字のセル充填・シェード文字のベタ塗り）----
 /**
  * フォーマッタ出力のテキストノードを走査して、フォント任せだと崩れる文字をspanでラップする。
  * - 全角文字: <span class="wide"> で2セル幅に強制する（フォント任せだと桁がズレるため）
  * - 罫線・ブロック文字: <span class="cell-glyph"> で行の高さいっぱいに引き伸ばす
  *   （連続する分をまとめて1つのspanにするので、run内の文字送りは通常のテキストのまま）
+ * - シェード文字: <span class="shade"> でグリフを隠してセル矩形を前景色の半透明で塗る
  */
 function fixGlyphs(root: HTMLElement) {
   // 変換が恒等（行の高さ＝フォントのセル高）なら罫線・ブロック文字のラップは不要
   const fillCellGlyphs = !isIdentityCellGlyphTransform(cellGlyphTransform);
-  const needsFix = (cp: number) => isWideChar(cp) || (fillCellGlyphs && isCellGlyphChar(cp));
+  // シェード文字は網掛けグリフをベタ塗りへ差し替えるのが目的なので、行の高さとは無関係に常に要る
+  const needsFix = (cp: number) =>
+    isWideChar(cp) || shadeAlphaPercent(cp) !== null || (fillCellGlyphs && isCellGlyphChar(cp));
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const targets: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -875,6 +879,8 @@ function fixGlyphs(root: HTMLElement) {
     const frag = document.createDocumentFragment();
     let narrow = "";
     let cellRun = "";
+    let shadeRun = "";
+    let shadeAlpha = 0;
     const flushNarrow = () => {
       if (!narrow) return;
       frag.appendChild(document.createTextNode(narrow));
@@ -888,8 +894,28 @@ function fixGlyphs(root: HTMLElement) {
       frag.appendChild(span);
       cellRun = "";
     };
+    const flushShadeRun = () => {
+      if (!shadeRun) return;
+      const span = document.createElement("span");
+      span.className = "shade";
+      span.style.setProperty("--shade-alpha", `${shadeAlpha}%`);
+      span.textContent = shadeRun;
+      frag.appendChild(span);
+      shadeRun = "";
+    };
     for (const ch of node.data) {
       const cp = ch.codePointAt(0) ?? 0;
+      const alpha = shadeAlphaPercent(cp);
+      if (alpha !== null) {
+        // 濃さが変われば別のspanへ分ける。同じ濃さが続く分は1つにまとめる
+        if (alpha !== shadeAlpha) flushShadeRun();
+        flushNarrow();
+        flushCellRun();
+        shadeAlpha = alpha;
+        shadeRun += ch;
+        continue;
+      }
+      flushShadeRun();
       if (fillCellGlyphs && isCellGlyphChar(cp)) {
         flushNarrow();
         cellRun += ch;
@@ -906,6 +932,7 @@ function fixGlyphs(root: HTMLElement) {
         narrow += ch;
       }
     }
+    flushShadeRun();
     flushCellRun();
     flushNarrow();
     node.parentNode?.replaceChild(frag, node);

@@ -109,3 +109,24 @@ export function measureInkExtent(
 export function isIdentityCellGlyphTransform(t: CellGlyphTransform): boolean {
   return Math.abs(t.scaleY - 1) < 0.001 && Math.abs(t.shiftY) < 0.05;
 }
+
+/**
+ * シェード文字（░ ▒ ▓）をベタ塗りする際の前景色の濃さ（%）。対象外ならnull。
+ *
+ * フォントのグリフはこれらをドットや斜線の網掛けとして持つため、そのまま描くと濃淡の階調に
+ * 見えないうえ、セル充填の拡大でパターンが崩れて縞が出る。weztermやGhosttyはグリフを使わず
+ * セル矩形を前景色の半透明で塗るので、同じ見え方になるようGhosttyのlight/medium/dark
+ * (0x40/0x80/0xc0) に相当する濃さへ合わせる。
+ */
+export function shadeAlphaPercent(cp: number): number | null {
+  switch (cp) {
+    case 0x2591:
+      return 25;
+    case 0x2592:
+      return 50;
+    case 0x2593:
+      return 75;
+    default:
+      return null;
+  }
+}

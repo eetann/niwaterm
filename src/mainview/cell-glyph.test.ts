@@ -5,6 +5,7 @@ import {
   isCellGlyphChar,
   isIdentityCellGlyphTransform,
   measureInkExtent,
+  shadeAlphaPercent,
 } from "./cell-glyph";
 
 describe("isCellGlyphChar", () => {
@@ -143,5 +144,19 @@ describe("measureInkExtent", () => {
 
   test("インクが無ければnull（グリフ欠落・描画失敗）", () => {
     expect(measureInkExtent(scan(20, []), 8)).toBeNull();
+  });
+});
+
+describe("shadeAlphaPercent", () => {
+  test.each([
+    [0x2590, null, "シェードの直前 ▐"],
+    [0x2591, 25, "薄いシェード ░"],
+    [0x2592, 50, "中間のシェード ▒"],
+    [0x2593, 75, "濃いシェード ▓"],
+    [0x2594, null, "シェードの直後 ▔"],
+    [0x2588, null, "全ブロック █（塗りつぶしはグリフのまま）"],
+    [0x0041, null, "ASCII 'A'"],
+  ])("U+%s -> %s (%s)", (cp, expected) => {
+    expect(shadeAlphaPercent(cp as number)).toBe(expected as number | null);
   });
 });
