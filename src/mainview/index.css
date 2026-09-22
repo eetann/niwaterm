@@ -183,6 +183,12 @@ body {
 
 #sidebar {
   flex: 0 0 var(--sidebar-width, 200px);
+  /*
+   * 中身のmin-contentで指定幅を押し広げられないようにする。flex itemのmin-width:autoは
+   * 中身のmin-contentまでしか縮まないため、ビュー切り替えタブのように横へ伸びる要素を
+   * 入れると、--sidebar-widthより広い状態でしか置けなくなる（横スクロールも働かない）
+   */
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;

@@ -19,6 +19,8 @@ export interface SidebarSwitcherProps {
  * ビューが増えるとサイドバーの幅（既定200px）には収まらなくなるため、タブ列は横スクロールさせる。
  * スクロールバー自体は隠し、代わりにキーバインド・CLIで切り替えたときは選択中のタブを見える位置へ送る
  * （切り替え先が画面外のままだと、今どのビューを出しているのか分からなくなるため）。
+ * ルートのmin-w-0が無いと、タブ列のmin-contentがサイドバーの幅を押し広げてしまい横スクロールに
+ * ならない。flex-1は残り幅いっぱいまでタブ列を広げるため（TabsListのw-fullはこの幅を基準にする）。
  */
 export function SidebarSwitcher({ views, activeViewId, onSelect }: SidebarSwitcherProps) {
   const activeTriggerRef = useRef<HTMLButtonElement>(null);
@@ -28,7 +30,7 @@ export function SidebarSwitcher({ views, activeViewId, onSelect }: SidebarSwitch
   }, [activeViewId]);
 
   return (
-    <Tabs value={activeViewId} onValueChange={onSelect}>
+    <Tabs className="min-w-0 flex-1" value={activeViewId} onValueChange={onSelect}>
       <TabsList
         variant="line"
         className="h-auto w-full justify-start overflow-x-auto rounded-none p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
