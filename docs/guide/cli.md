@@ -265,7 +265,7 @@ Boardが複数のディレクトリのタブを開いていても解決先は曖
 niwaterm font-size increase|decrease|reset
 ```
 
-ターミナルのフォントサイズを1段階拡大・縮小、またはconfigファイル（`niwaterm.config.ts`の`appearance.fontSize`）の値へリセットする。上限・下限でクランプされる。`niwaterm.config.ts`自体は変更しない実行時のみのズームで、キーバインド（既定: prefix `ctrl+b` → `=`/`-`/`0`）・コマンドパレットからの操作とも共有される。成功時、変更後のフォントサイズをpx単位で表示する。
+ターミナルのフォントサイズを1段階拡大・縮小、またはconfigファイル（`niwaterm.config.ts`の`appearance.fontSize`）の値へリセットする。上限・下限でクランプされる。行高（`appearance.lineHeight`）も設定値との比率を保ったまま追従する（行高を据え置くと、拡大したグリフが行からはみ出して上下の行へ食い込む）。`niwaterm.config.ts`自体は変更しない実行時のみのズームで、キーバインド（既定: prefix `ctrl+b` → `=`/`-`/`0`）・コマンドパレットからの操作とも共有される。成功時、変更後のフォントサイズをpx単位で表示する。
 
 ```sh
 niwaterm keybind list
@@ -299,7 +299,7 @@ config: /Users/you/.config/niwaterm/niwaterm.config.ts
 [appearance]
 fontFamily         "HackGen Console NF", monospace
 fontSize           16px (設定値 13px + ズーム +3)
-lineHeight         18
+lineHeight         22 (設定値 18 をfontSizeのズームで拡大)
 foreground         #cdd6f4
 background         #1e1e2e
 backgroundOpacity  1
@@ -315,7 +315,7 @@ direct             0件 (prefix不要で即時発火するバインド)
 ...
 ```
 
-表示されるのは**マージ後の実際に効いている値**で、設定ファイルに書いていない項目は既定値が出る。未設定でも既定値で動く項目（`shell.default`等）は`(未設定)`とフォールバック先を併記する。`fontSize`だけは設定ファイルを見ても今の値が分からない（キーバインド・`font-size`コマンドのズームは設定ファイルを書き換えない）ため、実効値に加えて設定値とズーム量を添える。
+表示されるのは**マージ後の実際に効いている値**で、設定ファイルに書いていない項目は既定値が出る。未設定でも既定値で動く項目（`shell.default`等）は`(未設定)`とフォールバック先を併記する。`fontSize`・`lineHeight`は設定ファイルを見ても今の値が分からない（キーバインド・`font-size`コマンドのズームは設定ファイルを書き換えない）ため、実効値に加えて設定ファイル上の値（`fontSize`はズーム量も）を添える。
 
 値として出せない設定は含まない。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`niwa.on`のハンドラ）、キーバインドの個々の割り当て（件数のみ。一覧は`keybind list`）、`worktree`設定（実行するディレクトリとプロジェクトローカル設定に依存するため、アプリ側に「現在の値」が無い）が該当する。`layouts`もアプリが保持しているグローバル設定のプリセット名だけで、プロジェクトローカル分は`layout list`で確認する。
 

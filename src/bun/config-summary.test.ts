@@ -13,6 +13,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     configFileLoaded: true,
     appearance: defaultAppearance,
     baseFontSize: defaultAppearance.fontSize,
+    baseLineHeight: defaultAppearance.lineHeight,
     keybindings: { prefix: "ctrl+b", bindings: { d: "split-vertical" } },
     browser: defaultBrowserConfig,
     customView: null,
@@ -67,6 +68,24 @@ describe("buildConfigSummary", () => {
     expect(entry(summary, "appearance", "fontSize")).toEqual({
       key: "fontSize",
       value: "13px",
+    });
+  });
+
+  test("ズーム中のlineHeightは実効値を出し、設定値をnoteへ添える", () => {
+    const appearance = { ...defaultAppearance, lineHeight: 22 };
+    const summary = buildConfigSummary(input({ appearance, baseLineHeight: 18 }));
+    expect(entry(summary, "appearance", "lineHeight")).toEqual({
+      key: "lineHeight",
+      value: "22",
+      note: "設定値 18 をfontSizeのズームで拡大",
+    });
+  });
+
+  test("ズームしていなければlineHeightにnoteは付かない", () => {
+    const summary = buildConfigSummary(input());
+    expect(entry(summary, "appearance", "lineHeight")).toEqual({
+      key: "lineHeight",
+      value: "18",
     });
   });
 

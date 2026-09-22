@@ -431,7 +431,7 @@ niwa.on("bell", (event) => {
 |---|---|---|
 | `fontFamily` | `string` | CSSの`font-family`値をそのまま文字列で指定する（複数フォント列挙・クォートはユーザー側の責務） |
 | `fontSize` | `number` | フォントサイズ（px） |
-| `lineHeight` | `number` | 行高（px） |
+| `lineHeight` | `number` | 行高（px）。`font-size`コマンド・キーバインドでのズームでは、`fontSize`との比率を保ったままこの値も拡大・縮小される |
 | `foreground` | `string` | 前景色（CSSカラー値） |
 | `background` | `string` | 背景色（CSSカラー値） |
 | `backgroundOpacity` | `number` | 背景の不透明度（0〜1、既定`1`）。1未満にすると背後のウィンドウが透ける |

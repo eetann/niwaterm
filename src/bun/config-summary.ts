@@ -53,6 +53,8 @@ export interface ConfigSummaryInput {
   appearance: ResolvedAppearanceConfig;
   /** ズームを掛ける前の、設定ファイル由来のフォントサイズ */
   baseFontSize: number;
+  /** ズームを掛ける前の、設定ファイル由来の行の高さ */
+  baseLineHeight: number;
   keybindings: KeybindingsConfig;
   browser: ResolvedBrowserConfig;
   customView: ResolvedCustomViewConfig | null;
@@ -99,16 +101,30 @@ function fontSizeEntry(effective: number, base: number): ConfigSummaryEntry {
   };
 }
 
+/**
+ * 実効行高。フォントサイズのズームに追従して変わるため、設定ファイルの値と食い違う。
+ * ズーム中はどこから来た値なのかが分かるよう設定値を添える
+ */
+function lineHeightEntry(effective: number, base: number): ConfigSummaryEntry {
+  if (effective === base) return { key: "lineHeight", value: String(effective) };
+  return {
+    key: "lineHeight",
+    value: String(effective),
+    note: `設定値 ${base} をfontSizeのズームで拡大`,
+  };
+}
+
 function appearanceSection(
   appearance: ResolvedAppearanceConfig,
   baseFontSize: number,
+  baseLineHeight: number,
 ): ConfigSummarySection {
   return {
     name: "appearance",
     entries: [
       { key: "fontFamily", value: appearance.fontFamily },
       fontSizeEntry(appearance.fontSize, baseFontSize),
-      { key: "lineHeight", value: String(appearance.lineHeight) },
+      lineHeightEntry(appearance.lineHeight, baseLineHeight),
       { key: "foreground", value: appearance.foreground, swatches: [appearance.foreground] },
       { key: "background", value: appearance.background, swatches: [appearance.background] },
       { key: "backgroundOpacity", value: String(appearance.backgroundOpacity) },
@@ -198,7 +214,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
     configFile: input.configFile,
     configFileLoaded: input.configFileLoaded,
     sections: [
-      appearanceSection(input.appearance, input.baseFontSize),
+      appearanceSection(input.appearance, input.baseFontSize, input.baseLineHeight),
       keybindingsSection(input.keybindings),
       shellSection(input.defaultShell, input.shellProfiles),
       {

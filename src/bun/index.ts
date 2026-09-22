@@ -20,6 +20,7 @@ import type {
   ResolvedMouseConfig,
   ShellProfile,
 } from "@niwaterm/config";
+import { scaleLineHeight } from "@niwaterm/config";
 import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
@@ -330,7 +331,8 @@ function clampFontSize(size: number): number {
 
 function effectiveAppearance(): ResolvedAppearanceConfig {
   if (fontSizeZoomDelta === 0) return appearance;
-  return { ...appearance, fontSize: clampFontSize(appearance.fontSize + fontSizeZoomDelta) };
+  const fontSize = clampFontSize(appearance.fontSize + fontSizeZoomDelta);
+  return { ...appearance, fontSize, lineHeight: scaleLineHeight(appearance, fontSize) };
 }
 
 function adjustFontSize(delta: number): number {
@@ -469,6 +471,7 @@ function currentConfigSummary(): ConfigSummary {
     configFileLoaded: userConfigLoaded,
     appearance: effectiveAppearance(),
     baseFontSize: appearance.fontSize,
+    baseLineHeight: appearance.lineHeight,
     keybindings,
     browser,
     customView,

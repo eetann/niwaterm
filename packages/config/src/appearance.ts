@@ -70,3 +70,18 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   ],
   tabBar: "auto",
 };
+
+/**
+ * フォントサイズを変えたときの行の高さ。設定に書かれた行間の比率（lineHeight / fontSize）を保つ。
+ *
+ * 行の高さを据え置いたままフォントだけ拡大すると、グリフが行ボックスへ収まらず上下の行へ
+ * 食い込む。セル矩形いっぱいに描かれる文字（█ ░ 等）は行の高さを前提に補正しているため、
+ * とくに崩れが目立つ。
+ */
+export function scaleLineHeight(
+  base: Pick<ResolvedAppearanceConfig, "fontSize" | "lineHeight">,
+  fontSize: number,
+): number {
+  if (!(base.fontSize > 0)) return base.lineHeight;
+  return Math.round((base.lineHeight / base.fontSize) * fontSize);
+}

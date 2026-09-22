@@ -3,6 +3,7 @@ export {
   defaultAppearance,
   isTabBarMode,
   type ResolvedAppearanceConfig,
+  scaleLineHeight,
   type TabBarMode,
 } from "./appearance";
 export {
