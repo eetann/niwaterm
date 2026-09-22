@@ -25,6 +25,20 @@ static const wchar_t *const kElectrobunWindowClass = L"BasicWindowClass";
 // 「このウィンドウは処理済みか」の判定も兼ねる
 static const wchar_t *const kPrevWndProcProp = L"NiwatermPrevWndProc";
 
+/**
+ * クライアント領域だけをガラス（DWMがper-pixel alphaを読む領域）にする。
+ * 全辺-1のsheet of glassだとキャプション・枠までガラス扱いになり、タイトルバーの地が
+ * 背後のウィンドウと合成されて透けてしまう。マージンはクライアント領域の内側で数えるので、
+ * 上辺からクライアント領域の高さぶん拡張すればちょうどクライアント領域だけを覆える。
+ * 高さはリサイズで変わるため、その都度呼び直す
+ */
+static HRESULT niwa_extend_frame_to_client(HWND hwnd) {
+  RECT rc;
+  if (!GetClientRect(hwnd, &rc)) return E_FAIL;
+  MARGINS margins = {0, 0, rc.bottom - rc.top, 0};
+  return DwmExtendFrameIntoClientArea(hwnd, &margins);
+}
+
 static LRESULT CALLBACK niwa_transparent_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                                  LPARAM lparam) {
   WNDPROC prev = (WNDPROC)GetPropW(hwnd, kPrevWndProcProp);
@@ -39,6 +53,14 @@ static LRESULT CALLBACK niwa_transparent_wndproc(HWND hwnd, UINT msg, WPARAM wpa
     GetClientRect(hwnd, &rc);
     PatBlt(hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, BLACKNESS);
     return 1;
+  }
+
+  // クライアント領域の高さが変わるとガラス領域の指定もずれるため、測り直して張り直す
+  if (msg == WM_SIZE) {
+    LRESULT result = prev ? CallWindowProcW(prev, hwnd, msg, wparam, lparam)
+                          : DefWindowProcW(hwnd, msg, wparam, lparam);
+    niwa_extend_frame_to_client(hwnd);
+    return result;
   }
 
   if (msg == WM_NCDESTROY) {
@@ -91,29 +113,27 @@ static int niwa_make_window_transparent(HWND hwnd) {
   DeleteObject(empty);
   if (FAILED(hr)) return -2;
 
-  // 全辺-1のマージンはフレームをクライアント領域全体へ拡張する指定（sheet of glass）。
-  // blur-behindだけではリダイレクションサーフェスのアルファがDWMまで届かない
-  MARGINS margins = {-1, -1, -1, -1};
-  hr = DwmExtendFrameIntoClientArea(hwnd, &margins);
-  if (FAILED(hr)) return -3;
-
   WNDPROC prev =
       (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)niwa_transparent_wndproc);
   if (!prev) return -4;
   SetPropW(hwnd, kPrevWndProcProp, (HANDLE)prev);
 
-  InvalidateRect(hwnd, NULL, TRUE);
-
-  // 非クライアント領域の再計算を促さないと、WS_EX_LAYEREDを剥がしても枠が描き直されない
+  // 非クライアント領域の再計算を促さないと、WS_EX_LAYEREDを剥がしても枠が描き直されない。
+  // フレームの拡張はこの再計算で確定したクライアント領域に対して行う
   SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+  // blur-behindだけではリダイレクションサーフェスのアルファがDWMまで届かない
+  if (FAILED(niwa_extend_frame_to_client(hwnd))) return -3;
+
+  InvalidateRect(hwnd, NULL, TRUE);
   return 0;
 }
 
 /**
  * 自プロセスのElectrobunウィンドウのうち、まだ処理していないものをすべて、
  * ネイティブ枠を保ったまま透過可能にする。ウィンドウを開くたびに呼ぶ想定。
- * 0=成功, -1=対象ウィンドウ未発見, -2=DWMへの要求が失敗, -4=プロシージャ差し替えが失敗。
+ * 0=成功, -1=対象ウィンドウ未発見, -2/-3=DWMへの要求が失敗, -4=プロシージャ差し替えが失敗。
  */
 int niwa_win_enable_window_transparency(void) {
   NiwaFindWindowCtx ctx = {GetCurrentProcessId(), {0}, 0};

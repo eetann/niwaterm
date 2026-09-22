@@ -44,16 +44,22 @@ niwatermでは`src/native/winwindow.c`（`niwa_win_enable_window_transparency`�
 
 1. `WS_EX_LAYERED`を外す
 2. 空リージョンを渡した`DwmEnableBlurBehindWindow`でper-pixel alphaを有効化
-3. 全辺`-1`のマージンで`DwmExtendFrameIntoClientArea`
-4. ウィンドウプロシージャを差し替え、`WM_ERASEBKGND`で`PatBlt(..., BLACKNESS)`
+3. ウィンドウプロシージャを差し替え、`WM_ERASEBKGND`で`PatBlt(..., BLACKNESS)`
+4. クライアント領域の高さを`cyTopHeight`にした`DwmExtendFrameIntoClientArea`
 
-**4が無いと透過しない。** Electrobunのウィンドウクラスは`hbrBackground = NULL`で
+**3が無いと透過しない。** Electrobunのウィンドウクラスは`hbrBackground = NULL`で
 クライアント領域を一切塗らないため、リダイレクションサーフェスのアルファが既定の不透明
 （白）のまま残る。`BLACKNESS`のPatBltはRGBA全チャンネルを0にするので、これがアルファの
 クリアになる。
 
-3までの状態は「画面のどこを測っても同じ色」になるのが目印で、背後と合成されていない。
-4を入れると位置ごとに値が変わる。
+3が無い状態は「画面のどこを測っても同じ色」になるのが目印で、背後と合成されていない。
+入れると位置ごとに値が変わる。
+
+4のマージンに全辺`-1`（sheet of glass）を渡すとウィンドウ全体がガラス扱いになり、
+今度は**キャプションの地まで背後と合成されて透けてしまう**（タイトル文字とウィンドウボタンは
+残るので、宙に浮いたように見える）。マージンはクライアント領域の内側で数えるため、
+上辺から`cyTopHeight`ぶんだけ拡張すればクライアント領域だけをガラスにできる。
+この高さはリサイズで変わるので`WM_SIZE`のたびに測り直して張り直す。
 
 `transparent: true`自体は渡し続ける必要がある。WebView2の`put_DefaultBackgroundColor`を
 透明にする経路がこのフラグに紐づいているため。なお同APIはアルファ0か255しか受け付けないので、
