@@ -1,0 +1,234 @@
+---
+type: Reference
+title: ワークツリー管理
+description: niwatermからgitワークツリーを作成・開閉・削除する仕組みと、置き場所・作成後フック・レイアウト適用の設定
+---
+
+# ワークツリー管理
+
+`niwaterm worktree`系コマンドで、gitのワークツリーを作成・一覧・削除し、それぞれをniwatermのBoardとして開ける。**1つのワークツリーが1つのBoard**（1ワークスペース内で持てる独立したTileレイアウト、tmuxのWindow相当。詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）に対応し、ブランチごとの作業場所をアプリ内で切り替えながら使う。
+
+```sh
+niwaterm worktree list [--cwd <dir>]
+niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm board worktree set <path> [--board <boardId>]
+niwaterm board worktree clear [--board <boardId>]
+niwaterm board worktree show [--board <boardId>]
+```
+
+`worktree list`と`worktree new --open none`はniwatermアプリへ接続しないため、アプリが起動していない普通のターミナルからも使える（`worktree remove`も削除までは進み、Boardを閉じられない旨の警告だけ出す）。設定ファイル側（`worktree`）の書き方は`docs/guide/config.md`「ワークツリー」節を参照。
+
+## Boardに紐づくワークツリー
+
+Boardは「このBoardはこのワークツリーの作業だ」という紐づけを1つ持てる。`worktree new`・`worktree open`で開いたBoardには自動で付き、それ以外のBoardには`board worktree set`で後から付ける。
+
+```sh
+# 今いるディレクトリをこのBoardへ紐づける
+niwaterm board worktree set .
+
+# 紐づけの確認・解除
+niwaterm board worktree show
+niwaterm board worktree clear
+```
+
+`set`に渡すパスは相対でもよく、コマンドを実行したディレクトリ起点で解決される。紐づけは次の3つに効く。
+
+- **`worktree open`の付け替え防止** — 「そのワークツリーのBoardが既に開いているか」の判定にこの値を使う（「ワークツリーを開く」節）。タブのcwdは見ないので、`cd`で別ディレクトリへ移っても判定は変わらない
+- **消えたディレクトリの警告** — 紐づけ先が見つからなくなるとサイドバーのBoard行に警告アイコンが出る。ワークツリーを`git worktree remove`した後のBoardを見分けるためのもの
+- **新しいタブのcwd** — `board.newTabCwd: "worktree"`を設定していれば、タブ追加・タイル分割・ポップアップのcwdが今のタブの引き継ぎではなく紐づけ先になる（`docs/guide/config.md`「Board設定」節）
+
+GUIからはサイドバーのBoard行を右クリック →「ワークツリーを設定」、またはコマンドパレットの`Set Board Worktree Directory`で変更できる。入力欄にはそのBoardのカレントディレクトリが入った状態で開くので、そのまま確定すれば「今いるディレクトリを紐づける」になる。空のまま確定すると紐づけを解除する。既定のキーバインドは持たないので、キーから使いたい場合は`set-board-worktree`アクションを設定ファイルで割り当てる。
+
+## ワークツリーの一覧
+
+```sh
+niwaterm worktree list
+niwaterm worktree list --cwd /path/to/repo
+```
+
+gitのワークツリー一覧をTSV（`path`／`branch`／`HEAD`／フラグ）で表示する。**このコマンドはniwatermアプリに接続せず、CLIプロセスから直接gitを呼ぶ**ため、アプリが起動していない普通のターミナルからも使える。値の無い列は`-`で埋めるので、`cut -f2`のような読み取りが列ずれで壊れない。
+
+```
+/home/eetann/ghq/github.com/eetann/niwaterm       main  3aa3f4f4...  main
+/home/eetann/ghq/github.com/eetann/niwaterm@dev   dev   2dbbd095...  -
+```
+
+先頭行は必ずメインワークツリー（gitがcwdに関わらずメインを先頭に出す）。4列目のフラグは`main`／`bare`／`detached`／`locked`／`prunable`をカンマ区切りで並べ、いずれにも該当しなければ`-`になる。detached HEADとbareのワークツリーは`branch`列が`-`、bareは`HEAD`列も`-`。
+
+gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在しない場合は、それぞれの理由を示すエラーメッセージと共に終了コード1を返す。
+
+## ワークツリーの作成
+
+```sh
+niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+```
+
+ワークツリーを作り、それをniwatermで開く。ブランチが未作成なら`git worktree add -b`で同時に作り、既にあればそれをチェックアウトする。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
+
+作成先は「ワークツリーの置き場所」で決まるが、`--path`で個別に上書きできる（相対パスは実行したディレクトリ基準）。
+
+**そのブランチのワークツリーが既にある場合はエラーにせず、作成を飛ばしてそれを開く**。同じコマンドを何度叩いても同じ結果になるので、「あれば使う、無ければ作る」を分岐なしで書ける。このとき作成時にしか効かない`--from`／`--path`を渡していると、効いていない旨の警告を出す。
+
+`--open`は作成後の開き方で、次の4つから選ぶ。
+
+| 値 | 挙動 |
+|---|---|
+| `board`（既定） | 新規Boardとして開くが、そのBoardへは遷移しない |
+| `board-switch` | 新規Boardとして開き、そのBoardへ遷移する |
+| `current-tab` | 実行したタブをそのワークツリーへ`cd`する（同じBoardの他のタブは触らない） |
+| `none` | 開かない（ワークツリーを作るだけ） |
+
+既定を`board`（遷移しない）にしているのは、作業中のBoardを奪わずに次のブランチを仕込めるようにするため。既定値は設定の`worktree.open`で変えられる（「ワークツリーの置き場所」と同じ優先順位で解決する）。
+
+Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`は遷移しないためサイドバーの表示が唯一の手がかりになる。別の名前にしたい場合は`--name`で指定する（`--open none`／`current-tab`はBoardを作らないので、指定しても効かない旨の警告を出す）。
+
+さらに、**そのワークツリーのBoardが既に開いていれば新しく作らずそれを使う**（`board-switch`ならそのBoardへ遷移し、別のワークスペースにあればワークスペースごと切り替える）。このとき`--name`を指定していれば、使い回すBoardの名前も指定どおりに付け替える（`--layout`と違って名前の変更はタブを閉じないため）。判定にはBoardを開いたときに記録したワークツリーのパスを使い、タブのcwdは見ない（`cd`で変わるため）。Board名を変えても紐づけは切れず、別リポジトリの同名ブランチと取り違えることもない。
+
+`current-tab`は`cd <path>`をそのタブへ送る（`tab send-keys`と同じ経路）。コマンドを実行しているシェルはCLIが終わるまで入力を読まないので、キーはtty側で待たされてからプロンプトへ流れる。`--open none`以外はniwatermアプリが起動している必要がある。
+
+## ワークツリーを開く
+
+```sh
+niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+```
+
+既にあるワークツリーをniwatermで開く。作成はしないので、無ければ作りたい場合は`worktree new`を使う。
+
+`<worktree>`はブランチ名・パス（相対は実行したディレクトリ基準）・ディレクトリ名のいずれでも指定でき、この順に探して最初に当たったものを開く。段階を分けているのは、ブランチ名のつもりで渡した文字列が別ワークツリーのディレクトリ名に一致して化けるのを防ぐため。同じディレクトリ名のワークツリーが複数ある場合は候補を並べて終了コード1で止まるので、パスで指定し直す。bareのワークツリーはワーキングツリーを持たないため候補から外れる。
+
+`--open`の値は`worktree new`と同じだが、**既定は`board-switch`（開いたBoardへ遷移する）**。「開く」と打った時点でそこへ移りたいはずのため、設定の`worktree.open`（作成後の開き方の既定値）はこちらには効かせていない。
+
+設定の読み取りは**Boardを新規に作るときまで遅らせる**。既に開いているBoardへ切り替えるだけの場合や`--open none`／`current-tab`の場合は、プロジェクトローカル設定を読む必要が無いので確認も出ない（ワークツリーへ移るだけの用途に承認の手間をかけないため）。
+
+## ワークツリーの削除
+
+```sh
+niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+```
+
+ワークツリーをディレクトリごと削除し、そのワークツリーで開いたBoardを閉じる。`<worktree>`の指定方法は`worktree open`と同じ（ブランチ名・パス・ディレクトリ名）。メインワークツリーは削除できない。
+
+消えて困るものが残っていないかを先に数え、次のいずれかがあれば**何も消さずに終了コード1で止まる**。
+
+| 止まる条件 | 理由 |
+|---|---|
+| 未コミットの変更（未追跡ファイルを含む） | ディレクトリごと消えるため戻せない |
+| どのリモート追跡ブランチにも無いコミット | `--delete-branch`と組み合わせると失われる |
+| `git worktree lock`済み | ロックは「触るな」という明示の印のため |
+
+```
+$ niwaterm worktree remove feat/x
+worktree removeに失敗しました: /path/to/repo@feat-x は削除しませんでした:
+  - 未コミットの変更が3件あります（ワークツリーごと消えます）
+  - どのリモートにも無いコミットが2件あります
+無視して削除するには--forceを付けてください
+```
+
+未pushのコミットまで見るのは`git worktree remove`がやらない部分で、リモートが1つも設定されていないリポジトリでは判定しない（push先が無いため）。判定はupstreamとの差分ではなく**リモート追跡ブランチ全体との差分**で行うので、upstream未設定のまま`worktree new`で作ったブランチでも取りこぼさない。実体ディレクトリが既に無いワークツリー（`worktree list`で`prunable`）は中身を問わずに消せる。
+
+`--force`はこれらをすべて無視する。
+
+ブランチは既定では残す。`--delete-branch`を付けると削除後に`git branch -d`し、未マージのブランチには`--force`も要る。ワークツリーを消した後にブランチの削除だけ失敗した場合は、その旨を表示して終了コード1になる（ワークツリーは削除済み）。detached HEADのワークツリーには効かず、警告を出して飛ばす。
+
+Boardは既定で閉じる。ワークツリーを消した後もBoardが残ると、cwdが存在しないタブだけが残るため。`--keep-board`で残せる。ワークスペース内最後の1つのBoardは閉じられないので、その場合は警告に留めて終了コード0を返す（削除自体は済んでいるため）。niwatermアプリが起動していない場合も同様に警告だけ出す。
+
+**Boardを閉じるのはワークツリーを消し終えた後**。先に閉じるとそのBoardのタブでこのコマンドを実行していた場合、PTYが落ちた巻き添えでCLI自身が殺され、gitを起動する前に止まってしまうため。同じ理由で、閉じるBoardが複数あるときは自分がいるBoardを最後に回す。
+
+この順序のおかげで削除対象のワークツリーのタブから実行しても削除とBoardのcloseは完了するが、**自分のBoardを閉じた時点で出力先のタブごと消えるため、`board closed:`以降の表示と終了コードは受け取れない**（実機で確認済み）。スクリプトから終了コードを見たい場合は、そのワークツリー以外のタブから実行する。
+
+Windowsは**カレントディレクトリにしているプロセスがあるとディレクトリを削除できない**ので、そのワークツリーで動いている別のシェル・エディタがあると`git worktree remove`が失敗する（CLI自身のcwdは削除前に退避する）。
+
+## ワークツリーの置き場所
+
+新規ワークツリーを作る場所は、`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）を展開するテンプレートで決める。既定は`../${repo}@${branch}`で、メインワークツリーの隣に`<repo>@<branch>`という名前で並ぶ。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は`niwaterm@feat-worktree`になる。
+
+テンプレートは次の順で探し、最初に見つかったものを使う。`--open`の既定値（`worktree.open`）も同じ順で解決する。
+
+| 優先 | 置き場所 | 用途 |
+|---|---|---|
+| 1 | `<repoRoot>/.niwaterm/config.ts`の`worktree.*` | そのリポジトリ固有の方針（チームで共有できる） |
+| 2 | `~/.config/niwaterm/niwaterm.config.ts`の`worktree.*` | ユーザー共通の方針 |
+| 3 | git configの`niwaterm.worktree.*` | niwatermを入れていない環境とも設定を共有したい場合の補助口 |
+| 4 | （既定値） | `dir`は`../${repo}@${branch}`、`open`は`board` |
+
+解決は**項目ごとに独立している**。`dir`はグローバル設定、`open`はこのリポジトリだけ別、といった混ぜ方ができる。
+
+git configを一番弱くしているのは、niwatermの設定の正本が`niwaterm.config.ts`だから。git config内部のローカル／グローバルの優先順位はgit自身が解決するので、niwaterm側では段階を持たない。
+
+```sh
+git config niwaterm.worktree.dir '.worktrees/${branch}'
+git config niwaterm.worktree.open board-switch
+```
+
+テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は`docs/guide/config.md`「ワークツリー」節を参照。
+
+プロジェクトローカル設定は、レイアウトプリセットと違って**cwdから上向きに探さず、メインワークツリー直下の`.niwaterm/config.ts`だけを見る**。置き場所はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
+
+## 作成後フック
+
+ワークツリーを**新規作成した直後**に走るフックを設定できる（`bun install`・`.env`のコピー・`direnv allow`あたりを想定）。既存のワークツリーを開き直した場合は走らない。
+
+```ts
+// ~/.config/niwaterm/niwaterm.config.ts
+worktree: {
+  onCreate: async (ctx) => {
+    await Bun.$`bun install`.cwd(ctx.worktreePath);
+  },
+},
+```
+
+`ctx`には`repoRoot`（メインワークツリー）・`worktreePath`（作ったワークツリー）・`branch`が入る。宣言的なコピー・リンクのDSLは用意していない。設定がTypeScriptなので、条件分岐もファイル操作も素のコードで書けるため（キーバインドの関数ハンドラと同じ方針）。
+
+**niwaterm CLIのプロセスで、Boardを開く前にawaitされる**。タブが立ち上がる時点でセットアップが済んでいるので、`--open`のどのモード（`none`・`current-tab`含む）でも同じように走る。標準出力はコマンドを実行したターミナルへそのまま流れるため、完了するまでプロンプトは戻らない。
+
+フックが例外を投げた場合は**ワークツリーを残したまま終了コード1で止まり、Boardは開かない**。準備できていないワークツリーで作業を始めてしまうより、直して開き直せるほうがよいため。残ったワークツリーは`worktree new`を再実行すれば開けるが、そのときフックは走らない（新規作成ではないため）。
+
+## レイアウトプリセットの適用
+
+```sh
+niwaterm worktree new feat/x --layout dev
+niwaterm worktree open feat/x --layout dev
+```
+
+ワークツリーのBoardへ、`layouts`のレイアウトプリセット（`docs/guide/config.md`「レイアウト」節参照）を適用する。省略時は設定の`worktree.layout`が使われる（置き場所と同じ優先順位で解決する）。
+
+適用されるのは**Boardを新規に作ったときだけ**。既にそのワークツリーのBoardが開いている場合・`--open none`／`current-tab`の場合は適用せず、効いていない旨の警告を出す。レイアウトの適用は既存タブ・PTYをすべて閉じる破壊的操作なので、作業中のBoardを奪わないため。作りたてのBoardは単一タイル・単一タブなので、失われるものは無い。
+
+プリセットは**メインワークツリーの`.niwaterm/`から引き**、タブは**そのワークツリーで開く**。解決起点をメインワークツリーに揃えているのは`worktree.*`の設定と同じ理由（置き場所・開き方はリポジトリ全体の方針）で、`.niwaterm/`をリンクされたワークツリーへコミットしていない運用でもプロジェクトローカルのプリセットが引ける。`layout apply`はプリセットの解決元をタブのcwdの基準にするが、ここでは解決元と開く場所が別になるため分けている（プリセット側で`cwd: "./packages/cli"`のように書いた相対パスも、ワークツリー基準で解決される）。
+
+プロジェクトローカルのプリセットを使う場合は、**プロジェクトローカル設定の承認（下記）が必要**。プリセットの解決でそのリポジトリの`.niwaterm/config.ts`が評価されるためで、未承認のままレイアウトを指定すると終了コード1で止まる（`--trust`で承認できる）。グローバル設定の`layouts`だけを使う場合も、プロジェクトローカル設定を持つリポジトリでは同じ理由で承認が要る。
+
+## プロジェクトローカル設定の承認
+
+`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`を叩くと、`onCreate`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
+
+```
+$ niwaterm worktree new feat/x
+このリポジトリはniwatermのプロジェクトローカル設定を持っています:
+  /path/to/repo/.niwaterm/config.ts
+ワークツリーの操作でこのファイルが評価され、worktree.onCreateのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
+信頼できるリポジトリでのみ許可してください。
+このリポジトリを信頼しますか？ (y/N)
+```
+
+承認は`~/.config/niwaterm/trusted-projects/`へ記録され、次回以降は確認なしで読まれる。記録の鍵は**リポジトリのパスと`.niwaterm/`配下の内容のハッシュ**なので、承認後にフックを書き換えられても黙って実行されることはない（改めて確認が出る）。`.niwaterm/`の外をimportしている場合（`../scripts/setup.ts`等）、その変更までは検出できない。
+
+`--trust`を付けると確認を省いて承認する（非対話環境向け）。非対話環境で`--trust`も無い場合は、確認できない旨を表示してプロジェクトローカル設定を無視したまま続行する（ハングもエラーもしない）。
+
+承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、`onCreate`の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
+
+`--layout`（「レイアウトプリセットの適用」節）も同じ承認で門番する。プリセットの解決はアプリ側が`<repoRoot>/.niwaterm/config.ts`を評価して行うため、CLIがimportしなくてもそこでコードが走るためで、未承認のままレイアウトを指定すると終了コード1で止まる。
+
+確認が出るのは、実際にプロジェクトローカル設定を読む必要があるときだけ。`worktree open`で既に開いているBoardへ切り替えるだけの場合は設定を読まないので、確認も出ない。
+
+> **note**: レイアウトプリセットのプロジェクトローカル設定を`layout list`／`layout apply`から使う場合は、この承認を通らず従来どおり読まれる。あちらの確認は「起動時レイアウトへの紐づけ」にかかっていて、設定を読むこと自体は素通しになっている（`docs/guide/cli.md`「プロジェクトローカルのレイアウト」節）。
+
+## GUIから使う
+
+Boardへのワークツリーの紐づけは、サイドバーのBoard行の右クリックとコマンドパレットから変更できる（「Boardに紐づくワークツリー」節）。
+
+ワークツリーの一覧・絞り込み・作成をniwaterm内のUIで行いたい場合は、ユーザー定義HTML UI（`customView`）のサンプルが`contrib/custom-views/worktrees/`にある。サイドバーへ一覧を出し、行のクリックで`worktree open`、入力欄へ入れたブランチ名で`worktree new`を実行する。導入手順と変更しどころは同ディレクトリのREADME、`customView`自体の仕様は`docs/guide/config.md`「ユーザー定義HTML UI（customView）」節を参照。
+
+このサンプルが一覧するリポジトリは、一覧を取った時点でフォーカス中タイルのアクティブタブがいたディレクトリで決まる。タブのcwdの報告にはシェル統合（`docs/guide/cli.md`「シェル統合」節）が要るので、先に入れておく。

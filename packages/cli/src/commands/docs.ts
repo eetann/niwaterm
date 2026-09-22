@@ -7,12 +7,16 @@ interface DocTopic {
   relativePath: string;
 }
 
-// 現状はcli一本のみだが、将来トピックが増える場合に備えて配列にしておく
 const DOC_TOPICS: readonly DocTopic[] = [
   {
     name: "cli",
     description: "niwatermをCLIから操作する方法（コマンド一覧・使用例・IPCサーバー仕様）",
     relativePath: "../../../../docs/guide/cli.md",
+  },
+  {
+    name: "worktree",
+    description: "gitワークツリーの作成・開閉・削除と、置き場所・作成後フック・レイアウトの設定",
+    relativePath: "../../../../docs/guide/worktree.md",
   },
 ];
 

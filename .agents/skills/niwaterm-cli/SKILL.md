@@ -37,11 +37,9 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
 - `layout list` / `apply <name>` — niwaterm.config.tsまたはプロジェクトローカルの`.niwaterm/config.ts`で定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う。`--startup`を付けるとそのBoardが次回起動時も同じプリセットで組み直される（`board startup`で後から切替・解除可）
   - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show cli`の「プロジェクトローカルのレイアウト」節
-- `worktree list` / `new` / `open` / `remove` — gitワークツリーの一覧・作成・表示・削除。`list`は`path`／`branch`／`HEAD`／フラグのTSVで、先頭行は必ずメインワークツリー（アプリへ接続せず直接gitを呼ぶ）。`new <branch>`はワークツリーを作ってniwatermで開き、`--open board`（既定、Boardを作るが遷移しない）／`board-switch`（遷移する）／`current-tab`（実行したタブをcd）／`none`（開かない）を選べる。**同じブランチのワークツリーが既にあればエラーにせずそれを開く**ので、「あれば使う、無ければ作る」を分岐なしで書ける。設定の`worktree.onCreate`があれば作成直後（Boardを開く前）に走る。プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるため、**AIエージェントから非対話で叩く場合は`--trust`を付ける**（付けないとプロジェクトローカル設定を無視して続行する）
-- `open <worktree>`は既にあるワークツリーを開くだけ（作成しない）。ブランチ名・パス・ディレクトリ名のいずれでも指定でき、既定の`--open`は`board-switch`。**そのワークツリーのBoardが既に開いていれば新しく作らずそれへ切り替える**ため、同じワークツリーのBoardが増えない（`new`も同じ扱い）
-- `new`・`open`とも`--name <name>`でBoardの名前を指定できる（省略時はブランチ名）。既に開いているBoardを使い回す場合もその名前へ付け替える（Boardを作らない`--open none`／`current-tab`では効かない）
-- `new`・`open`とも`--layout <name>`でレイアウトプリセットをBoardへ適用できる（省略時は設定の`worktree.layout`）。適用されるのはBoardを新規に作ったときだけで、既に開いているBoardの既存タブは壊さない。プロジェクトローカルのプリセットを使う場合は`--trust`が要る（プリセットの解決でリポジトリの設定が評価されるため）
-- `remove <worktree>`はワークツリーをディレクトリごと削除し、そのワークツリーのBoardも閉じる（`--keep-board`で残せる）。**未コミットの変更・未pushのコミット・ロックがあると何も消さずに終了コード1で止まる**ので、意図して消すなら`--force`を付ける。ブランチは既定で残り、`--delete-branch`で消せる（未マージなら`--force`も要る）
+- `worktree list` / `new` / `open` / `remove` — gitワークツリーの一覧・作成・表示・削除。`list`は`path`／`branch`／`HEAD`／フラグのTSVで、先頭行は必ずメインワークツリー（アプリへ接続せず直接gitを呼ぶ）。`new <branch>`はワークツリーを作ってniwatermのBoardとして開き（`--open`は`board`が既定＝Boardを作るが遷移しない。`board-switch`／`current-tab`／`none`も選べる）、`open <worktree>`は既にあるものをブランチ名・パス・ディレクトリ名のいずれかで開く（既定は`board-switch`）。**同じワークツリーのBoardが既に開いていればそれを使い回す**ため、同じコマンドを何度叩いてもBoardが増えず、「あれば使う、無ければ作る」を分岐なしで書ける。`--name`でBoard名、`--layout`でレイアウトプリセットも指定できる
+  - `remove <worktree>`はワークツリーをディレクトリごと削除し、そのBoardも閉じる（`--keep-board`で残せる）。**未コミットの変更・未pushのコミット・ロックがあると何も消さずに終了コード1で止まる**ので、意図して消すなら`--force`を付ける。ブランチは既定で残り、`--delete-branch`で消せる（未マージなら`--force`も要る）
+  - **プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるので、非対話で叩くなら`--trust`を付ける**（付けないとその設定を無視して続行し、`--layout`を指定していれば終了コード1で止まる）。置き場所・作成後フック・Boardとの紐づけを含む詳細は`niwaterm docs show worktree`
 - `keybind list` — 現在有効なキーバインドの一覧（tmuxの`list-keys`相当。prefix経由のバインドと即時発火のdirectを分けて表示。設定が反映されているかの確認に使う）
 - `config show` — 現在有効な設定値の一覧（設定ファイルのトップレベルキーごとに、マージ後の実際に効いている値。ズーム中のフォントサイズもここで分かる。関数で書く設定・キーバインドの個々の割り当ては含まない）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
@@ -51,7 +49,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 コマンドの全オプション・使用例・終了コード・IPCサーバー仕様は次のコマンドで確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
 
-    niwaterm docs show cli
+    niwaterm docs show cli        # コマンド全体
+    niwaterm docs show worktree   # ワークツリー管理（置き場所・フック・レイアウト・Boardとの紐づけ）
 
 トピック一覧の確認は`niwaterm docs list`、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。
 

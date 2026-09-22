@@ -772,7 +772,7 @@ board: {
 },
 ```
 
-`"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は`docs/guide/cli.md`「Boardに紐づくワークツリー」節を参照。
+`"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照。
 
 ## レイアウト
 
@@ -868,7 +868,7 @@ niwaterm layout apply dev --startup
 
 ## ワークツリー
 
-`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。
+`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。コマンド側の挙動を含めた全体像は`docs/guide/worktree.md`を参照。
 
 | フィールド | 型 | 意味 | 未指定時 |
 |---|---|---|---|
@@ -892,13 +892,13 @@ worktree: {
 
 テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
-`layout`は`layouts`のキー（「レイアウトプリセット」節参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は`docs/guide/cli.md`「レイアウトプリセットの適用」節。
+`layout`は`layouts`のキー（「レイアウト」節参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は`docs/guide/worktree.md`「レイアウトプリセットの適用」節。
 
-`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/cli.md`「作成後フック」節。
+`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/worktree.md`「作成後フック」節。
 
 ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`layout`はリポジトリ固有、という混ぜ方ができる）。ただし`onCreate`だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
 
-プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は`docs/guide/cli.md`「プロジェクトローカル設定の承認」節。
+プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
@@ -909,7 +909,7 @@ export default {
 } satisfies NiwatermProjectConfig;
 ```
 
-どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/cli.md`「ワークツリーの置き場所」節を参照。
+どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/worktree.md`「ワークツリーの置き場所」節を参照。
 
 レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所・開き方はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
 
