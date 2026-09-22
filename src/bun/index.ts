@@ -1042,9 +1042,10 @@ function screenWorkAreas(): ScreenArea[] {
   }
 }
 
-// 透過の有無はウィンドウ生成時にしか決められない（Electrobunに実行時の切り替えAPIが無い）。
-// 設定を変えたときは再起動が必要
+// 透過の有無・タイトルバーの有無はどちらもウィンドウ生成時にしか決められない
+// （Electrobunに実行時の切り替えAPIが無い）。設定を変えたときは再起動が必要
 const isBackgroundTransparent = appearance.backgroundOpacity < 1;
+const isTitleBarHidden = appearance.titleBar === "hidden";
 
 /** 一時ウィンドウを重ねて開くときのずらし幅（px）。真下に重なって見失うのを防ぐ */
 const WINDOW_CASCADE_OFFSET = 28;
@@ -1154,6 +1155,11 @@ function createWindowView(windowId: WindowId, frame: WindowFrame): WindowView {
     // 不透明度そのものはwebview側のCSSで決まる（WebView2のDefaultBackgroundColorは
     // アルファ0か255しか受け付けず、半透明を表現できない）
     transparent: isBackgroundTransparent,
+    // "hidden"ではなく"hiddenInset"を使う。Windowsの"hidden"はWS_POPUPになってネイティブ枠ごと
+    // 失われ、角丸・リサイズ・スナップが効かなくなる。"hiddenInset"はWS_CAPTION|WS_THICKFRAMEの
+    // ままWM_NCCALCSIZEでキャプション領域だけ削るので枠の挙動が残る。
+    // macOSではウィンドウ操作ボタンがコンテンツへ重なって残る
+    titleBarStyle: isTitleBarHidden ? "hiddenInset" : "default",
     rpc: createWindowRpc(windowId),
   });
 

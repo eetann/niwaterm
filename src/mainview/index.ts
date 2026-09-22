@@ -11,6 +11,7 @@ import {
   type ResolvedMouseConfig,
   type ShellProfile,
   type TabBarMode,
+  type TitleBarMode,
 } from "@niwaterm/config";
 import { createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -35,6 +36,7 @@ import type {
   WorkspaceListEntry,
 } from "../bun/workspace-manager";
 import { buildExecBrowserJsScript } from "./browser-js-bridge";
+import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
 import { keyToBytes } from "./key-to-bytes";
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
@@ -557,6 +559,18 @@ function setupPalette() {
   }
 }
 
+/**
+ * タイトルバーを隠しているときは、代わりにサイドバーのツールバーでウィンドウを動かせるようにする。
+ * ウィンドウ自体のスタイルは生成時に決まるため、ここで切り替わるのはwebview側だけ
+ * （設定を変えた直後は再起動するまでネイティブ側と食い違う）。
+ *
+ * macOSの`hiddenInset`はウィンドウ操作ボタンをコンテンツへ重ねて残すが、ツールバーは
+ * ボタンが右寄せで左側が空いているため、そこへ収まる
+ */
+function applyTitleBarMode(mode: TitleBarMode) {
+  sidebarToolbarEl.classList.toggle(DRAG_REGION_CLASS, mode === "hidden");
+}
+
 // ---- 外観設定（フォント・カラーテーマ）の適用 ----
 function applyAppearance(config: ResolvedAppearanceConfig) {
   const root = document.documentElement.style;
@@ -569,6 +583,7 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
   root.setProperty("--term-bg-image", config.backgroundImage);
   applyAnsiPalette(config.ansiColors);
+  applyTitleBarMode(config.titleBar);
   tabBarMode = config.tabBar;
   // タブバーの出し方が変わると.tile-contentの高さも変わる。下のsendResizeが実寸を送り直す
   for (const tileId of tabBarElByTileId.keys()) updateTabBarOverlay(tileId);

@@ -14,6 +14,7 @@ import {
   isKeybindAction,
   isNewTabCwdMode,
   isTabBarMode,
+  isTitleBarMode,
   type KeybindingsConfig,
   type LayoutPreset,
   type LayoutsConfig,
@@ -360,6 +361,13 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       user?.tabBar,
       defaultAppearance.tabBar,
       isTabBarMode,
+    ),
+    titleBar: resolveField(
+      "appearance",
+      "titleBar",
+      user?.titleBar,
+      defaultAppearance.titleBar,
+      isTitleBarMode,
     ),
   };
 }

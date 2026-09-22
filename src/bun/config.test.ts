@@ -463,6 +463,19 @@ describe("resolveAppearance", () => {
     }
   });
 
+  test('titleBarは"default"/"hidden"だけ受け付ける', () => {
+    expect(resolveAppearance({ appearance: { titleBar: "hidden" } }).titleBar).toBe("hidden");
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveAppearance({ appearance: { titleBar: "hiddenInset" as never } }).titleBar).toBe(
+        defaultAppearance.titleBar,
+      );
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test('tabBarは"auto"/"always"だけ受け付ける', () => {
     expect(resolveAppearance({ appearance: { tabBar: "always" } }).tabBar).toBe("always");
     const logSpy = spyOn(console, "log").mockImplementation(() => {});

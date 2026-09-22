@@ -2,9 +2,11 @@ export {
   type AppearanceConfig,
   defaultAppearance,
   isTabBarMode,
+  isTitleBarMode,
   type ResolvedAppearanceConfig,
   scaleLineHeight,
   type TabBarMode,
+  type TitleBarMode,
 } from "./appearance";
 export {
   type BoardConfig,

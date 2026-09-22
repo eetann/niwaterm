@@ -135,6 +135,7 @@ function appearanceSection(
         swatches: [...appearance.ansiColors],
       },
       { key: "tabBar", value: appearance.tabBar },
+      { key: "titleBar", value: appearance.titleBar },
     ],
   };
 }

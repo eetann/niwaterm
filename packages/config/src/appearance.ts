@@ -12,6 +12,18 @@ export function isTabBarMode(value: unknown): value is TabBarMode {
   return value === "auto" || value === "always";
 }
 
+/**
+ * ネイティブのタイトルバーの出し方。
+ * "default": OS標準のタイトルバー（ウィンドウ操作ボタン付き）を出す。
+ * "hidden": タイトルバーを隠してその高さぶんを画面へ回す。ウィンドウの移動は
+ * サイドバーのツールバーをドラッグして行う
+ */
+export type TitleBarMode = "default" | "hidden";
+
+export function isTitleBarMode(value: unknown): value is TitleBarMode {
+  return value === "default" || value === "hidden";
+}
+
 export interface AppearanceConfig {
   fontFamily?: string;
   fontSize?: number;
@@ -37,6 +49,13 @@ export interface AppearanceConfig {
    * 描かれるため重ねられない。docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
    */
   tabBar?: TabBarMode;
+  /**
+   * ネイティブのタイトルバーを隠すかどうか。背景の透過（backgroundOpacity）とは独立していて、
+   * 片方だけでも組み合わせても使える。
+   * 隠すとウィンドウ操作ボタンも消えるため、移動はサイドバーのツールバーのドラッグ、
+   * 最小化・最大化・終了はキーバインドやOSのショートカットが窓口になる
+   */
+  titleBar?: TitleBarMode;
 }
 
 export type ResolvedAppearanceConfig = Required<AppearanceConfig>;
@@ -69,6 +88,7 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
     "#a6adc8",
   ],
   tabBar: "auto",
+  titleBar: "default",
 };
 
 /**
