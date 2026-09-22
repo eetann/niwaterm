@@ -52,7 +52,7 @@ import {
   type WindowFrame,
   windowStateFilePath,
 } from "./window-state";
-import { createWindowManager, type WindowId } from "./window-manager";
+import { createWindowManager, type WindowId, type WindowOps } from "./window-manager";
 import type { AppRenderState, BoardId, WorkspaceId } from "./workspace-manager";
 
 // macOSではメニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する。
@@ -420,6 +420,9 @@ function onDirty(windowId: WindowId) {
 
 let ipcServer: IpcServer | null = null;
 
+/** 最後のウィンドウが閉じてからプロセスを落とすまでの猶予(ms)。CLIへレスポンスを返し切るため */
+const EXIT_GRACE_MS = 100;
+
 let cleaned = false;
 function cleanup() {
   if (cleaned) return;
@@ -487,8 +490,13 @@ const windowManager = createWindowManager({
   },
   onAllWindowsClosed: () => {
     console.log("all windows closed, exiting");
-    cleanup();
-    process.exit(0);
+    // 最後の1枚をCLI（`window close`・`tab close`）から閉じた場合、ここで同期的にexitすると
+    // レスポンスを返す前にプロセスが消え、CLI側には接続エラーだけが残る。
+    // 返し終える余地を残してから落とす
+    setTimeout(() => {
+      cleanup();
+      process.exit(0);
+    }, EXIT_GRACE_MS);
   },
 });
 
@@ -642,6 +650,22 @@ async function handleConfigFileChanged(): Promise<void> {
   }
 }
 
+/**
+ * CLIへ渡すウィンドウ操作。closeWindowだけはwindow-manager直結にせず、閉じる前に
+ * finalizeWindowを通す（OSのクローズボタンと同じ順序。window-manager側が先に畳むと
+ * 持ち主が消えていて最終状態・ウィンドウ枠を書き出せない）
+ */
+const ipcWindowOps: WindowOps = {
+  newWindow: (cwd) => windowManager.newWindow(cwd),
+  closeWindow: (windowId) => {
+    finalizeWindow(windowId, true);
+    return windowManager.closeWindow(windowId);
+  },
+  listWindows: () => windowManager.listWindows(),
+  windowIdOfTab: (tabId) => windowManager.windowIdOfTab(tabId),
+  managerOf: (windowId) => windowManager.managerOf(windowId),
+};
+
 try {
   ipcServer = await createIpcServer(
     ipcSocketPath(),
@@ -658,7 +682,7 @@ try {
     sendNotification,
     () => keybindings,
     currentConfigSummary,
-    windowManager,
+    ipcWindowOps,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
