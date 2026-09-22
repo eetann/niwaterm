@@ -63,6 +63,7 @@ import {
   isIdentityCellGlyphTransform,
   measureInkExtent,
 } from "./cell-glyph";
+import { cellAt, type TermCell } from "./term-cells";
 import { isWideChar } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -1987,6 +1988,31 @@ function updateFocusHighlight(): void {
 }
 
 // ---- カーソル描画（タイルごと） ----
+
+/** カーソルが乗っているセル。描画済みの.termのテキストから引く */
+function cursorCell(tabId: TabId, x: number, y: number): TermCell | null {
+  const termEl = termElByTabId.get(tabId);
+  if (!termEl) return null;
+  return cellAt(termEl.textContent ?? "", x, y);
+}
+
+/**
+ * ブロックカーソルはセルを塗りつぶすので、そのままだと下の文字が読めない。実ターミナルと同じく
+ * カーソル色の地へ背景色の文字を重ね、反転表示にする。
+ * 全角文字はCJKフォールバックグリフの実幅が2セル幅と一致しないため、.term内と同じく
+ * .wideで2セル幅へ揃える
+ */
+function setCursorGlyph(cursorEl: HTMLDivElement, cell: TermCell | null): void {
+  if (!cell || cell.char === " ") {
+    if (cursorEl.childNodes.length > 0) cursorEl.replaceChildren();
+    return;
+  }
+  const span = document.createElement("span");
+  if (cell.wide) span.className = "wide";
+  span.textContent = cell.char;
+  cursorEl.replaceChildren(span);
+}
+
 // DECSCUSRの視覚形状ごとにDOM要素のサイズ・位置を変える（bar=左端の縦線、underline=下端の横線、
 // block_hollow=枠線のみ）。libghostty-vtからshape不明値が来た場合も安全にblock扱いへフォールバックする
 function updateCursorForTab(
@@ -2000,13 +2026,21 @@ function updateCursorForTab(
   if (!cursorEl) return;
   if (!visible) {
     cursorEl.style.display = "none";
+    if (cursorEl.childNodes.length > 0) cursorEl.replaceChildren();
     return;
   }
+  // 全角文字の上では2セル分を覆う。全角文字の右半分を指された場合は左半分へ寄せる
+  const cell = cursorCell(tabId, x, y);
+  const cellCols = cell?.wide ? 2 : 1;
+  const left = (cell?.col ?? x) * cellWidth;
   cursorEl.style.display = "block";
   cursorEl.classList.toggle("shape-bar", shape === "bar");
   cursorEl.classList.toggle("shape-underline", shape === "underline");
   cursorEl.classList.toggle("shape-block-hollow", shape === "block_hollow");
-  cursorEl.style.left = `${x * cellWidth}px`;
+  cursorEl.style.left = `${left}px`;
+  // 反転表示にするのは塗りつぶす形状だけ。block_hollow・bar・underlineは下の文字がそのまま見える
+  const filled = shape !== "bar" && shape !== "underline" && shape !== "block_hollow";
+  setCursorGlyph(cursorEl, filled ? cell : null);
   switch (shape) {
     case "bar":
       cursorEl.style.top = `${y * cellHeight}px`;
@@ -2015,12 +2049,12 @@ function updateCursorForTab(
       break;
     case "underline":
       cursorEl.style.top = `${(y + 1) * cellHeight - 2}px`;
-      cursorEl.style.width = `${cellWidth}px`;
+      cursorEl.style.width = `${cellCols * cellWidth}px`;
       cursorEl.style.height = "2px";
       break;
     default:
       cursorEl.style.top = `${y * cellHeight}px`;
-      cursorEl.style.width = `${cellWidth}px`;
+      cursorEl.style.width = `${cellCols * cellWidth}px`;
       cursorEl.style.height = `${cellHeight}px`;
       break;
   }
@@ -2067,11 +2101,13 @@ function updateCopyModeForTab(tabId: TabId, copyMode: CopyModeRenderState | null
     frag.appendChild(el);
   }
   if (copyMode.cursor) {
+    // 全角文字の上では2セル分を覆う（bun側が桁をセルの開始位置へ寄せてくるので左端はそのまま）
+    const cell = cursorCell(tabId, copyMode.cursor.x, copyMode.cursor.y);
     const el = document.createElement("div");
     el.className = "copy-cursor";
     el.style.left = `${copyMode.cursor.x * cellWidth}px`;
     el.style.top = `${copyMode.cursor.y * cellHeight}px`;
-    el.style.width = `${cellWidth}px`;
+    el.style.width = `${(cell?.wide ? 2 : 1) * cellWidth}px`;
     el.style.height = `${cellHeight}px`;
     frag.appendChild(el);
   }
