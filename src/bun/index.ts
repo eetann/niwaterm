@@ -43,6 +43,7 @@ import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-lay
 import { enableWindowTransparency } from "./win-window";
 import { sendWindowsNotification } from "./windows-notification";
 import {
+  defaultWindowFrame,
   isFrameRestorable,
   loadWindowState,
   resolveWindowFrame,
@@ -51,12 +52,8 @@ import {
   type WindowFrame,
   windowStateFilePath,
 } from "./window-state";
-import {
-  createWorkspaceManager,
-  type AppRenderState,
-  type BoardId,
-  type WorkspaceId,
-} from "./workspace-manager";
+import { createWindowManager, type WindowId } from "./window-manager";
+import type { AppRenderState, BoardId, WorkspaceId } from "./workspace-manager";
 
 // macOSではメニューが無いとCmd+C/Cmd+V等のkey equivalentがWebViewに届かないため、標準メニューを設定する。
 // これはmacOS固有の事情（key equivalentがメニュー経由で配送される）への対処なので他OSでは設定しない
@@ -161,6 +158,8 @@ export type NiwaRPC = {
       resizeTileInDirection: { direction: "up" | "down" | "left" | "right" };
       resizeSplit: { splitId: TileId; ratio: number };
       newWorkspace: {};
+      /** 一時ウィンドウ（前回の状態を復元せず、閉じても何も残さないOSウィンドウ）を開く */
+      newWindow: {};
       switchWorkspace: { workspaceId: WorkspaceId };
       /** サイドバーのD&D・move-workspace-*キーバインドからの並び替え。toIndexは0始まり（範囲外はbun側でクランプ） */
       moveWorkspace: { workspaceId: WorkspaceId; toIndex: number };
@@ -199,7 +198,7 @@ export type NiwaRPC = {
       runSelectionMenuItem: { id: string };
       /** reload-configキーバインド・コマンドパレットからの手動リロード要求。ファイル監視での自動リロードと同じhandleConfigFileChangedを呼ぶ */
       reloadConfig: {};
-      /** niwatermのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
+      /** そのウィンドウのフォーカス状態。ベルの通知要否・既読判定に使う */
       windowFocusChanged: { focused: boolean };
     };
   }>;
@@ -236,32 +235,66 @@ export type NiwaRPC = {
   }>;
 };
 
+/**
+ * OSウィンドウ1枚ぶんの、描画側（Electrobun側）の状態。中身（Workspace以下）は
+ * window-manager.tsが持ち、ここが持つのはBrowserWindow・rpcと描画のコアレス状態だけ
+ */
+interface WindowView {
+  windowId: WindowId;
+  browserWindow: InstanceType<typeof BrowserWindow>;
+  /** OSのフォーカスがこのウィンドウにあるか（webview側のfocus/blurから届く）。ベルの扱いを分けるのに使う */
+  focused: boolean;
+  /** webviewの中身へOSキーボードフォーカスを渡し済みか（readyは再送されうるので1回だけ渡す） */
+  webviewFocused: boolean;
+  renderScheduled: boolean;
+  /** 前回webviewへ送ったパレットCSS（dropUnchangedPaletteCss参照） */
+  lastPaletteCssByTabId: Map<TabId, string>;
+  /** 保存対象のウィンドウ枠。一時ウィンドウでは保存しないので参照されない */
+  frame: WindowFrame;
+  frameSaveScheduled: boolean;
+  /** 後始末が済んでいるか。OSのクローズとwindow-manager側の終了の両方から閉じられるため持つ */
+  closed: boolean;
+}
+
+const views = new Map<WindowId, WindowView>();
+
+/**
+ * そのウィンドウのwebviewへメッセージを送る口。ウィンドウ生成直後はまだrpcが立っておらず、
+ * PTYの初回出力等からの描画要求が先に来ることがあるため、都度引き直してnullチェックする
+ */
+function rpcSendOf(windowId: WindowId): any | null {
+  const view = views.get(windowId);
+  if (!view || view.closed) return null;
+  return (view.browserWindow.webview.rpc as any)?.send ?? null;
+}
+
 // 描画は16msでコアレス（連続出力時のRPC洪水を防ぐ）
-let renderScheduled = false;
-function scheduleRender() {
-  if (renderScheduled) return;
-  renderScheduled = true;
+function scheduleRender(windowId: WindowId) {
+  const view = views.get(windowId);
+  if (!view || view.renderScheduled) return;
+  view.renderScheduled = true;
   setTimeout(() => {
-    renderScheduled = false;
-    render();
+    view.renderScheduled = false;
+    render(windowId);
   }, 16);
 }
 
-function render() {
-  // onDirty経由でPTYの初回出力等から即座に呼ばれうるため、mainWindow構築（このファイル末尾の
-  // new BrowserWindow）が完了する前にscheduleRenderのsetTimeoutが発火する競合状態がありうる。
-  // 未構築時はmainWindowの参照自体はTDZに引っかからずundefinedを返す（Bunのバンドラーがトップ
-  // レベルconstをvar相当にscope-hoistingしているため）ので、明示的にガードする必要がある
-  // （実機で発生確認済み。ガード無しだとsetTimeoutコールバック内の例外でWorker全体が落ちる）
-  if (!mainWindow) return;
-  const rpcSend = (mainWindow.webview.rpc as any)?.send;
-  if (!rpcSend) return;
+/** 全ウィンドウを描き直す（設定変更・フォントサイズ変更など、どのウィンドウにも効く変化） */
+function scheduleRenderAll() {
+  for (const windowId of views.keys()) scheduleRender(windowId);
+}
+
+function render(windowId: WindowId) {
+  const view = views.get(windowId);
+  const rpcSend = rpcSendOf(windowId);
+  if (!view || !rpcSend) return;
   // 画面に出ているタブのベルは既読として消す。描画のたびに拾うことで、タブ切替・Board切替・
   // ワークスペース切替・ウィンドウのフォーカス復帰のどの経路でも取りこぼさない
-  if (windowFocused) workspaceManager.clearBellOnVisibleTabs();
-  const snap = workspaceManager.snapshot();
-  dropUnchangedPaletteCss(snap);
-  mainWindow.setTitle(
+  if (view.focused) windowManager.clearBellOnVisibleTabs(windowId);
+  const snap = windowManager.snapshotOf(windowId);
+  if (!snap) return;
+  dropUnchangedPaletteCss(view, snap);
+  view.browserWindow.setTitle(
     snap.workspaceIds.length === 1
       ? APP_VARIANT
       : `${APP_VARIANT} — Workspace ${snap.workspaceIds.indexOf(snap.activeWorkspaceId) + 1}/${snap.workspaceIds.length}`,
@@ -273,31 +306,33 @@ function render() {
  * 前回webviewへ送ったのと同じパレットCSSをnullへ潰す。パレットは6KB強ある一方、
  * OSC 4等で塗り替えられない限り変わらないため、毎フレーム運ぶとRPCのペイロードが
  * 無駄に膨らむ。webviewは受け取ったパレットを保持して次回以降も使い回す（mainview側の
- * applyPaletteCss）ので、送り直しは内容が変わったときだけでよい
+ * applyPaletteCss）ので、送り直しは内容が変わったときだけでよい。
+ * 保持はウィンドウごと（webviewごと）に分ける
  */
-const lastPaletteCssByTabId = new Map<TabId, string>();
-function dropUnchangedPaletteCss(snap: AppRenderState): void {
+function dropUnchangedPaletteCss(view: WindowView, snap: AppRenderState): void {
   // popupのPTY描画状態もboard.tabsに同居しているため、ここを見るだけで両方拾える
   for (const [tabId, state] of Object.entries(snap.workspace.board.tabs)) {
     if (state.kind !== "terminal" || state.paletteCss === null) continue;
-    if (lastPaletteCssByTabId.get(tabId) === state.paletteCss) state.paletteCss = null;
-    else lastPaletteCssByTabId.set(tabId, state.paletteCss);
+    if (view.lastPaletteCssByTabId.get(tabId) === state.paletteCss) state.paletteCss = null;
+    else view.lastPaletteCssByTabId.set(tabId, state.paletteCss);
   }
 }
 
-function sendConfig() {
-  // render()と同じ理由でmainWindow構築前に呼ばれうるためガードする
-  if (!mainWindow) return;
-  const rpcSend = (mainWindow.webview.rpc as any)?.send;
-  if (!rpcSend) return;
-  rpcSend.config({
-    keybindings,
-    appearance: effectiveAppearance(),
-    mouse,
-    customView,
-    shellProfiles,
-    configSummary: currentConfigSummary(),
-  });
+/** 設定はアプリ全体で共通なので、windowId省略時は全ウィンドウへ送る */
+function sendConfig(windowId?: WindowId) {
+  const targets = windowId !== undefined ? [windowId] : [...views.keys()];
+  for (const id of targets) {
+    const rpcSend = rpcSendOf(id);
+    if (!rpcSend) continue;
+    rpcSend.config({
+      keybindings,
+      appearance: effectiveAppearance(),
+      mouse,
+      customView,
+      shellProfiles,
+      configSummary: currentConfigSummary(),
+    });
+  }
 }
 
 /**
@@ -306,9 +341,8 @@ function sendConfig() {
  * 表示先タブはwebview側が決めるためここでは送らない
  */
 function sendCopied(text: string): void {
-  // render()と同じ理由でmainWindow構築前に呼ばれうるためガードする
-  if (!mainWindow) return;
-  const rpcSend = (mainWindow.webview.rpc as any)?.send;
+  // コピーは操作しているウィンドウで起きるため、バッジもフォーカス中ウィンドウにだけ出す
+  const rpcSend = rpcSendOf(windowManager.getFocusedWindowId());
   if (!rpcSend) return;
   // 末尾の改行は数えない（行末まで選択したときに1行多く見える・空コピーで0文字と出るのを防ぐ）
   const body = text.replace(/\n+$/u, "");
@@ -348,6 +382,25 @@ function resetFontSizeZoom(): number {
   return appearance.fontSize;
 }
 
+/**
+ * ウィンドウ枠の保存先。前回のサイズ・位置を復元するのはメインウィンドウだけで、
+ * 一時ウィンドウは既定の枠を少しずつずらして重ねる（ブラウザの新規ウィンドウと同じ扱い）
+ */
+const windowFramePath = windowStateFilePath();
+
+/**
+ * workspaces.jsonへ今すぐ書き出す。書き出すのはメインウィンドウの中身だけで、
+ * メインウィンドウが閉じた後（一時ウィンドウだけが残っている状態）は何もしない。
+ * 一時ウィンドウの中身で前回の状態を上書きしないため
+ */
+function savePersistedStateNow(): void {
+  const state = windowManager.persistentState();
+  if (state === null) return;
+  savePersistedState(persistedFilePath(), state).catch((err: unknown) => {
+    console.log(`[bun] failed to save persisted state: ${String(err)}`);
+  });
+}
+
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
 let persistScheduled = false;
 function schedulePersist() {
@@ -355,17 +408,14 @@ function schedulePersist() {
   persistScheduled = true;
   setTimeout(() => {
     persistScheduled = false;
-    savePersistedState(persistedFilePath(), workspaceManager.serializeForPersistence()).catch(
-      (err: unknown) => {
-        console.log(`[bun] failed to save persisted state: ${String(err)}`);
-      },
-    );
+    savePersistedStateNow();
   }, 500);
 }
 
-function onDirty() {
-  scheduleRender();
-  schedulePersist();
+function onDirty(windowId: WindowId) {
+  scheduleRender(windowId);
+  // 一時ウィンドウの変化は保存しない（閉じた後に何も残さないのが一時ウィンドウの約束）
+  if (windowManager.isPersistent(windowId)) schedulePersist();
 }
 
 let ipcServer: IpcServer | null = null;
@@ -376,7 +426,7 @@ function cleanup() {
   cleaned = true;
   configWatcher.close();
   worktreeExistence.dispose();
-  workspaceManager.dispose();
+  windowManager.dispose();
   ipcServer?.close();
   cleanupConfigImportDir();
 }
@@ -397,10 +447,6 @@ let runKeybindHandler: (id: string) => Promise<void>;
 let bellHandler: NiwaBellHandler | null;
 let runDefaultBell: (event: NiwaBellEvent) => void;
 
-// niwatermのウィンドウがフォーカスされているか（webview側のfocus/blurから届く）。
-// OSの通知はniwatermから手が離れている時にだけ意味があるため、ベルの扱いを分けるのに使う
-let windowFocused = true;
-
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
 const detectedShellProfiles = await detectShellProfiles();
@@ -414,13 +460,13 @@ const sendNotification: (opts: NiwaNotifyOptions) => void =
 
 // Boardに紐づくワークツリーが消えていないかの監視。renderのたびに同期statを打つわけにいかないため
 // キャッシュ越しに引く（dir-existence.ts）
-const worktreeExistence = createDirExistenceCache({ onChange: onDirty });
+const worktreeExistence = createDirExistenceCache({ onChange: scheduleRenderAll });
 
-// niwa.tile/tab/popup等のAPI（設定ファイルの関数ハンドラから呼ばれる）がworkspaceManagerを
-// 操作するため、config読み込み（refreshConfig）より先にworkspaceManagerを作る必要がある。
+// niwa.tile/tab/popup等のAPI（設定ファイルの関数ハンドラから呼ばれる）がwindowManagerを
+// 操作するため、config読み込み（refreshConfig）より先にwindowManagerを作る必要がある。
 // getDefaultShell/getDefaultCwdは遅延評価のクロージャなので、生成時点でdefaultShell等が
 // 未確定（refreshConfig未実行）でも問題ない
-const workspaceManager = createWorkspaceManager({
+const windowManager = createWindowManager({
   initialCols: 80,
   initialRows: 24,
   onDirty,
@@ -433,8 +479,14 @@ const workspaceManager = createWorkspaceManager({
     resolveBoardNewTabCwd(boardConfig.newTabCwd, worktreePath, dirExistsSync),
   isWorktreeMissing: (worktreePath) => worktreeExistence.isMissing(worktreePath),
   onBell: handleBell,
-  onAllWorkspacesClosed: () => {
-    console.log("all workspaces closed, exiting");
+  onWindowOpened: (windowId) => {
+    createWindowView(windowId, frameForNewWindow());
+  },
+  onWindowClosed: (windowId) => {
+    finalizeWindow(windowId, true);
+  },
+  onAllWindowsClosed: () => {
+    console.log("all windows closed, exiting");
     cleanup();
     process.exit(0);
   },
@@ -445,16 +497,19 @@ const workspaceManager = createWorkspaceManager({
  * 無ければ既定の処理（マーク＋画面に出ていないタブなら通知）を行う
  */
 function handleBell(tabId: TabId): void {
-  const location = workspaceManager.locateTab(tabId);
+  const location = windowManager.locateTab(tabId);
   if (!location) return;
+  const windowId = windowManager.windowIdOfTab(tabId);
   const event: NiwaBellEvent = {
     tabId,
-    tabName: workspaceManager.getTabName(tabId),
+    tabName: windowManager.getTabName(tabId),
     tileId: location.tileId,
     boardId: location.boardId,
     workspaceId: location.workspaceId,
-    windowFocused,
-    visible: workspaceManager.isTabVisible(tabId),
+    // ベルを鳴らしたタブが載っているウィンドウのフォーカス状態。別ウィンドウを見ている間の
+    // ベルは「手が離れている」扱いにしたいので、アプリ全体ではなくウィンドウ単位で見る
+    windowFocused: windowId !== null && (views.get(windowId)?.focused ?? false),
+    visible: windowManager.isTabVisible(tabId),
   };
   if (!bellHandler) {
     runDefaultBell(event);
@@ -503,7 +558,7 @@ async function refreshConfig(): Promise<void> {
     runDefaultBell,
   } = await loadAndResolveConfig(
     configFilePath(),
-    workspaceManager,
+    windowManager,
     detectedShellProfiles,
     sendNotification,
     () => handleConfigFileChanged(),
@@ -529,7 +584,7 @@ await refreshConfig();
  * 紐づけ時に記録したもの（projectRoot、無ければcwd）を使う
  */
 async function applyStartupLayouts(): Promise<void> {
-  for (const { boardId, preset, projectRoot, cwd } of workspaceManager.listStartupLayoutBoards()) {
+  for (const { boardId, preset, projectRoot, cwd } of windowManager.listStartupLayoutBoards()) {
     const layoutPreset = projectRoot
       ? await loadProjectPreset(projectRoot, preset)
       : layouts[preset];
@@ -541,7 +596,7 @@ async function applyStartupLayouts(): Promise<void> {
       continue;
     }
     const result = applyLayoutPreset(
-      workspaceManager,
+      windowManager,
       shellProfiles,
       layoutPreset,
       "replace",
@@ -577,7 +632,7 @@ async function handleConfigFileChanged(): Promise<void> {
   try {
     await refreshConfig();
     sendConfig();
-    scheduleRender();
+    scheduleRenderAll();
   } finally {
     configReloadInFlight = false;
     if (configReloadPending) {
@@ -590,10 +645,10 @@ async function handleConfigFileChanged(): Promise<void> {
 try {
   ipcServer = await createIpcServer(
     ipcSocketPath(),
-    workspaceManager,
+    windowManager,
     () => customView,
-    () => mainWindow.activate(),
-    createBrowserBridge(() => rpc),
+    (windowId) => activateWindow(windowId),
+    createBrowserBridge(browserRpcOfTab),
     captureUrlScreenshot,
     () => shellProfiles,
     () => layouts,
@@ -603,6 +658,7 @@ try {
     sendNotification,
     () => keybindings,
     currentConfigSummary,
+    windowManager,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -619,294 +675,328 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
-const rpc = BrowserView.defineRPC<NiwaRPC>({
-  // ナビゲーション待ち等は数秒かかりうるため長めに設定。実際のタイムアウト制御はmainview側の
-  // 内部タイムアウト（execBrowserJs/browserNavigateハンドラ）が先に発火し、必ずresolveで返す。
-  // これは万一ハンドラがハングした場合の最終防波堤
-  maxRequestTime: 20000,
-  handlers: {
-    requests: {
-      listBoardLayouts: async ({ boardId }: { boardId: BoardId }) => ({
-        layouts: await listResolvedLayouts(workspaceManager.getBoardFocusedCwd(boardId), layouts),
-      }),
-      selectionMenuItems: async ({ tabId, text }: { tabId: TabId; text: string }) => {
-        const cwd = workspaceManager.getTabVar(tabId, "cwd");
-        return {
-          items: await selectionMenu.build({
-            text,
-            tabId,
-            cwd: cwd.found ? cwd.value : undefined,
-          }),
-        };
+/**
+ * ウィンドウ1枚ぶんのRPC。BrowserViewごとにトランスポートが紐づくため、rpcはウィンドウごとに
+ * 作り直す必要がある。tileId・tabId等を伴う操作はwindow-manager.tsが持ち主のウィンドウへ
+ * 振り分けるのでwindowIdを見ないが、「今のウィンドウに対して」という意味の操作
+ * （ポップアップ・ワークスペース新規作成・フォーカス移動）だけはこのwindowIdを起点にする
+ */
+function createWindowRpc(windowId: WindowId) {
+  return BrowserView.defineRPC<NiwaRPC>({
+    // ナビゲーション待ち等は数秒かかりうるため長めに設定。実際のタイムアウト制御はmainview側の
+    // 内部タイムアウト（execBrowserJs/browserNavigateハンドラ）が先に発火し、必ずresolveで返す。
+    // これは万一ハンドラがハングした場合の最終防波堤
+    maxRequestTime: 20000,
+    handlers: {
+      requests: {
+        listBoardLayouts: async ({ boardId }: { boardId: BoardId }) => ({
+          layouts: await listResolvedLayouts(windowManager.getBoardFocusedCwd(boardId), layouts),
+        }),
+        selectionMenuItems: async ({ tabId, text }: { tabId: TabId; text: string }) => {
+          const cwd = windowManager.getTabVar(tabId, "cwd");
+          return {
+            items: await selectionMenu.build({
+              text,
+              tabId,
+              cwd: cwd.found ? cwd.value : undefined,
+            }),
+          };
+        },
       },
-    },
-    messages: {
-      log: ({ msg }: { msg: string }) => {
-        console.log(`[view] ${msg}`);
-      },
-      ready: () => {
-        // webviewが読み込み直されると保持していたパレットも消えるため、差分判定を振り出しへ戻す
-        lastPaletteCssByTabId.clear();
-        scheduleRender();
-        sendConfig();
-        focusWebviewOnce();
-      },
-      input: ({ tabId, data }: { tabId: TabId; data: string }) => {
-        workspaceManager.handleInput(tabId, data);
-      },
-      paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
-        workspaceManager.handlePaste(tabId, data);
-      },
-      mouseEvent: ({ tabId, event }: { tabId: TabId; event: MouseEventInput }) => {
-        workspaceManager.handleMouseEvent(tabId, event);
-      },
-      enterCopyMode: ({ tabId }: { tabId: TabId }) => {
-        workspaceManager.enterCopyMode(tabId);
-      },
-      copyModeKey: ({ tabId, key, ctrl }: { tabId: TabId; key: string; ctrl: boolean }) => {
-        workspaceManager.handleCopyModeKey(tabId, { key, ctrl });
-      },
-      scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
-        workspaceManager.handleScroll(tabId, deltaLines);
-      },
-      scrollToTop: ({ tabId }: { tabId: TabId }) => {
-        workspaceManager.handleScrollToTop(tabId);
-      },
-      scrollToBottom: ({ tabId }: { tabId: TabId }) => {
-        workspaceManager.handleScrollToBottom(tabId);
-      },
-      copySelection: ({ text }: { text: string }) => {
-        writeClipboardText(text);
-      },
-      pasteFromClipboard: ({ tabId }: { tabId: TabId }) => {
-        readClipboardText().then((text) => {
-          if (text) workspaceManager.handlePaste(tabId, text);
-        });
-      },
-      openLink: ({ url }: { url: string }) => {
-        if (!isAllowedLinkUrl(url)) {
-          console.log(`[bun] blocked opening link with disallowed scheme: ${url}`);
-          return;
-        }
-        Utils.openExternal(url);
-      },
-      resize: (p: {
-        tabId: TabId;
-        cols: number;
-        rows: number;
-        cellWidth: number;
-        cellHeight: number;
-      }) => {
-        workspaceManager.handleResize(p.tabId, p.cols, p.rows, p.cellWidth, p.cellHeight);
-      },
-      splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
-        workspaceManager.splitTile(tileId, orientation);
-      },
-      newTab: ({
-        tileId,
-        shellProfileId,
-        cwd,
-      }: {
-        tileId: TileId;
-        shellProfileId?: string;
-        cwd?: string;
-      }) => {
-        const resolved = resolveShellProfileCommand(shellProfiles, shellProfileId);
-        if (!resolved.ok) {
-          console.log(`[bun] ${resolved.error}`);
-          return;
-        }
-        workspaceManager.newTab(tileId, resolved.command, cwd);
-      },
-      newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
-        workspaceManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
-      },
-      newCustomViewTab: ({ tileId }: { tileId: TileId }) => {
-        if (!customView) {
-          console.log("[bun] customView is not configured; ignoring newCustomViewTab");
-          return;
-        }
-        workspaceManager.newBrowserTab(tileId, customView.url);
-      },
-      openPopup: () => {
-        workspaceManager.openPopup();
-      },
-      closePopup: () => {
-        workspaceManager.closePopup();
-      },
-      togglePopupVisibility: () => {
-        workspaceManager.togglePopupVisibility();
-      },
-      promotePopup: () => {
-        workspaceManager.promotePopup();
-      },
-      zoomFontSize: ({ delta }: { delta: number }) => {
-        adjustFontSize(delta);
-      },
-      resetFontSizeZoom: () => {
-        resetFontSizeZoom();
-      },
-      switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
-        workspaceManager.switchTab(tileId, tabId);
-      },
-      moveTab: ({
-        fromTileId,
-        tabId,
-        toTileId,
-      }: {
-        fromTileId: TileId;
-        tabId: TabId;
-        toTileId: TileId;
-      }) => {
-        workspaceManager.moveTab(fromTileId, tabId, toTileId);
-      },
-      moveTabToSplit: ({
-        fromTileId,
-        tabId,
-        targetTileId,
-        orientation,
-        placement,
-      }: {
-        fromTileId: TileId;
-        tabId: TabId;
-        targetTileId: TileId;
-        orientation: SplitOrientation;
-        placement: SplitPlacement;
-      }) => {
-        workspaceManager.moveTabToSplit(fromTileId, tabId, targetTileId, orientation, placement);
-      },
-      closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
-        workspaceManager.closeTab(tileId, tabId);
-      },
-      restartTab: ({ tabId }: { tabId: TabId }) => {
-        workspaceManager.respawnTab(tabId);
-      },
-      focusTile: ({ tileId }: { tileId: TileId }) => {
-        workspaceManager.focusTile(tileId);
-      },
-      focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
-        workspaceManager.focusDirection(direction);
-      },
-      toggleZoomTile: ({ tileId }: { tileId: TileId }) => {
-        workspaceManager.toggleZoomTile(tileId);
-      },
-      resizeTileInDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
-        const tileId = workspaceManager.getFocusedTileId();
-        workspaceManager.resizeTileInDirection(tileId, direction, DEFAULT_RESIZE_AMOUNT);
-      },
-      resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {
-        workspaceManager.resizeSplit(splitId, ratio);
-      },
-      newWorkspace: () => {
-        workspaceManager.newWorkspace();
-      },
-      switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
-        workspaceManager.switchWorkspace(workspaceId);
-      },
-      moveWorkspace: ({ workspaceId, toIndex }: { workspaceId: WorkspaceId; toIndex: number }) => {
-        workspaceManager.moveWorkspace(workspaceId, toIndex);
-      },
-      closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
-        workspaceManager.closeWorkspace(workspaceId);
-      },
-      newBoard: ({ workspaceId, cwd }: { workspaceId: WorkspaceId; cwd?: string }) => {
-        workspaceManager.newBoard(workspaceId, cwd);
-      },
-      switchBoard: ({ boardId }: { boardId: BoardId }) => {
-        workspaceManager.switchBoard(boardId);
-      },
-      moveBoard: ({ boardId, toIndex }: { boardId: BoardId; toIndex: number }) => {
-        workspaceManager.moveBoard(boardId, toIndex);
-      },
-      moveBoardToWorkspace: ({
-        boardId,
-        workspaceId,
-        toIndex,
-      }: {
-        boardId: BoardId;
-        workspaceId: WorkspaceId;
-        toIndex?: number;
-      }) => {
-        workspaceManager.moveBoardToWorkspace(boardId, workspaceId, toIndex);
-      },
-      closeBoard: ({ boardId }: { boardId: BoardId }) => {
-        workspaceManager.closeBoard(boardId);
-      },
-      renameTab: ({ tabId, name }: { tabId: TabId; name: string }) => {
-        workspaceManager.setTabName(tabId, name);
-      },
-      renameTile: ({ tileId, name }: { tileId: TileId; name: string }) => {
-        workspaceManager.setTileName(tileId, name);
-      },
-      renameWorkspace: ({ workspaceId, name }: { workspaceId: WorkspaceId; name: string }) => {
-        workspaceManager.setWorkspaceName(workspaceId, name);
-      },
-      renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
-        workspaceManager.setBoardName(boardId, name);
-      },
-      setBoardWorktreePath: ({ boardId, path }: { boardId: BoardId; path: string | null }) => {
-        // 入力欄の初期値はそのBoardのフォーカス中タブのcwdなので、相対パスもそのタブ起点で解決する
-        const resolved =
-          path === null
-            ? null
-            : resolveWorktreeInputPath(
-                path,
-                workspaceManager.getBoardFocusedCwd(boardId),
-                workspaceManager.getBoardFocusedShell(boardId),
-              );
-        workspaceManager.setBoardWorktreePath(boardId, resolved);
-      },
-      applyBoardLayout: ({
-        boardId,
-        preset,
-        trust,
-      }: {
-        boardId: BoardId;
-        preset: string;
-        trust?: boolean;
-      }) => {
-        // 解決起点はそのBoardのフォーカス中タブのcwd。そのタブで`niwaterm layout apply`を
-        // 叩いたのと同じ解決になり、プロジェクトローカルのプリセットも同じ顔ぶれで引ける
-        const cwd = workspaceManager.getBoardFocusedCwd(boardId);
-        applyAndBindStartupLayout(workspaceManager, shellProfiles, layouts, {
+      messages: {
+        log: ({ msg }: { msg: string }) => {
+          console.log(`[view] ${msg}`);
+        },
+        ready: () => {
+          // webviewが読み込み直されると保持していたパレットも消えるため、差分判定を振り出しへ戻す
+          views.get(windowId)?.lastPaletteCssByTabId.clear();
+          scheduleRender(windowId);
+          sendConfig(windowId);
+          focusWebviewOnce(windowId);
+        },
+        input: ({ tabId, data }: { tabId: TabId; data: string }) => {
+          windowManager.handleInput(tabId, data);
+        },
+        paste: ({ tabId, data }: { tabId: TabId; data: string }) => {
+          windowManager.handlePaste(tabId, data);
+        },
+        mouseEvent: ({ tabId, event }: { tabId: TabId; event: MouseEventInput }) => {
+          windowManager.handleMouseEvent(tabId, event);
+        },
+        enterCopyMode: ({ tabId }: { tabId: TabId }) => {
+          windowManager.enterCopyMode(tabId);
+        },
+        copyModeKey: ({ tabId, key, ctrl }: { tabId: TabId; key: string; ctrl: boolean }) => {
+          windowManager.handleCopyModeKey(tabId, { key, ctrl });
+        },
+        scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
+          windowManager.handleScroll(tabId, deltaLines);
+        },
+        scrollToTop: ({ tabId }: { tabId: TabId }) => {
+          windowManager.handleScrollToTop(tabId);
+        },
+        scrollToBottom: ({ tabId }: { tabId: TabId }) => {
+          windowManager.handleScrollToBottom(tabId);
+        },
+        copySelection: ({ text }: { text: string }) => {
+          writeClipboardText(text);
+        },
+        pasteFromClipboard: ({ tabId }: { tabId: TabId }) => {
+          readClipboardText().then((text) => {
+            if (text) windowManager.handlePaste(tabId, text);
+          });
+        },
+        openLink: ({ url }: { url: string }) => {
+          if (!isAllowedLinkUrl(url)) {
+            console.log(`[bun] blocked opening link with disallowed scheme: ${url}`);
+            return;
+          }
+          Utils.openExternal(url);
+        },
+        resize: (p: {
+          tabId: TabId;
+          cols: number;
+          rows: number;
+          cellWidth: number;
+          cellHeight: number;
+        }) => {
+          windowManager.handleResize(p.tabId, p.cols, p.rows, p.cellWidth, p.cellHeight);
+        },
+        splitTile: ({ tileId, orientation }: { tileId: TileId; orientation: SplitOrientation }) => {
+          windowManager.splitTile(tileId, orientation);
+        },
+        newTab: ({
+          tileId,
+          shellProfileId,
+          cwd,
+        }: {
+          tileId: TileId;
+          shellProfileId?: string;
+          cwd?: string;
+        }) => {
+          const resolved = resolveShellProfileCommand(shellProfiles, shellProfileId);
+          if (!resolved.ok) {
+            console.log(`[bun] ${resolved.error}`);
+            return;
+          }
+          windowManager.newTab(tileId, resolved.command, cwd);
+        },
+        newBrowserTab: ({ tileId, url }: { tileId: TileId; url?: string }) => {
+          windowManager.newBrowserTab(tileId, url ?? browser.defaultUrl);
+        },
+        newCustomViewTab: ({ tileId }: { tileId: TileId }) => {
+          if (!customView) {
+            console.log("[bun] customView is not configured; ignoring newCustomViewTab");
+            return;
+          }
+          windowManager.newBrowserTab(tileId, customView.url);
+        },
+        openPopup: () => {
+          windowManager.openPopup(undefined, windowId);
+        },
+        closePopup: () => {
+          windowManager.closePopup(windowId);
+        },
+        togglePopupVisibility: () => {
+          windowManager.togglePopupVisibility(windowId);
+        },
+        promotePopup: () => {
+          windowManager.promotePopup(windowId);
+        },
+        zoomFontSize: ({ delta }: { delta: number }) => {
+          adjustFontSize(delta);
+        },
+        resetFontSizeZoom: () => {
+          resetFontSizeZoom();
+        },
+        switchTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
+          windowManager.switchTab(tileId, tabId);
+        },
+        moveTab: ({
+          fromTileId,
+          tabId,
+          toTileId,
+        }: {
+          fromTileId: TileId;
+          tabId: TabId;
+          toTileId: TileId;
+        }) => {
+          windowManager.moveTab(fromTileId, tabId, toTileId);
+        },
+        moveTabToSplit: ({
+          fromTileId,
+          tabId,
+          targetTileId,
+          orientation,
+          placement,
+        }: {
+          fromTileId: TileId;
+          tabId: TabId;
+          targetTileId: TileId;
+          orientation: SplitOrientation;
+          placement: SplitPlacement;
+        }) => {
+          windowManager.moveTabToSplit(fromTileId, tabId, targetTileId, orientation, placement);
+        },
+        closeTab: ({ tileId, tabId }: { tileId: TileId; tabId: TabId }) => {
+          windowManager.closeTab(tileId, tabId);
+        },
+        restartTab: ({ tabId }: { tabId: TabId }) => {
+          windowManager.respawnTab(tabId);
+        },
+        focusTile: ({ tileId }: { tileId: TileId }) => {
+          windowManager.focusTile(tileId);
+        },
+        focusDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
+          windowManager.focusDirection(direction, windowId);
+        },
+        toggleZoomTile: ({ tileId }: { tileId: TileId }) => {
+          windowManager.toggleZoomTile(tileId);
+        },
+        resizeTileInDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
+          const tileId = windowManager.getFocusedTileId(windowId);
+          windowManager.resizeTileInDirection(tileId, direction, DEFAULT_RESIZE_AMOUNT);
+        },
+        resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {
+          windowManager.resizeSplit(splitId, ratio);
+        },
+        newWorkspace: () => {
+          windowManager.newWorkspace(undefined, windowId);
+        },
+        newWindow: () => {
+          windowManager.newWindow();
+        },
+        switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
+          windowManager.switchWorkspace(workspaceId);
+        },
+        moveWorkspace: ({
+          workspaceId,
+          toIndex,
+        }: {
+          workspaceId: WorkspaceId;
+          toIndex: number;
+        }) => {
+          windowManager.moveWorkspace(workspaceId, toIndex);
+        },
+        closeWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
+          windowManager.closeWorkspace(workspaceId);
+        },
+        newBoard: ({ workspaceId, cwd }: { workspaceId: WorkspaceId; cwd?: string }) => {
+          windowManager.newBoard(workspaceId, cwd);
+        },
+        switchBoard: ({ boardId }: { boardId: BoardId }) => {
+          windowManager.switchBoard(boardId);
+        },
+        moveBoard: ({ boardId, toIndex }: { boardId: BoardId; toIndex: number }) => {
+          windowManager.moveBoard(boardId, toIndex);
+        },
+        moveBoardToWorkspace: ({
+          boardId,
+          workspaceId,
+          toIndex,
+        }: {
+          boardId: BoardId;
+          workspaceId: WorkspaceId;
+          toIndex?: number;
+        }) => {
+          windowManager.moveBoardToWorkspace(boardId, workspaceId, toIndex);
+        },
+        closeBoard: ({ boardId }: { boardId: BoardId }) => {
+          windowManager.closeBoard(boardId);
+        },
+        renameTab: ({ tabId, name }: { tabId: TabId; name: string }) => {
+          windowManager.setTabName(tabId, name);
+        },
+        renameTile: ({ tileId, name }: { tileId: TileId; name: string }) => {
+          windowManager.setTileName(tileId, name);
+        },
+        renameWorkspace: ({ workspaceId, name }: { workspaceId: WorkspaceId; name: string }) => {
+          windowManager.setWorkspaceName(workspaceId, name);
+        },
+        renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
+          windowManager.setBoardName(boardId, name);
+        },
+        setBoardWorktreePath: ({ boardId, path }: { boardId: BoardId; path: string | null }) => {
+          // 入力欄の初期値はそのBoardのフォーカス中タブのcwdなので、相対パスもそのタブ起点で解決する
+          const resolved =
+            path === null
+              ? null
+              : resolveWorktreeInputPath(
+                  path,
+                  windowManager.getBoardFocusedCwd(boardId),
+                  windowManager.getBoardFocusedShell(boardId),
+                );
+          windowManager.setBoardWorktreePath(boardId, resolved);
+        },
+        applyBoardLayout: ({
           boardId,
           preset,
-          ...(cwd !== undefined ? { cwd } : {}),
-          ...(trust !== undefined ? { trust } : {}),
-        })
-          .then((result) => {
-            if (result.ok) return;
-            console.log(`[bun] applyBoardLayout failed: ${result.error}`);
-            sendNotification({ title: "レイアウトを適用できません", body: result.error });
+          trust,
+        }: {
+          boardId: BoardId;
+          preset: string;
+          trust?: boolean;
+        }) => {
+          // 解決起点はそのBoardのフォーカス中タブのcwd。そのタブで`niwaterm layout apply`を
+          // 叩いたのと同じ解決になり、プロジェクトローカルのプリセットも同じ顔ぶれで引ける
+          const cwd = windowManager.getBoardFocusedCwd(boardId);
+          applyAndBindStartupLayout(windowManager, shellProfiles, layouts, {
+            boardId,
+            preset,
+            ...(cwd !== undefined ? { cwd } : {}),
+            ...(trust !== undefined ? { trust } : {}),
           })
-          .catch((err: unknown) => {
-            console.log(`[bun] applyBoardLayout error: ${String(err)}`);
+            .then((result) => {
+              if (result.ok) return;
+              console.log(`[bun] applyBoardLayout failed: ${result.error}`);
+              sendNotification({ title: "レイアウトを適用できません", body: result.error });
+            })
+            .catch((err: unknown) => {
+              console.log(`[bun] applyBoardLayout error: ${String(err)}`);
+            });
+        },
+        clearBoardStartup: ({ boardId }: { boardId: BoardId }) => {
+          windowManager.setBoardStartup(boardId, null);
+        },
+        windowFocusChanged: ({ focused }: { focused: boolean }) => {
+          const view = views.get(windowId);
+          if (view) view.focused = focused;
+          if (!focused) return;
+          // id省略の操作（CLIの`workspace new`等）の対象は、最後にフォーカスされたウィンドウにする
+          windowManager.setFocusedWindow(windowId);
+          // フォーカスが戻った時点で見えているタブのベルを既読にするため、描画をやり直す
+          scheduleRender(windowId);
+        },
+        runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
+          runKeybindHandler(handlerId).catch((err: unknown) => {
+            console.log(`[bun] keybind handler error: ${String(err)}`);
           });
-      },
-      clearBoardStartup: ({ boardId }: { boardId: BoardId }) => {
-        workspaceManager.setBoardStartup(boardId, null);
-      },
-      windowFocusChanged: ({ focused }: { focused: boolean }) => {
-        windowFocused = focused;
-        // フォーカスが戻った時点で見えているタブのベルを既読にするため、描画をやり直す
-        if (focused) scheduleRender();
-      },
-      runKeybindHandler: ({ handlerId }: { handlerId: string }) => {
-        runKeybindHandler(handlerId).catch((err: unknown) => {
-          console.log(`[bun] keybind handler error: ${String(err)}`);
-        });
-      },
-      runSelectionMenuItem: ({ id }: { id: string }) => {
-        void selectionMenu.run(id);
-      },
-      reloadConfig: () => {
-        handleConfigFileChanged().catch((err: unknown) => {
-          console.log(`[bun] manual config reload error: ${String(err)}`);
-        });
+        },
+        runSelectionMenuItem: ({ id }: { id: string }) => {
+          void selectionMenu.run(id);
+        },
+        reloadConfig: () => {
+          handleConfigFileChanged().catch((err: unknown) => {
+            console.log(`[bun] manual config reload error: ${String(err)}`);
+          });
+        },
       },
     },
-  },
-});
+  });
+}
+
+/** そのタブが載っているウィンドウのwebviewへブラウザタブ操作を投げるためのrpc */
+function browserRpcOfTab(tabId: TabId) {
+  const windowId = windowManager.windowIdOfTab(tabId);
+  const rpc = windowId !== null ? (views.get(windowId)?.browserWindow.webview.rpc as any) : null;
+  if (rpc) return rpc;
+  // ウィンドウが閉じた直後のCLI操作等。エラーとして返せばCLI側が理由を表示できる
+  const unavailable = async () => ({
+    ok: false as const,
+    error: `window not found for tab: ${tabId}`,
+  });
+  return { request: { browserNavigate: unavailable, execBrowserJs: unavailable } };
+}
 
 interface DisplayInfo {
   workArea: ScreenArea;
@@ -932,41 +1022,26 @@ function screenWorkAreas(): ScreenArea[] {
 // 設定を変えたときは再起動が必要
 const isBackgroundTransparent = appearance.backgroundOpacity < 1;
 
-const windowFramePath = windowStateFilePath();
-let windowFrame = resolveWindowFrame(loadWindowState(windowFramePath), screenWorkAreas());
+/** 一時ウィンドウを重ねて開くときのずらし幅（px）。真下に重なって見失うのを防ぐ */
+const WINDOW_CASCADE_OFFSET = 28;
 
-const mainWindow = new BrowserWindow({
-  // 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
-  // タイトルバーで見分けられるよう、実際のアプリ名をそのまま使う
-  title: APP_VARIANT,
-  url: "views://mainview/index.html",
-  frame: {
-    width: windowFrame.width,
-    height: windowFrame.height,
-    x: windowFrame.x,
-    y: windowFrame.y,
-  },
-  // 透過ウィンドウはWebView2の背景色を透明にする副作用も持つため、実際に透かすときだけ有効にする。
-  // 不透明度そのものはwebview側のCSSで決まる（WebView2のDefaultBackgroundColorは
-  // アルファ0か255しか受け付けず、半透明を表現できない）
-  transparent: isBackgroundTransparent,
-  rpc,
-});
-
-if (isBackgroundTransparent) {
-  // Electrobunが立てるWS_EX_LAYEREDのままだとネイティブ枠が描画されないため、
-  // 生成後にDWM側の透過へ切り替える（詳細: src/native/winwindow.c）
-  enableWindowTransparency();
+/** 一時ウィンドウの枠。既定の枠を、今開いているウィンドウの枚数ぶんだけずらす */
+function frameForNewWindow(): WindowFrame {
+  const base = defaultWindowFrame(screenWorkAreas());
+  const offset = WINDOW_CASCADE_OFFSET * views.size;
+  return { ...base, x: base.x + offset, y: base.y + offset };
 }
 
-// 保存する値はネイティブ側の外枠（getFrame）から取り直す。move/resizeイベントが持つ
-// width/heightはwebview（クライアント領域）のサイズで、ウィンドウ生成時に渡す外枠より
-// タイトルバー・枠の分だけ小さいため、イベント値をそのまま保存すると起動のたびに縮んでいく。
-// 最小化中など復元に使えない値のときは、直前に控えた値を残す
-function captureWindowFrame() {
+/**
+ * 保存する値はネイティブ側の外枠（getFrame）から取り直す。move/resizeイベントが持つ
+ * width/heightはwebview（クライアント領域）のサイズで、ウィンドウ生成時に渡す外枠より
+ * タイトルバー・枠の分だけ小さいため、イベント値をそのまま保存すると起動のたびに縮んでいく。
+ * 最小化中など復元に使えない値のときは、直前に控えた値を残す
+ */
+function captureWindowFrame(view: WindowView) {
   let frame: WindowFrame;
   try {
-    frame = mainWindow.getFrame();
+    frame = view.browserWindow.getFrame();
   } catch (err: unknown) {
     console.log(`[bun] failed to read window frame: ${String(err)}`);
     return;
@@ -978,68 +1053,148 @@ function captureWindowFrame() {
     height: Math.round(frame.height),
   };
   if (!isFrameRestorable(rounded, screenWorkAreas())) return;
-  windowFrame = rounded;
+  view.frame = rounded;
 }
 
-function saveWindowFrameNow() {
-  captureWindowFrame();
+function saveWindowFrameNow(view: WindowView) {
+  // 復元するのはメインウィンドウだけなので、一時ウィンドウの枠は保存しない
+  if (!windowManager.isPersistent(view.windowId)) return;
+  captureWindowFrame(view);
   try {
-    saveWindowState(windowFramePath, windowFrame);
+    saveWindowState(windowFramePath, view.frame);
   } catch (err: unknown) {
     console.log(`[bun] failed to save window frame: ${String(err)}`);
   }
 }
 
 // ウィンドウ枠の保存は500msでコアレスする（ドラッグ中はmove/resizeが連続で飛んでくる）
-let windowFrameSaveScheduled = false;
-function scheduleWindowFrameSave() {
-  if (windowFrameSaveScheduled) return;
-  windowFrameSaveScheduled = true;
+function scheduleWindowFrameSave(view: WindowView) {
+  if (view.frameSaveScheduled) return;
+  view.frameSaveScheduled = true;
   setTimeout(() => {
-    windowFrameSaveScheduled = false;
-    saveWindowFrameNow();
+    view.frameSaveScheduled = false;
+    if (!view.closed) saveWindowFrameNow(view);
   }, 500);
 }
 
-mainWindow.on("move", () => scheduleWindowFrameSave());
-mainWindow.on("resize", () => scheduleWindowFrameSave());
-
-// Electrobunはアプリコードをbun Worker上で実行するため、Worker側で登録したprocess.on("exit")や
-// シグナルハンドラはアプリ終了時に発火しない（Electrobunがprocess.exitを上書きし、ネイティブ側の
-// quitGracefullyでプロセスを終わらせるため）。このためウィンドウを閉じただけではcleanup()＝
-// 全セッションのdispose()もIPCサーバーの停止も一度も走らず、Windows実機ではbridge-port・
-// niwaterm.sockが残留する（PTYの子プロセス自体はアプリのプロセス終了に伴いOSが回収するが、
-// killをOS任せにせず明示的に落とす）。そこでElectrobunのウィンドウ終了・アプリ終了イベントからも
-// cleanup()を呼ぶ。will-closeはウィンドウを閉じる直前（ネイティブのcloseWindowより前）、
-// before-quitはCmd+Q等のアプリ終了要求で発火する。cleanup()は冪等なので複数経路から
-// 呼ばれても問題ない
-function onExit() {
-  saveWindowFrameNow();
-  cleanup();
+/**
+ * ウィンドウが閉じたときの後始末。OSのクローズボタン（will-close/close）と、
+ * 最後のタブが終了してwindow-manager側から畳まれた場合の両方から呼ばれるため冪等にする。
+ * closeNativeはBrowserWindowをこちらから閉じる必要があるか（OS由来なら既に閉じている）
+ */
+function finalizeWindow(windowId: WindowId, closeNative: boolean): void {
+  const view = views.get(windowId);
+  if (!view || view.closed) return;
+  view.closed = true;
+  views.delete(windowId);
+  // window-manager側から畳まれた場合、この時点で既にpersistent判定はfalseになっており
+  // 中身も空なので保存は走らない（空のワークスペースで上書きしないための順序）
+  saveWindowFrameNow(view);
+  if (windowManager.isPersistent(windowId)) savePersistedStateNow();
+  if (closeNative) view.browserWindow.close();
 }
 
-mainWindow.on("will-close", () => onExit());
-mainWindow.on("close", () => onExit());
-Electrobun.events.on("before-quit", () => onExit());
-
-// WindowsではmainWindow.activate()（ネイティブのactivateWindow）がwebviewのOSキーボードフォーカスを
-// 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
-// 加えてウィンドウ生成時点ではWebView2のコントローラがまだ無く、生成時のactivateではweb contentへ
-// フォーカスが渡らない。showWindow(activate:true)ならネイティブ側がFocusActiveView()＝
-// MoveFocus(PROGRAMMATIC)まで行うため、webviewの準備ができたready受信時に一度だけ呼ぶ
-if (process.platform !== "win32") {
-  mainWindow.activate();
+/** CLIの`tab show`等からウィンドウを前面に出す。windowId省略時はフォーカス中ウィンドウ */
+function activateWindow(windowId?: WindowId | null): void {
+  const view = views.get(windowId ?? windowManager.getFocusedWindowId());
+  view?.browserWindow.activate();
 }
-
-let webviewFocused = false;
 
 /** 起動直後に一度だけ、webviewの中身へOSキーボードフォーカスを渡す（readyは再送されうるので1回だけ） */
-function focusWebviewOnce(): void {
-  if (webviewFocused) return;
-  webviewFocused = true;
+function focusWebviewOnce(windowId: WindowId): void {
+  const view = views.get(windowId);
+  if (!view || view.webviewFocused) return;
+  view.webviewFocused = true;
+  // WindowsではactivateWindow（ネイティブのactivateWindow）がwebviewのOSキーボードフォーカスを
+  // 壊し、物理クリックまでキー入力が一切届かなくなる（docs/known-issues/windows-popup-activatewindow-focus-loss.md）。
+  // 加えてウィンドウ生成時点ではWebView2のコントローラがまだ無く、生成時のactivateではweb contentへ
+  // フォーカスが渡らない。showWindow(activate:true)ならネイティブ側がFocusActiveView()＝
+  // MoveFocus(PROGRAMMATIC)まで行うため、webviewの準備ができたready受信時に一度だけ呼ぶ
   if (process.platform !== "win32") return;
-  mainWindow.show();
+  view.browserWindow.show();
 }
+
+function createWindowView(windowId: WindowId, frame: WindowFrame): WindowView {
+  const browserWindow = new BrowserWindow({
+    // 開発中ビルド(niwaterm-wip-dev)と普段遣いビルド(niwaterm-daily-dev)を同時に起動した際に
+    // タイトルバーで見分けられるよう、実際のアプリ名をそのまま使う
+    title: APP_VARIANT,
+    url: "views://mainview/index.html",
+    frame: {
+      width: frame.width,
+      height: frame.height,
+      x: frame.x,
+      y: frame.y,
+    },
+    // 透過ウィンドウはWebView2の背景色を透明にする副作用も持つため、実際に透かすときだけ有効にする。
+    // 不透明度そのものはwebview側のCSSで決まる（WebView2のDefaultBackgroundColorは
+    // アルファ0か255しか受け付けず、半透明を表現できない）
+    transparent: isBackgroundTransparent,
+    rpc: createWindowRpc(windowId),
+  });
+
+  if (isBackgroundTransparent) {
+    // Electrobunが立てるWS_EX_LAYEREDのままだとネイティブ枠が描画されないため、
+    // 生成後にDWM側の透過へ切り替える（詳細: src/native/winwindow.c）。
+    // 未処理のウィンドウだけが対象なので、ウィンドウを開くたびに呼んでよい
+    enableWindowTransparency();
+  }
+
+  const view: WindowView = {
+    windowId,
+    browserWindow,
+    focused: true,
+    webviewFocused: false,
+    renderScheduled: false,
+    lastPaletteCssByTabId: new Map(),
+    frame,
+    frameSaveScheduled: false,
+    closed: false,
+  };
+  views.set(windowId, view);
+
+  browserWindow.on("move", () => scheduleWindowFrameSave(view));
+  browserWindow.on("resize", () => scheduleWindowFrameSave(view));
+
+  // Electrobunはアプリコードをbun Worker上で実行するため、Worker側で登録したprocess.on("exit")や
+  // シグナルハンドラはアプリ終了時に発火しない（Electrobunがprocess.exitを上書きし、ネイティブ側の
+  // quitGracefullyでプロセスを終わらせるため）。このためウィンドウを閉じただけではcleanup()＝
+  // 全セッションのdispose()もIPCサーバーの停止も一度も走らず、Windows実機ではbridge-port・
+  // niwaterm.sockが残留する（PTYの子プロセス自体はアプリのプロセス終了に伴いOSが回収するが、
+  // killをOS任せにせず明示的に落とす）。そこでElectrobunのウィンドウ終了イベントから
+  // そのウィンドウを畳み、最後の1枚が閉じた時点でcleanup()＋終了する。
+  // will-closeはウィンドウを閉じる直前（ネイティブのcloseWindowより前）に発火する
+  const onNativeClose = () => {
+    finalizeWindow(windowId, false);
+    windowManager.closeWindow(windowId);
+  };
+  browserWindow.on("will-close", onNativeClose);
+  browserWindow.on("close", onNativeClose);
+
+  // Windowsでのactivateはwebviewのキーボードフォーカスを壊すため、ここでは呼ばない
+  // （focusWebviewOnceでready受信時にshowする）
+  if (process.platform !== "win32") {
+    browserWindow.activate();
+  }
+
+  return view;
+}
+
+// メインウィンドウだけは前回のサイズ・位置を復元する
+createWindowView(
+  windowManager.mainWindowId,
+  resolveWindowFrame(loadWindowState(windowFramePath), screenWorkAreas()),
+);
+
+// Cmd+Q等のアプリ終了要求。ウィンドウのcloseイベントが来ないまま終わる経路のため、
+// ここでもメインウィンドウの状態を書き出してから後始末する
+Electrobun.events.on("before-quit", () => {
+  for (const view of views.values()) {
+    saveWindowFrameNow(view);
+  }
+  savePersistedStateNow();
+  cleanup();
+});
 
 const configWatcher = watchConfigFile(configFilePath(), () => {
   void handleConfigFileChanged();

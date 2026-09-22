@@ -26,6 +26,7 @@ import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
+import type { WindowId, WindowOps } from "./window-manager";
 import type { WorkspaceManager } from "./workspace-manager";
 
 const UNAVAILABLE_BROWSER_BRIDGE: BrowserBridge = {
@@ -36,6 +37,24 @@ const UNAVAILABLE_BROWSER_BRIDGE: BrowserBridge = {
 };
 
 type CaptureScreenshot = (url: string) => Promise<ScreenshotResult>;
+
+/**
+ * CLIが全リクエストへ付ける呼び出し元タブのid（PTYへ注入したNIWATERM_TAB_ID）。
+ * 「今のウィンドウに対して」という意味を持つ操作（workspace new・popup open等）の起点になる。
+ * niwatermの外から叩かれた場合は付かないので、フォーカス中ウィンドウへ落とす
+ */
+const SCOPE_TAB_HEADER = "x-niwaterm-tab-id";
+
+/** ウィンドウが1つしか無い前提の既定実装（テスト・単体利用向け） */
+function singleWindowOps(workspaceManager: WorkspaceManager): WindowOps {
+  return {
+    newWindow: () => null,
+    closeWindow: () => false,
+    listWindows: () => [],
+    windowIdOfTab: () => null,
+    managerOf: () => workspaceManager,
+  };
+}
 
 export function ipcSocketPath(): string {
   return join(appSupportDir(), "niwaterm.sock");
@@ -676,7 +695,7 @@ function parseFontSizeAction(body: unknown): FontSizeAction | null {
 function buildApp(
   workspaceManager: WorkspaceManager,
   getCustomView: () => ResolvedCustomViewConfig | null,
-  activateWindow: () => void,
+  activateWindow: (windowId?: WindowId | null) => void,
   browserBridge: BrowserBridge,
   captureScreenshot: CaptureScreenshot,
   getShellProfiles: () => ShellProfile[],
@@ -687,12 +706,60 @@ function buildApp(
   sendNotification: (opts: NiwaNotifyOptions) => void,
   getKeybindings: () => KeybindingsConfig,
   getConfigSummary: () => ConfigSummary,
+  windowOps: WindowOps,
 ) {
   const app = new Hono();
 
+  /** 呼び出し元タブが載っているウィンドウ。ヘッダが無ければフォーカス中ウィンドウ */
+  function scopeWindowId(c: Context): WindowId | null {
+    const tabId = c.req.header(SCOPE_TAB_HEADER);
+    return tabId ? windowOps.windowIdOfTab(tabId) : null;
+  }
+
+  /** 「今のウィンドウ」に対する操作の宛先。id指定の操作はwindowOpsを介さずworkspaceManagerでよい */
+  function scoped(c: Context): WorkspaceManager {
+    return windowOps.managerOf(scopeWindowId(c));
+  }
+
+  /** そのウィンドウのアクティブなBoard。省略可能な--boardのフォールバックに使う */
+  function activeBoardId(c: Context): string | undefined {
+    return scoped(c)
+      .listWorkspaces()
+      .find((w) => w.active)?.activeBoardId;
+  }
+
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
 
-  app.get("/list", (c) => c.json({ workspaces: workspaceManager.listWorkspaces() }));
+  // 一覧は呼び出し元のウィンドウぶんだけ返す（サイドバーに出ているものと一致させる）。
+  // ウィンドウをまたいだ俯瞰は`niwaterm window list`が担う
+  app.get("/list", (c) => c.json({ workspaces: scoped(c).listWorkspaces() }));
+
+  app.get("/windows", (c) => c.json({ ok: true, windows: windowOps.listWindows() }));
+
+  // 一時ウィンドウを開く（前回の状態を復元せず、閉じても何も残さない）
+  app.post("/new-window", async (c) => {
+    const body = await readJsonBody(c);
+    const cwd = (body as { cwd?: unknown } | undefined)?.cwd;
+    if (cwd !== undefined && (typeof cwd !== "string" || cwd.length === 0)) {
+      return c.json({ ok: false, error: "expected { cwd?: string }" }, 400);
+    }
+    const windowId = windowOps.newWindow(cwd);
+    if (!windowId) return c.json({ ok: false, error: "window is not available" }, 409);
+    return c.json({ ok: true, windowId });
+  });
+
+  app.post("/close-window", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const windowId = (body as { windowId?: unknown }).windowId;
+    if (typeof windowId !== "string" || windowId.length === 0) {
+      return c.json({ ok: false, error: "expected { windowId: string }" }, 400);
+    }
+    if (!windowOps.closeWindow(windowId)) {
+      return c.json({ ok: false, error: `window not found: ${windowId}` }, 404);
+    }
+    return c.json({ ok: true });
+  });
 
   // CLIが`--tile`等を省略された時の既定の対象を引くための解決口。`tabId`には呼び出し元タブ
   // （PTYへ注入したNIWATERM_TAB_ID）が渡る。タイル階層に居ないタブ（ポップアップ）や、
@@ -704,11 +771,15 @@ function buildApp(
   app.get("/resolve-target", (c) => {
     const scopeTabId = c.req.query("tabId");
     const location = scopeTabId ? workspaceManager.locateTab(scopeTabId) : null;
-    const workspaceId = location?.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+    // 呼び出し元タブが分かるならそのタブのウィンドウ、分からなければフォーカス中ウィンドウが起点
+    const owner = windowOps.managerOf(
+      scopeTabId ? windowOps.windowIdOfTab(scopeTabId) : scopeWindowId(c),
+    );
+    const workspaceId = location?.workspaceId ?? owner.getActiveWorkspaceId();
     const boardId =
-      location?.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+      location?.boardId ?? owner.listWorkspaces().find((w) => w.active)?.activeBoardId;
     if (!boardId) return c.json({ ok: false, error: "active board not found" }, 404);
-    const tileId = location?.tileId ?? workspaceManager.getFocusedTileId();
+    const tileId = location?.tileId ?? owner.getFocusedTileId();
     // ポップアップのタブはタイル階層に居ないためlocationはnullになるが、tabId自体は
     // 呼び出し元のものが正しい
     const tabId =
@@ -720,7 +791,7 @@ function buildApp(
   });
 
   app.post("/new-workspace", (c) => {
-    const workspaceId = workspaceManager.newWorkspace();
+    const workspaceId = scoped(c).newWorkspace();
     return c.json({ ok: true, workspaceId });
   });
 
@@ -795,7 +866,7 @@ function buildApp(
         400,
       );
     }
-    const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+    const workspaceId = parsed.workspaceId ?? scoped(c).getActiveWorkspaceId();
     const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd, {
       ...(parsed.activate !== undefined ? { activate: parsed.activate } : {}),
       ...(parsed.worktreePath !== undefined ? { worktreePath: parsed.worktreePath } : {}),
@@ -925,15 +996,14 @@ function buildApp(
     const target = parsed.target ?? "new-board";
     let boardId: string;
     if (target === "new-board") {
-      const workspaceId = parsed.workspaceId ?? workspaceManager.getActiveWorkspaceId();
+      const workspaceId = parsed.workspaceId ?? scoped(c).getActiveWorkspaceId();
       const newId = workspaceManager.newBoard(workspaceId, parsed.cwd);
       if (newId === null) {
         return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);
       }
       boardId = newId;
     } else {
-      const resolvedBoardId =
-        parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+      const resolvedBoardId = parsed.boardId ?? activeBoardId(c);
       if (!resolvedBoardId || !workspaceManager.hasBoard(resolvedBoardId)) {
         return c.json({ ok: false, error: `board not found: ${resolvedBoardId ?? ""}` }, 404);
       }
@@ -981,8 +1051,7 @@ function buildApp(
         400,
       );
     }
-    const boardId =
-      parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    const boardId = parsed.boardId ?? activeBoardId(c);
     if (!boardId || !workspaceManager.hasBoard(boardId)) {
       return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
     }
@@ -1018,8 +1087,7 @@ function buildApp(
         400,
       );
     }
-    const boardId =
-      parsed.boardId ?? workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    const boardId = parsed.boardId ?? activeBoardId(c);
     if (!boardId) {
       return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
     }
@@ -1221,7 +1289,7 @@ function buildApp(
         400,
       );
     }
-    workspaceManager.focusDirection(parsed.direction);
+    scoped(c).focusDirection(parsed.direction);
     return c.json({ ok: true });
   });
 
@@ -1336,7 +1404,7 @@ function buildApp(
       if (!location) return c.json({ ok: false, error: `tab not found: ${scopeTabId}` }, 404);
       boardId = location.boardId;
     }
-    boardId ??= workspaceManager.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    boardId ??= activeBoardId(c);
     if (!boardId) return c.json({ ok: false, error: "active board not found" }, 404);
     const tabIds = workspaceManager.findTabsByVarInBoard(boardId, key, value);
     if (tabIds === null) return c.json({ ok: false, error: `board not found: ${boardId}` }, 404);
@@ -1442,7 +1510,8 @@ function buildApp(
         400,
       );
     }
-    const tabId = workspaceManager.openPopup(parsed);
+    const popupOwner = scoped(c);
+    const tabId = popupOwner.openPopup(parsed);
     if (!tabId) return c.json({ ok: false, error: "a popup is already open" }, 409);
     // activateWindow()は意図的に呼ばない: mainWindow.activate()を呼ぶと、Windows実機で
     // webviewのOSキーボードフォーカスが壊れ、以後JS側からfocus()を何度呼んでも回復せず
@@ -1456,20 +1525,20 @@ function buildApp(
     // captureStdout: trueは結果を受け取るのに待機が前提のため、waitが未指定でも待つ
     // （fzf-tmuxの`fzf ... > $fifo; cat $fifo`相当。詳細: docs/guide/cli.md「popup open」節）
     if (parsed.wait || parsed.captureStdout) {
-      const output = await workspaceManager.waitForPopupClose();
+      const output = await popupOwner.waitForPopupClose();
       if (parsed.captureStdout) return c.json({ ok: true, tabId, stdout: output ?? "" });
     }
     return c.json({ ok: true, tabId });
   });
 
   app.post("/close-popup", (c) => {
-    const ok = workspaceManager.closePopup();
+    const ok = scoped(c).closePopup();
     if (!ok) return c.json({ ok: false, error: "no popup is open" }, 409);
     return c.json({ ok: true });
   });
 
   app.post("/toggle-popup", (c) => {
-    const visible = workspaceManager.togglePopupVisibility();
+    const visible = scoped(c).togglePopupVisibility();
     if (visible === null) return c.json({ ok: false, error: "no popup is open" }, 409);
     return c.json({ ok: true, visible });
   });
@@ -1477,9 +1546,9 @@ function buildApp(
   // ポップアップの中身をフォーカス中タイルへ通常タブとして編入する（タブへ昇格。ADR 0005）。
   // PTYセッションは作り直さないため、workspaceManager.promotePopup()はセッション生成を伴わない
   app.post("/promote-popup", (c) => {
-    const result = workspaceManager.promotePopup();
+    const result = scoped(c).promotePopup();
     if (!result) return c.json({ ok: false, error: "no popup is open" }, 409);
-    activateWindow();
+    activateWindow(scopeWindowId(c));
     return c.json({ ok: true, tileId: result.tileId, tabId: result.tabId });
   });
 
@@ -1535,7 +1604,8 @@ function buildApp(
     const location = workspaceManager.locateTab(parsed.tabId);
     if (!location) return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
     workspaceManager.showTab(parsed.tabId);
-    activateWindow();
+    // そのタブが載っているウィンドウを前面に出す（別ウィンドウのタブを指されることもある）
+    activateWindow(windowOps.windowIdOfTab(parsed.tabId));
     return c.json({ ok: true, workspaceId: location.workspaceId, tileId: location.tileId });
   });
 
@@ -1613,7 +1683,7 @@ export async function createIpcServer(
   path: string,
   workspaceManager: WorkspaceManager,
   getCustomView: () => ResolvedCustomViewConfig | null = () => null,
-  activateWindow: () => void = () => {},
+  activateWindow: (windowId?: WindowId | null) => void = () => {},
   browserBridge: BrowserBridge = UNAVAILABLE_BROWSER_BRIDGE,
   captureScreenshot: CaptureScreenshot = captureUrlScreenshot,
   getShellProfiles: () => ShellProfile[] = () => [],
@@ -1628,6 +1698,7 @@ export async function createIpcServer(
     configFileLoaded: false,
     sections: [],
   }),
+  windowOps: WindowOps = singleWindowOps(workspaceManager),
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1651,6 +1722,7 @@ export async function createIpcServer(
     sendNotification,
     getKeybindings,
     getConfigSummary,
+    windowOps,
   );
   const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];

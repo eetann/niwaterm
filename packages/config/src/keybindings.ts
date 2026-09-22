@@ -53,6 +53,7 @@ export const KEYBIND_ACTIONS = [
   "rename-board",
   "set-board-worktree",
   "new-workspace",
+  "new-window",
   "next-workspace",
   "prev-workspace",
   "move-workspace-up",
@@ -114,6 +115,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   // tmuxのbind-key , rename-window相当（Boardはtmuxのwindowに対応する）
   ",": "rename-board",
   "shift+n": "new-workspace",
+  // 新規作成系はshift+頭文字で揃える（shift+t: browser Tab、shift+n: New workspace）。
+  // wはWindowの頭文字で、単独のw（close-tile）とは別枠
+  "shift+w": "new-window",
   "]": "next-workspace",
   "[": "prev-workspace",
   b: "toggle-sidebar",

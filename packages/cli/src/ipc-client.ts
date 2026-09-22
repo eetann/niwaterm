@@ -193,13 +193,25 @@ function ipcUrl(endpoint: IpcEndpoint, path: string): string {
   return `http://localhost${path}`;
 }
 
+/**
+ * 呼び出し元タブのidを全リクエストへ載せる。niwatermが複数のOSウィンドウを開けるため、
+ * 「今のウィンドウ」を対象にする操作（workspace new・popup open等）の宛先をアプリ側が
+ * 決められるようにする。niwatermの外から実行した場合は付かず、フォーカス中ウィンドウが対象になる
+ */
+function withScopeHeader(init: RequestInit): RequestInit {
+  const tabId = process.env["NIWATERM_TAB_ID"];
+  if (!tabId) return init;
+  return { ...init, headers: { ...init.headers, "x-niwaterm-tab-id": tabId } };
+}
+
 /** BunのfetchはWeb標準のRequestInitにない`unix`を追加でサポートするため、その分だけ型を広げる */
 function ipcFetchInit(
   endpoint: IpcEndpoint,
   init: RequestInit = {},
 ): RequestInit & { unix?: string } {
-  if (endpoint.kind === "unix") return { ...init, unix: endpoint.path };
-  return init;
+  const scoped = withScopeHeader(init);
+  if (endpoint.kind === "unix") return { ...scoped, unix: endpoint.path };
+  return scoped;
 }
 
 /**
@@ -369,6 +381,50 @@ export async function listWorkspaces(endpoint: IpcEndpoint): Promise<ListResult>
 }
 
 export type WorkspaceId = string;
+
+export type WindowId = string;
+
+export interface WindowListEntry {
+  windowId: WindowId;
+  /** 前回の状態を復元し、終了時にも書き戻すメインウィンドウか。falseなら一時ウィンドウ */
+  persistent: boolean;
+  /** 最後にフォーカスされたウィンドウか。id省略時の操作対象になる */
+  focused: boolean;
+  workspaceIds: WorkspaceId[];
+  activeWorkspaceId: WorkspaceId;
+}
+
+export type ListWindowsResult =
+  | { ok: true; windows: WindowListEntry[] }
+  | { ok: false; error: string };
+
+export async function listWindows(endpoint: IpcEndpoint): Promise<ListWindowsResult> {
+  try {
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/windows"), ipcFetchInit(endpoint));
+    if (!res.ok) return { ok: false, error: `unexpected status ${res.status}` };
+    const body = (await res.json()) as { windows?: unknown };
+    if (!Array.isArray(body.windows)) return { ok: false, error: "malformed response" };
+    return { ok: true, windows: body.windows as WindowListEntry[] };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
+export type NewWindowResult = { ok: true; windowId: WindowId } | { ok: false; error: string };
+
+export function newWindow(endpoint: IpcEndpoint, cwd?: string): Promise<NewWindowResult> {
+  return postJson<{ ok: true; windowId: WindowId }>(
+    endpoint,
+    "/new-window",
+    cwd !== undefined ? { cwd } : {},
+  );
+}
+
+export type CloseWindowResult = { ok: true } | { ok: false; error: string };
+
+export function closeWindow(endpoint: IpcEndpoint, windowId: WindowId): Promise<CloseWindowResult> {
+  return postJson<{ ok: true }>(endpoint, "/close-window", { windowId });
+}
 
 /** `--tile`等を省略した時に使う「今の対象」。ワークスペースからタブまで一式が揃う */
 export interface ResolvedTarget {

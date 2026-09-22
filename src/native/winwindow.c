@@ -8,37 +8,31 @@
 #include <dwmapi.h>
 #include <windows.h>
 
+// 一度の呼び出しで処理する上限。ウィンドウは高々数枚なのでこれで足りる
+#define NIWA_MAX_WINDOWS 16
+
 typedef struct {
   DWORD pid;
-  HWND hwnd;
+  HWND hwnds[NIWA_MAX_WINDOWS];
+  int count;
 } NiwaFindWindowCtx;
 
 // Electrobunがトップレベルウィンドウへ登録するクラス名（package/src/native/win/nativeWrapper.cpp）
 static const wchar_t *const kElectrobunWindowClass = L"BasicWindowClass";
 
-static BOOL CALLBACK niwa_find_main_window(HWND hwnd, LPARAM lparam) {
-  NiwaFindWindowCtx *ctx = (NiwaFindWindowCtx *)lparam;
-  DWORD pid = 0;
-  GetWindowThreadProcessId(hwnd, &pid);
-  if (pid != ctx->pid) return TRUE;
-  if (!IsWindowVisible(hwnd)) return TRUE;
+// 差し替え前のウィンドウプロシージャの置き場。ウィンドウごとに持つ必要があるためプロパティに載せる
+// （静的変数1つだと2枚目のウィンドウで1枚目の分を上書きし、どちらの入力も壊れる）。
+// 「このウィンドウは処理済みか」の判定も兼ねる
+static const wchar_t *const kPrevWndProcProp = L"NiwatermPrevWndProc";
 
-  wchar_t cls[64];
-  int len = GetClassNameW(hwnd, cls, (int)(sizeof(cls) / sizeof(cls[0])));
-  if (len <= 0 || wcscmp(cls, kElectrobunWindowClass) != 0) return TRUE;
-
-  ctx->hwnd = hwnd;
-  return FALSE;
-}
-
-static WNDPROC g_prev_wndproc = NULL;
-
-// DWMへper-pixel alphaを渡すには、クライアント領域のアルファを実際にゼロで塗る必要がある。
-// Electrobunのウィンドウクラスは背景ブラシを持たない（hbrBackground = NULL）ため
-// 誰もリダイレクションサーフェスを初期化せず、既定の不透明な白が残り続ける。
-// BLACKNESSのPatBltはRGBA全チャンネルを0にするので、これがアルファのクリアになる
 static LRESULT CALLBACK niwa_transparent_wndproc(HWND hwnd, UINT msg, WPARAM wparam,
                                                  LPARAM lparam) {
+  WNDPROC prev = (WNDPROC)GetPropW(hwnd, kPrevWndProcProp);
+
+  // DWMへper-pixel alphaを渡すには、クライアント領域のアルファを実際にゼロで塗る必要がある。
+  // Electrobunのウィンドウクラスは背景ブラシを持たない（hbrBackground = NULL）ため
+  // 誰もリダイレクションサーフェスを初期化せず、既定の不透明な白が残り続ける。
+  // BLACKNESSのPatBltはRGBA全チャンネルを0にするので、これがアルファのクリアになる
   if (msg == WM_ERASEBKGND) {
     HDC hdc = (HDC)wparam;
     RECT rc;
@@ -46,21 +40,42 @@ static LRESULT CALLBACK niwa_transparent_wndproc(HWND hwnd, UINT msg, WPARAM wpa
     PatBlt(hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, BLACKNESS);
     return 1;
   }
-  return CallWindowProcW(g_prev_wndproc, hwnd, msg, wparam, lparam);
+
+  if (msg == WM_NCDESTROY) {
+    LRESULT result = prev ? CallWindowProcW(prev, hwnd, msg, wparam, lparam)
+                          : DefWindowProcW(hwnd, msg, wparam, lparam);
+    if (prev) SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)prev);
+    RemovePropW(hwnd, kPrevWndProcProp);
+    return result;
+  }
+
+  return prev ? CallWindowProcW(prev, hwnd, msg, wparam, lparam)
+              : DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-/**
- * 自プロセスのElectrobunメインウィンドウを、ネイティブ枠を保ったまま透過可能にする。
- * 0=成功, -1=ウィンドウ未発見, -2=DWMへの要求が失敗。
- */
-int niwa_win_enable_window_transparency(void) {
-  NiwaFindWindowCtx ctx = {GetCurrentProcessId(), NULL};
-  EnumWindows(niwa_find_main_window, (LPARAM)&ctx);
-  if (!ctx.hwnd) return -1;
+static BOOL CALLBACK niwa_find_windows(HWND hwnd, LPARAM lparam) {
+  NiwaFindWindowCtx *ctx = (NiwaFindWindowCtx *)lparam;
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid != ctx->pid) return TRUE;
+  if (!IsWindowVisible(hwnd)) return TRUE;
+  // 処理済みのウィンドウは飛ばす（ウィンドウを増やすたびに呼ばれるため、
+  // 二重にサブクラス化するとプロシージャの鎖が壊れる）
+  if (GetPropW(hwnd, kPrevWndProcProp)) return TRUE;
 
-  LONG_PTR ex = GetWindowLongPtrW(ctx.hwnd, GWL_EXSTYLE);
+  wchar_t cls[64];
+  int len = GetClassNameW(hwnd, cls, (int)(sizeof(cls) / sizeof(cls[0])));
+  if (len <= 0 || wcscmp(cls, kElectrobunWindowClass) != 0) return TRUE;
+
+  ctx->hwnds[ctx->count++] = hwnd;
+  return ctx->count < NIWA_MAX_WINDOWS;
+}
+
+/** 1枚のウィンドウを透過可能にする。戻り値はniwa_win_enable_window_transparencyと同じ */
+static int niwa_make_window_transparent(HWND hwnd) {
+  LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
   if (ex & WS_EX_LAYERED) {
-    SetWindowLongPtrW(ctx.hwnd, GWL_EXSTYLE, ex & ~(LONG_PTR)WS_EX_LAYERED);
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & ~(LONG_PTR)WS_EX_LAYERED);
   }
 
   // 空リージョン（右下が左上より小さい矩形）を渡すのが「ぼかしは不要、
@@ -72,25 +87,44 @@ int niwa_win_enable_window_transparency(void) {
   bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
   bb.fEnable = TRUE;
   bb.hRgnBlur = empty;
-  HRESULT hr = DwmEnableBlurBehindWindow(ctx.hwnd, &bb);
+  HRESULT hr = DwmEnableBlurBehindWindow(hwnd, &bb);
   DeleteObject(empty);
   if (FAILED(hr)) return -2;
 
   // 全辺-1のマージンはフレームをクライアント領域全体へ拡張する指定（sheet of glass）。
   // blur-behindだけではリダイレクションサーフェスのアルファがDWMまで届かない
   MARGINS margins = {-1, -1, -1, -1};
-  hr = DwmExtendFrameIntoClientArea(ctx.hwnd, &margins);
+  hr = DwmExtendFrameIntoClientArea(hwnd, &margins);
   if (FAILED(hr)) return -3;
 
-  if (!g_prev_wndproc) {
-    g_prev_wndproc =
-        (WNDPROC)SetWindowLongPtrW(ctx.hwnd, GWLP_WNDPROC, (LONG_PTR)niwa_transparent_wndproc);
-    if (!g_prev_wndproc) return -4;
-  }
-  InvalidateRect(ctx.hwnd, NULL, TRUE);
+  WNDPROC prev =
+      (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)niwa_transparent_wndproc);
+  if (!prev) return -4;
+  SetPropW(hwnd, kPrevWndProcProp, (HANDLE)prev);
+
+  InvalidateRect(hwnd, NULL, TRUE);
 
   // 非クライアント領域の再計算を促さないと、WS_EX_LAYEREDを剥がしても枠が描き直されない
-  SetWindowPos(ctx.hwnd, NULL, 0, 0, 0, 0,
+  SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
   return 0;
+}
+
+/**
+ * 自プロセスのElectrobunウィンドウのうち、まだ処理していないものをすべて、
+ * ネイティブ枠を保ったまま透過可能にする。ウィンドウを開くたびに呼ぶ想定。
+ * 0=成功, -1=対象ウィンドウ未発見, -2=DWMへの要求が失敗, -4=プロシージャ差し替えが失敗。
+ */
+int niwa_win_enable_window_transparency(void) {
+  NiwaFindWindowCtx ctx = {GetCurrentProcessId(), {0}, 0};
+  EnumWindows(niwa_find_windows, (LPARAM)&ctx);
+  if (ctx.count == 0) return -1;
+
+  int result = 0;
+  for (int i = 0; i < ctx.count; i++) {
+    int rc = niwa_make_window_transparent(ctx.hwnds[i]);
+    // 1枚でも失敗したら最初の失敗を返す（成功した分はそのまま透過されている）
+    if (rc != 0 && result == 0) result = rc;
+  }
+  return result;
 }

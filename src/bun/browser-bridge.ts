@@ -1,7 +1,8 @@
 // bunメインプロセスからブラウザタブ（OOPIF）を操作するための薄いラッパー。
 // 実体はNiwaRPC.webview.requestsを経由してmainview側（src/mainview/index.ts）へ委譲する。
-// rpcはsrc/bun/index.tsでこのモジュールより後（BrowserView.defineRPC呼び出し時）に初期化されるため、
-// 実体ではなく遅延アクセサ（getRpc）を受け取る（getCustomView: () => customViewと同じパターン）。
+// rpcはウィンドウ（webview）ごとに別物で、かつsrc/bun/index.tsでこのモジュールより後
+// （BrowserView.defineRPC呼び出し時）に初期化されるため、実体ではなく
+// 「そのタブが載っているウィンドウのrpc」を引くアクセサを受け取る。
 import type { TabId } from "./tile-layout";
 
 export type BrowserNavigateResult = { ok: true } | { ok: false; error: string };
@@ -34,12 +35,12 @@ const GET_TEXT_CODE = "return document.body ? document.body.innerText : '';";
 const GET_HTML_CODE = "return document.documentElement ? document.documentElement.outerHTML : '';";
 const GET_URL_CODE = "return document.location.href;";
 
-export function createBrowserBridge(getRpc: () => BrowserBridgeRpc): BrowserBridge {
+export function createBrowserBridge(getRpc: (tabId: TabId) => BrowserBridgeRpc): BrowserBridge {
   async function execText(
     tabId: TabId,
     code: string,
   ): Promise<{ ok: true; value: string } | { ok: false; error: string }> {
-    const r = await getRpc().request.execBrowserJs({ tabId, code });
+    const r = await getRpc(tabId).request.execBrowserJs({ tabId, code });
     if (!r.ok) return r;
     if (typeof r.result !== "string") {
       return { ok: false, error: "unexpected result type from browser tab" };
@@ -48,7 +49,7 @@ export function createBrowserBridge(getRpc: () => BrowserBridgeRpc): BrowserBrid
   }
 
   return {
-    navigate: (tabId, url) => getRpc().request.browserNavigate({ tabId, url }),
+    navigate: (tabId, url) => getRpc(tabId).request.browserNavigate({ tabId, url }),
     async getText(tabId) {
       const r = await execText(tabId, GET_TEXT_CODE);
       return r.ok ? { ok: true, text: r.value } : r;

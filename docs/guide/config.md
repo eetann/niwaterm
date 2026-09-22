@@ -265,6 +265,7 @@ keybindings: {
 | `r` | rename-tab |
 | `,` | rename-board |
 | `shift+n` | new-workspace |
+| `shift+w` | new-window |
 | `]` / `[` | next-workspace / prev-workspace |
 | `b` | toggle-sidebar |
 | `f` | jump-hint |
@@ -276,7 +277,7 @@ keybindings: {
 | `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 
-**KeybindAction の一覧**（47種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（48種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -295,6 +296,7 @@ keybindings: {
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `new-workspace` | 新規ワークスペース作成 |
+| `new-window` | 新しいOSウィンドウを開く（既定は prefix + `shift+w`。CLIの`niwaterm window new`と同じ。前回の状態は復元されず、閉じても何も残らない一時ウィンドウになる。詳細は[CLIガイド](/guide/cli.md)の「ウィンドウ」節） |
 | `next-workspace` / `prev-workspace` | ワークスペース切替 |
 | `move-board-up` / `move-board-down` | アクティブなBoardの表示順をワークスペース内で1つ上/下へ移動する（サイドバーのドラッグ&ドロップ、CLIの`niwaterm board move --up/--down`と同じ並び替え）。端では何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
 | `move-board-to-workspace` | アクティブなBoardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`と同じ）。移動先はピッカーで選ぶ（Escapeでキャンセル）。移すとワークスペースが空になる場合は確認ダイアログを挟む。既定キーは無いため使うには自分で割り当てる必要がある |

@@ -2910,6 +2910,9 @@ function handleTileCommand(cmd: TileCommand): void {
     case "newWorkspace":
       sendMessage("newWorkspace");
       break;
+    case "newWindow":
+      sendMessage("newWindow");
+      break;
     case "switchBoard": {
       if (!activeBoardId || boardIds.length < 2) return;
       const index = boardIds.indexOf(activeBoardId);

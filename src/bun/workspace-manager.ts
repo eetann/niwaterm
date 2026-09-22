@@ -93,6 +93,15 @@ export interface WorkspaceManagerOptions {
   onAllWorkspacesClosed: () => void;
   /** 起動時に読み込んだ永続化データ。省略時・無効時は単一ワークスペース・単一タブで初期化する */
   restoreFrom?: PersistedState | null;
+  /**
+   * tile/tab/board/workspaceのidに使う連番の採番。ウィンドウごとにマネージャを持つ構成では
+   * アプリ全体で1つの採番を渡し、ウィンドウをまたいでもidが衝突しないようにする
+   * （CLI・RPCはidだけで対象を指すため、衝突すると別ウィンドウのタブを操作してしまう）。
+   * 省略時はこのマネージャ内で閉じた連番を使う
+   */
+  nextIdSeq?: () => number;
+  /** restoreFromが無いときに作る最初のワークスペースの最初のタブのcwd。省略時はgetDefaultCwdに従う */
+  initialCwd?: string;
   /** 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う */
   getDefaultShell?: WorkspaceOptions["getDefaultShell"];
   /** 新規ワークスペース作成時の最初のタブに使うデフォルトcwdを取得する。省略時はpty.ts側のOS標準ホームディレクトリを使う */
@@ -118,10 +127,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   const workspaceNames = new Map<WorkspaceId, string>();
 
   let counter = 0;
-  const genTileId = (): TileId => `tile-${counter++}`;
-  const genTabId = (): TabId => `tab-${counter++}`;
-  const genBoardId = (): BoardId => `board-${counter++}`;
-  const genWorkspaceId = (): WorkspaceId => `workspace-${counter++}`;
+  const nextSeq = opts.nextIdSeq ?? (() => counter++);
+  const genTileId = (): TileId => `tile-${nextSeq()}`;
+  const genTabId = (): TabId => `tab-${nextSeq()}`;
+  const genBoardId = (): BoardId => `board-${nextSeq()}`;
+  const genWorkspaceId = (): WorkspaceId => `workspace-${nextSeq()}`;
 
   function createAndRegisterWorkspace(
     initialBoards?: InitialBoard[],
@@ -198,7 +208,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     const clampedIndex = Math.min(Math.max(0, restoreFrom.activeWorkspaceIndex), order.length - 1);
     activeId = order[clampedIndex];
   } else {
-    activeId = createAndRegisterWorkspace();
+    activeId = createAndRegisterWorkspace(undefined, undefined, opts.initialCwd);
   }
 
   function findOwnerByTileId(tileId: TileId): Workspace | undefined {
@@ -206,6 +216,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       if (ws.hasTile(tileId)) return ws;
     }
     return undefined;
+  }
+
+  function hasTile(tileId: TileId): boolean {
+    return findOwnerByTileId(tileId) !== undefined;
+  }
+
+  function hasWorkspace(workspaceId: WorkspaceId): boolean {
+    return workspaces.has(workspaceId);
   }
 
   /** アクティブなワークスペースで画面に出ているタブ（各タイルのアクティブタブ、ズーム中はそのタイルのみ） */
@@ -699,6 +717,19 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId) !== undefined;
   }
 
+  /** boardIdのBoardを全ワークスペース横断で引く。listWorkspaces()を舐める呼び出し側のための口 */
+  function findBoard(boardId: BoardId): BoardStatusEntry | undefined {
+    const owner = findOwnerByBoardId(boardId);
+    if (!owner) return undefined;
+    const board = owner.listBoards().find((b) => b.boardId === boardId);
+    if (!board) return undefined;
+    return {
+      ...board,
+      worktreeMissing:
+        board.worktreePath !== null && (opts.isWorktreeMissing?.(board.worktreePath) ?? false),
+    };
+  }
+
   function getTabText(tabId: TabId): string | null {
     return findOwnerByTabId(tabId)?.getTabText(tabId) ?? null;
   }
@@ -828,6 +859,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     getBoardFocusedCwd,
     getBoardFocusedShell,
     listStartupLayoutBoards,
+    hasTile,
+    hasWorkspace,
+    findBoard,
     splitTile,
     newTab,
     newBrowserTab,

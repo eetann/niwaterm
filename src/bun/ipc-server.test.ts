@@ -9,6 +9,7 @@ import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import { listLeaves, type TileLeaf, type TileSplit } from "./tile-layout";
+import { createWindowManager } from "./window-manager";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
 
 /**
@@ -3956,5 +3957,201 @@ describe("POST /popup", () => {
       body: JSON.stringify({ captureStdout: true }),
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("ウィンドウ（複数OSウィンドウ）", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  function createFakeSession(): TerminalSession {
+    return {
+      write: () => {},
+      writeWhenReady: () => {},
+      paste: () => {},
+      mouseEvent: () => {},
+      resize: () => false,
+      setCellSize: () => {},
+      scroll: () => {},
+      scrollToTop: () => {},
+      scrollToBottom: () => {},
+      renderState: () => ({
+        kind: "terminal",
+        html: "",
+        cursorX: 0,
+        cursorY: 0,
+        cursorVisible: true,
+        cursorShape: "block",
+        viewportPinned: true,
+        mouseTracking: false,
+        mouseAnyMotion: false,
+        paletteCss: null,
+        copyMode: null,
+      }),
+      dumpText: () => "",
+      isCopyMode: () => false,
+      enterCopyMode: () => {},
+      exitCopyMode: () => {},
+      handleCopyModeKey: () => false,
+      setCallbacks: () => {},
+      dispose: () => {},
+    };
+  }
+
+  function createTestWindowManager() {
+    return createWindowManager({
+      initialCols: 80,
+      initialRows: 24,
+      onDirty: () => {},
+      onWindowOpened: () => {},
+      onWindowClosed: () => {},
+      onAllWindowsClosed: () => {},
+      createSession: () => createFakeSession(),
+    });
+  }
+
+  /** WindowManagerはWorkspaceManagerとしても振る舞うため、両方の引数へ同じものを渡す */
+  function startServer(wm: ReturnType<typeof createTestWindowManager>) {
+    return createIpcServer(
+      socketPath,
+      wm,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      wm,
+    );
+  }
+
+  /** そのウィンドウのフォーカス中タイルのアクティブタブ */
+  function focusedTabId(wm: ReturnType<typeof createTestWindowManager>, windowId: string): string {
+    return wm.getActiveTabId(wm.getFocusedTileId(windowId)) as string;
+  }
+
+  function post(path: string, body: unknown, tabId?: string) {
+    return fetch(`http://localhost${path}`, {
+      unix: socketPath,
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(tabId ? { "x-niwaterm-tab-id": tabId } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function get(path: string, tabId?: string) {
+    return fetch(`http://localhost${path}`, {
+      unix: socketPath,
+      ...(tabId ? { headers: { "x-niwaterm-tab-id": tabId } } : {}),
+    });
+  }
+
+  test("/windowsが開いているウィンドウを返し、/new-windowで増える", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+
+    const before = (await (await get("/windows")).json()) as {
+      windows: { windowId: string; persistent: boolean }[];
+    };
+    expect(before.windows).toHaveLength(1);
+    expect(before.windows[0].persistent).toBe(true);
+
+    const res = await post("/new-window", {});
+    expect(res.status).toBe(200);
+    const created = (await res.json()) as { ok: true; windowId: string };
+
+    const after = (await (await get("/windows")).json()) as {
+      windows: { windowId: string; persistent: boolean }[];
+    };
+    expect(after.windows).toHaveLength(2);
+    expect(after.windows[1]).toMatchObject({ windowId: created.windowId, persistent: false });
+  });
+
+  test("/close-windowで閉じ、存在しないidは404", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+    const created = (await (await post("/new-window", {})).json()) as { windowId: string };
+
+    expect((await post("/close-window", { windowId: created.windowId })).status).toBe(200);
+    expect((await post("/close-window", { windowId: created.windowId })).status).toBe(404);
+    expect(wm.listWindows()).toHaveLength(1);
+  });
+
+  test("/listは呼び出し元タブが載っているウィンドウのワークスペースだけを返す", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+    const mainTabId = focusedTabId(wm, wm.mainWindowId);
+    const created = (await (await post("/new-window", {})).json()) as { windowId: string };
+    // 一時ウィンドウ側にだけワークスペースを増やす
+    wm.newWorkspace(undefined, created.windowId);
+
+    const scoped = (await (await get("/list", mainTabId)).json()) as { workspaces: unknown[] };
+    expect(scoped.workspaces).toHaveLength(1);
+
+    // ヘッダ無し（niwatermの外からの実行）は最後にフォーカスされたウィンドウ＝一時ウィンドウ
+    const focused = (await (await get("/list")).json()) as { workspaces: unknown[] };
+    expect(focused.workspaces).toHaveLength(2);
+  });
+
+  test("/new-workspaceは呼び出し元タブのウィンドウへ作る", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+    const mainTabId = focusedTabId(wm, wm.mainWindowId);
+    const created = (await (await post("/new-window", {})).json()) as { windowId: string };
+
+    const res = await post("/new-workspace", {}, mainTabId);
+    expect(res.status).toBe(200);
+    expect(wm.snapshotOf(wm.mainWindowId)?.workspaceIds).toHaveLength(2);
+    expect(wm.snapshotOf(created.windowId)?.workspaceIds).toHaveLength(1);
+  });
+
+  test("別ウィンドウのタブもidを指定すれば操作できる", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+    const mainTabId = focusedTabId(wm, wm.mainWindowId);
+    const created = (await (await post("/new-window", {})).json()) as { windowId: string };
+    const tempTabId = focusedTabId(wm, created.windowId);
+
+    // メインウィンドウのタブから、一時ウィンドウのタブのタブ変数を設定する
+    const res = await post(
+      "/set-var",
+      { tabId: tempTabId, key: "role", value: "editor" },
+      mainTabId,
+    );
+    expect(res.status).toBe(200);
+    expect(wm.getTabVar(tempTabId, "role")).toEqual({ found: true, value: "editor" });
+  });
+
+  test("/resolve-targetは呼び出し元タブのウィンドウを起点にフォールバックする", async () => {
+    const wm = createTestWindowManager();
+    server = await startServer(wm);
+    const created = (await (await post("/new-window", {})).json()) as { windowId: string };
+    const tempTabId = focusedTabId(wm, created.windowId);
+
+    const res = await get(`/resolve-target?tabId=${tempTabId}`);
+    const body = (await res.json()) as { ok: true; workspaceId: string; tabId: string };
+    expect(body.tabId).toBe(tempTabId);
+    expect(body.workspaceId).toBe(wm.getActiveWorkspaceId(created.windowId));
   });
 });

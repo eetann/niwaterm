@@ -8,7 +8,7 @@ import { findNativeArtifact } from "./native-artifacts";
 const DLL_REL_PATH = join("vendor", "libghostty", "bin", "niwawin.dll");
 
 const RESULT_MESSAGES: Record<number, string> = {
-  [-1]: "メインウィンドウが見つからない",
+  [-1]: "対象のウィンドウが見つからない",
   [-2]: "DwmEnableBlurBehindWindowが失敗した",
   [-3]: "DwmExtendFrameIntoClientAreaが失敗した",
   [-4]: "ウィンドウプロシージャの差し替えが失敗した",
@@ -16,6 +16,7 @@ const RESULT_MESSAGES: Record<number, string> = {
 
 /**
  * ネイティブ枠（タイトルバー・リサイズ枠）を保ったまま、ウィンドウ背景の透過を有効にする。
+ * まだ処理していないウィンドウすべてが対象なので、ウィンドウを開くたびに呼ぶ。
  * Windows以外では何もしない。成功可否はログにのみ出し、失敗しても起動は続行する
  * （透過が効かないだけで、ターミナルとしては動作するため）
  */

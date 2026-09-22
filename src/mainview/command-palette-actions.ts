@@ -271,6 +271,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     icon: FolderPlus,
   },
   {
+    action: "new-window",
+    labelEn: "New Window",
+    label: "新しいウィンドウを開く",
+    category: "ウィンドウ",
+    icon: AppWindow,
+    keywords: ["window", "ウィンドウ", "新規"],
+  },
+  {
     action: "next-workspace",
     labelEn: "Next Workspace",
     label: "次のワークスペースへ切り替え",

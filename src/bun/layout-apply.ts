@@ -124,18 +124,9 @@ interface BuildContext {
   baseCwd?: string;
 }
 
-/** 全Workspaceを横断してboardIdのBoardListEntryを探す（Board 1つはたかだか数十件程度のため線形探索で十分） */
-function findBoardEntry(workspaceManager: WorkspaceManager, boardId: BoardId) {
-  for (const entry of workspaceManager.listWorkspaces()) {
-    const board = entry.boards.find((b) => b.boardId === boardId);
-    if (board) return board;
-  }
-  return undefined;
-}
-
 /** tileIdが現時点で唯一持つタブのtabIdを返す（不変条件により常に1件のはず） */
 function getSoleTabId(ctx: BuildContext, tileId: TileId): TabId {
-  const board = findBoardEntry(ctx.workspaceManager, ctx.boardId);
+  const board = ctx.workspaceManager.findBoard(ctx.boardId);
   const node = board && findNode(board.layout, tileId);
   if (!node || node.kind !== "leaf" || node.tabIds.length !== 1) {
     throw new Error(`internal error: expected tile ${tileId} to have exactly 1 tab`);
@@ -254,7 +245,7 @@ function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): v
 /** boardIdのBoardを、単一タイル・単一タブへ畳む（既存のcloseTabの繰り返しのみで実現する） */
 function resetToSingleTile(workspaceManager: WorkspaceManager, boardId: BoardId): void {
   for (;;) {
-    const board = findBoardEntry(workspaceManager, boardId);
+    const board = workspaceManager.findBoard(boardId);
     if (!board) return;
     const leaves = listLeaves(board.layout);
     const [firstLeaf] = leaves;
@@ -272,7 +263,7 @@ function resetToSingleTile(workspaceManager: WorkspaceManager, boardId: BoardId)
 }
 
 function getRootTileId(workspaceManager: WorkspaceManager, boardId: BoardId): TileId {
-  const board = findBoardEntry(workspaceManager, boardId);
+  const board = workspaceManager.findBoard(boardId);
   if (!board) throw new Error(`internal error: board not found: ${boardId}`);
   return board.layout.id;
 }

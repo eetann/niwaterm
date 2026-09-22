@@ -17,6 +17,7 @@ import popupCommand from "./commands/popup";
 import shellProfilesCommand from "./commands/shell-profiles";
 import tabCommand from "./commands/tab";
 import tileCommand from "./commands/tile";
+import windowCommand from "./commands/window";
 import workspaceCommand from "./commands/workspace";
 import worktreeCommand from "./commands/worktree";
 
@@ -52,6 +53,7 @@ try {
       list: listCommand,
       notify: notifyCommand,
       tab: tabCommand,
+      window: windowCommand,
       workspace: workspaceCommand,
       board: boardCommand,
       worktree: worktreeCommand,
