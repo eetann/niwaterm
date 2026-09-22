@@ -66,6 +66,7 @@ import {
   type SidebarApplyLayoutRequest,
 } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
+import { isLightBackground } from "./theme-mode";
 import { resolveTileDropZone, splitForDropZone, type TileDropZone } from "./tile-drop-zone";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import {
@@ -599,6 +600,46 @@ function applyTitleBarMode(mode: TitleBarMode) {
   sidebarToolbarEl.classList.toggle(DRAG_REGION_CLASS, mode === "hidden");
 }
 
+let colorProbeCanvas: HTMLCanvasElement | undefined;
+
+/**
+ * CSSカラー値を実際に1px塗って読み戻し、RGBへ解決する。
+ * 名前付き色・hsl()・color-mix()などユーザーが書ける記法をすべて自前で解釈せずに済ませるため、
+ * ブラウザの色解決をそのまま借りる。解釈できない値は透明として塗られるのでnullを返す
+ */
+function resolveColorToRgb(value: string): [number, number, number] | null {
+  const canvas = (colorProbeCanvas ??= document.createElement("canvas"));
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, 1, 1);
+  ctx.fillStyle = value;
+  ctx.fillRect(0, 0, 1, 1);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(0, 0, 1, 1).data;
+  } catch {
+    return null;
+  }
+  if ((data[3] ?? 0) === 0) return null;
+  return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
+}
+
+/**
+ * 背景の明暗をUI側へ伝える。shadcnのデザイントークン自体はforeground/backgroundからの
+ * color-mixで両方向に成り立つが、それだけでは足りない2つをここで切り替える。
+ * - color-scheme: フォームコントロール・スクロールバーのUA既定色。CSSのinheritでは
+ *   上書きできないため、地の明暗と食い違うと入力文字が読めなくなる
+ * - .darkクラス: shadcnコンポーネントが持つ`dark:`バリアント（枠線の濃さ等の微調整）
+ */
+function applyThemeMode(background: string) {
+  const rgb = resolveColorToRgb(background);
+  const light = rgb !== null && isLightBackground(rgb[0], rgb[1], rgb[2]);
+  document.documentElement.style.setProperty("--ui-color-scheme", light ? "light" : "dark");
+  document.documentElement.classList.toggle("dark", !light);
+}
+
 // ---- 外観設定（フォント・カラーテーマ）の適用 ----
 function applyAppearance(config: ResolvedAppearanceConfig) {
   const root = document.documentElement.style;
@@ -615,6 +656,14 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   // color-mix()へ渡す割合。calc()を挟まず済むよう、パーセント文字列にしてから渡す
   root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
   root.setProperty("--term-bg-image", config.backgroundImage);
+  root.setProperty("--ui-border", config.ui.border);
+  root.setProperty("--ui-accent", config.ui.accent);
+  root.setProperty("--ui-warning", config.ui.warning);
+  root.setProperty("--ui-success", config.ui.success);
+  root.setProperty("--ui-danger", config.ui.danger);
+  root.setProperty("--ui-badge-fg", config.ui.badgeForeground);
+  root.setProperty("--ui-scrollbar", config.ui.scrollbar);
+  applyThemeMode(config.background);
   applyAnsiPalette(config.ansiColors);
   applyTitleBarMode(config.titleBar);
   tabBarMode = config.tabBar;

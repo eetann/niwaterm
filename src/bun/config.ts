@@ -7,10 +7,12 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  type AppearanceConfig,
   defaultAppearance,
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultUiColors,
   type CustomViewConfig,
   type CustomViewHandlers,
   isKeybindAction,
@@ -34,6 +36,7 @@ import {
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
+  type ResolvedUiColors,
   type SelectionMenuFn,
   type ShellProfile,
   WORKSPACES_VIEW_ID,
@@ -290,6 +293,24 @@ function isOpacity(value: unknown): value is number {
 }
 
 /**
+ * defaultUiColorsにユーザー設定をマージした最終値を返す。全フィールドが同じ「CSSカラー値の
+ * 文字列」なので、キーを並べて回すだけで済む
+ */
+function resolveUiColors(user: AppearanceConfig["ui"]): ResolvedUiColors {
+  const resolved = { ...defaultUiColors };
+  for (const key of Object.keys(defaultUiColors) as (keyof ResolvedUiColors)[]) {
+    resolved[key] = resolveField(
+      "appearance.ui",
+      key,
+      user?.[key],
+      defaultUiColors[key],
+      isNonEmptyString,
+    );
+  }
+  return resolved;
+}
+
+/**
  * defaultAppearanceにユーザー設定をマージし、フィールド単位・ansiColorsはindex単位で
  * 不正値を警告付きで除外した最終値を返す（resolveKeybindingsと同じper-entry方針）。
  */
@@ -376,6 +397,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       defaultAppearance.titleBar,
       isTitleBarMode,
     ),
+    ui: resolveUiColors(user?.ui),
   };
 }
 

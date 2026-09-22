@@ -31,22 +31,8 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* 地の明暗。applyThemeModeがappearance.backgroundを実測してlight/darkを入れる */
+  --ui-color-scheme: dark;
 
   --term-font:
     "HackGen Console NF", "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
@@ -59,25 +45,47 @@
   --term-cursor: #f5e0dc;
   --term-bg-opacity: 100%;
   --term-bg-image: none;
-}
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* appearance.uiの各フィールド。applyAppearanceがJS側から上書きする */
+  --ui-border: #313244;
+  --ui-accent: #89b4fa;
+  --ui-warning: #f9e2af;
+  --ui-success: #a6e3a1;
+  --ui-danger: #f38ba8;
+  --ui-badge-fg: #1e1e2e;
+  --ui-scrollbar: #45475a;
+
+  /*
+   * クロームの地。サイドバー・オーバーレイ表示のタブバーなど、ターミナルの地より
+   * 一段沈ませたい面で使う。--term-bgへ黒を薄く重ねて作るので、背景色を変えても
+   * 「少し沈んでいる」関係が保たれる
+   */
+  --chrome-bg: color-mix(in srgb, #000 20%, var(--term-bg));
+
+  /*
+   * shadcnのデザイントークン。素のshadcnはライト/ダークで固定のoklch値を持つが、
+   * ここではappearanceのforeground/background/uiから派生させ、サイドバー・ダイアログ・
+   * コマンドパレットの配色がターミナル本体と揃うようにしている。
+   * 中間色は地と文字色のcolor-mixで作るため、明るいテーマでも暗いテーマでも
+   * 同じ式のまま「地に文字色を少し混ぜた面」として成立する（.darkによる上書きは不要）
+   */
+  --background: var(--term-bg);
+  --foreground: var(--term-fg);
+  --primary: var(--ui-accent);
+  --primary-foreground: var(--ui-badge-fg);
+  --secondary: color-mix(in srgb, var(--term-fg) 14%, var(--term-bg));
+  --secondary-foreground: var(--term-fg);
+  --muted: color-mix(in srgb, var(--term-fg) 14%, var(--term-bg));
+  --muted-foreground: color-mix(in srgb, var(--term-fg) 62%, var(--term-bg));
+  --accent: color-mix(in srgb, var(--term-fg) 14%, var(--term-bg));
+  --accent-foreground: var(--term-fg);
+  --popover: color-mix(in srgb, var(--term-fg) 8%, var(--term-bg));
+  --popover-foreground: var(--term-fg);
+  --destructive: var(--ui-danger);
+  --border: var(--ui-border);
+  /* 入力欄の枠は他の境界線より一段はっきりさせる（素のshadcnも border < input の関係を持つ） */
+  --input: color-mix(in srgb, var(--ui-border) 85%, var(--term-fg));
+  --ring: var(--ui-accent);
 }
 
 * {
@@ -121,9 +129,9 @@ body {
   color: var(--foreground);
   /* input/textarea等のフォームコントロールはUAスタイルシートでcolor-schemeに応じた
      独自既定色（light扱いだと黒文字）を持ち、colorプロパティのinherit継承では上書きできない。
-     CommandInput（コマンドパレットの検索欄）等で入力文字が黒く見づらくなるのを防ぐため、
-     ダークテーマ固定であることをブラウザに伝える（スクロールバーの既定配色にも影響する） */
-  color-scheme: dark;
+     CommandInput（コマンドパレットの検索欄）等で入力文字が読みづらくなるのを防ぐため、
+     地が明るいか暗いかをブラウザへ伝える（スクロールバーの既定配色にも影響する） */
+  color-scheme: var(--ui-color-scheme);
   /* Tailwind preflightを除外している（ADR 0003）ためhtmlにfont-familyが一切設定されず、
      サイドバー等のUIクロームがWebKit既定のserif（Times系）で描画されてしまう。
      ターミナル用途のアプリなので、UI側もappearance.fontFamilyの等幅フォントに揃える
@@ -143,7 +151,7 @@ body {
  */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #45475a transparent;
+  scrollbar-color: var(--ui-scrollbar) transparent;
 }
 
 /*
@@ -178,8 +186,8 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: color-mix(in srgb, #181825 var(--term-bg-opacity), transparent);
-  border-right: 1px solid #313244;
+  background-color: color-mix(in srgb, var(--chrome-bg) var(--term-bg-opacity), transparent);
+  border-right: 1px solid var(--ui-border);
 }
 
 #sidebar-divider {
@@ -191,7 +199,7 @@ body {
 #sidebar-switcher:not([hidden]) {
   display: flex;
   flex: 0 0 auto;
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--ui-border);
 }
 /*
  * #sidebar-listと#sidebar-custom-viewは重ねて配置し、表示切替はdisplay:noneではなく
@@ -293,7 +301,7 @@ body {
   padding: 2px;
 }
 .tile.focused {
-  outline: 1px solid #89b4fa;
+  outline: 1px solid var(--ui-accent);
   outline-offset: -1px;
 }
 /*
@@ -304,7 +312,7 @@ body {
  * 背後のタイルが透けて見えるため採用していない
  */
 .tile.zoomed {
-  outline: 1px solid #f9e2af;
+  outline: 1px solid var(--ui-warning);
   outline-offset: -1px;
 }
 /*
@@ -313,7 +321,7 @@ body {
  * 新しいタイルが占める側の半分を塗る
  */
 .tile.drag-over {
-  outline: 2px dashed #89b4fa;
+  outline: 2px dashed var(--ui-accent);
   outline-offset: -2px;
 }
 .tile.drag-over::after {
@@ -321,30 +329,30 @@ body {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: rgba(137, 180, 250, 0.12);
+  background: color-mix(in srgb, var(--ui-accent) 12%, transparent);
   pointer-events: none;
 }
 .tile.drag-over[data-drop-zone="left"]::after {
   inset: 0 50% 0 0;
-  background: rgba(137, 180, 250, 0.22);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 .tile.drag-over[data-drop-zone="right"]::after {
   inset: 0 0 0 50%;
-  background: rgba(137, 180, 250, 0.22);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 .tile.drag-over[data-drop-zone="top"]::after {
   inset: 0 0 50% 0;
-  background: rgba(137, 180, 250, 0.22);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 .tile.drag-over[data-drop-zone="bottom"]::after {
   inset: 50% 0 0 0;
-  background: rgba(137, 180, 250, 0.22);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 
 /*
  * クロームの陰影は地の色を塗り直さず黒を薄く重ねて作る。半透明時に地と二重に塗ると
- * そこだけ不透明に寄ってしまうため。不透明度0.2は既定の地(--term-bgの#1e1e2e)に重ねると
- * ちょうど#181825になる値で、--term-bgを変えても同じ濃さの関係が保たれる
+ * そこだけ不透明に寄ってしまうため。重ねる濃さは--chrome-bgと同じ20%で、
+ * 不透明に塗れる場所（--chrome-bg）と透ける場所（ここ）で沈み具合が揃う
  */
 .tab-bar {
   display: flex;
@@ -360,7 +368,7 @@ body {
  * flexへの出し入れだと、出るたびにcols/rowsが振り直されてTUIが再描画されてしまう）。
  * 非表示中にpointer-events:noneを外せないのも同じ理由で、重なっているターミナル1行目の
  * クリック・選択・マウスレポートを奪ってしまうため。
- * 地は通常時と同じ#181825相当を不透明で塗る: 下にターミナルの文字がいるので、
+ * 地は--chrome-bgを不透明のまま塗る: 下にターミナルの文字がいるので、
  * ウィンドウ透過中（--term-bg-opacity < 100%）と同じ塗り方では文字が透けてしまう
  */
 .tab-bar.overlay {
@@ -371,8 +379,8 @@ body {
   z-index: 4;
   opacity: 0;
   pointer-events: none;
-  background-color: color-mix(in srgb, #000 20%, var(--term-bg));
-  border-bottom: 1px solid #313244;
+  background-color: var(--chrome-bg);
+  border-bottom: 1px solid var(--ui-border);
   transition: opacity 100ms ease-out;
 }
 .tab-bar.overlay.revealed {
@@ -425,7 +433,7 @@ body {
   min-height: 36px;
   padding: 4px 6px;
   background-color: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 /*
@@ -436,7 +444,7 @@ body {
 .divider {
   position: relative;
   flex: 0 0 4px;
-  background-color: color-mix(in srgb, #313244 var(--term-bg-opacity), transparent);
+  background-color: color-mix(in srgb, var(--ui-border) var(--term-bg-opacity), transparent);
 }
 .split[data-direction="row"] > .divider {
   cursor: col-resize;
@@ -475,7 +483,7 @@ body {
   max-width: 1200px;
   padding: 0 4px 4px;
   background: var(--term-bg);
-  border: 1px solid #313244;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   overflow: hidden;
@@ -493,7 +501,7 @@ body {
   margin: 0 -4px 4px;
   padding: 2px 4px;
   background-color: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid #313244;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 /*
@@ -647,14 +655,14 @@ body {
 
 .copy-overlay .sel {
   position: absolute;
-  background: #89b4fa;
+  background: var(--ui-accent);
   opacity: 0.3;
 }
 
-/* 検索文字列に一致した箇所。選択（青）と区別できるよう黄系にする */
+/* 検索文字列に一致した箇所。選択（--ui-accent）と区別できるよう別の役割色を当てる */
 .copy-overlay .search-hit {
   position: absolute;
-  background: #f9e2af;
+  background: var(--ui-warning);
   opacity: 0.35;
 }
 
@@ -667,8 +675,8 @@ body {
   padding: 2px 8px;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #1e1e2e;
-  background: #89b4fa;
+  color: var(--ui-badge-fg);
+  background: var(--ui-accent);
   border-radius: 0 4px 0 0;
   white-space: pre;
   overflow: hidden;
@@ -677,14 +685,14 @@ body {
 }
 
 .copy-overlay .copy-status.warn {
-  background: #f38ba8;
+  background: var(--ui-danger);
 }
 
 .copy-overlay .copy-cursor {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid #f9e2af;
-  background: rgba(249, 226, 175, 0.25);
+  border: 1px solid var(--ui-warning);
+  background: color-mix(in srgb, var(--ui-warning) 25%, transparent);
 }
 
 /* コピーモード中であることを示すバッジ（スクロールバックのバッジと同じ位置・体裁） */
@@ -696,8 +704,8 @@ body {
   padding: 2px 8px;
   font-size: 11px;
   font-family: system-ui, sans-serif;
-  color: #1e1e2e;
-  background: #89b4fa;
+  color: var(--ui-badge-fg);
+  background: var(--ui-accent);
   border-radius: 4px;
   opacity: 0.9;
 }
@@ -711,8 +719,8 @@ body {
   padding: 2px 8px;
   font-size: 11px;
   font-family: system-ui, sans-serif;
-  color: #1e1e2e;
-  background: #a6e3a1;
+  color: var(--ui-badge-fg);
+  background: var(--ui-success);
   border-radius: 4px;
   opacity: 0;
   transition: opacity 200ms ease-out;
@@ -739,8 +747,8 @@ body {
   padding: 2px 8px;
   font-size: 11px;
   font-family: system-ui, sans-serif;
-  color: #1e1e2e;
-  background: #f9e2af;
+  color: var(--ui-badge-fg);
+  background: var(--ui-warning);
   border-radius: 4px;
   opacity: 0.9;
   pointer-events: none;
@@ -803,9 +811,9 @@ body {
   font-weight: bold;
   line-height: 1.2;
   text-transform: uppercase;
-  color: #1e1e2e;
-  background: #f9e2af;
-  border: 1px solid #fab387;
+  color: var(--ui-badge-fg);
+  background: var(--ui-warning);
+  border: 1px solid color-mix(in srgb, var(--ui-warning) 80%, var(--ui-badge-fg));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
 }

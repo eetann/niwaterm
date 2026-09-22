@@ -24,6 +24,39 @@ export function isTitleBarMode(value: unknown): value is TitleBarMode {
   return value === "default" || value === "hidden";
 }
 
+/**
+ * ターミナル本体以外のUI（タイルの枠・境界線・バッジ・選択ハイライト等）の配色。
+ * 部品ごとではなく役割ごとに色を持ち、同じ役割の部品は同じ色を共有する。
+ */
+export interface UiColorsConfig {
+  /** サイドバー・タブバー・ポップアップの境界線と、タイル間の分割線 */
+  border?: string;
+  /** フォーカス中タイルの枠・タブD&Dのドロップ先・選択ハイライト・情報メッセージの地 */
+  accent?: string;
+  /** ズーム中タイルの枠・検索一致・コピーモードのカーソル・スクロールバックバッジ・ジャンプヒントの地 */
+  warning?: string;
+  /** 完了を知らせるバッジ（コピー完了）の地 */
+  success?: string;
+  /** エラーを知らせるメッセージ（検索失敗）の地 */
+  danger?: string;
+  /** accent/warning/success/dangerを地に敷くバッジ・メッセージの文字色 */
+  badgeForeground?: string;
+  /** スクロールバーのつまみ */
+  scrollbar?: string;
+}
+
+export type ResolvedUiColors = Required<UiColorsConfig>;
+
+export const defaultUiColors: ResolvedUiColors = {
+  border: "#313244",
+  accent: "#89b4fa",
+  warning: "#f9e2af",
+  success: "#a6e3a1",
+  danger: "#f38ba8",
+  badgeForeground: "#1e1e2e",
+  scrollbar: "#45475a",
+};
+
 export interface AppearanceConfig {
   fontFamily?: string;
   fontSize?: number;
@@ -56,9 +89,17 @@ export interface AppearanceConfig {
    * 最小化・最大化・終了はキーバインドやOSのショートカットが窓口になる
    */
   titleBar?: TitleBarMode;
+  /**
+   * ターミナル本体以外のUIの配色。未指定のフィールドはdefaultUiColorsの値のまま有効。
+   * サイドバー・ダイアログ・コマンドパレットの地と文字色はここではなく
+   * foreground/backgroundから派生するため、全体の明るさを変えるときはその2つを先に変える
+   */
+  ui?: UiColorsConfig;
 }
 
-export type ResolvedAppearanceConfig = Required<AppearanceConfig>;
+export type ResolvedAppearanceConfig = Required<Omit<AppearanceConfig, "ui">> & {
+  ui: ResolvedUiColors;
+};
 
 export const defaultAppearance: ResolvedAppearanceConfig = {
   fontFamily:
@@ -89,6 +130,7 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   ],
   tabBar: "auto",
   titleBar: "default",
+  ui: defaultUiColors,
 };
 
 /**

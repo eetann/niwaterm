@@ -1,12 +1,15 @@
 export {
   type AppearanceConfig,
   defaultAppearance,
+  defaultUiColors,
   isTabBarMode,
   isTitleBarMode,
   type ResolvedAppearanceConfig,
+  type ResolvedUiColors,
   scaleLineHeight,
   type TabBarMode,
   type TitleBarMode,
+  type UiColorsConfig,
 } from "./appearance";
 export {
   type BoardConfig,

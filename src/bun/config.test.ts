@@ -8,6 +8,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultUiColors,
   platformDefaultKeybindings,
 } from "@niwaterm/config";
 import {
@@ -483,6 +484,28 @@ describe("resolveAppearance", () => {
       expect(resolveAppearance({ appearance: { tabBar: "hover" as never } }).tabBar).toBe(
         defaultAppearance.tabBar,
       );
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("uiはフィールド単位でマージする", () => {
+    const resolved = resolveAppearance({ appearance: { ui: { accent: "#ff0000" } } });
+    expect(resolved.ui.accent).toBe("#ff0000");
+    expect(resolved.ui.border).toBe(defaultUiColors.border);
+    expect(resolved.ui.warning).toBe(defaultUiColors.warning);
+  });
+
+  test("uiの不正な値は警告付きでそのフィールドだけデフォルトに戻す", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveAppearance({
+        appearance: { ui: { accent: "", border: 0xff0000 as never, success: "#00ff00" } },
+      });
+      expect(resolved.ui.accent).toBe(defaultUiColors.accent);
+      expect(resolved.ui.border).toBe(defaultUiColors.border);
+      expect(resolved.ui.success).toBe("#00ff00");
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

@@ -4,6 +4,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultUiColors,
 } from "@niwaterm/config";
 import { buildConfigSummary, type ConfigSummary, type ConfigSummaryInput } from "./config-summary";
 
@@ -93,6 +94,20 @@ describe("buildConfigSummary", () => {
     const summary = buildConfigSummary(input());
     expect(entry(summary, "appearance", "background")?.swatches).toEqual(["#1e1e2e"]);
     expect(entry(summary, "appearance", "ansiColors")?.swatches).toHaveLength(16);
+  });
+
+  test("appearance.uiの各色はui.付きのkeyでappearanceセクションへ並ぶ", () => {
+    const appearance = {
+      ...defaultAppearance,
+      ui: { ...defaultUiColors, accent: "#ff0000" },
+    };
+    const summary = buildConfigSummary(input({ appearance }));
+    expect(entry(summary, "appearance", "ui.accent")).toEqual({
+      key: "ui.accent",
+      value: "#ff0000",
+      swatches: ["#ff0000"],
+    });
+    expect(entry(summary, "appearance", "ui.border")?.value).toBe(defaultUiColors.border);
   });
 
   test("data URIへ埋め込まれた背景画像はMIMEタイプとサイズへ畳む", () => {

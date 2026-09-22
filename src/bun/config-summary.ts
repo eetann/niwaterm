@@ -15,6 +15,7 @@ import type {
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
   ResolvedMouseConfig,
+  ResolvedUiColors,
   ShellProfile,
 } from "@niwaterm/config";
 import { buildKeybindList } from "./keybind-list";
@@ -114,6 +115,18 @@ function lineHeightEntry(effective: number, base: number): ConfigSummaryEntry {
   };
 }
 
+/**
+ * UIの詳細配色。appearanceの他の項目と同じセクションへ並べるが、設定ファイル上は
+ * appearance.uiのネストなのでkeyへ"ui."を付けて出どころを示す
+ */
+function uiColorEntries(ui: ResolvedUiColors): ConfigSummaryEntry[] {
+  return (Object.keys(ui) as (keyof ResolvedUiColors)[]).map((key) => ({
+    key: `ui.${key}`,
+    value: ui[key],
+    swatches: [ui[key]],
+  }));
+}
+
 function appearanceSection(
   appearance: ResolvedAppearanceConfig,
   baseFontSize: number,
@@ -136,6 +149,7 @@ function appearanceSection(
       },
       { key: "tabBar", value: appearance.tabBar },
       { key: "titleBar", value: appearance.titleBar },
+      ...uiColorEntries(appearance.ui),
     ],
   };
 }

@@ -37,5 +37,10 @@ export default defineConfig({
     fontSize: 14,
     foreground: "#e0e0e0",
     background: "#101010",
+    // タイルの枠・境界線・バッジなどUIの配色も役割ごとに差し替えられる
+    ui: {
+      accent: "#7aa2f7",
+      border: "#2a2a2a",
+    },
   },
 });

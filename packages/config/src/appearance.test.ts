@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { defaultAppearance, scaleLineHeight } from "./appearance";
+import { defaultAppearance, defaultUiColors, scaleLineHeight } from "./appearance";
 
 describe("defaultAppearance", () => {
   test("ansiColorsは16件（ANSI標準色0-15）", () => {
@@ -19,6 +19,19 @@ describe("defaultAppearance", () => {
       expect(typeof color).toBe("string");
       expect(color.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("defaultUiColors", () => {
+  test("全フィールドが非空文字列で埋まっている", () => {
+    for (const [key, value] of Object.entries(defaultUiColors)) {
+      expect(typeof value, key).toBe("string");
+      expect(value.length, key).toBeGreaterThan(0);
+    }
+  });
+
+  test("defaultAppearance.uiがdefaultUiColorsと一致する", () => {
+    expect(defaultAppearance.ui).toEqual(defaultUiColors);
   });
 });
 
