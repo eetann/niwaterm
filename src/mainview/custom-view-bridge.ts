@@ -14,6 +14,12 @@ function safeJsonParse(text: string): unknown {
   }
 }
 
+/** customViewのHTMLへ渡す、niwatermの配色。HTML側がサイドバーへ馴染む見た目を作れるようにする */
+export interface CustomViewTheme {
+  background: string;
+  foreground: string;
+}
+
 /** HTML側の`niwaterm.call(name, payload)`1回分 */
 export interface CustomViewCallMessage {
   callId: string;
@@ -40,13 +46,20 @@ function jsLiteral(value: unknown): string {
  * customViewのHTML内で`window.niwaterm`を定義する。既に定義済みなら呼べるハンドラ名だけを
  * 差し替える（設定のホットリロードでhandlersが変わっても、HTML側の保留中の呼び出しを壊さないため）。
  * 定義し終えた合図として`niwaterm:ready`イベントを投げる。注入はdom-ready後になるため、
- * HTML側のスクリプトは`window.niwaterm`の有無を見てからこのイベントを待つ
+ * HTML側のスクリプトは`window.niwaterm`の有無を見てからこのイベントを待つ。
+ * 2回目以降（設定のホットリロード）は`niwaterm:theme`を投げ、HTML側が配色へ追従できるようにする
  */
-export function buildCustomViewBootstrapScript(handlerNames: string[]): string {
+export function buildCustomViewBootstrapScript(
+  handlerNames: string[],
+  theme: CustomViewTheme,
+): string {
   return `(() => {
     const __names = ${jsLiteral(handlerNames)};
+    const __theme = ${jsLiteral(theme)};
     if (window.niwaterm) {
       window.niwaterm.handlers = __names;
+      window.niwaterm.theme = __theme;
+      window.dispatchEvent(new Event("niwaterm:theme"));
       return;
     }
     const __pending = new Map();
@@ -79,6 +92,7 @@ export function buildCustomViewBootstrapScript(handlerNames: string[]): string {
     };
     window.niwaterm = {
       handlers: __names,
+      theme: __theme,
       call(name, payload) {
         return new Promise((resolve, reject) => {
           // webviewIdを混ぜるのは、複数ウィンドウのcustomViewが同時に呼んでもcallIdが衝突しないようにするため

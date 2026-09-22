@@ -4,27 +4,20 @@
     <meta charset="utf-8" />
     <title>Worktrees</title>
     <style>
+      /*
+       * 配色はniwatermのターミナルと同じ値をniwaterm.themeから受け取って--bg/--fgへ流し込む
+       * （applyTheme）。ここに書いてあるのは、まだ受け取れていない間に使う既定値。
+       * 中間色はcolor-mixで2色から作るので、どんな配色でもサイドバーへ馴染む
+       */
       :root {
-        --bg: #ffffff;
-        --fg: #1f2328;
-        --muted: #6b7280;
-        --border: #d8dce1;
-        --hover: #f1f3f5;
-        --selected: #e2e8f0;
-        --accent: #3b82f6;
-        --error: #dc2626;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #1a1b1e;
-          --fg: #e6e6e6;
-          --muted: #9aa0a6;
-          --border: #34363b;
-          --hover: #26282c;
-          --selected: #2f3237;
-          --accent: #60a5fa;
-          --error: #f87171;
-        }
+        --bg: #1a1b1e;
+        --fg: #e6e6e6;
+        --muted: color-mix(in srgb, var(--fg) 55%, var(--bg));
+        --border: color-mix(in srgb, var(--fg) 20%, var(--bg));
+        --hover: color-mix(in srgb, var(--fg) 8%, var(--bg));
+        --selected: color-mix(in srgb, var(--fg) 16%, var(--bg));
+        --accent: color-mix(in srgb, var(--fg) 35%, #3b82f6);
+        --error: #f87171;
       }
       * {
         box-sizing: border-box;
@@ -160,6 +153,15 @@
         });
       }
 
+      /** niwatermの配色を受け取ってCSS変数へ流し込む。設定のホットリロード時も呼ばれる */
+      function applyTheme() {
+        const theme = window.niwaterm && window.niwaterm.theme;
+        if (!theme) return;
+        const root = document.documentElement.style;
+        root.setProperty("--bg", theme.background);
+        root.setProperty("--fg", theme.foreground);
+      }
+
       function setStatus(text, isError) {
         statusEl.textContent = text;
         statusEl.classList.toggle("error", Boolean(isError));
@@ -254,7 +256,11 @@
         if (e.key === "Enter" && branch) create(branch);
       });
 
-      whenReady().then(reload);
+      window.addEventListener("niwaterm:theme", applyTheme);
+      whenReady().then(() => {
+        applyTheme();
+        reload();
+      });
     </script>
   </body>
 </html>

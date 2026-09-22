@@ -40,6 +40,7 @@ import {
   buildCustomViewBootstrapScript,
   buildCustomViewResolveScript,
   type CustomViewCallResultPayload,
+  type CustomViewTheme,
   parseCustomViewCallMessage,
 } from "./custom-view-bridge";
 import { DRAG_REGION_CLASS } from "./drag-region";
@@ -446,6 +447,11 @@ let customViewUrl: string | null = null;
 let customViewName: string | null = null;
 /** customViewのHTMLから呼べるハンドラ名（customView.handlers）。注入するwindow.niwatermへ渡す */
 let customViewHandlerNames: string[] = [];
+/** customViewのHTMLへ渡す配色。ターミナルと同じ値を使い、HTML側がサイドバーへ馴染ませられるようにする */
+let customViewTheme: CustomViewTheme = {
+  background: defaultAppearance.background,
+  foreground: defaultAppearance.foreground,
+};
 /**
  * 結果待ちのniwaterm.callと、返送先のwebview。callIdはwebviewIdを含むため全webviewで一意で、
  * bun側は結果を全ウィンドウへ配る（自分が出したcallIdでなければここに無く、無視される）
@@ -593,6 +599,7 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-line-height", `${config.lineHeight}px`);
   root.setProperty("--term-fg", config.foreground);
   root.setProperty("--term-bg", config.background);
+  customViewTheme = { background: config.background, foreground: config.foreground };
   // color-mix()へ渡す割合。calc()を挟まず済むよう、パーセント文字列にしてから渡す
   root.setProperty("--term-bg-opacity", `${config.backgroundOpacity * 100}%`);
   root.setProperty("--term-bg-image", config.backgroundImage);
@@ -1270,7 +1277,7 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
   webviewEl.on("dom-ready", () => {
     browserDomReadyByTabId.set(tabId, true);
     if (isCustomViewTab) {
-      webviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
+      injectCustomViewBridge(webviewEl);
     }
   });
 
@@ -2051,13 +2058,23 @@ function handleCustomViewCallMessage(webviewEl: WebviewTagElement, detail: unkno
   return true;
 }
 
+/** 最後に注入したブートストラップ。ハンドラ名・配色のどちらも変わっていなければ注入し直さない */
+let lastInjectedBootstrap: string | null = null;
+
+/** customViewのHTMLへwindow.niwatermを注入する */
+function injectCustomViewBridge(webviewEl: WebviewTagElement): void {
+  const script = buildCustomViewBootstrapScript(customViewHandlerNames, customViewTheme);
+  lastInjectedBootstrap = script;
+  webviewEl.executeJavascript(script);
+}
+
 /**
  * customViewのHTMLへwindow.niwatermを注入し、そこからの呼び出しを受け取れるようにする。
  * dom-readyはロードのたびに発火するため、HTML側でのリロード・ページ内遷移の後も注入し直される
  */
 function attachCustomViewBridge(webviewEl: WebviewTagElement): void {
   webviewEl.on("dom-ready", () => {
-    webviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
+    injectCustomViewBridge(webviewEl);
   });
   webviewEl.on("host-message", (e) => {
     handleCustomViewCallMessage(webviewEl, (e as CustomEvent).detail);
@@ -2078,8 +2095,6 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
 
   sidebarSwitcherEl.hidden = false;
   customViewName = customView.name;
-  const handlerNamesChanged =
-    customViewHandlerNames.join("\n") !== customView.handlerNames.join("\n");
   customViewHandlerNames = customView.handlerNames;
   renderSidebarSwitcher();
 
@@ -2094,6 +2109,10 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     webviewEl.on("dom-ready", () => {
       webviewEl.toggleHidden(!sidebarShowingCustom);
       webviewEl.togglePassthrough(!sidebarShowingCustom);
+      // ネイティブ側のwebviewが用意できる前に送った位置は捨てられる（WebView2は
+      // "Controller is NULL, cannot resize"）のに、送った側は最新の矩形として覚えてしまい
+      // 二度と送り直さない。生成が済んだここで現在の矩形を強制的に送り直す
+      webviewEl.syncDimensions(true);
     });
     attachCustomViewBridge(webviewEl);
     sidebarCustomViewEl.appendChild(webviewEl);
@@ -2103,16 +2122,22 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     // 読み込み直せばdom-readyでwindow.niwatermも注入し直される
     customViewWebviewEl.loadURL(customView.url);
     customViewUrl = customView.url;
-  } else if (handlerNamesChanged) {
-    // 設定のホットリロードでhandlersだけが変わった場合。読み込み直すとHTML側の状態
-    // （入力途中の値・スクロール位置）が消えるため、呼べる名前だけを差し替える
-    customViewWebviewEl.executeJavascript(buildCustomViewBootstrapScript(customViewHandlerNames));
+  } else if (
+    buildCustomViewBootstrapScript(customViewHandlerNames, customViewTheme) !==
+    lastInjectedBootstrap
+  ) {
+    // 設定のホットリロードでhandlers・配色だけが変わった場合。読み込み直すとHTML側の状態
+    // （入力途中の値・スクロール位置）が消えるため、注入済みの値だけを差し替える
+    injectCustomViewBridge(customViewWebviewEl);
   }
 }
 
 function applySidebarVisibility(): void {
   sidebarEl.style.display = sidebarOpen ? "" : "none";
   sidebarDividerEl.style.display = sidebarOpen ? "" : "none";
+  // OOPIFはCSSの管轄外なので、サイドバーごとdisplay:noneにしてもネイティブ側のオーバーレイは
+  // 残り続ける（docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
+  setCustomViewWebviewActive(sidebarOpen && sidebarShowingCustom);
 }
 
 function toggleSidebar(): void {

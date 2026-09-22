@@ -5,16 +5,24 @@ import {
   parseCustomViewCallMessage,
 } from "./custom-view-bridge";
 
+const THEME = { background: "#0d2635", foreground: "#d6e2e7" };
+
 describe("buildCustomViewBootstrapScript", () => {
   test("ハンドラ名を埋め込み、window.niwatermを定義する", () => {
-    const script = buildCustomViewBootstrapScript(["list", "open"]);
+    const script = buildCustomViewBootstrapScript(["list", "open"], THEME);
     expect(script).toContain('["list","open"]');
     expect(script).toContain("window.niwaterm =");
     expect(script).toContain('new Event("niwaterm:ready")');
   });
 
+  test("niwatermの配色を埋め込む", () => {
+    expect(buildCustomViewBootstrapScript([], THEME)).toContain('"background":"#0d2635"');
+  });
+
   test("既にwindow.niwatermがあればハンドラ名だけを差し替える", () => {
-    expect(buildCustomViewBootstrapScript([])).toContain("window.niwaterm.handlers = __names;");
+    expect(buildCustomViewBootstrapScript([], THEME)).toContain(
+      "window.niwaterm.handlers = __names;",
+    );
   });
 });
 
@@ -83,7 +91,7 @@ describe("注入したwindow.niwaterm", () => {
       addEventListener: () => {},
       dispatchEvent: () => {},
     };
-    new Function("window", buildCustomViewBootstrapScript(handlerNames))(win);
+    new Function("window", buildCustomViewBootstrapScript(handlerNames, THEME))(win);
     return { win, posted };
   }
 
