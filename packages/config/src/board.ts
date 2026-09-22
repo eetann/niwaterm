@@ -1,6 +1,6 @@
-// Board設定。新しいタブを開くときのcwdの決め方をniwaterm.config.tsから変更できるようにする。
-// browser.tsと同様、全フィールドoptionalの型を「ユーザーの部分上書き」と「マージ後の解決済み値」の
-// 両方に使い回す。
+// Board設定。新しいタブを開くときのcwdの決め方と、Boardに付けられるステータスの候補を
+// niwaterm.config.tsから変更できるようにする。
+// browser.tsと同様、全フィールドoptionalの型を「ユーザーの部分上書き」に使う。
 //
 // workspace.defaultCwdとは別物。あちらは「新規ワークスペースの最初のタブ」だけに効く初期値で、
 // こちらは既存Board内でタブが増えるたびに効く。
@@ -18,16 +18,85 @@ export function isNewTabCwdMode(value: unknown): value is NewTabCwdMode {
   return typeof value === "string" && (NEW_TAB_CWD_MODES as readonly string[]).includes(value);
 }
 
+/** ステータスのidに許す文字。キーバインドの`set-board-status:<id>`へそのまま埋め込むため空白を除く */
+const STATUS_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/** サイドバーの右クリックメニュー・コマンドパレットに並べるステータスの候補 */
+export interface BoardStatusPreset {
+  /** CLI（`niwaterm board status <id>`）・キーバインドから指す識別子 */
+  id: string;
+  /** サイドバーのバッジ・メニューに出す表示名。省略時はidをそのまま出す */
+  label?: string;
+  /** バッジの配色（CSSカラー）。省略時はUIの既定色 */
+  color?: string;
+}
+
+/** labelの省略をidで埋めた解決済みのステータス候補 */
+export interface ResolvedBoardStatus {
+  id: string;
+  label: string;
+  /** 未指定はnull（表示側の既定色にフォールバックする） */
+  color: string | null;
+}
+
 export interface BoardConfig {
   /**
    * タブ追加・タイル分割・ポップアップで新しいタブを開くときのcwd。
    * "worktree"を選んでも、Boardに紐づけが無い場合と紐づけ先が存在しない場合は"inherit"の挙動になる。
    */
   newTabCwd?: NewTabCwdMode;
+  /**
+   * Boardへ付けられるステータスの候補。サイドバーの右クリックメニュー・コマンドパレットの
+   * 選択肢になる。ここに無い文字列もCLIからは設定でき、その場合は文字列がそのまま既定色で出る。
+   */
+  statuses?: BoardStatusPreset[];
 }
 
-export type ResolvedBoardConfig = Required<BoardConfig>;
+export interface ResolvedBoardConfig {
+  newTabCwd: NewTabCwdMode;
+  statuses: ResolvedBoardStatus[];
+}
 
 export const defaultBoardConfig: ResolvedBoardConfig = {
   newTabCwd: "inherit",
+  statuses: [],
 };
+
+function isBoardStatusPreset(value: unknown): value is BoardStatusPreset {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v["id"] !== "string" || !STATUS_ID_PATTERN.test(v["id"])) return false;
+  if (v["label"] !== undefined && (typeof v["label"] !== "string" || v["label"] === "")) {
+    return false;
+  }
+  return v["color"] === undefined || (typeof v["color"] === "string" && v["color"] !== "");
+}
+
+/**
+ * ユーザー設定のステータス候補を、表示側がそのまま使える形へ均す。
+ * 不正な要素は黙って落とす（1件の書き間違いで候補が全滅すると、設定ファイルを直すまで
+ * サイドバーから切り替えられなくなるため）。idの重複は先勝ちで、CLI・キーバインドの
+ * `<id>`指定が一意に解決できる状態を保つ
+ */
+export function normalizeBoardStatuses(value: unknown): ResolvedBoardStatus[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: ResolvedBoardStatus[] = [];
+  for (const entry of value) {
+    if (!isBoardStatusPreset(entry) || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    result.push({ id: entry.id, label: entry.label ?? entry.id, color: entry.color ?? null });
+  }
+  return result;
+}
+
+/**
+ * Boardに設定された文字列の表示情報。候補に無い文字列（CLIから直接設定したもの）は
+ * 文字列そのものをラベルとして既定色で出す
+ */
+export function resolveBoardStatus(
+  statuses: readonly ResolvedBoardStatus[],
+  value: string,
+): ResolvedBoardStatus {
+  return statuses.find((status) => status.id === value) ?? { id: value, label: value, color: null };
+}

@@ -35,6 +35,7 @@ import {
   Pencil,
   PictureInPicture2,
   Plus,
+  Tag,
   RefreshCw,
   RotateCcw,
   RotateCw,
@@ -46,7 +47,12 @@ import {
   ZoomOut,
   type LucideIcon,
 } from "lucide-react";
-import { type KeybindAction, SHOW_SIDEBAR_VIEW_PREFIX } from "@niwaterm/config";
+import {
+  type KeybindAction,
+  type ResolvedBoardStatus,
+  SET_BOARD_STATUS_PREFIX,
+  SHOW_SIDEBAR_VIEW_PREFIX,
+} from "@niwaterm/config";
 
 export type CommandPaletteCategory =
   | "タイル"
@@ -264,6 +270,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["worktree", "directory", "cwd", "ディレクトリ", "紐づけ"],
   },
   {
+    action: "clear-board-status",
+    labelEn: "Clear Board Status",
+    label: "Boardのステータスを解除",
+    category: "Board",
+    icon: Tag,
+    keywords: ["board status", "ステータス", "clear"],
+  },
+  {
     action: "new-workspace",
     labelEn: "New Workspace",
     label: "新しいワークスペースを作成",
@@ -439,6 +453,23 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["config show", "font size", "settings"],
   },
 ];
+
+/**
+ * アクティブBoardへ作業フェーズを付ける項目。候補は設定ファイル次第で増減するため実行時に組み立てる
+ * （解除はKEYBIND_ACTIONS側のclear-board-statusが担うため、ここには含めない）
+ */
+export function boardStatusActionDefs(
+  statuses: readonly ResolvedBoardStatus[],
+): CommandPaletteActionDef[] {
+  return statuses.map((status) => ({
+    action: `${SET_BOARD_STATUS_PREFIX}${status.id}`,
+    labelEn: `Set Board Status: ${status.label}`,
+    label: `Boardのステータスを${status.label}にする`,
+    category: "Board",
+    icon: Tag,
+    keywords: ["board status", "ステータス", status.id],
+  }));
+}
 
 /** サイドバーのビューを直接出す項目。ビューは設定ファイル次第で増減するため実行時に組み立てる */
 export function sidebarViewActionDefs(

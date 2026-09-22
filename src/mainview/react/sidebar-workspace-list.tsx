@@ -20,6 +20,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import type { ResolvedBoardStatus } from "@niwaterm/config";
 import { cn } from "@/lib/utils";
 import type { LayoutListEntry } from "../../bun/project-config";
 import type { BoardId } from "../../bun/workspace";
@@ -43,6 +44,10 @@ export interface SidebarApplyLayoutRequest {
 
 export interface SidebarWorkspaceListProps {
   workspaces: SidebarWorkspaceItem[];
+  /** 右クリックメニューに並べるステータスの候補（board.statuses）。未定義なら候補なしの案内を出す */
+  boardStatuses: readonly ResolvedBoardStatus[];
+  /** Board行の右クリックからの作業フェーズの切り替え。nullは解除 */
+  onSetBoardStatus: (boardId: BoardId, status: string | null) => void;
   onSelectWorkspaceHeader: (workspaceId: WorkspaceId) => void;
   onSelectBoard: (workspaceId: WorkspaceId, boardId: BoardId) => void;
   onSelectPopup: (workspaceId: WorkspaceId) => void;
@@ -134,6 +139,8 @@ function saveCollapsedIds(storageKey: string, collapsed: Set<string>): void {
 
 export function SidebarWorkspaceList({
   workspaces,
+  boardStatuses,
+  onSetBoardStatus,
   onSelectWorkspaceHeader,
   onSelectBoard,
   onSelectPopup,
@@ -426,6 +433,56 @@ export function SidebarWorkspaceList({
   }
 
   /**
+   * 作業フェーズのサブメニュー。設定（board.statuses）の候補を並べ、今の値にチェックを付ける。
+   * 候補に無い文字列（CLIで直接設定したもの）が付いている場合は、その値も一時的な項目として
+   * 末尾に足す（チェックの付いた項目がどこにも無いと、今の状態が読み取れなくなるため）
+   */
+  function renderBoardStatusMenu(board: SidebarBoardItem) {
+    const current = board.status;
+    const isCustom = current !== null && !boardStatuses.some((s) => s.id === current.value);
+    return (
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>ステータス</ContextMenuSubTrigger>
+        <ContextMenuSubContent className="max-w-72">
+          {boardStatuses.length === 0 && !isCustom && (
+            <ContextMenuItem disabled>設定のboard.statusesで候補を定義できます</ContextMenuItem>
+          )}
+          {boardStatuses.map((status) => (
+            <ContextMenuCheckboxItem
+              key={status.id}
+              checked={current?.value === status.id}
+              onSelect={() => onSetBoardStatus(board.boardId, status.id)}
+            >
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: status.color ?? "var(--ui-accent)" }}
+              />
+              <span className="min-w-0 flex-1 truncate">{status.label}</span>
+            </ContextMenuCheckboxItem>
+          ))}
+          {isCustom && current && (
+            <ContextMenuCheckboxItem
+              checked
+              onSelect={() => onSetBoardStatus(board.boardId, current.value)}
+            >
+              <span className="min-w-0 flex-1 truncate">{current.label}</span>
+            </ContextMenuCheckboxItem>
+          )}
+          {current && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => onSetBoardStatus(board.boardId, null)}>
+                ステータスを解除
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    );
+  }
+
+  /**
    * Board行はTile/Tabを表示しない1行が既定（ADR 0006後の再設計）。ブランチ・エージェント状態が
    * 何も無ければ展開せず1行のまま終わる。何かあれば縦線ガイド付きでステータスラインを展開する
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
@@ -444,7 +501,7 @@ export function SidebarWorkspaceList({
         </div>
       );
     }
-    const hasStatusLine = board.branch !== null || board.agent !== null;
+    const hasStatusLine = board.status !== null || board.branch !== null || board.agent !== null;
     const dotClass =
       board.agent?.status === "working"
         ? "bg-blue-500 shadow-[0_0_4px] shadow-blue-500"
@@ -456,6 +513,7 @@ export function SidebarWorkspaceList({
         ? dropTarget.position
         : null;
     const titleParts: string[] = [];
+    if (board.status) titleParts.push(board.status.label);
     if (board.bell) titleParts.push("ベル");
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
@@ -527,6 +585,19 @@ export function SidebarWorkspaceList({
               <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
                 <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
                 <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
+                  {board.status && (
+                    <div className="flex">
+                      <span
+                        className="max-w-full truncate rounded px-1 font-sans font-semibold"
+                        style={{
+                          backgroundColor: board.status.color ?? "var(--ui-accent)",
+                          color: "var(--ui-badge-fg)",
+                        }}
+                      >
+                        {board.status.label}
+                      </span>
+                    </div>
+                  )}
                   {board.branch && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <span className="text-blue-400/80">on</span>
@@ -566,6 +637,7 @@ export function SidebarWorkspaceList({
           <ContextMenuItem onSelect={() => onSetBoardWorktree(board.boardId)}>
             ワークツリーを設定
           </ContextMenuItem>
+          {renderBoardStatusMenu(board)}
           {renderStartupLayoutMenu(board)}
           <ContextMenuItem
             variant="destructive"

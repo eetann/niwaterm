@@ -474,6 +474,30 @@ function parseBoardWorktreeBody(body: unknown): BoardWorktreeRequestBody | null 
   return result;
 }
 
+/** `niwaterm board status`。boardId省略時はアクティブBoardへ向ける */
+interface BoardStatusRequestBody {
+  boardId?: string;
+  mode: "set" | "clear" | "show";
+  /** mode: "set"のみ必須。board.statusesのidか任意の文字列 */
+  status?: string;
+}
+
+function parseBoardStatusBody(body: unknown): BoardStatusRequestBody | null {
+  const b = body as { boardId?: unknown; mode?: unknown; status?: unknown };
+  if (b.mode !== "set" && b.mode !== "clear" && b.mode !== "show") return null;
+  const result: BoardStatusRequestBody = { mode: b.mode };
+  if (b.boardId !== undefined) {
+    if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+    result.boardId = b.boardId;
+  }
+  if (b.status !== undefined) {
+    if (typeof b.status !== "string" || b.status.trim().length === 0) return null;
+    result.status = b.status;
+  }
+  if (b.mode === "set" && result.status === undefined) return null;
+  return result;
+}
+
 interface MoveBoardRequestBody extends BoardIdRequestBody {
   direction: "up" | "down";
 }
@@ -1096,6 +1120,31 @@ function buildApp(
       worktreePath: entry?.worktreePath ?? null,
       missing: entry?.worktreeMissing ?? false,
     });
+  });
+
+  app.post("/board-status", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardStatusBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error: 'expected { mode: "set"|"clear"|"show", boardId?: string, status?: string }',
+        },
+        400,
+      );
+    }
+    const boardId = parsed.boardId ?? activeBoardId(c);
+    if (!boardId || !workspaceManager.hasBoard(boardId)) {
+      return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
+    }
+    if (parsed.mode === "set") {
+      workspaceManager.setBoardStatus(boardId, parsed.status as string);
+    } else if (parsed.mode === "clear") {
+      workspaceManager.setBoardStatus(boardId, null);
+    }
+    return c.json({ ok: true, boardId, status: workspaceManager.getBoardStatus(boardId) });
   });
 
   app.post("/board-startup", async (c) => {

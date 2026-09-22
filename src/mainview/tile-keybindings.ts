@@ -14,7 +14,9 @@ import {
   type CompiledKeybindings,
   isCustomBindingRef,
   type KeybindAction,
+  parseSetBoardStatusAction,
   parseShowSidebarViewAction,
+  type SetBoardStatusAction,
   type ShowSidebarViewAction,
 } from "@niwaterm/config";
 
@@ -43,6 +45,8 @@ export type TileCommand =
   | { type: "moveBoardToWorkspace" }
   | { type: "renameBoard" }
   | { type: "setBoardWorktree" }
+  | { type: "setBoardStatus"; status: string }
+  | { type: "clearBoardStatus" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "moveWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
@@ -155,6 +159,8 @@ function keyboardEventToSecondKeyCanonical(e: KeyboardEventLike): string {
 export function actionToTileCommand(action: KeybindAction): TileCommand {
   const sidebarViewId = parseShowSidebarViewAction(action);
   if (sidebarViewId !== null) return { type: "showSidebarView", viewId: sidebarViewId };
+  const boardStatus = parseSetBoardStatusAction(action);
+  if (boardStatus !== null) return { type: "setBoardStatus", status: boardStatus };
   switch (action) {
     case "split-vertical":
       return { type: "split", orientation: "vertical" };
@@ -208,6 +214,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "renameBoard" };
     case "set-board-worktree":
       return { type: "setBoardWorktree" };
+    case "clear-board-status":
+      return { type: "clearBoardStatus" };
     case "new-workspace":
       return { type: "newWorkspace" };
     case "new-window":
@@ -258,8 +266,9 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "showConfig" };
     default: {
       // KEYBIND_ACTIONSへ足したアクションのcase書き忘れをコンパイル時に弾く。
-      // 対象id付きのshow-sidebar-view:<id>だけは先に処理済みで、ここに残る型もそれだけになる
-      const exhaustive: ShowSidebarViewAction = action;
+      // 対象id付きのアクション（show-sidebar-view:<id>・set-board-status:<id>）は先に
+      // 処理済みで、ここに残る型もそれだけになる
+      const exhaustive: ShowSidebarViewAction | SetBoardStatusAction = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);
     }
   }

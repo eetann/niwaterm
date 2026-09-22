@@ -28,6 +28,7 @@ import {
   type NiwaBellHandler,
   type NiwaNotifyOptions,
   type NiwatermConfig,
+  normalizeBoardStatuses,
   parseKeyBindingString,
   parseSecondKeyString,
   platformDefaultKeybindings,
@@ -440,6 +441,8 @@ export function resolveBoard(userConfig: NiwatermConfig | null): ResolvedBoardCo
       defaultBoardConfig.newTabCwd,
       isNewTabCwdMode,
     ),
+    // 要素単位で落とす正規化なのでresolveFieldは通さない（不正な1件だけを捨てる）
+    statuses: normalizeBoardStatuses(user?.statuses),
   };
 }
 

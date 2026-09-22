@@ -1,6 +1,6 @@
 import { Terminal } from "lucide-react";
 import { useMemo } from "react";
-import type { KeybindAction, ShellProfile } from "@niwaterm/config";
+import type { KeybindAction, ResolvedBoardStatus, ShellProfile } from "@niwaterm/config";
 import {
   CommandDialog,
   CommandEmpty,
@@ -11,6 +11,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
+  boardStatusActionDefs,
   COMMAND_PALETTE_ACTIONS,
   type CommandPaletteActionDef,
   type CommandPaletteCategory,
@@ -29,6 +30,8 @@ export interface CommandPaletteProps {
   onSelectShellProfile: (shellProfileId: string) => void;
   /** サイドバーに出せるビュー。customViewが1つも無ければ切り替え先が無いので空で渡る */
   sidebarViews: SidebarSwitcherView[];
+  /** Boardへ付けられるステータスの候補（board.statuses）。未定義なら項目が並ばない */
+  boardStatuses: readonly ResolvedBoardStatus[];
   shortcutLabelFor: (action: NonPaletteKeybindAction) => string | undefined;
 }
 
@@ -47,9 +50,14 @@ function groupByCategory(
   defs: readonly CommandPaletteActionDef[],
   shellProfiles: readonly ShellProfile[],
   sidebarViews: readonly SidebarSwitcherView[],
+  boardStatuses: readonly ResolvedBoardStatus[],
 ): Map<CommandPaletteCategory, PaletteItem[]> {
   const map = new Map<CommandPaletteCategory, PaletteItem[]>();
-  for (const def of [...defs, ...sidebarViewActionDefs(sidebarViews)]) {
+  for (const def of [
+    ...defs,
+    ...boardStatusActionDefs(boardStatuses),
+    ...sidebarViewActionDefs(sidebarViews),
+  ]) {
     const list = map.get(def.category) ?? [];
     list.push({ kind: "action", def });
     map.set(def.category, list);
@@ -69,11 +77,12 @@ export function CommandPalette({
   shellProfiles,
   onSelectShellProfile,
   sidebarViews,
+  boardStatuses,
   shortcutLabelFor,
 }: CommandPaletteProps) {
   const grouped = useMemo(
-    () => groupByCategory(COMMAND_PALETTE_ACTIONS, shellProfiles, sidebarViews),
-    [shellProfiles, sidebarViews],
+    () => groupByCategory(COMMAND_PALETTE_ACTIONS, shellProfiles, sidebarViews, boardStatuses),
+    [shellProfiles, sidebarViews, boardStatuses],
   );
 
   return (

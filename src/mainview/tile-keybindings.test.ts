@@ -250,6 +250,14 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("set-board-status:<id> は対象id付きのステータス設定コマンドへ変換される", () => {
+    expect(actionToTileCommand("set-board-status:review")).toEqual({
+      type: "setBoardStatus",
+      status: "review",
+    });
+    expect(actionToTileCommand("clear-board-status")).toEqual({ type: "clearBoardStatus" });
+  });
+
   test("prefix -> ` でポップアップトグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

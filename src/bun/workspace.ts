@@ -43,6 +43,7 @@ export interface DetachedBoard {
   name?: string;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
+  status?: string;
 }
 
 export interface WorkspaceRenderState {
@@ -78,6 +79,8 @@ export interface BoardListEntry {
   startup: PersistedBoardStartup | null;
   /** 対応するgitワークツリーの絶対パス。worktreeコマンド由来でないBoardはnull */
   worktreePath: string | null;
+  /** ユーザーが付けた作業フェーズ。board.statusesのidか任意の文字列。未設定はnull */
+  status: string | null;
 }
 
 /** newBoardの任意指定。cwdだけは呼び出し側で必須になりがちなので引数のまま分けている */
@@ -106,6 +109,7 @@ export interface InitialBoard {
   restoredMeta?: RestoredTreeMeta;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
+  status?: string;
 }
 
 export interface WorkspaceOptions {
@@ -147,6 +151,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const boardStartups = new Map<BoardId, PersistedBoardStartup>();
   // Boardが対応するgitワークツリーの絶対パス。boardNamesと同じく永続化対象になる
   const boardWorktreePaths = new Map<BoardId, string>();
+  // ユーザーが付けた作業フェーズ。boardNamesと同じく永続化対象になる
+  const boardStatuses = new Map<BoardId, string>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
@@ -192,6 +198,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardNames.delete(id);
     boardStartups.delete(id);
     boardWorktreePaths.delete(id);
+    boardStatuses.delete(id);
     order = order.filter((bid) => bid !== id);
     if (order.length === 0) {
       opts.onAllTabsClosed();
@@ -212,6 +219,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       if (initialBoard.startup !== undefined) boardStartups.set(id, initialBoard.startup);
       if (initialBoard.worktreePath !== undefined)
         boardWorktreePaths.set(id, initialBoard.worktreePath);
+      if (initialBoard.status !== undefined) boardStatuses.set(id, initialBoard.status);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
     activeBoardId = order[clampedIndex];
@@ -314,6 +322,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardNames.delete(boardId);
     boardStartups.delete(boardId);
     boardWorktreePaths.delete(boardId);
+    boardStatuses.delete(boardId);
     order = order.filter((id) => id !== boardId);
     if (activeBoardId === boardId) {
       activeBoardId = order[order.length - 1];
@@ -337,9 +346,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const name = boardNames.get(boardId);
     const startup = boardStartups.get(boardId);
     const worktreePath = boardWorktreePaths.get(boardId);
+    const status = boardStatuses.get(boardId);
     boardNames.delete(boardId);
     boardStartups.delete(boardId);
     boardWorktreePaths.delete(boardId);
+    boardStatuses.delete(boardId);
     if (activeBoardId === boardId && order.length > 0) {
       activeBoardId = order[order.length - 1];
     }
@@ -349,6 +360,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       ...(name !== undefined ? { name } : {}),
       ...(startup !== undefined ? { startup } : {}),
       ...(worktreePath !== undefined ? { worktreePath } : {}),
+      ...(status !== undefined ? { status } : {}),
     };
   }
 
@@ -370,6 +382,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (detached.name !== undefined) boardNames.set(boardId, detached.name);
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
     if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
+    if (detached.status !== undefined) boardStatuses.set(boardId, detached.status);
   }
 
   /** detachBoardで最後のBoardを失ったかどうか。この状態のWorkspaceは描画に耐えないため即座に畳む */
@@ -443,6 +456,22 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   function getBoardWorktreePath(boardId: BoardId): string | null {
     return boardWorktreePaths.get(boardId) ?? null;
+  }
+
+  /** nullまたは空文字列（trim後）を渡すとステータスを解除する */
+  function setBoardStatus(boardId: BoardId, status: string | null): boolean {
+    if (!boards.has(boardId)) return false;
+    if (status === null || status.trim() === "") {
+      boardStatuses.delete(boardId);
+    } else {
+      boardStatuses.set(boardId, status.trim());
+    }
+    opts.onDirty();
+    return true;
+  }
+
+  function getBoardStatus(boardId: BoardId): string | null {
+    return boardStatuses.get(boardId) ?? null;
   }
 
   /** そのBoardで新しいタブを開くときのcwd。undefinedなら呼び出し側の既定（cwdの引き継ぎ）に任せる */
@@ -718,6 +747,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         zoomedTileId: board.getZoomedTileId(),
         startup: boardStartups.get(id) ?? null,
         worktreePath: boardWorktreePaths.get(id) ?? null,
+        status: boardStatuses.get(id) ?? null,
       };
     });
   }
@@ -810,6 +840,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     name?: string;
     startup?: PersistedBoardStartup;
     worktreePath?: string;
+    status?: string;
   }[] {
     return order.map((id) => {
       const board = boards.get(id) as Board;
@@ -821,16 +852,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
       const name = boardNames.get(id);
       const startup = boardStartups.get(id);
       const worktreePath = boardWorktreePaths.get(id);
+      const status = boardStatuses.get(id);
       const entry: {
         boardId: BoardId;
         layout: PersistedTileNode;
         name?: string;
         startup?: PersistedBoardStartup;
         worktreePath?: string;
+        status?: string;
       } = { boardId: id, layout };
       if (name !== undefined) entry.name = name;
       if (startup !== undefined) entry.startup = startup;
       if (worktreePath !== undefined) entry.worktreePath = worktreePath;
+      if (status !== undefined) entry.status = status;
       return entry;
     });
   }
@@ -870,6 +904,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getBoardStartup,
     setBoardWorktreePath,
     getBoardWorktreePath,
+    setBoardStatus,
+    getBoardStatus,
     getBoardFocusedShell,
     getBoardFocusedCwd,
     splitTile,

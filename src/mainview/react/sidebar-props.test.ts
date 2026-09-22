@@ -28,6 +28,7 @@ function board(
     startup?: BoardStatusEntry["startup"];
     worktreePath?: string | null;
     worktreeMissing?: boolean;
+    status?: string | null;
   } = {},
 ): BoardStatusEntry {
   return {
@@ -43,6 +44,7 @@ function board(
     startup: options.startup ?? null,
     worktreePath: options.worktreePath ?? null,
     worktreeMissing: options.worktreeMissing ?? false,
+    status: options.status ?? null,
   };
 }
 
@@ -91,6 +93,7 @@ describe("buildSidebarWorkspaceItems", () => {
             startup: null,
             worktreePath: null,
             worktreeMissing: false,
+            status: null,
           },
         ],
       },
@@ -111,6 +114,7 @@ describe("buildSidebarWorkspaceItems", () => {
             startup: null,
             worktreePath: null,
             worktreeMissing: false,
+            status: null,
           },
         ],
       },
@@ -194,6 +198,52 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.branch).toBe("feature/focused");
+  });
+
+  test("ステータス未設定時はstatus:null", () => {
+    const workspaces = [workspace("ws-1", [board("board-1", leaf("tile-1", ["tab-1"], "tab-1"))])];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1", [
+      { id: "review", label: "レビュー", color: "#f9e2af" },
+    ]);
+
+    expect(items[0]?.boards[0]?.status).toBeNull();
+  });
+
+  test("候補に載っているステータスはラベル・配色を引く", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { status: "review" }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1", [
+      { id: "review", label: "レビュー", color: "#f9e2af" },
+    ]);
+
+    expect(items[0]?.boards[0]?.status).toEqual({
+      value: "review",
+      label: "レビュー",
+      color: "#f9e2af",
+    });
+  });
+
+  test("候補に無い文字列（CLIで直接設定した値）は値そのものを既定色で出す", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { status: "あとで直す" }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1", [
+      { id: "review", label: "レビュー", color: null },
+    ]);
+
+    expect(items[0]?.boards[0]?.status).toEqual({
+      value: "あとで直す",
+      label: "あとで直す",
+      color: null,
+    });
   });
 
   test("agent未設定時はagent:null", () => {

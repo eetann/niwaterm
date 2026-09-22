@@ -249,7 +249,18 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
         ],
       },
       { name: "browser", entries: [{ key: "defaultUrl", value: input.browser.defaultUrl }] },
-      { name: "board", entries: [{ key: "newTabCwd", value: input.board.newTabCwd }] },
+      {
+        name: "board",
+        entries: [
+          { key: "newTabCwd", value: input.board.newTabCwd },
+          input.board.statuses.length === 0
+            ? { key: "statuses", value: "(なし)" }
+            : {
+                key: "statuses",
+                value: input.board.statuses.map((status) => status.id).join(", "),
+              },
+        ],
+      },
       {
         name: "terminal",
         entries: [

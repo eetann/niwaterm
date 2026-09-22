@@ -278,6 +278,54 @@ describe("Board操作", () => {
     expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.worktreePath).toBeUndefined();
   });
 
+  test("setBoardStatusでステータスを付け替えられ、nullで解除できる（永続化にも載る）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+
+    expect(mgr.setBoardStatus(boardId, "plan")).toBe(true);
+    expect(mgr.getBoardStatus(boardId)).toBe("plan");
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.status).toBe("plan");
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.status).toBe("plan");
+
+    expect(mgr.setBoardStatus(boardId, "review")).toBe(true);
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.status).toBe("review");
+
+    expect(mgr.setBoardStatus(boardId, null)).toBe(true);
+    expect(mgr.getBoardStatus(boardId)).toBeNull();
+    expect(mgr.serializeForPersistence().workspaces[0]?.boards[0]?.status).toBeUndefined();
+  });
+
+  test("空白だけのステータスは解除として扱い、前後の空白は落とす", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+
+    mgr.setBoardStatus(boardId, "  レビュー待ち  ");
+    expect(mgr.getBoardStatus(boardId)).toBe("レビュー待ち");
+
+    mgr.setBoardStatus(boardId, "   ");
+    expect(mgr.getBoardStatus(boardId)).toBeNull();
+  });
+
+  test("ステータスは保存・復元でラウンドトリップする", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    mgr.setBoardStatus(mgr.listWorkspaces()[0]?.activeBoardId as string, "implement");
+    const persisted = mgr.serializeForPersistence();
+
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+    expect(restored.listWorkspaces()[0]?.boards[0]?.status).toBe("implement");
+  });
+
+  test("存在しないboardIdへのsetBoardStatusはfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    expect(mgr.setBoardStatus("not-found", "plan")).toBe(false);
+  });
+
   test("存在しないboardIdへのsetBoardWorktreePathはfalseを返す", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
@@ -548,10 +596,11 @@ describe("moveBoardToWorkspace", () => {
     expect(boardIdsOf(wsB)).toEqual([boardA2, boardB1]);
   });
 
-  test("Board名とworktreePathの紐づけも一緒に移る", () => {
+  test("Board名・worktreePath・ステータスの紐づけも一緒に移る", () => {
     const { mgr, wsA, wsB } = createTwoWorkspaces();
     const boardA3 = mgr.newBoard(wsA, undefined, { worktreePath: "/repo/work/feature" }) as string;
     mgr.setBoardName(boardA3, "feat/x");
+    mgr.setBoardStatus(boardA3, "review");
 
     mgr.moveBoardToWorkspace(boardA3, wsB);
 
@@ -561,6 +610,7 @@ describe("moveBoardToWorkspace", () => {
       ?.boards.find((b) => b.boardId === boardA3);
     expect(moved?.name).toBe("feat/x");
     expect(moved?.worktreePath).toBe("/repo/work/feature");
+    expect(moved?.status).toBe("review");
   });
 
   test("移動してもタブのセッションは作り直されない（PTYごと移る）", () => {

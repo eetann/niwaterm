@@ -15,6 +15,7 @@ import type {
   NiwaNotifyOptions,
   ResolvedAppearanceConfig,
   ResolvedBoardConfig,
+  ResolvedBoardStatus,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
   ResolvedMouseConfig,
@@ -188,6 +189,11 @@ export type NiwaRPC = {
        */
       setBoardWorktreePath: { boardId: BoardId; path: string | null };
       /**
+       * サイドバーの右クリック・set-board-status:<id>アクションからの作業フェーズの切り替え。
+       * statusはboard.statusesのidか任意の文字列で、nullは解除
+       */
+      setBoardStatus: { boardId: BoardId; status: string | null };
+      /**
        * サイドバーの右クリックからのレイアウト適用。選んだプリセットをそのBoardへ今すぐ適用し、
        * 起動時レイアウトとしても紐づける（CLIの`layout apply --replace --startup`と同じ）。
        * 既存タブを閉じる確認と、プロジェクトローカル由来の場合のtrust確認はwebview側で取ってから送る
@@ -239,6 +245,8 @@ export type NiwaRPC = {
         mouse: ResolvedMouseConfig;
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
+        /** Boardへ付けられるステータスの候補（board.statuses）。サイドバーのメニュー・コマンドパレットに並ぶ */
+        boardStatuses: ResolvedBoardStatus[];
         /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
         configSummary: ConfigSummary;
       };
@@ -349,6 +357,7 @@ function sendConfig(windowId?: WindowId) {
       mouse,
       customViews,
       shellProfiles,
+      boardStatuses: boardConfig.statuses,
       configSummary: currentConfigSummary(),
     });
   }
@@ -998,6 +1007,9 @@ function createWindowRpc(windowId: WindowId) {
         },
         renameBoard: ({ boardId, name }: { boardId: BoardId; name: string }) => {
           windowManager.setBoardName(boardId, name);
+        },
+        setBoardStatus: ({ boardId, status }: { boardId: BoardId; status: string | null }) => {
+          windowManager.setBoardStatus(boardId, status);
         },
         setBoardWorktreePath: ({ boardId, path }: { boardId: BoardId; path: string | null }) => {
           // 入力欄の初期値はそのBoardのフォーカス中タブのcwdなので、相対パスもそのタブ起点で解決する

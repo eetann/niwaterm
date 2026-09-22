@@ -52,6 +52,7 @@ export const KEYBIND_ACTIONS = [
   "move-board-to-workspace",
   "rename-board",
   "set-board-worktree",
+  "clear-board-status",
   "new-workspace",
   "new-window",
   "next-workspace",
@@ -81,19 +82,39 @@ export const KEYBIND_ACTIONS = [
 /** アクション名と対象idを`:`で繋ぐ形のアクション（例: `show-sidebar-view:notes`）の接頭辞 */
 export const SHOW_SIDEBAR_VIEW_PREFIX = "show-sidebar-view:";
 
+/** アクティブBoardへステータスを付けるアクション（例: `set-board-status:review`）の接頭辞 */
+export const SET_BOARD_STATUS_PREFIX = "set-board-status:";
+
 /**
  * サイドバーの特定ビューを直接出すアクション。対象idはcustomViewのid（またはワークスペース一覧の
  * `workspaces`）で、設定ファイル側で増減するためKEYBIND_ACTIONSの固定リストには入らない
  */
 export type ShowSidebarViewAction = `${typeof SHOW_SIDEBAR_VIEW_PREFIX}${string}`;
 
-export type KeybindAction = (typeof KEYBIND_ACTIONS)[number] | ShowSidebarViewAction;
+/**
+ * アクティブBoardのステータスを指定の値へ変えるアクション。対象idはboard.statusesのid
+ * （設定ファイル側で増減するためKEYBIND_ACTIONSの固定リストには入らない）。
+ * 解除は固定アクションの`clear-board-status`が担う
+ */
+export type SetBoardStatusAction = `${typeof SET_BOARD_STATUS_PREFIX}${string}`;
+
+export type KeybindAction =
+  | (typeof KEYBIND_ACTIONS)[number]
+  | ShowSidebarViewAction
+  | SetBoardStatusAction;
 
 /** `show-sidebar-view:<id>`ならその対象idを返す。他のアクション・id部分が空ならnull */
 export function parseShowSidebarViewAction(action: string): string | null {
   if (!action.startsWith(SHOW_SIDEBAR_VIEW_PREFIX)) return null;
   const viewId = action.slice(SHOW_SIDEBAR_VIEW_PREFIX.length);
   return viewId === "" ? null : viewId;
+}
+
+/** `set-board-status:<id>`ならその対象idを返す。他のアクション・id部分が空ならnull */
+export function parseSetBoardStatusAction(action: string): string | null {
+  if (!action.startsWith(SET_BOARD_STATUS_PREFIX)) return null;
+  const statusId = action.slice(SET_BOARD_STATUS_PREFIX.length);
+  return statusId === "" ? null : statusId;
 }
 
 export interface KeybindingsConfig {
@@ -256,6 +277,7 @@ export function canonicalizeSecondKey(p: ParsedSecondKey): string {
 export function isKeybindAction(value: unknown): value is KeybindAction {
   if (typeof value !== "string") return false;
   if (parseShowSidebarViewAction(value) !== null) return true;
+  if (parseSetBoardStatusAction(value) !== null) return true;
   return (KEYBIND_ACTIONS as readonly string[]).includes(value);
 }
 

@@ -13,10 +13,14 @@ export {
 } from "./appearance";
 export {
   type BoardConfig,
+  type BoardStatusPreset,
   defaultBoardConfig,
   isNewTabCwdMode,
   type NewTabCwdMode,
+  normalizeBoardStatuses,
   type ResolvedBoardConfig,
+  type ResolvedBoardStatus,
+  resolveBoardStatus,
 } from "./board";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export {
@@ -82,10 +86,13 @@ export {
   type ParsedSecondKey,
   parseKeyBindingString,
   parseSecondKeyString,
+  parseSetBoardStatusAction,
   parseShowSidebarViewAction,
   platformDefaultKeybindings,
   resolveBindingEntry,
   type SecondKeyString,
+  SET_BOARD_STATUS_PREFIX,
+  type SetBoardStatusAction,
   SHOW_SIDEBAR_VIEW_PREFIX,
   type ShowSidebarViewAction,
 } from "./keybindings";

@@ -7,6 +7,7 @@ import {
   defaultMouseConfig,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
+  type ResolvedBoardStatus,
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
   type ShellProfile,
@@ -288,6 +289,7 @@ function renderCommandPalette(): void {
         sendMessage("newTab", { tileId: focusedTileId, shellProfileId });
       },
       sidebarViews: commandPaletteSidebarViews(),
+      boardStatuses,
       shortcutLabelFor: shortcutLabelForAction,
     }),
   );
@@ -453,6 +455,10 @@ interface CustomViewPanel {
 }
 /** bun側で解決されたcustomView一覧（configメッセージで受信）。設定に並べた順 */
 let customViews: ResolvedCustomViewConfig[] = [];
+/** Boardへ付けられるステータスの候補（configメッセージで受信）。設定に並べた順 */
+let boardStatuses: ResolvedBoardStatus[] = [];
+// ステータスの候補が変わったことをrenderSidebarのキャッシュキーへ伝える連番（shellProfilesVersionと同じ役割）
+let boardStatusesVersion = 0;
 const customViewPanelById = new Map<string, CustomViewPanel>();
 /** customViewのHTMLへ渡す配色。ターミナルと同じ値を使い、HTML側がサイドバーへ馴染ませられるようにする */
 let customViewTheme: CustomViewTheme = {
@@ -761,6 +767,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         mouse,
         customViews: views,
         shellProfiles: profiles,
+        boardStatuses: statuses,
         configSummary,
       }: {
         keybindings: KeybindingsConfig;
@@ -768,6 +775,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         mouse: ResolvedMouseConfig;
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
+        boardStatuses: ResolvedBoardStatus[];
         configSummary: ConfigSummary;
       }) => {
         hostRpcReplyReceived = true;
@@ -778,6 +786,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         applyCustomViews(views);
         shellProfiles = profiles;
         shellProfilesVersion++;
+        boardStatuses = statuses;
+        // ステータスのラベル・配色は設定由来なので、renderSidebarのキャッシュキーにも効かせる
+        boardStatusesVersion++;
+        if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
         // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
@@ -1792,10 +1804,12 @@ function renderSidebar(
 ): void {
   // renderTileTabBarと同じ理由で、内容が変わらないrenderは省く。
   // buildSidebarWorkspaceItemsは引数だけで決まる純関数なので、入力側をキーにすれば足りる
-  const key = `${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
+  const key = `${boardStatusesVersion}\u0000${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
   sidebarWorkspaceListRoot.renderIfChanged(key, () =>
     createElement(SidebarWorkspaceList, {
-      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId),
+      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId, boardStatuses),
+      boardStatuses,
+      onSetBoardStatus: setSidebarBoardStatus,
       onSelectWorkspaceHeader: activateSidebarWorkspace,
       onSelectBoard: activateSidebarBoard,
       onSelectPopup: activateSidebarPopup,
@@ -1811,6 +1825,12 @@ function renderSidebar(
       onMoveBoardToWorkspace: requestMoveBoardToWorkspace,
     }),
   );
+}
+
+/** サイドバーの右クリックからの作業フェーズの切り替え。nullは解除 */
+function setSidebarBoardStatus(boardId: BoardId, status: string | null): void {
+  sendMessage("setBoardStatus", { boardId, status });
+  imeEl.focus({ preventScroll: true });
 }
 
 /** サイドバーのワークスペース見出しクリック。既にアクティブなワークスペースなら何もしない */
@@ -3087,6 +3107,16 @@ function handleTileCommand(cmd: TileCommand): void {
   // ワークツリーの紐づけもアクティブBoardが対象。renameBoardと同じ理由でここで処理する
   if (cmd.type === "setBoardWorktree") {
     openSetActiveBoardWorktreeDialog();
+    return;
+  }
+  // 作業フェーズもアクティブBoardが対象。renameBoardと同じ理由でここで処理する
+  if (cmd.type === "setBoardStatus" || cmd.type === "clearBoardStatus") {
+    if (activeBoardId) {
+      sendMessage("setBoardStatus", {
+        boardId: activeBoardId,
+        status: cmd.type === "setBoardStatus" ? cmd.status : null,
+      });
+    }
     return;
   }
   // Boardの移動先選びもアクティブBoardが対象。renameBoardと同じくfocusedTileIdのガードより手前で処理する
