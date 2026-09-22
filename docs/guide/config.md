@@ -685,7 +685,7 @@ function whenReady() {
 `window.niwaterm.theme`には`appearance`の背景色・文字色・背景画像（`background`・`foreground`・`backgroundImage`）が入っている。
 これをCSS変数へ流し込むと、ターミナルと同じ地の上にUIを載せられる。配色が変わったときは`niwaterm:theme`イベントが飛ぶので、そこで当て直す。
 
-HTMLは必ず自分で地を塗ること。**webviewの背後は透けない**（`docs/known-issues/webview2-ignores-webview-transparency.md`）ので、
+HTMLは必ず自分で地を塗ること。**webviewの背後は透けない**（`docs/known-issues/electrobun-webview-background-cannot-be-transparent.md`）ので、
 地を指定しないとそこだけ白く浮く。ホバー・枠線のような中間色は、地と混ぜず文字色からの透明度だけで作ると背景のグラデーションを潰さない。
 
 ```js

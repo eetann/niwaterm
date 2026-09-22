@@ -2114,10 +2114,6 @@ function applyCustomView(customView: ResolvedCustomViewConfig | null): void {
     webviewEl.on("dom-ready", () => {
       webviewEl.toggleHidden(!sidebarShowingCustom);
       webviewEl.togglePassthrough(!sidebarShowingCustom);
-      // 地を塗らないHTMLの背後を透かす。WindowsのWebView2では効かないため
-      // （docs/known-issues/webview2-ignores-webview-transparency.md）、
-      // HTML側はniwaterm.themeの背景色・背景画像で地を塗る前提で書く
-      webviewEl.toggleTransparent(true);
       // ネイティブ側のwebviewが用意できる前に送った位置は捨てられる（WebView2は
       // "Controller is NULL, cannot resize"）のに、送った側は最新の矩形として覚えてしまい
       // 二度と送り直さない。生成が済んだここで現在の矩形を強制的に送り直す
