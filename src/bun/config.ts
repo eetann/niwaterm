@@ -12,6 +12,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultTerminalConfig,
   defaultUiColors,
   type CustomViewConfig,
   type CustomViewHandlers,
@@ -36,6 +37,7 @@ import {
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
   type ResolvedMouseConfig,
+  type ResolvedTerminalConfig,
   type ResolvedUiColors,
   type SelectionMenuFn,
   type ShellProfile,
@@ -94,6 +96,10 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   if ("workspace" in v) {
     const ws = v["workspace"];
     if (typeof ws !== "object" || ws === null) return false;
+  }
+  if ("terminal" in v) {
+    const te = v["terminal"];
+    if (typeof te !== "object" || te === null) return false;
   }
   return true;
 }
@@ -288,6 +294,10 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function isOpacity(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
@@ -429,6 +439,22 @@ export function resolveBoard(userConfig: NiwatermConfig | null): ResolvedBoardCo
       user?.newTabCwd,
       defaultBoardConfig.newTabCwd,
       isNewTabCwdMode,
+    ),
+  };
+}
+
+/**
+ * defaultTerminalConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
+ */
+export function resolveTerminal(userConfig: NiwatermConfig | null): ResolvedTerminalConfig {
+  const user = userConfig?.terminal;
+  return {
+    scrollback: resolveField(
+      "terminal",
+      "scrollback",
+      user?.scrollback,
+      defaultTerminalConfig.scrollback,
+      isNonNegativeInteger,
     ),
   };
 }
@@ -671,6 +697,7 @@ export async function loadAndResolveConfig(
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
+  terminal: ResolvedTerminalConfig;
   /** ユーザー定義HTML UI（サイドバーのビュー・タブ）の一覧。設定に並べた順 */
   customViews: ResolvedCustomViewConfig[];
   /** customViewのhandlersの実行（HTML側のniwaterm.callの実体） */
@@ -714,6 +741,7 @@ export async function loadAndResolveConfig(
     appearance: resolveAppearance(userConfig),
     browser: resolveBrowser(userConfig),
     board: resolveBoard(userConfig),
+    terminal: resolveTerminal(userConfig),
     customViews: customViews.views,
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
     defaultShell: resolveShell(userConfig),

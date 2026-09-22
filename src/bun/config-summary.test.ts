@@ -4,6 +4,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultTerminalConfig,
   defaultUiColors,
 } from "@niwaterm/config";
 import { buildConfigSummary, type ConfigSummary, type ConfigSummaryInput } from "./config-summary";
@@ -24,6 +25,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     mouse: defaultMouseConfig,
     workspaceDefaultCwd: undefined,
     board: defaultBoardConfig,
+    terminal: defaultTerminalConfig,
     ...overrides,
   };
 }
@@ -48,6 +50,7 @@ describe("buildConfigSummary", () => {
       "layouts",
       "browser",
       "board",
+      "terminal",
       "workspace",
       "mouse",
       "customViews",
@@ -211,5 +214,14 @@ describe("buildConfigSummary", () => {
     const summary = buildConfigSummary(input());
     const mouseKeys = summary.sections.find((s) => s.name === "mouse")?.entries.map((e) => e.key);
     expect(mouseKeys).toEqual(["copyOnSelect"]);
+  });
+
+  test("terminal.scrollbackは行数と刈り込み単位の注記を添えて出す", () => {
+    const summary = buildConfigSummary(input({ terminal: { scrollback: 50_000 } }));
+    expect(entry(summary, "terminal", "scrollback")).toEqual({
+      key: "scrollback",
+      value: "50000行",
+      note: "実際に遡れる行数はこれより数十〜数百行多くなる（刈り込みがページ単位のため）",
+    });
   });
 });

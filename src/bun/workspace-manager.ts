@@ -113,6 +113,8 @@ export interface WorkspaceManagerOptions {
    * 省略時は常に存在扱い（サイドバーに警告アイコンが出ない）
    */
   isWorktreeMissing?: (worktreePath: string) => boolean;
+  /** 新しく起動するタブのスクロールバック保持行数を取得する。省略時はterminal-session側の既定値 */
+  getMaxScrollback?: WorkspaceOptions["getMaxScrollback"];
   /** いずれかのタブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: WorkspaceOptions["onBell"];
   /** テスト時にfakeへ差し替えるためのDI */
@@ -153,6 +155,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
       getNewTabCwd: opts.getNewTabCwd,
+      getMaxScrollback: opts.getMaxScrollback,
       onBell: opts.onBell,
       createSession: opts.createSession,
     });
@@ -835,6 +838,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     };
   }
 
+  /** 配下の全ワークスペースのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
+  function applyMaxScrollback(lines: number): void {
+    for (const ws of workspaces.values()) ws.applyMaxScrollback(lines);
+  }
+
   function dispose(): void {
     for (const ws of workspaces.values()) ws.dispose();
     workspaces.clear();
@@ -919,6 +927,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setTileName,
     setWorkspaceName,
     serializeForPersistence,
+    applyMaxScrollback,
     dispose,
   };
 }

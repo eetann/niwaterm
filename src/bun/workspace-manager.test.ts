@@ -42,6 +42,7 @@ function createFakeSessionFactory() {
       mouseEvent: () => {},
       resize: () => false,
       setCellSize: () => {},
+      setMaxScrollback: () => {},
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},

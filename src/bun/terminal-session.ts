@@ -34,7 +34,10 @@ export type TerminalSessionCallbacks = {
 };
 
 export type TerminalSessionOptions = PtyOptions &
-  TerminalSessionCallbacks & { maxScrollback?: number };
+  TerminalSessionCallbacks & {
+    /** スクロールバックとして保持する行数の上限。省略時はghostty.ts側のフォールバック値 */
+    maxScrollback?: number;
+  };
 
 /** コピーモードの描画に必要な情報。座標はすべてビューポート座標（webviewがそのまま桁×セル幅で置ける） */
 export interface CopyModeRenderState {
@@ -540,6 +543,14 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     return term.dumpText();
   }
 
+  /**
+   * スクロールバックの保持行数の上限を変更する（設定ファイルのホットリロード用）。
+   * 下げた場合はその時点で上限を超える履歴が破棄される
+   */
+  function setMaxScrollback(lines: number): void {
+    term.setScrollbackMaxLines(lines);
+  }
+
   function dispose(): void {
     if (disposed) return;
     disposed = true;
@@ -562,6 +573,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     handleCopyModeKey,
     resize,
     setCellSize,
+    setMaxScrollback,
     scroll,
     scrollToTop,
     scrollToBottom,

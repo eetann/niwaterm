@@ -57,6 +57,7 @@ type SharedWorkspaceOptions = Pick<
   | "getDefaultShell"
   | "getDefaultCwd"
   | "getNewTabCwd"
+  | "getMaxScrollback"
   | "isWorktreeMissing"
   | "onBell"
   | "createSession"
@@ -112,6 +113,7 @@ export function createWindowManager(opts: WindowManagerOptions) {
       ...(opts.getDefaultShell !== undefined ? { getDefaultShell: opts.getDefaultShell } : {}),
       ...(opts.getDefaultCwd !== undefined ? { getDefaultCwd: opts.getDefaultCwd } : {}),
       ...(opts.getNewTabCwd !== undefined ? { getNewTabCwd: opts.getNewTabCwd } : {}),
+      ...(opts.getMaxScrollback !== undefined ? { getMaxScrollback: opts.getMaxScrollback } : {}),
       ...(opts.isWorktreeMissing !== undefined
         ? { isWorktreeMissing: opts.isWorktreeMissing }
         : {}),
@@ -255,6 +257,11 @@ export function createWindowManager(opts: WindowManagerOptions) {
       if (entry.persistent) return entry.workspaces.serializeForPersistence();
     }
     return null;
+  }
+
+  /** 全ウィンドウの全タブのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
+  function applyMaxScrollback(lines: number): void {
+    for (const entry of entries.values()) entry.workspaces.applyMaxScrollback(lines);
   }
 
   function dispose(): void {
@@ -433,6 +440,7 @@ export function createWindowManager(opts: WindowManagerOptions) {
     // メインウィンドウの中身だけを書き出す。一時ウィンドウしか残っていない場合は
     // 最後に見えていたメインウィンドウの状態を消さないよう、空のまま返さずpersistentState()を使う
     serializeForPersistence: () => persistentState() ?? focused().serializeForPersistence(),
+    applyMaxScrollback,
     dispose,
   };
 }

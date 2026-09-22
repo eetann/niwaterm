@@ -131,6 +131,7 @@ export interface WorkspaceOptions {
    * ディレクトリの存在確認はここを渡す側（index.ts）の責務
    */
   getNewTabCwd?: (worktreePath: string | undefined) => string | undefined;
+  getMaxScrollback?: BoardOptions["getMaxScrollback"];
   onBell?: BoardOptions["onBell"];
   createSession?: BoardOptions["createSession"];
 }
@@ -150,6 +151,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
     getDefaultShell: opts.getDefaultShell,
+    getMaxScrollback: opts.getMaxScrollback,
     onDirty: () => opts.onDirty(),
     createSession: opts.createSession,
   });
@@ -173,6 +175,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
       getNewTabCwd: () => newTabCwdOf(id),
+      getMaxScrollback: opts.getMaxScrollback,
       onBell: opts.onBell,
       createSession: opts.createSession,
     });
@@ -841,6 +844,12 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return popup.getInfo();
   }
 
+  /** 配下の全Board・ポップアップのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
+  function applyMaxScrollback(lines: number): void {
+    for (const board of boards.values()) board.applyMaxScrollback(lines);
+    popup.applyMaxScrollback(lines);
+  }
+
   function dispose(): void {
     for (const board of boards.values()) board.dispose();
     boards.clear();
@@ -917,6 +926,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     setTabName,
     setTileName,
     getPersistableBoards,
+    applyMaxScrollback,
     dispose,
   };
 }

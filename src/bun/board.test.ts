@@ -31,6 +31,8 @@ function resolvePending(ws: Board, cols = 80, rows = 24): void {
 interface FakeSessionRecord {
   opts: TerminalSessionOptions;
   disposed: boolean;
+  /** setMaxScrollbackで後から差し替えられた値。未呼び出しならnull */
+  appliedMaxScrollback: number | null;
   /** setCallbacksで差し替わった最新のコールバック。テストからtriggerExit/triggerPwdChangedで発火する */
   callbacks: TerminalSessionCallbacks;
 }
@@ -41,6 +43,7 @@ function createFakeSessionFactory() {
     const record: FakeSessionRecord = {
       opts,
       disposed: false,
+      appliedMaxScrollback: null,
       callbacks: {
         onOutput: opts.onOutput,
         onExit: opts.onExit,
@@ -56,6 +59,9 @@ function createFakeSessionFactory() {
       mouseEvent: () => {},
       resize: () => false,
       setCellSize: () => {},
+      setMaxScrollback: (lines: number) => {
+        record.appliedMaxScrollback = lines;
+      },
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
@@ -389,6 +395,36 @@ describe("getDefaultShellによるシェル指定", () => {
   });
 });
 
+describe("getMaxScrollbackによるスクロールバック行数の指定", () => {
+  test("getMaxScrollback省略時はmaxScrollbackがundefinedのまま渡る（terminal-session側の既定値にフォールバック）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    expect(created[0]?.opts.maxScrollback).toBeUndefined();
+  });
+
+  test("getMaxScrollbackは呼び出し毎に評価される（ホットリロードで変わった値が新規タブへ反映される）", () => {
+    const { created, factory } = createFakeSessionFactory();
+    let current = 10_000;
+    const ws = createBoard(baseOpts({ createSession: factory, getMaxScrollback: () => current }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    current = 50_000;
+    ws.newTab(tileId);
+    expect(created[0]?.opts.maxScrollback).toBe(10_000);
+    expect(created[1]?.opts.maxScrollback).toBe(50_000);
+  });
+
+  test("applyMaxScrollbackは起動済みの全タブへ新しい値を配る", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    ws.applyMaxScrollback(50_000);
+    expect(created.map((r) => r.appliedMaxScrollback)).toEqual([50_000, 50_000]);
+  });
+});
 describe("getDefaultCwdによる新規Boardのcwd指定", () => {
   test("getDefaultCwd省略時はcwdがundefinedのまま渡る（pty.ts側のOS標準ホームディレクトリにフォールバック）", () => {
     const { created, factory } = createFakeSessionFactory();

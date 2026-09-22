@@ -61,6 +61,11 @@ export type PopupOptions = {
   genTabId: () => TabId;
   /** 新規タブ作成時に使うデフォルトシェルを取得する。省略時はpty.ts側のOS標準シェルを使う */
   getDefaultShell?: () => string | undefined;
+  /**
+   * 新しく起動するポップアップのスクロールバック保持行数を取得する。省略時はterminal-session側の既定値。
+   * getDefaultShellと同様、呼び出し毎に評価する
+   */
+  getMaxScrollback?: () => number;
   /** 描画すべき変化が生じた時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onDirty: () => void;
   /** テスト時にfakeへ差し替えるためのDI */
@@ -131,6 +136,7 @@ export function createPopup(opts: PopupOptions) {
         NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
         NIWATERM_APP_VARIANT: APP_VARIANT,
       },
+      maxScrollback: opts.getMaxScrollback?.(),
       onOutput: () => opts.onDirty(),
       onExit: () => close(),
       onPwdChanged: (cwd) => vars.set("cwd", cwd),
@@ -328,6 +334,11 @@ export function createPopup(opts: PopupOptions) {
     return tabId ? { tabId, visible } : null;
   }
 
+  /** 開いているポップアップのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
+  function applyMaxScrollback(lines: number): void {
+    session?.setMaxScrollback(lines);
+  }
+
   function dispose(): void {
     session?.dispose();
     consumeCaptureFile();
@@ -355,6 +366,7 @@ export function createPopup(opts: PopupOptions) {
     renderState,
     snapshot,
     getInfo,
+    applyMaxScrollback,
     dispose,
   };
 }

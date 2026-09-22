@@ -43,6 +43,7 @@ function createTestWorkspaceManager(): {
       mouseEvent: () => {},
       resize: () => false,
       setCellSize: () => {},
+      setMaxScrollback: () => {},
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},

@@ -18,6 +18,7 @@ import type {
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
   ResolvedMouseConfig,
+  ResolvedTerminalConfig,
   ShellProfile,
 } from "@niwaterm/config";
 import { scaleLineHeight } from "@niwaterm/config";
@@ -485,6 +486,7 @@ let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 let boardConfig: ResolvedBoardConfig;
+let terminalConfig: ResolvedTerminalConfig;
 let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
 let defaultShell: string | undefined;
@@ -527,6 +529,7 @@ const windowManager = createWindowManager({
   // （紐づけ先が消えていると気づかずPTYの起動自体が失敗するため）
   getNewTabCwd: (worktreePath) =>
     resolveBoardNewTabCwd(boardConfig.newTabCwd, worktreePath, dirExistsSync),
+  getMaxScrollback: () => terminalConfig.scrollback,
   isWorktreeMissing: (worktreePath) => worktreeExistence.isMissing(worktreePath),
   onBell: handleBell,
   onWindowOpened: (windowId) => {
@@ -591,6 +594,7 @@ function currentConfigSummary(): ConfigSummary {
     mouse,
     workspaceDefaultCwd,
     board: boardConfig,
+    terminal: terminalConfig,
   });
 }
 
@@ -601,6 +605,7 @@ async function refreshConfig(): Promise<void> {
     appearance,
     browser,
     board: boardConfig,
+    terminal: terminalConfig,
     customViews,
     customViewHandlers,
     defaultShell,
@@ -619,6 +624,8 @@ async function refreshConfig(): Promise<void> {
     sendNotification,
     () => handleConfigFileChanged(),
   ));
+  // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
+  windowManager.applyMaxScrollback(terminalConfig.scrollback);
 }
 
 await refreshConfig();

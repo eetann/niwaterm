@@ -45,6 +45,11 @@ export {
 } from "./mouse";
 export type { NiwatermProjectConfig } from "./project";
 export { type ShellConfig, type ShellProfile } from "./shell";
+export {
+  defaultTerminalConfig,
+  type ResolvedTerminalConfig,
+  type TerminalConfig,
+} from "./terminal";
 export { type WorkspaceConfig } from "./workspace";
 export {
   type WorktreeConfig,

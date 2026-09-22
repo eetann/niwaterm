@@ -7,6 +7,7 @@ import type { LayoutsConfig } from "./layout";
 import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
+import type { TerminalConfig } from "./terminal";
 import type { WorkspaceConfig } from "./workspace";
 import type { WorktreeConfig } from "./worktree";
 
@@ -53,6 +54,12 @@ export interface NiwatermConfig {
    * 例: { default: "/bin/bash", profiles: [{ id: "ssh-dev", name: "dev server", command: "ssh dev" }] }
    */
   shell?: ShellConfig;
+  /**
+   * ターミナル本体の挙動設定。スクロールバックの保持行数を変更できる。
+   * 未指定のフィールドはdefaultTerminalConfigの値のまま有効。
+   * 例: { scrollback: 50000 }
+   */
+  terminal?: TerminalConfig;
   /**
    * レイアウトプリセット設定。`niwaterm layout apply <name>`で名前指定して適用できる
    * タイル構成（2分割ratioのネスト）とタブごとのcommand/cwd/vars/focus等を定義する。

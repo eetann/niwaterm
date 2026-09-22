@@ -15,6 +15,7 @@ import type {
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
   ResolvedMouseConfig,
+  ResolvedTerminalConfig,
   ResolvedUiColors,
   ShellProfile,
 } from "@niwaterm/config";
@@ -65,6 +66,7 @@ export interface ConfigSummaryInput {
   mouse: ResolvedMouseConfig;
   workspaceDefaultCwd: string | undefined;
   board: ResolvedBoardConfig;
+  terminal: ResolvedTerminalConfig;
 }
 
 /** background-imageの値がdata URIとして埋め込まれた画像かどうかと、そのMIMEタイプ */
@@ -248,6 +250,18 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
       },
       { name: "browser", entries: [{ key: "defaultUrl", value: input.browser.defaultUrl }] },
       { name: "board", entries: [{ key: "newTabCwd", value: input.board.newTabCwd }] },
+      {
+        name: "terminal",
+        entries: [
+          {
+            key: "scrollback",
+            value: `${input.terminal.scrollback}行`,
+            // 刈り込みがページ単位で実際に遡れる行数は指定値より多くなる。
+            // 値だけを出すと「設定より多く残っている」と見えてしまう
+            note: "実際に遡れる行数はこれより数十〜数百行多くなる（刈り込みがページ単位のため）",
+          },
+        ],
+      },
       {
         name: "workspace",
         entries: [

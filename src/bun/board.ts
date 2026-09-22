@@ -109,6 +109,11 @@ export type BoardOptions = {
    * 戻り値undefinedは従来どおり引き継ぐ。getDefaultShellと同様、呼び出し毎に評価する
    */
   getNewTabCwd?: () => string | undefined;
+  /**
+   * 新しく起動するタブのスクロールバック保持行数を取得する。省略時はterminal-session側の既定値。
+   * getDefaultShellと同様、呼び出し毎に評価する
+   */
+  getMaxScrollback?: () => number;
   /** タブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: (tabId: TabId) => void;
   /** テスト時にfakeへ差し替えるためのDI */
@@ -179,6 +184,7 @@ export function createBoard(opts: BoardOptions) {
         NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
         NIWATERM_APP_VARIANT: APP_VARIANT,
       },
+      maxScrollback: opts.getMaxScrollback?.(),
       onOutput: () => opts.onDirty(),
       onExit: () => handleTabProcessExit(tabId),
       // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）
@@ -841,6 +847,14 @@ export function createBoard(opts: BoardOptions) {
     onAllTabsClosed = handler;
   }
 
+  /**
+   * 起動済みの全タブのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用）。
+   * 起動を保留中のタブはPTY起動時にgetMaxScrollbackから最新値を読むため対象外でよい
+   */
+  function applyMaxScrollback(lines: number): void {
+    for (const session of sessions.values()) session.setMaxScrollback(lines);
+  }
+
   function dispose(): void {
     for (const session of sessions.values()) session.dispose();
     sessions.clear();
@@ -898,6 +912,7 @@ export function createBoard(opts: BoardOptions) {
     listTileNames,
     getPersistableTabs,
     setOnAllTabsClosed,
+    applyMaxScrollback,
     dispose,
   };
 }

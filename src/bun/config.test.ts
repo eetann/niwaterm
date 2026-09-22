@@ -8,6 +8,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultTerminalConfig,
   defaultUiColors,
   platformDefaultKeybindings,
 } from "@niwaterm/config";
@@ -25,6 +26,7 @@ import {
   resolveSelectionMenu,
   resolveShell,
   resolveShellProfiles,
+  resolveTerminal,
   resolveWorkspaceDefaultCwd,
 } from "./config";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
@@ -40,6 +42,7 @@ function createTestNiwaApi(): NiwaApiHandle {
     mouseEvent: () => {},
     resize: () => false,
     setCellSize: () => {},
+    setMaxScrollback: () => {},
     scroll: () => {},
     scrollToTop: () => {},
     scrollToBottom: () => {},
@@ -559,6 +562,33 @@ describe("resolveBoard", () => {
   });
 });
 
+describe("resolveTerminal", () => {
+  test("nullを渡すとdefaultTerminalConfigがそのまま返る", () => {
+    expect(resolveTerminal(null)).toEqual(defaultTerminalConfig);
+  });
+
+  test("scrollbackを変更できる", () => {
+    expect(resolveTerminal({ terminal: { scrollback: 50_000 } }).scrollback).toBe(50_000);
+  });
+
+  test("scrollback: 0（スクロールバック無し）は有効な値として通す", () => {
+    expect(resolveTerminal({ terminal: { scrollback: 0 } }).scrollback).toBe(0);
+  });
+
+  test("負数・小数・数値以外は警告付きでデフォルトにフォールバックする", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      for (const invalid of [-1, 1.5, "10000" as never]) {
+        expect(resolveTerminal({ terminal: { scrollback: invalid } }).scrollback).toBe(
+          defaultTerminalConfig.scrollback,
+        );
+      }
+      expect(logSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
 describe("resolveMouse", () => {
   test("nullを渡すとdefaultMouseConfigがそのまま返る", () => {
     expect(resolveMouse(null)).toEqual(defaultMouseConfig);

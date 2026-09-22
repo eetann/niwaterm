@@ -146,6 +146,7 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
 const OPT_WRITE_PTY = 1;
 const OPT_BELL = 2;
 const OPT_CLIPBOARD_WRITE = 26;
+const OPT_SCROLLBACK_MAX_BYTES = 27;
 const OPT_SCROLLBACK_MAX_LINES = 28;
 const OPT_PWD_CHANGED = 25;
 
@@ -247,16 +248,27 @@ export interface CursorState {
   shape: CursorShape;
 }
 
-export function createGhosttyTerminal(cols: number, rows: number, maxScrollback = 10_000) {
+// 呼び出し元が指定しなかった場合のスクロールバック上限。
+// 設定ファイル経由の既定値は@niwaterm/configのdefaultTerminalConfig.scrollbackが持つ
+const FALLBACK_MAX_SCROLLBACK = 10_000;
+
+export function createGhosttyTerminal(
+  cols: number,
+  rows: number,
+  maxScrollback = FALLBACK_MAX_SCROLLBACK,
+) {
   const handle = new BigUint64Array(1);
   let rc = vt.symbols.ghostty_terminal_new(null, ptr(handle), cols, rows);
   if (rc !== 0) throw new Error(`ghostty_terminal_new failed: ${rc}`);
   const term = read.ptr(ptr(handle)) as Pointer;
 
   // スクロールバック上限は生成時オプションではなく生成後のsetで指定する
-  // （ghostty_terminal_newはcols/rowsしか受け取らない）
-  const scrollbackLimit = new BigUint64Array([BigInt(maxScrollback)]);
-  vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(scrollbackLimit));
+  // （ghostty_terminal_newはcols/rowsしか受け取らない）。
+  // バイト数の上限はNULLで解除し、行数だけで上限を決める。libghostty-vtの既定は
+  // 10000バイトで、行数をいくら大きくしてもバイト数側が先に上限へ達して900行ほどで
+  // 頭打ちになる（詳細: docs/known-issues/libghostty-vt-scrollback-byte-limit.md）
+  vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_BYTES, null);
+  setScrollbackMaxLines(maxScrollback);
 
   // カーソル形状（DECSCUSR）読み取り専用のrender state。行データ等は一切使わない
   const renderStateHandle = new BigUint64Array(1);
@@ -716,6 +728,16 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_BOTTOM, 0n);
   }
 
+  /**
+   * スクロールバックとして保持する行数の上限を設定する。生成後も変更でき、
+   * 下げた場合はその時点で上限を超える履歴が破棄される。
+   * libghostty側の刈り込みはページ単位のため、実際に残る行数は指定値より数十〜百行ほど多くなる
+   */
+  function setScrollbackMaxLines(lines: number): void {
+    const limit = new BigUint64Array([BigInt(lines)]);
+    vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_LINES, ptr(limit));
+  }
+
   function free(): void {
     if (mouseEvent) vt.symbols.ghostty_mouse_event_free(mouseEvent);
     if (mouseEncoder) vt.symbols.ghostty_mouse_encoder_free(mouseEncoder);
@@ -752,6 +774,7 @@ export function createGhosttyTerminal(cols: number, rows: number, maxScrollback 
     scrollToRow,
     scrollToTop,
     scrollToBottom,
+    setScrollbackMaxLines,
     free,
   };
 }
