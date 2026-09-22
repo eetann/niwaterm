@@ -73,6 +73,11 @@ export default define({
       short: "w",
       description: "Boardの作成先workspaceId（省略時は現在アクティブなワークスペース）",
     },
+    name: {
+      type: "string",
+      short: "n",
+      description: "Boardに付ける名前（省略時はブランチ名）",
+    },
     trust: {
       type: "boolean",
       description:
@@ -164,6 +169,7 @@ export default define({
       path,
       branch,
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+      ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
       layout: {
         ...(ctx.values.layout !== undefined ? { explicit: ctx.values.layout } : {}),
         resolve: async () => layoutPreset,

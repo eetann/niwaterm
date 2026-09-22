@@ -15,11 +15,17 @@ export default define({
       type: "string",
       description: "最初のタブの作業ディレクトリ（省略時はOS標準）",
     },
+    name: {
+      type: "string",
+      short: "n",
+      description: "Boardの名前（省略時はデフォルトの連番ラベル）",
+    },
   },
   run: async (ctx) => {
     const result = await newBoard(resolveIpcEndpoint(), {
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
       ...(ctx.values.cwd !== undefined ? { cwd: ctx.values.cwd } : {}),
+      ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
     });
     if (!result.ok) {
       failAndExit(`board newに失敗しました: ${result.error}`);

@@ -677,6 +677,8 @@ export interface NewBoardOptions {
   activate?: boolean;
   /** 対応するgitワークツリーの絶対パス。`worktree open`が既存Boardを見つける判定キーになる */
   worktreePath?: string;
+  /** Boardの表示名。空文字列は名前なし（デフォルトの連番ラベル）として扱う */
+  name?: string;
 }
 
 export function newBoard(
@@ -688,6 +690,7 @@ export function newBoard(
     cwd?: string;
     activate?: boolean;
     worktreePath?: string;
+    name?: string;
   } = {};
   if (opts.workspaceId !== undefined) body.workspaceId = opts.workspaceId;
   if (opts.cwd !== undefined) body.cwd = toAppAccessiblePath(endpoint, opts.cwd);
@@ -695,6 +698,7 @@ export function newBoard(
   if (opts.worktreePath !== undefined) {
     body.worktreePath = toAppAccessiblePath(endpoint, opts.worktreePath);
   }
+  if (opts.name !== undefined) body.name = opts.name;
   return postJson(endpoint, "/new-board", body);
 }
 

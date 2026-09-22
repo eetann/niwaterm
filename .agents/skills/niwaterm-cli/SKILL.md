@@ -30,7 +30,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `window new` / `list` / `close` — OSウィンドウの作成・一覧・クローズ。`window new`で開くのは**一時ウィンドウ**（まっさらな状態で開き、閉じても何も残らず次回起動時にも復元されない）。前回の状態を復元するメインウィンドウは起動時の1枚だけ。ウィンドウをまたいだタブ・Boardの移動はできない
 - `workspace new` / `switch` / `close` / `rename` / `move` — ワークスペースの作成・切替・削除・名前変更・表示順の並び替え（`move`は`--up`/`--down`で1つずつ移動）
-- `board new` / `switch` / `close` / `rename` / `move` / `startup` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成・切替・削除・名前変更・表示順の並び替え・別ワークスペースへの移動（`move`は`--up`/`--down`でワークスペース内を1つずつ移動、`--to-workspace <workspaceId>`で別ワークスペースの末尾へ移動）・起動時レイアウト設定
+- `board new` / `switch` / `close` / `rename` / `move` / `startup` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成（`new --name <name>`で名前も付けられる）・切替・削除・名前変更・表示順の並び替え・別ワークスペースへの移動（`move`は`--up`/`--down`でワークスペース内を1つずつ移動、`--to-workspace <workspaceId>`で別ワークスペースの末尾へ移動）・起動時レイアウト設定
 - `board worktree set <path>` / `clear` / `show` — そのBoardに紐づくワークツリーの設定・解除・表示。`worktree new`/`open`で開いたBoardには自動で付いており、`worktree open`の「既に開いているBoardか」の判定キーになる。紐づけ先が消えるとサイドバーに警告アイコンが出る。設定の`board.newTabCwd: "worktree"`と組み合わせると新しいタブがここで開く
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
@@ -39,6 +39,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
   - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show cli`の「プロジェクトローカルのレイアウト」節
 - `worktree list` / `new` / `open` / `remove` — gitワークツリーの一覧・作成・表示・削除。`list`は`path`／`branch`／`HEAD`／フラグのTSVで、先頭行は必ずメインワークツリー（アプリへ接続せず直接gitを呼ぶ）。`new <branch>`はワークツリーを作ってniwatermで開き、`--open board`（既定、Boardを作るが遷移しない）／`board-switch`（遷移する）／`current-tab`（実行したタブをcd）／`none`（開かない）を選べる。**同じブランチのワークツリーが既にあればエラーにせずそれを開く**ので、「あれば使う、無ければ作る」を分岐なしで書ける。設定の`worktree.onCreate`があれば作成直後（Boardを開く前）に走る。プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるため、**AIエージェントから非対話で叩く場合は`--trust`を付ける**（付けないとプロジェクトローカル設定を無視して続行する）
 - `open <worktree>`は既にあるワークツリーを開くだけ（作成しない）。ブランチ名・パス・ディレクトリ名のいずれでも指定でき、既定の`--open`は`board-switch`。**そのワークツリーのBoardが既に開いていれば新しく作らずそれへ切り替える**ため、同じワークツリーのBoardが増えない（`new`も同じ扱い）
+- `new`・`open`とも`--name <name>`でBoardの名前を指定できる（省略時はブランチ名）。既に開いているBoardを使い回す場合もその名前へ付け替える（Boardを作らない`--open none`／`current-tab`では効かない）
 - `new`・`open`とも`--layout <name>`でレイアウトプリセットをBoardへ適用できる（省略時は設定の`worktree.layout`）。適用されるのはBoardを新規に作ったときだけで、既に開いているBoardの既存タブは壊さない。プロジェクトローカルのプリセットを使う場合は`--trust`が要る（プリセットの解決でリポジトリの設定が評価されるため）
 - `remove <worktree>`はワークツリーをディレクトリごと削除し、そのワークツリーのBoardも閉じる（`--keep-board`で残せる）。**未コミットの変更・未pushのコミット・ロックがあると何も消さずに終了コード1で止まる**ので、意図して消すなら`--force`を付ける。ブランチは既定で残り、`--delete-branch`で消せる（未マージなら`--force`も要る）
 - `keybind list` — 現在有効なキーバインドの一覧（tmuxの`list-keys`相当。prefix経由のバインドと即時発火のdirectを分けて表示。設定が反映されているかの確認に使う）

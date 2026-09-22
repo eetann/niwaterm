@@ -160,7 +160,7 @@ niwaterm workspace move [--workspace <workspaceId>] --up | --down
 いずれも対象の`workspaceId`が存在しない場合、`workspace close`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
 ```sh
-niwaterm board new [--workspace <workspaceId>] [--cwd <dir>]
+niwaterm board new [--workspace <workspaceId>] [--cwd <dir>] [--name <name>]
 niwaterm board switch --board <boardId>
 niwaterm board close [--board <boardId>]
 niwaterm board rename [--board <boardId>] <name>
@@ -173,7 +173,7 @@ niwaterm board worktree show [--board <boardId>]
 
 Board（1つのワークスペース内で複数持てる独立したTileレイアウト。tmuxのWindow相当、詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）単位の操作コマンド。対象の`boardId`は`niwaterm list`（複数Board時のみBoard行が表示される）または`board new`実行時に表示される値で確認する。
 
-- `board new` — 新規Boardを作成し、アクティブにする。`--workspace`省略時は現在アクティブなワークスペースに作成する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）。成功時、新規`boardId`を表示する
+- `board new` — 新規Boardを作成し、アクティブにする。`--workspace`省略時は現在アクティブなワークスペースに作成する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）。`--name`はBoardの名前（省略時はデフォルトの連番ラベル。後から変えるには`board rename`）。成功時、新規`boardId`を表示する
 - `board switch` — 指定したBoardへ切り替える
 - `board close` — 指定したBoardを閉じる。ワークスペース内最後の1つのBoardは誤操作防止のため閉じられない。`--board`省略時は実行しているタブが属するBoard（niwatermの外から実行した場合はアクティブなBoard）
 - `board rename` — 指定したBoardの名前を変更する。`<name>`に空文字列を指定するとデフォルトの連番ラベルへ戻る。`--board`の省略時の扱いは`board close`と同じ
@@ -409,7 +409,7 @@ gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在�
 #### ワークツリーの作成
 
 ```sh
-niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--trust] [--cwd <dir>]
+niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 ```
 
 ワークツリーを作り、それをniwatermで開く。ブランチが未作成なら`git worktree add -b`で同時に作り、既にあればそれをチェックアウトする。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
@@ -429,16 +429,16 @@ niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--
 
 既定を`board`（遷移しない）にしているのは、作業中のBoardを奪わずに次のブランチを仕込めるようにするため。既定値は設定の`worktree.open`で変えられる（「ワークツリーの置き場所」と同じ優先順位で解決する）。
 
-Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`は遷移しないためサイドバーの表示が唯一の手がかりになる。
+Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`は遷移しないためサイドバーの表示が唯一の手がかりになる。別の名前にしたい場合は`--name`で指定する（`--open none`／`current-tab`はBoardを作らないので、指定しても効かない旨の警告を出す）。
 
-さらに、**そのワークツリーのBoardが既に開いていれば新しく作らずそれを使う**（`board-switch`ならそのBoardへ遷移し、別のワークスペースにあればワークスペースごと切り替える）。判定にはBoardを開いたときに記録したワークツリーのパスを使い、タブのcwdは見ない（`cd`で変わるため）。Board名を変えても紐づけは切れず、別リポジトリの同名ブランチと取り違えることもない。
+さらに、**そのワークツリーのBoardが既に開いていれば新しく作らずそれを使う**（`board-switch`ならそのBoardへ遷移し、別のワークスペースにあればワークスペースごと切り替える）。このとき`--name`を指定していれば、使い回すBoardの名前も指定どおりに付け替える（`--layout`と違って名前の変更はタブを閉じないため）。判定にはBoardを開いたときに記録したワークツリーのパスを使い、タブのcwdは見ない（`cd`で変わるため）。Board名を変えても紐づけは切れず、別リポジトリの同名ブランチと取り違えることもない。
 
 `current-tab`は`cd <path>`をそのタブへ送る（`tab send-keys`と同じ経路）。コマンドを実行しているシェルはCLIが終わるまで入力を読まないので、キーはtty側で待たされてからプロンプトへ流れる。`--open none`以外はniwatermアプリが起動している必要がある。
 
 #### ワークツリーを開く
 
 ```sh
-niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--trust] [--cwd <dir>]
+niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 ```
 
 既にあるワークツリーをniwatermで開く。作成はしないので、無ければ作りたい場合は`worktree new`を使う。

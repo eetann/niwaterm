@@ -1844,6 +1844,56 @@ describe("POST /new-board, POST /switch-board, POST /close-board, POST /rename-b
     expect(boards.filter((b) => b.worktreePath === null)).toHaveLength(1);
   });
 
+  test("new-board: nameを渡すとその名前のBoardができる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "repo-a" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { boardId: string };
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === body.boardId)?.name).toBe("repo-a");
+  });
+
+  test("new-board: nameが空文字列ならデフォルトラベルのままにする", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { boardId: string };
+    const entry = mgr.listWorkspaces().find((e) => e.workspaceId === workspaceId);
+    expect(entry?.boards.find((b) => b.boardId === body.boardId)?.name).toBeNull();
+  });
+
+  test("new-board: nameが文字列以外なら400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/new-board", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: 1 }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("new-board: worktreePathが文字列以外なら400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);

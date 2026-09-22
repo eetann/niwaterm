@@ -86,6 +86,8 @@ export interface NewBoardOptions {
   activate?: boolean;
   /** このBoardが対応するgitワークツリーの絶対パス */
   worktreePath?: string;
+  /** Boardの表示名。空文字列・空白のみは未設定（デフォルトの連番ラベル）として扱う */
+  name?: string;
 }
 
 export interface BoardLocation {
@@ -285,6 +287,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   function newBoard(cwd?: string, options: NewBoardOptions = {}): BoardId {
     const boardId = createAndRegisterBoard(undefined, cwd);
     if (options.worktreePath !== undefined) boardWorktreePaths.set(boardId, options.worktreePath);
+    if (options.name !== undefined && options.name.trim() !== "")
+      boardNames.set(boardId, options.name);
     if (options.activate !== false) activeBoardId = boardId;
     opts.onDirty();
     return boardId;

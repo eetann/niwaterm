@@ -386,6 +386,8 @@ interface NewBoardRequestBody {
   activate?: boolean;
   /** このBoardが対応するgitワークツリーの絶対パス（`niwaterm worktree new`・`worktree open`用） */
   worktreePath?: string;
+  /** Boardの表示名。空文字列は名前なし（デフォルトの連番ラベル）として扱う */
+  name?: string;
 }
 
 /** workspaceId省略時はgetActiveWorkspaceId()で解決する（エンドポイント側の責務） */
@@ -395,6 +397,7 @@ function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
     cwd?: unknown;
     activate?: unknown;
     worktreePath?: unknown;
+    name?: unknown;
   };
   const result: NewBoardRequestBody = {};
   if (b.workspaceId !== undefined) {
@@ -412,6 +415,10 @@ function parseNewBoardBody(body: unknown): NewBoardRequestBody | null {
   if (b.worktreePath !== undefined) {
     if (typeof b.worktreePath !== "string" || b.worktreePath.length === 0) return null;
     result.worktreePath = b.worktreePath;
+  }
+  if (b.name !== undefined) {
+    if (typeof b.name !== "string") return null;
+    result.name = b.name;
   }
   return result;
 }
@@ -861,7 +868,7 @@ function buildApp(
         {
           ok: false,
           error:
-            "expected { workspaceId?: string, cwd?: string, activate?: boolean, worktreePath?: string }",
+            "expected { workspaceId?: string, cwd?: string, activate?: boolean, worktreePath?: string, name?: string }",
         },
         400,
       );
@@ -870,6 +877,7 @@ function buildApp(
     const boardId = workspaceManager.newBoard(workspaceId, parsed.cwd, {
       ...(parsed.activate !== undefined ? { activate: parsed.activate } : {}),
       ...(parsed.worktreePath !== undefined ? { worktreePath: parsed.worktreePath } : {}),
+      ...(parsed.name !== undefined ? { name: parsed.name } : {}),
     });
     if (boardId === null) {
       return c.json({ ok: false, error: `workspace not found: ${workspaceId}` }, 404);

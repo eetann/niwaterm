@@ -84,13 +84,23 @@ export interface OpenWorktreeOptions {
   branch: string | null;
   /** Boardの作成先。省略時はアクティブなワークスペース */
   workspaceId?: string;
+  /** `--name`で明示指定されたBoard名。省略時はブランチ名をBoard名にする */
+  name?: string;
   layout?: WorktreeLayoutRequest;
 }
 
-/** レイアウトを適用しなかったときに、なぜ効いていないのかを伝える。reasonは「〜ため」までの理由句 */
-function warnLayoutIgnored(layout: WorktreeLayoutRequest | undefined, reason: string): void {
-  if (layout?.explicit === undefined) return;
-  console.error(`warning: ${reason}--layoutは適用されません`);
+/** Boardを作らなかったときに、なぜ効いていないのかを伝える。reasonは「〜ため」までの理由句 */
+function warnOptionsIgnored(reason: string, names: string[]): void {
+  if (names.length === 0) return;
+  console.error(`warning: ${reason}${names.join("・")}は使われません`);
+}
+
+/** Boardを新規に作るときだけ効くオプションのうち、明示指定されたものを並べる */
+function boardOnlyOptions(opts: OpenWorktreeOptions): string[] {
+  return [
+    ...(opts.layout?.explicit !== undefined ? ["--layout"] : []),
+    ...(opts.name !== undefined ? ["--name"] : []),
+  ];
 }
 
 /**
@@ -101,12 +111,12 @@ function warnLayoutIgnored(layout: WorktreeLayoutRequest | undefined, reason: st
 export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
   const { endpoint, commandName, mode, path, branch, layout } = opts;
   if (mode === "none") {
-    warnLayoutIgnored(layout, "--open noneのため");
+    warnOptionsIgnored("--open noneのため", boardOnlyOptions(opts));
     return;
   }
 
   if (mode === "current-tab") {
-    warnLayoutIgnored(layout, "--open current-tabのため");
+    warnOptionsIgnored("--open current-tabのため", boardOnlyOptions(opts));
     const target = createTargetResolver(endpoint, commandName, {});
     // シェルは実行中のこのCLIが終わるまで入力を読まないため、キーはtty側で待たされてから流れる
     const result = await sendKeys(endpoint, await target.tabId(), [
@@ -120,8 +130,16 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
   const appPath = toAppAccessiblePath(endpoint, path);
   const found = await findOpenBoard(endpoint, appPath);
   if (found) {
-    // レイアウト適用は既存タブ・PTYを閉じる破壊的操作なので、作業中のBoardには当てない
-    warnLayoutIgnored(layout, "Boardが既に開いているため");
+    // レイアウト適用は既存タブ・PTYを閉じる破壊的操作なので、作業中のBoardには当てない。
+    // 名前の変更は非破壊なので、明示指定されていれば使い回すBoardへも反映する
+    warnOptionsIgnored(
+      "Boardが既に開いているため",
+      layout?.explicit !== undefined ? ["--layout"] : [],
+    );
+    if (opts.name !== undefined) {
+      const renamed = await renameBoard(endpoint, found.boardId, opts.name);
+      if (!renamed.ok) console.error(`warning: Board名を設定できませんでした: ${renamed.error}`);
+    }
     if (opts.workspaceId !== undefined && opts.workspaceId !== found.workspaceId) {
       console.error("warning: 既に開いているBoardを使うため--workspaceは使われません");
     }
@@ -141,18 +159,17 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
 
   const preset = await layout?.resolve();
 
+  // 遷移しないモードではサイドバーの見分けが唯一の手がかりになるため、
+  // 名前の指定が無ければブランチ名を付ける
+  const boardName = opts.name ?? branch;
   const created = await newBoard(endpoint, {
     ...(opts.workspaceId !== undefined ? { workspaceId: opts.workspaceId } : {}),
     cwd: path,
     activate: mode === "board-switch",
     worktreePath: path,
+    ...(boardName !== null ? { name: boardName } : {}),
   });
   if (!created.ok) failAndExit(`${commandName}に失敗しました: ${created.error}`);
-  // 遷移しないモードではサイドバーの見分けが唯一の手がかりになるため、必ずブランチ名を付ける
-  if (branch !== null) {
-    const renamed = await renameBoard(endpoint, created.boardId, branch);
-    if (!renamed.ok) console.error(`warning: Board名を設定できませんでした: ${renamed.error}`);
-  }
 
   if (preset !== undefined) {
     // 作りたてのBoardは単一タイル・単一タブなので、replaceで閉じるものが無い。
