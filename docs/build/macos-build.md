@@ -62,7 +62,11 @@ opensrc path ghostty-org/ghostty   # 取得先パスが返る
 mise run build:vendor:mac
 ```
 
-ghosttyソースの場所解決・ビルド・ビルド後のコード署名までこのタスクが行う。
+ghosttyソースの場所解決・niwaterm用パッチの適用・ビルド・ビルド後のコード署名までこのタスクが行う。
+
+パッチは `scripts/patch-ghostty-formatter.ts` が当てる（フォーマッタが空セルへ背景色をにじませる
+のを直すもの。詳細: [/known-issues/libghostty-vt-formatter-bleeds-bg-into-skipped-cells.md](/known-issues/libghostty-vt-formatter-bleeds-bg-into-skipped-cells.md)）。
+適用先は `opensrc` が返すghosttyソースそのもので、適用済みなら何もしない。
 
 > **手でビルドする場合は `-Doptimize=ReleaseFast` を必ず付けること**。zigの既定は `Debug` で、
 > Debugビルドのlibghostty-vtは画面スクロール1行あたり約700µsかかる（ReleaseFastの1万倍以上）。

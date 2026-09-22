@@ -81,10 +81,11 @@ mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
 # 致命的に遅く、シェルの通常出力すらPTY読み取りスレッドを止める
 # （詳細: docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
 [tasks."build:vendor:mac"]
-description = "libghostty-vt本体をmacOS向けにビルドする（vendor更新時のみ。要 opensrc でのghosttyソース取得）"
+description = "libghostty-vt本体をmacOS向けにビルドする（niwaterm用パッチ適用込み。vendor更新時のみ。要 opensrc でのghosttyソース取得）"
 run = '''
 SRC="$(opensrc path ghostty-org/ghostty)"
 DEST="$PWD/vendor/libghostty"
+bun scripts/patch-ghostty-formatter.ts "$SRC"
 cd "$SRC"
 mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
   -Doptimize=ReleaseFast \
@@ -95,8 +96,9 @@ codesign -f -s - "$DEST/lib/libghostty-vt.0.1.0.dylib"
 '''
 
 [tasks."build:vendor:win"]
-description = "libghostty-vt本体をWindows向けにクロスビルドする（vendor更新時のみ。要vendor/libghostty へのghosttyソース配置）"
+description = "libghostty-vt本体をWindows向けにクロスビルドする（niwaterm用パッチ適用込み。vendor更新時のみ。要vendor/libghostty へのghosttyソース配置）"
 run = '''
+bun scripts/patch-ghostty-formatter.ts vendor/libghostty
 cd vendor/libghostty
 # -Dtargetの`-gnu`は必須。ghosttyのbuild.zigはWindowsターゲット時にABIをMSVCへ自動で
 # 切り替えるため、省略するとWSL上に無いMSVCツールチェーンを要求されて失敗する

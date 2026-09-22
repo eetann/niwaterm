@@ -145,9 +145,15 @@ opensrc path ghostty-org/ghostty   # 取得先パスが返る
 mise run build:vendor:win
 ```
 
+タスクはビルドの前に `scripts/patch-ghostty-formatter.ts` でniwaterm用のパッチを当てる
+（フォーマッタが空セルへ背景色をにじませるのを直すもの。詳細:
+[/known-issues/libghostty-vt-formatter-bleeds-bg-into-skipped-cells.md](/known-issues/libghostty-vt-formatter-bleeds-bg-into-skipped-cells.md)）。
+適用済みなら何もしないので、何度実行してもよい。
+
 中身は次のコマンド:
 
 ```bash
+bun scripts/patch-ghostty-formatter.ts vendor/libghostty
 cd vendor/libghostty
 mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
   -Dtarget=x86_64-windows-gnu \
