@@ -119,6 +119,57 @@ describe("changeBoardStartup", () => {
     });
   });
 
+  test("preset省略時はtabCwdも引き継ぐ（ワークツリーのBoardが起動時にリポジトリ側へ移らない）", async () => {
+    const store = createStore({
+      "board-1": {
+        preset: "dev",
+        restoreMode: "restore",
+        cwd: "/repo/main",
+        tabCwd: "/repo/work/feature",
+      },
+    });
+
+    const result = await changeBoardStartup(store, LAYOUTS, {
+      boardId: "board-1",
+      mode: "layout",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      boardId: "board-1",
+      startup: {
+        preset: "dev",
+        restoreMode: "layout",
+        cwd: "/repo/main",
+        tabCwd: "/repo/work/feature",
+      },
+    });
+  });
+
+  test("presetを指定し直したらtabCwdは引き継がない（そのディレクトリで組み直す指定のため）", async () => {
+    const store = createStore({
+      "board-1": {
+        preset: "dev",
+        restoreMode: "layout",
+        cwd: "/repo/main",
+        tabCwd: "/repo/work/feature",
+      },
+    });
+
+    const result = await changeBoardStartup(store, LAYOUTS, {
+      boardId: "board-1",
+      mode: "layout",
+      preset: "work",
+      cwd: "/home/me",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      boardId: "board-1",
+      startup: { preset: "work", restoreMode: "layout", cwd: "/home/me" },
+    });
+  });
+
   test("mode:clearは紐づけごと解除する", async () => {
     const store = createStore({ "board-1": { preset: "dev", restoreMode: "layout" } });
 

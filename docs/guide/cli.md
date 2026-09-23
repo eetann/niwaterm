@@ -215,13 +215,15 @@ niwaterm board startup clear --board board-12
 
 `layout apply`は成功したBoardに適用したプリセット名を必ず記録する。`--startup`を付けた場合だけそのBoardが起動時の組み直し対象（`restoreMode: "layout"`）になり、付けなければ名前を覚えるだけで従来どおり保存した骨格を復元する。
 
+`worktree new`／`worktree open`の`--layout`だけは`--startup`を付けずとも紐づく。あちらはBoardの中身をプリセットが決めているため（`docs/guide/worktree.md`「レイアウトプリセットの適用」節）。
+
 `board startup <mode>`のmodeは次の3つ。`--preset`を省略すると、そのBoardに既に記録されているプリセット名を（プロジェクトローカル由来ならその解決元ごと）引き継ぐ（一度も`layout apply`していないBoardでは`--preset`が必須）。
 
 - `layout` — 起動時にプリセットで組み直す。保存した骨格は使わないので、前回セッションのタブ名・タブ変数・cwdは持ち込まれず、プリセットの`command`も改めて実行される
 - `restore` — 保存した骨格を復元する（既定の挙動）。プリセット名の記録自体は残るので、あとから`layout`へ戻せる
 - `clear` — プリセットの紐づけごと解除する
 
-起動時にタブが開くディレクトリは、紐づけを作った時点のもの（`layout apply`・`board startup --preset`を実行したディレクトリ、`--cwd`を渡したならその値）になる。プロジェクトローカル由来のプリセットの場合だけは実行ディレクトリではなく解決元の`projectRoot`が基準になる（どこから実行しても同じ構成を再現するため）。いずれの場合も、プリセット側で`cwd`を指定したタブはそちらが優先される。別のディレクトリで開き直したくなったら、そのディレクトリで`layout apply <name> --replace --startup`（または`board startup layout --preset <name>`）を実行して紐づけ直す。`board startup`で`--preset`を省略したときはモードだけが変わり、記録済みのディレクトリはそのまま引き継がれる。
+起動時にタブが開くディレクトリは、紐づけを作った時点のもの（`layout apply`・`board startup --preset`を実行したディレクトリ、`--cwd`を渡したならその値。`worktree new`／`worktree open`で開いたBoardならそのワークツリー）になる。プロジェクトローカル由来のプリセットの場合だけは実行ディレクトリではなく解決元の`projectRoot`が基準になる（どこから実行しても同じ構成を再現するため）。いずれの場合も、プリセット側で`cwd`を指定したタブはそちらが優先される。別のディレクトリで開き直したくなったら、そのディレクトリで`layout apply <name> --replace --startup`（または`board startup layout --preset <name>`）を実行して紐づけ直す。`board startup`で`--preset`を省略したときはモードだけが変わり、記録済みのディレクトリはそのまま引き継がれる。
 
 起動時にプリセットが設定から消えていた場合、そのBoardは単一タブのまま残り、デスクトップ通知でその旨を知らせる（骨格は復元されない）。プリセット名を変える際は`board startup`で追随させること。プロジェクトローカル由来の場合は、記録された`projectRoot`が消えている・`.niwaterm/config.ts`からプリセットが消えている場合も同じ扱いになる。
 
@@ -281,6 +283,7 @@ Boardが複数のディレクトリのタブを開いていても解決先は曖
 - 確認は「起動時の自動実行を有効にする操作」ごとに出る。`board startup restore`で一度止めてから`board startup layout`で戻す場合も、改めて確認が出る（解決元の記録は残っているが、自動実行を再び有効にするのはガードすべき操作という判断）
 - 信頼の記録は専用のストアを持たない。起動時に自動実行される経路は起動時レイアウトの紐づけ1本だけで、それは必ずこの確認を通ってしか作られないため。紐づけを外す（`board startup restore`／`clear`）と起動時の自動実行も止まる
 - trust後に`git pull`等で`.niwaterm/config.ts`の内容が変わった場合の再確認は行わない（内容ハッシュを持たない）
+- `worktree new`／`worktree open`の`--layout`もプリセットを起動時レイアウトへ紐づけるが、確認はワークツリー側の承認（`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節）が兼ねるため、ここの確認は重ねて出ない。あちらは内容ハッシュ付きの記録を持つので、`.niwaterm/`の中身が変われば改めて確認が出る
 
 ```sh
 niwaterm sidebar switch --view <viewId>

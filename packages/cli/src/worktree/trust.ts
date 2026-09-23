@@ -7,6 +7,8 @@
 //
 // レイアウトプリセットの適用（worktree/open.ts）も同じ承認で門番する。プリセットの解決は
 // アプリ側が<repoRoot>/.niwaterm/config.tsを評価して行うため、CLIがimportしなくてもコードは走る。
+// 適用したプリセットは起動時レイアウトとしても紐づき、以後は起動のたびにcommandが走るので、
+// その点まで承認の文面で断ってこの承認1本にまとめる（layout-trust.tsの確認を重ねて出さない）。
 //
 // 承認の記録はレイアウトプリセット（layout-trust.ts）と違って専用ストアを持つ。あちらは
 // 「起動時レイアウトの紐づけ」という永続オブジェクトがそのまま信頼の記録になるが、
@@ -107,6 +109,9 @@ async function confirm(repoRoot: string): Promise<boolean> {
   console.log(`  ${path}`);
   console.log(
     "ワークツリーの操作でこのファイルが評価され、worktree.onCreateのフックやlayoutsのプリセットに書かれたコマンドが実行されます。",
+  );
+  console.log(
+    "レイアウトプリセットを適用したBoardは起動時レイアウトとしても紐づくため、以後niwatermを起動するたびにも実行されます。",
   );
   console.log("信頼できるリポジトリでのみ許可してください。");
   if (!process.stdin.isTTY) {

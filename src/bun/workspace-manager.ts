@@ -76,6 +76,8 @@ export interface StartupLayoutBoard {
   projectRoot?: string;
   /** 紐づけを作った時点の実行ディレクトリ。projectRootが無いときのcwdの基準になる */
   cwd?: string;
+  /** タブを開く基準ディレクトリ。projectRoot・cwdより優先される（ワークツリーのBoard） */
+  tabCwd?: string;
 }
 
 export interface TabLocation {
@@ -482,6 +484,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           }
           if (board.startup.cwd !== undefined) {
             entry.cwd = board.startup.cwd;
+          }
+          if (board.startup.tabCwd !== undefined) {
+            entry.tabCwd = board.startup.tabCwd;
           }
           result.push(entry);
         }

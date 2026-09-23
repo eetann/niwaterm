@@ -95,6 +95,14 @@ export interface PersistedBoardStartup {
    * 組み直されるBoardのタブが既定cwd（ホーム）で開いてしまう
    */
   cwd?: string;
+  /**
+   * タブを開く基準ディレクトリ（絶対パス）。projectRoot・cwdのどちらより優先される。
+   *
+   * ワークツリーのBoard向け。プリセットはメインワークツリーの`.niwaterm/`から引くため
+   * projectRootにはメインワークツリー側が載るが、タブはそのワークツリーで開く必要があり、
+   * 「解決元」と「開く場所」が別になるため分けて記録する
+   */
+  tabCwd?: string;
 }
 
 /** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
@@ -269,6 +277,9 @@ function isPersistedBoardStartup(value: unknown): value is PersistedBoardStartup
   }
   if (v["cwd"] !== undefined) {
     if (typeof v["cwd"] !== "string" || v["cwd"] === "") return false;
+  }
+  if (v["tabCwd"] !== undefined) {
+    if (typeof v["tabCwd"] !== "string" || v["tabCwd"] === "") return false;
   }
   return v["restoreMode"] === "restore" || v["restoreMode"] === "layout";
 }

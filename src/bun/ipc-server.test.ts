@@ -3459,6 +3459,39 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId: body.boardId, preset: "dev" }]);
   });
 
+  test("POST /apply-layout: tabCwdは起動時レイアウトの紐づけにも記録される", async () => {
+    const { mgr, serverPromise } = createServerWithLayouts(LAYOUTS);
+    server = await serverPromise;
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "dev",
+        cwd: "/repo/main",
+        tabCwd: "/repo/work/feature",
+        startup: true,
+      }),
+    });
+
+    const body = (await res.json()) as { boardId: string };
+    expect(mgr.getBoardStartup(body.boardId)).toEqual({
+      preset: "dev",
+      restoreMode: "layout",
+      cwd: "/repo/main",
+      tabCwd: "/repo/work/feature",
+    });
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      {
+        boardId: body.boardId,
+        preset: "dev",
+        cwd: "/repo/main",
+        tabCwd: "/repo/work/feature",
+      },
+    ]);
+  });
+
   test("POST /apply-layout: startupがboolean以外のボディは400を返す", async () => {
     const { serverPromise } = createServerWithLayouts(LAYOUTS);
     server = await serverPromise;

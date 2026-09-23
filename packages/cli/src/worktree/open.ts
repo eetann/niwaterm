@@ -9,6 +9,7 @@ import {
   switchWorkspace,
   toAppAccessiblePath,
 } from "../ipc-client";
+import { confirmTrust } from "../layout-trust";
 import { createTargetResolver } from "../resolve-target";
 import { findWorktreeBoards, type WorktreeBoard } from "./board";
 import type { WorktreeOpenMode } from "./config";
@@ -60,15 +61,27 @@ export function resolveWorktreeLayout(opts: {
   return name;
 }
 
+/** WorktreeLayoutRequest.resolveの結果 */
+export interface ResolvedWorktreeLayout {
+  /** 適用するプリセット名。undefinedならレイアウトを適用しない */
+  preset?: string;
+  /**
+   * プロジェクトローカル設定を承認済みか。起動時レイアウトの紐づけへの同意として引き継ぐ。
+   * ワークツリーの承認プロンプトが「プリセットのcommandが起動のたびに実行される」ところまで
+   * 含めて聞いているため、同じリポジトリのプリセットを紐づけるのに再度確認は取らない
+   */
+  trusted: boolean;
+}
+
 export interface WorktreeLayoutRequest {
   /** `--layout`で明示指定された名前。Boardを作らなかったときに効いていない旨を伝えるために使う */
   explicit?: string;
   /**
-   * 適用するプリセット名を返す。**Boardを新規に作るときだけ**呼ばれる。
+   * 適用するプリセットを返す。**Boardを新規に作るときだけ**呼ばれる。
    * 設定から既定値を読むにはプロジェクトローカル設定の承認が要るため、承認が要る場面でだけ
    * 呼べるよう関数で受ける（Boardを使い回すだけのときに確認を出さない）
    */
-  resolve: () => Promise<string | undefined>;
+  resolve: () => Promise<ResolvedWorktreeLayout>;
 }
 
 export interface OpenWorktreeOptions {
@@ -157,7 +170,8 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
     return;
   }
 
-  const preset = await layout?.resolve();
+  const resolvedLayout = await layout?.resolve();
+  const preset = resolvedLayout?.preset;
 
   // 遷移しないモードではサイドバーの見分けが唯一の手がかりになるため、
   // 名前の指定が無ければブランチ名を付ける
@@ -176,12 +190,29 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
     // プリセットはメインワークツリーの.niwaterm/から引き（worktree.*の設定と同じ解決起点）、
     // タブはそのワークツリーで開く。リンクされたワークツリーへ.niwaterm/をコミットしていなくても
     // プロジェクトローカルのプリセットが引けるよう、解決起点と開く場所を分けている
-    const applied = await applyLayout(endpoint, preset, {
-      target: "replace",
-      boardId: created.boardId,
-      cwd: opts.repoRoot,
-      tabCwd: path,
-    });
+    const applyOnce = (startup: boolean, trust: boolean) =>
+      applyLayout(endpoint, preset, {
+        target: "replace",
+        boardId: created.boardId,
+        cwd: opts.repoRoot,
+        tabCwd: path,
+        startup,
+        trust,
+      });
+    // 起動時レイアウトとしても紐づける。Boardの中身をプリセットが決めているので、
+    // 次の起動でも保存した骨格ではなくプリセットで組み直すほうが指定どおりになる
+    let applied = await applyOnce(true, resolvedLayout?.trusted === true);
+    if (!applied.ok && "needsTrust" in applied) {
+      // プリセットの解決元がこのリポジトリの外（親ディレクトリの.niwaterm/等）だと、
+      // ワークツリーの承認では足りない。改めて同意を取り、断られたら紐づけだけ諦める
+      // （今回の適用はワークツリーの承認で済んでいるので続ける）
+      if (await confirmTrust(applied.needsTrust)) {
+        applied = await applyOnce(true, true);
+      } else {
+        console.error("warning: 起動時レイアウトには紐づけません（今回の適用のみ）");
+        applied = await applyOnce(false, false);
+      }
+    }
     if (!applied.ok) {
       failAndExit(
         `${commandName}に失敗しました: レイアウト"${preset}"を適用できませんでした: ${applied.error}\n` +

@@ -27,9 +27,11 @@ export interface BoardStartupTrustRequest {
  * 起動時レイアウトへの紐づけにtrustの同意が要るかを判定する。同意が必要なら拒否用の応答を、
  * 不要（グローバル設定由来、または同意済み）ならnullを返す。
  *
- * 紐づけを作る経路（CLIの`layout apply --startup`／`board startup layout`、サイドバーの
- * 右クリックメニュー）はどれもここを通す。判定と文面が散らばると、入口が増えたときに
- * 片方だけ素通しになる事故が起きるため
+ * 紐づけを作る経路（CLIの`layout apply --startup`／`board startup layout`／`worktree new`・
+ * `worktree open`の`--layout`、サイドバーの右クリックメニュー）はどれもここを通す。判定と文面が
+ * 散らばると、入口が増えたときに片方だけ素通しになる事故が起きるため。
+ * worktree系だけは同意の取り方が違い、ワークツリーの承認（packages/cli/src/worktree/trust.ts）を
+ * そのままtrustとして渡す
  */
 export function checkLayoutTrust(
   bindsStartup: boolean,
@@ -111,9 +113,12 @@ export async function changeBoardStartup(
     };
   }
   // presetを明示指定されたときだけ解決し直す。省略時は既存の紐づけ（解決元・cwd込み）を引き継ぎ、
-  // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする
+  // 別ディレクトリからmodeだけ切り替えても解決元が入れ替わらないようにする。
+  // tabCwdを引き継ぐのも省略時だけ。presetを指定し直す操作は「このディレクトリで組み直す」
+  // 意思表示なので、古い基準ディレクトリが新しい指定を上書きしないようにする
   let projectRoot: string | null;
   let cwd: string | undefined;
+  let tabCwd: string | undefined;
   if (input.preset !== undefined) {
     const resolved = await resolveLayoutPresetByName(input.preset, input.cwd, layouts);
     if (!resolved) return { ok: false, status: 404, error: `layout not found: ${preset}` };
@@ -122,6 +127,7 @@ export async function changeBoardStartup(
   } else {
     projectRoot = existing?.projectRoot ?? null;
     cwd = existing?.cwd;
+    tabCwd = existing?.tabCwd;
     const stillExists = projectRoot
       ? (await loadProjectPreset(projectRoot, preset)) !== null
       : layouts[preset] !== undefined;
@@ -133,6 +139,7 @@ export async function changeBoardStartup(
     preset,
     restoreMode: input.mode,
     ...startupCwdFields(projectRoot, cwd),
+    ...(tabCwd !== undefined ? { tabCwd } : {}),
   };
   store.setBoardStartup(boardId, startup);
   return { ok: true, boardId, startup };

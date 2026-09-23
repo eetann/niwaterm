@@ -34,7 +34,7 @@ export default define({
     layout: {
       type: "string",
       description:
-        "Boardへ適用するレイアウトプリセット名（省略時は設定のworktree.layout）。Boardを新規に作ったときだけ適用される",
+        "Boardへ適用するレイアウトプリセット名（省略時は設定のworktree.layout）。Boardを新規に作ったときだけ適用され、そのBoardの起動時レイアウトとしても紐づく",
     },
     workspace: {
       type: "string",
@@ -107,12 +107,18 @@ export default define({
           const settings = await resolveWorktreeSettings(worktreeDirSourcesFor(repoRoot), {
             includeProject: trust === "trusted",
           });
-          return resolveWorktreeLayout({
+          const preset = resolveWorktreeLayout({
             commandName: "worktree open",
             explicit: ctx.values.layout,
             configured: settings.layout.value,
             trust,
           });
+          return {
+            ...(preset !== undefined ? { preset } : {}),
+            // --trustはプロジェクトローカル設定を持たないリポジトリでも承認の意思表示として効かせる。
+            // プリセットの解決元がリポジトリの外にある場合、ensureProjectTrustは"absent"を返すため
+            trusted: trust === "trusted" || ctx.values.trust === true,
+          };
         },
       },
     });

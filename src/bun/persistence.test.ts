@@ -589,6 +589,59 @@ describe("loadPersistedState / savePersistedState", () => {
     expect(await loadPersistedState(path)).toEqual(state);
   });
 
+  test("startupのtabCwd（タブを開く基準ディレクトリ）がラウンドトリップする", async () => {
+    const path = join(dir, "board-startup-tab-cwd.json");
+    const state = {
+      version: 3 as const,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          activeBoardIndex: 0,
+          boards: [
+            {
+              layout: {
+                kind: "leaf" as const,
+                tabs: [{ kind: "terminal" as const }],
+                activeTabIndex: 0,
+              },
+              startup: {
+                preset: "dev",
+                restoreMode: "layout" as const,
+                projectRoot: "/repo/main",
+                tabCwd: "/repo/work/feature",
+              },
+            },
+          ],
+        },
+      ],
+    };
+    await writeFile(path, JSON.stringify(state));
+    expect(await loadPersistedState(path)).toEqual(state);
+  });
+
+  test("startupのtabCwdが空文字列の場合はnullを返す", async () => {
+    const path = join(dir, "invalid-startup-tab-cwd.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 3,
+        activeWorkspaceIndex: 0,
+        workspaces: [
+          {
+            activeBoardIndex: 0,
+            boards: [
+              {
+                layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 },
+                startup: { preset: "dev", restoreMode: "layout", tabCwd: "" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(await loadPersistedState(path)).toBeNull();
+  });
+
   test("startupのcwdが空文字列の場合はnullを返す", async () => {
     const path = join(dir, "invalid-startup-cwd.json");
     await writeFile(

@@ -1078,6 +1078,7 @@ function buildApp(
       preset: parsed.name,
       restoreMode: parsed.startup ? "layout" : "restore",
       ...startupCwdFields(resolved.projectRoot, parsed.cwd),
+      ...(parsed.tabCwd !== undefined ? { tabCwd: parsed.tabCwd } : {}),
     });
     return c.json({
       ok: true,
