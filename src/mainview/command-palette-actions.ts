@@ -226,8 +226,8 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "新しいBoardを作成",
     category: "Board",
     icon: SquarePlus,
-    // tmuxの対応コマンド名(new-window)はキーワードに入れない。fuzzy検索では
-    // 「new window」がNew Windowより上に来てしまうため（close-boardも同じ理由）
+    // 他のコマンド名を構成する単語（tmuxの対応コマンド名new-window等）はキーワードに入れない。
+    // 詳細: docs/known-issues/cmdk-earlier-group-wins-over-better-match.md
     keywords: ["新規", "追加"],
   },
   {
