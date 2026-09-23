@@ -171,6 +171,8 @@ export type NiwaRPC = {
       newWorkspace: {};
       /** 一時ウィンドウ（前回の状態を復元せず、閉じても何も残さないOSウィンドウ）を開く */
       newWindow: {};
+      /** close-windowアクションからの、このwebviewが載っているOSウィンドウを閉じる要求 */
+      closeWindow: {};
       switchWorkspace: { workspaceId: WorkspaceId };
       /** サイドバーのD&D・move-workspace-*キーバインドからの並び替え。toIndexは0始まり（範囲外はbun側でクランプ） */
       moveWorkspace: { workspaceId: WorkspaceId; toIndex: number };
@@ -1018,6 +1020,12 @@ function createWindowRpc(windowId: WindowId) {
         },
         newWindow: () => {
           windowManager.newWindow();
+        },
+        // 閉じる順序はCLIの`window close`（ipcWindowOps）と揃える。window-manager側を先に畳むと
+        // 持ち主が消えていて最終状態・ウィンドウ枠を書き出せない
+        closeWindow: () => {
+          finalizeWindow(windowId, true);
+          windowManager.closeWindow(windowId);
         },
         switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
           windowManager.switchWorkspace(workspaceId);

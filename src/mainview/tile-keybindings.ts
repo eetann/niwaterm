@@ -39,7 +39,12 @@ export type TileCommand =
   | { type: "renameTab" }
   | { type: "restartTab" }
   | { type: "newWorkspace" }
+  | { type: "renameWorkspace" }
+  | { type: "closeWorkspace" }
   | { type: "newWindow" }
+  | { type: "closeWindow" }
+  | { type: "newBoard" }
+  | { type: "closeBoard" }
   | { type: "switchBoard"; delta: 1 | -1 }
   | { type: "moveBoard"; delta: 1 | -1 }
   | { type: "moveBoardToWorkspace" }
@@ -47,12 +52,14 @@ export type TileCommand =
   | { type: "setBoardWorktree" }
   | { type: "setBoardStatus"; status: string }
   | { type: "clearBoardStatus" }
+  | { type: "clearBoardStartup" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "moveWorkspace"; delta: 1 | -1 }
   | { type: "toggleSidebar" }
   | { type: "cycleSidebarView"; delta: 1 | -1 }
   | { type: "showSidebarView"; viewId: string }
   | { type: "togglePopup" }
+  | { type: "promotePopup" }
   | { type: "jumpHint" }
   | { type: "copySelection" }
   | { type: "copyMode" }
@@ -200,6 +207,10 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "renameTab" };
     case "restart-tab":
       return { type: "restartTab" };
+    case "new-board":
+      return { type: "newBoard" };
+    case "close-board":
+      return { type: "closeBoard" };
     case "next-board":
       return { type: "switchBoard", delta: 1 };
     case "prev-board":
@@ -216,10 +227,18 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "setBoardWorktree" };
     case "clear-board-status":
       return { type: "clearBoardStatus" };
+    case "clear-board-startup":
+      return { type: "clearBoardStartup" };
     case "new-workspace":
       return { type: "newWorkspace" };
+    case "rename-workspace":
+      return { type: "renameWorkspace" };
+    case "close-workspace":
+      return { type: "closeWorkspace" };
     case "new-window":
       return { type: "newWindow" };
+    case "close-window":
+      return { type: "closeWindow" };
     case "next-workspace":
       return { type: "switchWorkspace", delta: 1 };
     case "prev-workspace":
@@ -236,6 +255,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "cycleSidebarView", delta: -1 };
     case "toggle-popup":
       return { type: "togglePopup" };
+    case "promote-popup":
+      return { type: "promotePopup" };
     case "jump-hint":
       return { type: "jumpHint" };
     case "copy-selection":

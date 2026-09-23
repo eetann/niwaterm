@@ -24,8 +24,11 @@ import {
   Crosshair,
   FolderGit2,
   FolderInput,
+  FolderPen,
   FolderPlus,
+  FolderX,
   Globe,
+  LayoutTemplate,
   Maximize2,
   MoveDown,
   MoveLeft,
@@ -41,7 +44,10 @@ import {
   RotateCw,
   Rows2,
   SlidersHorizontal,
+  SquarePlus,
+  SquareX,
   TextCursorInput,
+  Trash2,
   X,
   ZoomIn,
   ZoomOut,
@@ -59,6 +65,7 @@ export type CommandPaletteCategory =
   | "タブ"
   | "Board"
   | "ワークスペース"
+  | "ウィンドウ"
   | "表示"
   | "編集"
   | "スクロール"
@@ -214,6 +221,24 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["respawn-pane", "respawn"],
   },
   {
+    action: "new-board",
+    labelEn: "New Board",
+    label: "新しいBoardを作成",
+    category: "Board",
+    icon: SquarePlus,
+    // tmuxの対応コマンド名(new-window)はキーワードに入れない。fuzzy検索では
+    // 「new window」がNew Windowより上に来てしまうため（close-boardも同じ理由）
+    keywords: ["新規", "追加"],
+  },
+  {
+    action: "close-board",
+    labelEn: "Close Board",
+    label: "Boardを削除",
+    category: "Board",
+    icon: Trash2,
+    keywords: ["削除", "閉じる"],
+  },
+  {
     action: "next-board",
     labelEn: "Next Board",
     label: "次のBoardへ切り替え",
@@ -278,11 +303,35 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["board status", "ステータス", "clear"],
   },
   {
+    action: "clear-board-startup",
+    labelEn: "Clear Board Startup Layout",
+    label: "Boardの起動時レイアウトの紐づけを解除",
+    category: "Board",
+    icon: LayoutTemplate,
+    keywords: ["startup", "layout", "preset", "起動時レイアウト", "プリセット"],
+  },
+  {
     action: "new-workspace",
     labelEn: "New Workspace",
     label: "新しいワークスペースを作成",
     category: "ワークスペース",
     icon: FolderPlus,
+  },
+  {
+    action: "rename-workspace",
+    labelEn: "Rename Workspace",
+    label: "ワークスペースの名前を変更",
+    category: "ワークスペース",
+    icon: FolderPen,
+    keywords: ["名前"],
+  },
+  {
+    action: "close-workspace",
+    labelEn: "Close Workspace",
+    label: "ワークスペースを削除",
+    category: "ワークスペース",
+    icon: FolderX,
+    keywords: ["削除", "閉じる"],
   },
   {
     action: "new-window",
@@ -291,6 +340,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "ウィンドウ",
     icon: AppWindow,
     keywords: ["window", "ウィンドウ", "新規"],
+  },
+  {
+    action: "close-window",
+    labelEn: "Close Window",
+    label: "このウィンドウを閉じる",
+    category: "ウィンドウ",
+    icon: SquareX,
+    keywords: ["window", "ウィンドウ", "閉じる"],
   },
   {
     action: "next-workspace",
@@ -351,6 +408,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "ポップアップの表示切り替え",
     category: "表示",
     icon: PictureInPicture2,
+  },
+  {
+    action: "promote-popup",
+    labelEn: "Promote Popup to Tab",
+    label: "ポップアップをタブへ昇格",
+    category: "表示",
+    icon: ArrowUpToLine,
+    keywords: ["popup", "ポップアップ", "タブ", "昇格"],
   },
   {
     action: "jump-hint",

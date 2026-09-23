@@ -54,6 +54,11 @@ export interface SidebarWorkspaceListProps {
   onRenameBoard: (boardId: BoardId, name: string) => void;
   onRenameWorkspace: (workspaceId: WorkspaceId, name: string) => void;
   onCloseBoard: (boardId: BoardId, name: string) => void;
+  /** ワークスペース見出しの右クリックからのBoard追加。作成先はそのワークスペース */
+  onNewBoard: (workspaceId: WorkspaceId) => void;
+  onNewWorkspace: () => void;
+  /** ワークスペース見出しの右クリックからのワークスペース削除。確認ダイアログは呼び出し側が出す */
+  onCloseWorkspace: (workspaceId: WorkspaceId, name: string) => void;
   /** 起動時レイアウトのサブメニューを開いたときに、そのBoardから見えるプリセットを取り出す */
   onRequestBoardLayouts: (boardId: BoardId) => Promise<LayoutListEntry[]>;
   onApplyBoardLayout: (request: SidebarApplyLayoutRequest) => void;
@@ -147,6 +152,9 @@ export function SidebarWorkspaceList({
   onRenameBoard,
   onRenameWorkspace,
   onCloseBoard,
+  onNewBoard,
+  onNewWorkspace,
+  onCloseWorkspace,
   onRequestBoardLayouts,
   onApplyBoardLayout,
   onClearBoardStartup,
@@ -769,6 +777,13 @@ export function SidebarWorkspaceList({
                     </button>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => onNewBoard(workspace.workspaceId)}>
+                      新しいBoard
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => onNewWorkspace()}>
+                      新しいワークスペース
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
                     <ContextMenuItem
                       onSelect={() =>
                         startEditing(
@@ -778,6 +793,14 @@ export function SidebarWorkspaceList({
                       }
                     >
                       名前を変更
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      variant="destructive"
+                      // 最後の1つを閉じるとウィンドウごと畳むことになるためbun側が閉じない
+                      disabled={workspaces.length === 1}
+                      onSelect={() => onCloseWorkspace(workspace.workspaceId, workspace.label)}
+                    >
+                      削除
                     </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>

@@ -122,6 +122,8 @@ niwaterm popup promote
 
 開いているポップアップが無い場合、いずれもエラーメッセージと共に終了コード1を返す。
 
+`popup toggle`・`popup promote`はキーバインド（`toggle-popup`・`promote-popup`アクション）とコマンドパレットの「Toggle Popup」「Promote Popup to Tab」からも実行できる。
+
 ```sh
 niwaterm window new [--cwd <dir>]
 niwaterm window list
@@ -132,7 +134,7 @@ OSウィンドウ単位の操作コマンド。ウィンドウの中身（ワー
 
 - `window new` — 新しいOSウィンドウを開く。成功時、新規`windowId`を表示する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）
 - `window list` — 開いているウィンドウを`windowId (種別[, focused])`形式で表示し、各ウィンドウが持つワークスペースをぶら下げる。種別は`main`（メインウィンドウ）か`temporary`（一時ウィンドウ）
-- `window close` — 指定したウィンドウを閉じる。中のPTYはすべて終了する。最後の1つを閉じるとniwaterm自体が終了する
+- `window close` — 指定したウィンドウを閉じる。中のPTYはすべて終了する。最後の1つを閉じるとniwaterm自体が終了する（キーバインドの`close-window`アクション・コマンドパレットの「Close Window」からも同じことができる。そちらは確認ダイアログを挟む）
 
 ウィンドウは2種類ある（ADR 0007）。
 
@@ -158,6 +160,8 @@ niwaterm workspace move [--workspace <workspaceId>] --up | --down
 - `workspace move` — 表示順（サイドバーの並び・ウィンドウタイトルの番号）を1つ上（`--up`）または1つ下（`--down`）へ移動する。`--up`/`--down`はどちらか一方が必須。中身（Board・タイル・タブ）とアクティブなワークスペースは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.workspace.move(workspaceId, index)`を使う）
 
 いずれも対象の`workspaceId`が存在しない場合、`workspace close`はさらに最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
+
+アクティブなワークスペースに対する同じ操作は、キーバインド（`new-workspace`・`rename-workspace`・`close-workspace`アクション）とコマンドパレット、サイドバーの見出しの右クリックからも行える。コマンドパレットには切り替え先ごとに「Switch to Workspace: <名前>」も並ぶ。
 
 ```sh
 niwaterm board new [--workspace <workspaceId>] [--cwd <dir>] [--name <name>]
@@ -186,6 +190,8 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 - `board worktree` — そのBoardに紐づくワークツリーを設定・解除・表示する（`--board`省略時の扱いは`board close`と同じ）。`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペースが1つだけの状態でその最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
+
+アクティブなBoardに対する同じ操作は、キーバインド（`new-board`・`close-board`・`rename-board`等のアクション）とコマンドパレット、サイドバーの右クリックからも行える。コマンドパレットには切り替え先ごとに「Switch to Board: <名前>」もワークスペース横断で並ぶ。
 
 ### Boardが0個のワークスペース
 
@@ -233,7 +239,7 @@ niwaterm board startup clear --board board-12
 
 起動時にプリセットが設定から消えていた場合、そのBoardは単一タブのまま残り、デスクトップ通知でその旨を知らせる（骨格は復元されない）。プリセット名を変える際は`board startup`で追随させること。プロジェクトローカル由来の場合は、記録された`projectRoot`が消えている・`.niwaterm/config.ts`からプリセットが消えている場合も同じ扱いになる。
 
-サイドバーのBoard行を右クリック → 「起動時レイアウト」からも設定できる。**プリセットを選ぶとその場でBoardへ適用し、同時に起動時レイアウトとしても紐づける**（`layout apply <name> --replace --startup --board <boardId>`と同じ）。次回の起動を待たずに結果が見えるので、意図と違うプリセットを選んだことにその場で気づける。既存タブ・PTYを閉じる破壊的操作なので確認ダイアログが出る（プロジェクトローカル由来なら、その中でtrustの確認文も併せて示される）。「紐づけを解除」は`board startup clear`にあたる。
+サイドバーのBoard行を右クリック → 「起動時レイアウト」からも設定できる。**プリセットを選ぶとその場でBoardへ適用し、同時に起動時レイアウトとしても紐づける**（`layout apply <name> --replace --startup --board <boardId>`と同じ）。次回の起動を待たずに結果が見えるので、意図と違うプリセットを選んだことにその場で気づける。既存タブ・PTYを閉じる破壊的操作なので確認ダイアログが出る（プロジェクトローカル由来なら、その中でtrustの確認文も併せて示される）。「紐づけを解除」は`board startup clear`にあたる（コマンドパレットの「Clear Board Startup Layout」・キーバインドの`clear-board-startup`アクションも同じ操作で、対象はアクティブなBoard）。
 
 プリセット一覧はそのBoardのフォーカス中タブのcwdから解決するため、そのタブで`layout list`を叩いたときと同じ顔ぶれになる（プロジェクトローカルのプリセットには`project`が付く）。紐づけのあるBoard行にはアイコンが出て、起動時に組み直すBoard（`layout`）だけ色が付く。`restore`モードへの切り替え（紐づけを残したまま起動時の組み直しだけ止める）はサイドバーには無いので`board startup restore`を使う。
 

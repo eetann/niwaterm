@@ -244,8 +244,27 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // コマンドパレット・CLIから行える操作で、付ける側のset-board-status:<id>が設定側にしか
   // 書けない以上、解除だけに既定キーを割いても対にならないため）
   "clear-board-status",
+  // clear-board-startupも既定キーを持たない（起動時レイアウトの付け外しはサイドバーの右クリック・
+  // コマンドパレット・CLIから行える操作で、付ける側のプリセット選択がキーで完結しないため）
+  "clear-board-startup",
   // prev-sidebar-viewも既定キーを持たない（customViewが1つだけならnext-sidebar-viewの往復で足りるため）
   "prev-sidebar-view",
+  // new-board/close-boardも既定キーを持たない（2打目キーのshift+bはnext-sidebar-viewに埋まっており、
+  // Boardの頭文字で揃う空きキーが無いため。新規作成系のshift+頭文字の並び（shift+t/shift+n/shift+w）に
+  // 加えられないなら、他の空きキーを当てるよりユーザーの好みに委ねる）
+  "new-board",
+  "close-board",
+  // rename-workspace/close-workspaceも既定キーを持たない（ワークスペース側の2打目キーは
+  // shift+n（新規）・]/[（切替）で埋まっており、rename-board（,）に対応する空きも無いため）
+  "rename-workspace",
+  "close-workspace",
+  // close-windowも既定キーを持たない（OSのクローズボタン・Cmd+W等のOS標準操作で閉じられるうえ、
+  // ウィンドウ内のプロセスがまとめて落ちる破壊的操作のため、restart-tabと同じくユーザーが
+  // 明示的に割り当てる想定）
+  "close-window",
+  // promote-popupも既定キーを持たない（ポップアップのツールバーにボタンがあり、
+  // 開閉のtoggle-popup（`）ほど頻度が高くないため）
+  "promote-popup",
 ];
 
 describe("defaultKeybindings", () => {

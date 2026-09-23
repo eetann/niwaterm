@@ -52,7 +52,12 @@ import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { extractNavigatedUrl } from "./navigated-url";
 import { normalizeUrl } from "./normalize-url";
 import { BrowserToolbar } from "./react/browser-toolbar";
-import { CommandPalette, type NonPaletteKeybindAction } from "./react/command-palette";
+import {
+  CommandPalette,
+  type CommandPaletteBoardItem,
+  type CommandPaletteWorkspaceItem,
+  type NonPaletteKeybindAction,
+} from "./react/command-palette";
 import { ConfigDialog } from "./react/config-dialog";
 import { ConfirmDialog } from "./react/confirm-dialog";
 import { PopupToolbar } from "./react/popup-toolbar";
@@ -292,6 +297,10 @@ function renderCommandPalette(): void {
       },
       sidebarViews: commandPaletteSidebarViews(),
       boardStatuses,
+      boards: commandPaletteBoards(),
+      onSelectBoard: switchToBoard,
+      workspaces: commandPaletteWorkspaces(),
+      onSelectWorkspace: activateSidebarWorkspace,
       shortcutLabelFor: shortcutLabelForAction,
     }),
   );
@@ -1854,6 +1863,9 @@ function renderSidebar(
       onRenameBoard: renameSidebarBoard,
       onRenameWorkspace: renameSidebarWorkspace,
       onCloseBoard: closeSidebarBoard,
+      onNewBoard: (workspaceId) => sendMessage("newBoard", { workspaceId }),
+      onNewWorkspace: () => sendMessage("newWorkspace"),
+      onCloseWorkspace: closeSidebarWorkspace,
       onRequestBoardLayouts: requestSidebarBoardLayouts,
       onApplyBoardLayout: applySidebarBoardLayout,
       onClearBoardStartup: clearSidebarBoardStartup,
@@ -1982,6 +1994,21 @@ function closeSidebarBoard(boardId: BoardId, name: string): void {
 }
 
 /**
+ * サイドバーからのワークスペース削除。中の全Board・全タブのPTYがまとめて落ちるため
+ * Board削除と同じ確認ダイアログを挟む。最後の1つはbun側が閉じない
+ * （SidebarWorkspaceList側でもメニュー項目を無効化しているので、ここには来ない想定）
+ */
+function closeSidebarWorkspace(workspaceId: WorkspaceId, name: string): void {
+  openConfirmDialog(
+    `ワークスペース「${name}」を削除しますか？`,
+    "中のBoardごと閉じられ、実行中のプロセスは強制終了されます。",
+    () => {
+      sendMessage("closeWorkspace", { workspaceId });
+    },
+  );
+}
+
+/**
  * 起動時レイアウトのサブメニューを開いたときのプリセット一覧取得。プロジェクトローカルの
  * プリセットはbun側が対象Boardのcwdから解決するため、ここではboardIdを渡すだけでよい
  */
@@ -2031,22 +2058,106 @@ function clearSidebarBoardStartup(boardId: BoardId): void {
   sendMessage("clearBoardStartup", { boardId });
 }
 
+/** アクティブなBoardとサイドバーと同じ表示ラベル。Boardが1つも無いワークスペースならnull */
+function activeBoardWithLabel(): { boardId: BoardId; label: string } | null {
+  const boardId = activeBoardId;
+  if (!boardId) return null;
+  const workspace = lastWorkspaces.find((w) => w.workspaceId === activeWorkspaceId);
+  const index = workspace?.boards.findIndex((b) => b.boardId === boardId) ?? -1;
+  const board = index >= 0 ? workspace?.boards[index] : undefined;
+  if (!board) return null;
+  return { boardId, label: boardLabel(board, index) };
+}
+
+/** アクティブなワークスペースとサイドバーと同じ表示ラベル。render到達前はnull */
+function activeWorkspaceWithLabel(): { workspaceId: WorkspaceId; label: string } | null {
+  const index = lastWorkspaces.findIndex((w) => w.workspaceId === activeWorkspaceId);
+  const workspace = index >= 0 ? lastWorkspaces[index] : undefined;
+  if (!workspace) return null;
+  return { workspaceId: workspace.workspaceId, label: workspaceLabel(workspace, index) };
+}
+
+/** キーバインド・コマンドパレットからのアクティブワークスペースへのBoard追加 */
+function newBoardInActiveWorkspace(): void {
+  if (!activeWorkspaceId) return;
+  sendMessage("newBoard", { workspaceId: activeWorkspaceId });
+}
+
+/**
+ * キーバインド・コマンドパレットからのアクティブBoardの削除。確認ダイアログはサイドバーからの
+ * 削除と共通。ワークスペースが1つだけのときの最後の1つはbun側が閉じないため、
+ * 確認だけ出して何も起きない状態にならないよう手前で弾く
+ */
+function closeActiveBoard(): void {
+  const active = activeBoardWithLabel();
+  if (!active) return;
+  const workspace = lastWorkspaces.find((w) => w.workspaceId === activeWorkspaceId);
+  if (!workspace) return;
+  if (workspace.boards.length === 1 && lastWorkspaces.length === 1) return;
+  closeSidebarBoard(active.boardId, active.label);
+}
+
+/** キーバインド・コマンドパレットからのアクティブBoardの起動時レイアウトの紐づけ解除 */
+function clearActiveBoardStartup(): void {
+  if (activeBoardId) sendMessage("clearBoardStartup", { boardId: activeBoardId });
+}
+
+/**
+ * キーバインド・コマンドパレットからのアクティブワークスペースの名前変更。
+ * openRenameActiveBoardDialogと同じく、サイドバーの表示状態に依存しないよう入力ダイアログで受ける
+ */
+function openRenameActiveWorkspaceDialog(): void {
+  const active = activeWorkspaceWithLabel();
+  if (!active) return;
+  openPromptDialog(
+    "ワークスペースの名前を変更",
+    "空のまま確定すると既定の連番ラベルへ戻ります。",
+    active.label,
+    (name) => {
+      sendMessage("renameWorkspace", { workspaceId: active.workspaceId, name });
+    },
+  );
+}
+
+/**
+ * キーバインド・コマンドパレットからのアクティブワークスペースの削除。中の全Boardの
+ * PTYがまとめて落ちる破壊的操作なので確認ダイアログを挟む。最後の1つはbun側が閉じないため、
+ * closeActiveBoardと同じ理由で手前で弾く
+ */
+function closeActiveWorkspace(): void {
+  const active = activeWorkspaceWithLabel();
+  if (!active || lastWorkspaces.length === 1) return;
+  closeSidebarWorkspace(active.workspaceId, active.label);
+}
+
+/**
+ * キーバインド・コマンドパレットからのウィンドウを閉じる操作。このウィンドウの全Boardの
+ * PTYがまとめて落ちるため確認ダイアログを挟む（OSのクローズボタンと違い、
+ * 検索して選ぶパレットからは誤爆しやすいため）
+ */
+function closeThisWindow(): void {
+  openConfirmDialog(
+    "このウィンドウを閉じますか？",
+    "ウィンドウ内で実行中のプロセスは強制終了されます。",
+    () => {
+      sendMessage("closeWindow");
+    },
+  );
+}
+
 /**
  * キーバインド・コマンドパレットからのアクティブBoardの名前変更。サイドバーのインライン編集と違い
  * サイドバーの表示状態に依存しないよう、入力ダイアログで受ける（初期値・空文字列の扱いは
  * サイドバー側と揃える）
  */
 function openRenameActiveBoardDialog(): void {
-  const boardId = activeBoardId;
-  if (!boardId) return;
-  const workspace = lastWorkspaces.find((w) => w.workspaceId === activeWorkspaceId);
-  const index = workspace?.boards.findIndex((b) => b.boardId === boardId) ?? -1;
-  const board = index >= 0 ? workspace?.boards[index] : undefined;
-  if (!board) return;
+  const active = activeBoardWithLabel();
+  if (!active) return;
+  const { boardId } = active;
   openPromptDialog(
     "Boardの名前を変更",
     "空のまま確定すると自動で付く名前へ戻ります。",
-    boardLabel(board, index),
+    active.label,
     (name) => {
       sendMessage("renameBoard", { boardId, name });
     },
@@ -2142,6 +2253,49 @@ function sidebarViewIds(): string[] {
  */
 function commandPaletteSidebarViews(): SidebarSwitcherView[] {
   return customViews.length === 0 ? [] : sidebarSwitcherViews();
+}
+
+/**
+ * コマンドパレットに並べる切り替え先のBoard。next-board/prev-boardと違いワークスペースを
+ * またいで全て並べる（サイドバーを開いていなくても名前で目的のBoardへ1打で飛べるようにするため）。
+ * アクティブなBoard自身は選んでも何も起きないので除く
+ */
+function commandPaletteBoards(): CommandPaletteBoardItem[] {
+  return lastWorkspaces.flatMap((workspace, workspaceIndex) =>
+    workspace.boards.flatMap<CommandPaletteBoardItem>((board, boardIndex) =>
+      board.boardId === activeBoardId
+        ? []
+        : [
+            {
+              boardId: board.boardId,
+              label: boardLabel(board, boardIndex),
+              workspaceLabel: workspaceLabel(workspace, workspaceIndex),
+            },
+          ],
+    ),
+  );
+}
+
+/** コマンドパレットに並べる切り替え先のワークスペース。commandPaletteBoardsと同じくアクティブなもの自身は除く */
+function commandPaletteWorkspaces(): CommandPaletteWorkspaceItem[] {
+  return lastWorkspaces.flatMap<CommandPaletteWorkspaceItem>((workspace, index) =>
+    workspace.workspaceId === activeWorkspaceId
+      ? []
+      : [
+          {
+            workspaceId: workspace.workspaceId,
+            label: workspaceLabel(workspace, index),
+            boardCount: workspace.boards.length,
+          },
+        ],
+  );
+}
+
+/** コマンドパレットからのBoard切り替え。所属ワークスペースはboardIdから引く（別ワークスペースなら先に切り替わる） */
+function switchToBoard(boardId: BoardId): void {
+  const workspace = lastWorkspaces.find((w) => w.boards.some((b) => b.boardId === boardId));
+  if (!workspace) return;
+  activateSidebarBoard(workspace.workspaceId, boardId);
 }
 
 function findCustomView(viewId: string): ResolvedCustomViewConfig | null {
@@ -3112,6 +3266,16 @@ function handleTileCommand(cmd: TileCommand): void {
     togglePopup();
     return;
   }
+  // ポップアップはタイルの外側の状態（ADR 0005）。編入先はbun側がフォーカス中タイルから決める
+  if (cmd.type === "promotePopup") {
+    sendMessage("promotePopup");
+    return;
+  }
+  // ウィンドウ単位の操作もフォーカス中タイルに依存しない
+  if (cmd.type === "closeWindow") {
+    closeThisWindow();
+    return;
+  }
   if (cmd.type === "commandPalette") {
     openCommandPalette();
     return;
@@ -3122,8 +3286,28 @@ function handleTileCommand(cmd: TileCommand): void {
     hintMode.enter(collectHintTargets());
     return;
   }
-  // Board名の変更はフォーカス中タイルではなくアクティブBoardが対象なので、
-  // focusedTileIdのガードより手前で処理する
+  // Board・ワークスペース単位の操作はフォーカス中タイルではなくアクティブBoard
+  // （またはアクティブワークスペース）が対象なので、focusedTileIdのガードより手前で処理する
+  if (cmd.type === "newBoard") {
+    newBoardInActiveWorkspace();
+    return;
+  }
+  if (cmd.type === "closeBoard") {
+    closeActiveBoard();
+    return;
+  }
+  if (cmd.type === "clearBoardStartup") {
+    clearActiveBoardStartup();
+    return;
+  }
+  if (cmd.type === "renameWorkspace") {
+    openRenameActiveWorkspaceDialog();
+    return;
+  }
+  if (cmd.type === "closeWorkspace") {
+    closeActiveWorkspace();
+    return;
+  }
   if (cmd.type === "renameBoard") {
     openRenameActiveBoardDialog();
     return;
