@@ -48,7 +48,7 @@ function createFakeSessionFactory(sessionOpts: TerminalSessionOptions[] = []) {
     sessionOpts.push(opts);
     return {
       write: () => {},
-      writeWhenReady: () => {},
+      runCommandWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,

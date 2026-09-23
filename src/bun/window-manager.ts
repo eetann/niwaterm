@@ -385,8 +385,8 @@ export function createWindowManager(opts: WindowManagerOptions) {
       return owner.swapWorkspaces(workspaceIdA, workspaceIdB);
     },
     handleInput: (tabId: TabId, data: string) => byTab(tabId)?.handleInput(tabId, data),
-    sendInitialInput: (tabId: TabId, data: string) =>
-      byTab(tabId)?.sendInitialInput(tabId, data) ?? false,
+    sendInitialCommand: (tabId: TabId, command: string) =>
+      byTab(tabId)?.sendInitialCommand(tabId, command) ?? false,
     handleMouseEvent: (tabId: TabId, ev: MouseEventInput) =>
       byTab(tabId)?.handleMouseEvent(tabId, ev),
     enterCopyMode: (tabId: TabId) => byTab(tabId)?.enterCopyMode(tabId),

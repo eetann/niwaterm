@@ -59,7 +59,7 @@ function createTestWorkspaceManager(): {
     const index = sessionCount++;
     return {
       write: (data) => record.push(data),
-      writeWhenReady: (data) => record.push(data),
+      runCommandWhenReady: (command) => record.push(command),
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,
@@ -4306,7 +4306,7 @@ describe("ウィンドウ（複数OSウィンドウ）", () => {
   function createFakeSession(): TerminalSession {
     return {
       write: () => {},
-      writeWhenReady: () => {},
+      runCommandWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,

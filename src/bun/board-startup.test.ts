@@ -312,7 +312,7 @@ function createTestWorkspaceManager(): WorkspaceManager {
     const index = sessionCount++;
     return {
       write: () => {},
-      writeWhenReady: () => {},
+      runCommandWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,

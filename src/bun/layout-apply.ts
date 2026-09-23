@@ -19,7 +19,6 @@ import type { BoardId } from "./board";
 import { resolveTabCwd } from "./project-config";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { findNode, listLeaves, type TabId, type TileId } from "./tile-layout";
-import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WorkspaceManager } from "./workspace-manager";
 
 export type ApplyLayoutTarget = "new-board" | "replace";
@@ -155,8 +154,8 @@ function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
  * PTY起動保留中のタブ（"new-board"時・分割で作られたタイル）なら、respawnTab側の分岐で
  * 保留パラメータの上書きだけで済む。
  *
- * respawnTabは保留中タブのinitialInputを引き継がないため、必ずconfigureTab（commandの
- * sendInitialInput）より前に呼ぶこと。
+ * respawnTabは保留中タブへ積んだ初期コマンドを引き継がないため、必ずconfigureTab（commandの
+ * sendInitialCommand）より前に呼ぶこと。
  */
 function alignPlaceholderCwd(ctx: BuildContext, tabId: TabId): void {
   if (ctx.baseCwd === undefined) return;
@@ -178,14 +177,14 @@ function configureTab(
   }
 
   if (tabConfig.command) {
-    const bytes = tmuxKeysToBytes([tabConfig.command, "Enter"]);
+    const command = tabConfig.command;
     const delay = tabConfig.delay ?? 0;
-    // handleInputではなくsendInitialInputを使う: 分割で作ったタイルのタブはPTY起動が
+    // handleInputではなくsendInitialCommandを使う: 分割で作ったタイルのタブはPTY起動が
     // 実測cols/rows到達まで保留されており、handleInputだと黙って捨てられる
     if (delay > 0) {
-      setTimeout(() => ctx.workspaceManager.sendInitialInput(tabId, bytes), delay);
+      setTimeout(() => ctx.workspaceManager.sendInitialCommand(tabId, command), delay);
     } else {
-      ctx.workspaceManager.sendInitialInput(tabId, bytes);
+      ctx.workspaceManager.sendInitialCommand(tabId, command);
     }
   }
 

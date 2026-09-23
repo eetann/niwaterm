@@ -152,7 +152,7 @@ export function createBoard(opts: BoardOptions) {
   // 同じ理由）。正しいサイズが判明するまでPTY自体を起動しないことでこの競合を避ける
   const pendingSpawnByTabId = new Map<
     TabId,
-    { shellOverride?: string; cwd?: string; command?: string; initialInput?: string }
+    { shellOverride?: string; cwd?: string; command?: string; initialCommands?: string[] }
   >();
 
   /** webview側の初回resize到達まで実際のPTY起動を保留する。sizeByTabIdはまだ確定しない */
@@ -579,21 +579,21 @@ export function createBoard(opts: BoardOptions) {
   }
 
   /**
-   * タブ作成直後に流し込む入力（layoutsプリセットのcommand等）を送る。PTY起動待ち
+   * タブ作成直後に流し込むコマンド（layoutsプリセットのcommand）を送る。PTY起動待ち
    * （spawnSessionPending）のタブでは保留キューへ積み、実測cols/rows到達時に
    * 起動と続けて流す。handleInputはsessions未登録のタブでは黙って捨てるため、
    * splitTile直後のタブ（新タイルのプレースホルダーは常に起動保留中）へは届かない
    * （respawnTabで先に塞いだのと同じ穴）。tabIdが存在しない場合はfalseを返す
    */
-  function sendInitialInput(tabId: TabId, data: string): boolean {
+  function sendInitialCommand(tabId: TabId, command: string): boolean {
     const pending = pendingSpawnByTabId.get(tabId);
     if (pending) {
-      pending.initialInput = (pending.initialInput ?? "") + data;
+      (pending.initialCommands ??= []).push(command);
       return true;
     }
     const session = sessions.get(tabId);
     if (!session) return false;
-    session.writeWhenReady(data);
+    session.runCommandWhenReady(command);
     return true;
   }
 
@@ -654,9 +654,11 @@ export function createBoard(opts: BoardOptions) {
       spawnSession(tabId, cols, rows, pending.shellOverride, pending.cwd, pending.command);
       // 生成時はcols/rowsしか渡らないため、セルの実寸はここで伝える（マウスレポートの座標変換に必要）
       sessions.get(tabId)?.setCellSize(cellWidthPx, cellHeightPx);
-      // 起動を待たせていた間に積まれた入力（layoutsプリセットのcommand等）をここで流す。
-      // 起動直後のシェルは入力を取りこぼすため、writeWhenReadyで準備完了を待たせる
-      if (pending.initialInput) sessions.get(tabId)?.writeWhenReady(pending.initialInput);
+      // 起動を待たせていた間に積まれたコマンド（layoutsプリセットのcommand）をここで流す。
+      // 起動直後のシェルは入力を取りこぼすため、runCommandWhenReadyで準備完了を待たせる
+      for (const command of pending.initialCommands ?? []) {
+        sessions.get(tabId)?.runCommandWhenReady(command);
+      }
       opts.onDirty();
       return;
     }
@@ -887,7 +889,7 @@ export function createBoard(opts: BoardOptions) {
     resizeTileInDirection,
     respawnTab,
     handleInput,
-    sendInitialInput,
+    sendInitialCommand,
     handleMouseEvent,
     enterCopyMode,
     handleCopyModeKey,

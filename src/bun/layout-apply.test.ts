@@ -38,7 +38,7 @@ function createTestWorkspaceManager(): {
     const index = sessionCount++;
     return {
       write: (data) => record.push(data),
-      writeWhenReady: (data) => record.push(data),
+      runCommandWhenReady: (command) => record.push(command),
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,
@@ -165,7 +165,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     // プレースホルダーはPTY起動保留中のまま閉じられるため、実際のタブのセッションだけが残る想定
     const realSessionIndex = sessionOpts.findIndex((o) => o.cwd === "/tmp/project");
     expect(realSessionIndex).toBeGreaterThanOrEqual(0);
-    expect(writes[realSessionIndex]).toEqual(["nvim\r"]);
+    expect(writes[realSessionIndex]).toEqual(["nvim"]);
   });
 
   test("split構成のプリセットを指定したorientation・ratioで組み立てる", () => {
@@ -213,8 +213,8 @@ describe("applyLayoutPreset (target: new-board)", () => {
     resolvePending(mgr);
 
     const flat = writes.flat();
-    expect(flat).toContain("echo left\r");
-    expect(flat).toContain("echo right\r");
+    expect(flat).toContain("echo left");
+    expect(flat).toContain("echo right");
   });
 
   test("1タイルに複数タブを作り、activeTabで指定したタブがアクティブになる", () => {

@@ -684,7 +684,7 @@ await refreshConfig();
  *
  * 実行タイミングはconfig読み込み直後・BrowserView生成前に固定する。この時点では全タブが
  * まだPTY起動保留中（spawnSessionPending）で、プリセットのcommandも
- * sendInitialInputで保留キューへ積まれるため、実測cols/rowsが確定してから正しいサイズで
+ * sendInitialCommandで保留キューへ積まれるため、実測cols/rowsが確定してから正しいサイズで
  * 一度だけシェルが起動する。プリセットが見つからない場合は単一タブのまま残し、
  * ユーザーが気づけるよう通知する。
  *

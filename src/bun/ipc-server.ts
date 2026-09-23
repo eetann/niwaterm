@@ -1461,7 +1461,7 @@ function buildApp(
   // 「同じレイアウトプリセット内のタブ」= 同じBoard内のタブ）。boardIdは
   // 明示指定 > scopeTabId（呼び出し元タブ）の所属Board > アクティブBoard の順に解決する。
   // scopeTabIdを挟むのは、プリセットのcommandが実際に走るのはPTY起動・シェル初期化を待った後で
-  // （layout-apply.tsのsendInitialInput・delay）、その時点でアクティブBoardが
+  // （layout-apply.tsのsendInitialCommand・delay）、その時点でアクティブBoardが
   // 切り替わっていても呼び出し元自身のBoardを正しく指せるようにするため
   app.get("/find-vars", (c) => {
     const key = c.req.query("key");

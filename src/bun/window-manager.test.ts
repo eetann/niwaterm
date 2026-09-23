@@ -16,7 +16,7 @@ function createFakeSessionFactory() {
     created.push(record);
     return {
       write: () => {},
-      writeWhenReady: () => {},
+      runCommandWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
       resize: () => false,
