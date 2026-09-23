@@ -8,7 +8,8 @@
 // 1箇所であり続けるようここへ集約する。
 
 import type { LayoutsConfig, ShellProfile } from "@niwaterm/config";
-import { applyLayoutPreset } from "./layout-apply";
+import { isBuiltinLayoutName } from "./builtin-layouts";
+import { applyBuiltinLayout, applyLayoutPreset } from "./layout-apply";
 import type { BoardRestoreMode, PersistedBoardStartup } from "./persistence";
 import { loadProjectPreset, resolveLayoutPresetByName } from "./project-config";
 import type { BoardId } from "./workspace";
@@ -130,7 +131,7 @@ export async function changeBoardStartup(
     tabCwd = existing?.tabCwd;
     const stillExists = projectRoot
       ? (await loadProjectPreset(projectRoot, preset)) !== null
-      : layouts[preset] !== undefined;
+      : layouts[preset] !== undefined || isBuiltinLayoutName(preset);
     if (!stillExists) return { ok: false, status: 404, error: `layout not found: ${preset}` };
   }
   const denied = checkLayoutTrust(input.mode === "layout", projectRoot, input.trust, preset);
@@ -183,17 +184,20 @@ export async function applyAndBindStartupLayout(
   const denied = checkLayoutTrust(true, resolved.projectRoot, input.trust, input.preset);
   if (denied) return { ok: false, ...denied };
 
-  const applied = applyLayoutPreset(
-    workspaceManager,
-    shellProfiles,
-    resolved.preset,
-    "replace",
-    input.boardId,
-    {
-      ...(input.cwd !== undefined ? { invocationCwd: input.cwd } : {}),
-      ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
-    },
-  );
+  const applied =
+    resolved.kind === "builtin"
+      ? applyBuiltinLayout(workspaceManager, resolved.name, input.boardId)
+      : applyLayoutPreset(
+          workspaceManager,
+          shellProfiles,
+          resolved.preset,
+          "replace",
+          input.boardId,
+          {
+            ...(input.cwd !== undefined ? { invocationCwd: input.cwd } : {}),
+            ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+          },
+        );
   if (!applied.ok) return { ok: false, error: applied.error };
 
   const startup: PersistedBoardStartup = {

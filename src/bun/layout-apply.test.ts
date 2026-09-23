@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { LayoutPreset, ShellProfile } from "@niwaterm/config";
 import type { BoardId } from "./board";
-import { applyLayoutPreset, validateLayoutPreset } from "./layout-apply";
+import { applyBuiltinLayout, applyLayoutPreset, validateLayoutPreset } from "./layout-apply";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
 import { createWorkspaceManager, type WorkspaceManager } from "./workspace-manager";
@@ -507,5 +507,90 @@ describe("applyLayoutPreset (target: replace)", () => {
 
     expect(result.ok).toBe(false);
     expect(mgr.snapshot().workspace.board.layout).toEqual(before);
+  });
+});
+
+describe("applyBuiltinLayout (empty)", () => {
+  test("複数タイル・複数タブのBoardをタイル1つ・タブ1つへ畳む", () => {
+    const { mgr } = createTestWorkspaceManager();
+    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const split = mgr.splitTile(firstTileId, "vertical");
+    if (!split) throw new Error("unreachable");
+    mgr.newTab(firstTileId);
+    mgr.newTab(split.tileId);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+
+    const result = applyBuiltinLayout(mgr, "empty", boardId);
+    resolvePending(mgr);
+
+    expect(result).toMatchObject({ ok: true, boardId });
+    const leaf = findBoardEntry(mgr, boardId)?.layout as TileLeaf;
+    expect(leaf.kind).toBe("leaf");
+    expect(leaf.tabIds.length).toBe(1);
+  });
+
+  test("残す1タブもPTYを起動し直し、cwdだけ引き継ぐ", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const leafBefore = mgr.snapshot().workspace.board.layout as TileLeaf;
+    const tabId = leafBefore.tabIds[0] as string;
+    resolvePending(mgr);
+    // 起動中のシェルがOSC 7で報告したcwd相当
+    mgr.setTabVar(tabId, "cwd", "/tmp/work");
+    const sessionsBefore = sessionOpts.length;
+
+    expect(applyBuiltinLayout(mgr, "empty", boardId).ok).toBe(true);
+    resolvePending(mgr);
+
+    expect(sessionOpts.length).toBe(sessionsBefore + 1);
+    expect(sessionOpts[sessionOpts.length - 1]?.cwd).toBe("/tmp/work");
+  });
+
+  test("タブ名・タイル名・タブ変数は消える（cwdだけ残る）", () => {
+    const { mgr } = createTestWorkspaceManager();
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).tabIds[0] as string;
+    resolvePending(mgr);
+    mgr.setTabName(tabId, "server");
+    mgr.setTileName(tileId, "right");
+    mgr.setTabVar(tabId, "role", "claude");
+    mgr.setTabVar(tabId, "cwd", "/tmp/work");
+
+    expect(applyBuiltinLayout(mgr, "empty", boardId).ok).toBe(true);
+
+    const board = findBoardEntry(mgr, boardId);
+    const leaf = board?.layout as TileLeaf;
+    const survivingTabId = leaf.tabIds[0] as string;
+    expect(board?.tabNames[survivingTabId]).toBeUndefined();
+    expect(board?.tileNames[leaf.id]).toBeUndefined();
+    expect(mgr.listTabVars(survivingTabId)).toEqual({ cwd: "/tmp/work" });
+  });
+
+  test("残るのがブラウザタブならterminalタブへ置き換える", () => {
+    const { mgr } = createTestWorkspaceManager();
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).tabIds[0] as string;
+    const browserTabId = mgr.newBrowserTab(tileId, "https://example.com");
+    if (!browserTabId) throw new Error("unreachable");
+    // ブラウザタブだけが残るよう、先にterminalタブを閉じておく
+    mgr.closeTab(tileId, terminalTabId);
+
+    expect(applyBuiltinLayout(mgr, "empty", boardId).ok).toBe(true);
+    resolvePending(mgr);
+
+    const leaf = findBoardEntry(mgr, boardId)?.layout as TileLeaf;
+    expect(leaf.tabIds.length).toBe(1);
+    expect(leaf.tabIds[0]).not.toBe(browserTabId);
+    expect(mgr.locateBrowserTab(leaf.tabIds[0] as string)).toBeNull();
+  });
+
+  test("存在しないBoardはエラーを返す", () => {
+    const { mgr } = createTestWorkspaceManager();
+    expect(applyBuiltinLayout(mgr, "empty", "board-does-not-exist")).toEqual({
+      ok: false,
+      error: "board not found: board-does-not-exist",
+    });
   });
 });

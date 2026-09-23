@@ -16,6 +16,7 @@ import type {
   ShellProfile,
 } from "@niwaterm/config";
 import type { BoardId } from "./board";
+import type { BuiltinLayoutName } from "./builtin-layouts";
 import { resolveTabCwd } from "./project-config";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { findNode, listLeaves, type TabId, type TileId } from "./tile-layout";
@@ -315,4 +316,66 @@ export function applyLayoutPreset(
   }
 
   return { ok: true, boardId };
+}
+
+/**
+ * ビルトインの"empty"を適用する（Boardをタイル1つ・タブ1つのまっさらな状態へ戻す）。
+ *
+ * 畳んで閉じたタブのPTYはcloseTabが始末するが、残す1タブだけは自前で起動し直す。
+ * 「動いているプロセスを全部止める」のが目的なので、残ったタブでTUIが動き続けるのでは
+ * 用を成さないため。引き継ぐのはそのタブのcwdだけで、タブ名・タイル名・タブ変数は消す。
+ *
+ * layoutsプリセットのapply（applyLayoutPreset）と違いbaseCwdを見ないのは、Boardを畳む操作で
+ * 作業ディレクトリまで別の場所へ移されると「片付けたら知らない場所に立っていた」状態になるため。
+ */
+function applyEmptyLayout(workspaceManager: WorkspaceManager, boardId: BoardId): ApplyLayoutResult {
+  if (!workspaceManager.findBoard(boardId)) {
+    return { ok: false, error: `board not found: ${boardId}` };
+  }
+  resetToSingleTile(workspaceManager, boardId);
+
+  const board = workspaceManager.findBoard(boardId);
+  const leaf = board && listLeaves(board.layout)[0];
+  if (!leaf || leaf.tabIds.length !== 1) {
+    return { ok: false, error: `internal error: failed to reset board ${boardId}` };
+  }
+  const tileId = leaf.id;
+  let tabId = leaf.tabIds[0] as TabId;
+
+  if (workspaceManager.locateBrowserTab(tabId)) {
+    // ブラウザタブはPTYを持たず起動し直せないので、terminalタブを足してから閉じる。
+    // 先に足すのは、最後の1タブを閉じるとBoardごと畳まれてしまうため
+    const replacement = workspaceManager.newTab(tileId);
+    if (!replacement) {
+      return { ok: false, error: `internal error: failed to create tab in tile ${tileId}` };
+    }
+    workspaceManager.closeTab(tileId, tabId);
+    tabId = replacement;
+  } else {
+    // respawnTabはcwd省略時にタブ変数の"cwd"（OSC 7の報告値）を引き継ぎ元にするため、
+    // 変数を消すより先に呼ぶ
+    workspaceManager.respawnTab(tabId);
+  }
+
+  const cwd = workspaceManager.listTabVars(tabId)?.["cwd"];
+  workspaceManager.clearTabVars(tabId);
+  // 起動し直したシェルは同じディレクトリに居る。OSC 7を報告しないシェルでも
+  // サイドバーの表示・以後のタブ追加時のcwd引き継ぎが欠けないよう戻しておく
+  if (cwd !== undefined) workspaceManager.setTabVar(tabId, "cwd", cwd);
+  workspaceManager.setTabName(tabId, "");
+  workspaceManager.setTileName(tileId, "");
+
+  return { ok: true, boardId };
+}
+
+/** ビルトインプリセット（builtin-layouts.ts）をBoardへ適用する */
+export function applyBuiltinLayout(
+  workspaceManager: WorkspaceManager,
+  name: BuiltinLayoutName,
+  boardId: BoardId,
+): ApplyLayoutResult {
+  switch (name) {
+    case "empty":
+      return applyEmptyLayout(workspaceManager, boardId);
+  }
 }

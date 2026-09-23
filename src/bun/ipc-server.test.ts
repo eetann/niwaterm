@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LayoutsConfig } from "@niwaterm/config";
+import { BUILTIN_LAYOUT_DESCRIPTIONS } from "./builtin-layouts";
 import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
 import { createIpcServer, type IpcServer } from "./ipc-server";
@@ -3169,6 +3170,14 @@ describe("GET /layouts, POST /apply-layout", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  /** ビルトインは設定に同名が無い限り必ず一覧の末尾へ付く（project-config.tsのlistResolvedLayouts） */
+  const BUILTIN_EMPTY = {
+    name: "empty",
+    description: BUILTIN_LAYOUT_DESCRIPTIONS.empty,
+    projectRoot: null,
+    builtin: true,
+  };
+
   const LAYOUTS: LayoutsConfig = {
     dev: {
       description: "Editor + terminal",
@@ -3202,13 +3211,13 @@ describe("GET /layouts, POST /apply-layout", () => {
     };
   }
 
-  test("GET /layouts: getLayouts未指定時は空配列を返す", async () => {
+  test("GET /layouts: getLayouts未指定時はビルトインだけを返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
 
     const res = await fetch("http://localhost/layouts", { unix: socketPath });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, layouts: [] });
+    expect(await res.json()).toEqual({ ok: true, layouts: [BUILTIN_EMPTY] });
   });
 
   // 解決元(projectRoot)を必ず載せる。プロジェクトローカルのプリセットと同名になりうるため、
@@ -3223,6 +3232,7 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(body.layouts).toEqual([
       { name: "broken", projectRoot: null },
       { name: "dev", description: "Editor + terminal", projectRoot: null },
+      BUILTIN_EMPTY,
     ]);
   });
 
@@ -3269,6 +3279,27 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(mgr.snapshot().activeWorkspaceId).toBe(activeWorkspaceId);
     const entry = mgr.listWorkspaces().find((w) => w.workspaceId === otherWorkspaceId);
     expect(entry?.boards.some((b) => b.boardId === body.boardId)).toBe(true);
+  });
+
+  test("POST /apply-layout: ビルトインのemptyは設定にプリセットが無くても適用できる", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    mgr.splitTile(tileId, "vertical");
+    resolvePending(mgr);
+
+    const res = await fetch("http://localhost/apply-layout", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "empty", target: "replace", boardId }),
+    });
+
+    expect(res.status).toBe(200);
+    const board = mgr.findBoard(boardId);
+    expect(board?.layout.kind).toBe("leaf");
+    expect(listLeaves(board?.layout as TileLeaf)[0]?.tabIds.length).toBe(1);
   });
 
   test("POST /apply-layout: 存在しないworkspaceIdは404を返す", async () => {
@@ -3820,6 +3851,7 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(body.layouts).toEqual([
       { name: "dev", description: "project dev", projectRoot },
       { name: "broken", projectRoot: null },
+      BUILTIN_EMPTY,
     ]);
   });
 

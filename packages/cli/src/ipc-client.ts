@@ -874,9 +874,11 @@ export interface LayoutSummary {
   description?: string;
   /**
    * プロジェクトローカル（<projectRoot>/.niwaterm/config.ts）由来ならその解決元、
-   * グローバル設定由来ならnull
+   * グローバル設定・ビルトイン由来ならnull
    */
   projectRoot: string | null;
+  /** 設定ファイルに定義が無くても使えるビルトインのプリセット */
+  builtin?: boolean;
 }
 
 export type ListLayoutsResult =

@@ -20,7 +20,7 @@ import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { changeBoardStartup, checkLayoutTrust, startupCwdFields } from "./board-startup";
 import type { ConfigSummary } from "./config-summary";
-import { applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
+import { applyBuiltinLayout, applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
 import { buildKeybindList } from "./keybind-list";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
@@ -1062,18 +1062,21 @@ function buildApp(
       boardId = resolvedBoardId;
     }
 
-    const result = applyLayoutPreset(
-      workspaceManager,
-      getShellProfiles(),
-      resolved.preset,
-      target,
-      boardId,
-      {
-        ...(parsed.cwd !== undefined ? { invocationCwd: parsed.cwd } : {}),
-        ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
-        ...(parsed.tabCwd !== undefined ? { tabBaseCwd: parsed.tabCwd } : {}),
-      },
-    );
+    const result =
+      resolved.kind === "builtin"
+        ? applyBuiltinLayout(workspaceManager, resolved.name, boardId)
+        : applyLayoutPreset(
+            workspaceManager,
+            getShellProfiles(),
+            resolved.preset,
+            target,
+            boardId,
+            {
+              ...(parsed.cwd !== undefined ? { invocationCwd: parsed.cwd } : {}),
+              ...(resolved.projectRoot ? { projectRoot: resolved.projectRoot } : {}),
+              ...(parsed.tabCwd !== undefined ? { tabBaseCwd: parsed.tabCwd } : {}),
+            },
+          );
     if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
     // どのプリセットから生えたBoardかを記録しておく。--startup指定時のみ
     // 起動時の組み直し対象になり、それ以外は名前を覚えるだけで従来どおり骨格を復元する。

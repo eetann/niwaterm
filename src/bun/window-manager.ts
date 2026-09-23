@@ -428,6 +428,7 @@ export function createWindowManager(opts: WindowManagerOptions) {
     getTabText: (tabId: TabId) => byTab(tabId)?.getTabText(tabId) ?? null,
     setTabVar: (tabId: TabId, key: string, value: string) =>
       byTab(tabId)?.setTabVar(tabId, key, value) ?? false,
+    clearTabVars: (tabId: TabId) => byTab(tabId)?.clearTabVars(tabId) ?? false,
     getTabVar: (tabId: TabId, key: string) =>
       byTab(tabId)?.getTabVar(tabId, key) ?? ({ found: false, reason: "tab-not-found" } as const),
     listTabVars: (tabId: TabId) => byTab(tabId)?.listTabVars(tabId) ?? null,

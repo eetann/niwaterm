@@ -15,6 +15,12 @@
 import { stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { LayoutPreset, LayoutsConfig, NiwatermProjectConfig } from "@niwaterm/config";
+import {
+  BUILTIN_LAYOUT_DESCRIPTIONS,
+  BUILTIN_LAYOUT_NAMES,
+  type BuiltinLayoutName,
+  isBuiltinLayoutName,
+} from "./builtin-layouts";
 import { importFreshConfig, normalizeLayouts } from "./config";
 
 /** プロジェクトルート直下に置く設定ディレクトリ名 */
@@ -135,17 +141,25 @@ export async function loadProjectLayouts(projectRoot: string): Promise<LayoutsCo
 }
 
 /** プリセット1件と、それがどこから解決されたか */
-export interface ResolvedLayoutPreset {
-  name: string;
-  preset: LayoutPreset;
-  /** プロジェクトローカル由来ならそのルート。グローバル設定由来ならnull */
-  projectRoot: string | null;
-}
+export type ResolvedLayoutPreset =
+  | {
+      kind: "config";
+      name: string;
+      preset: LayoutPreset;
+      /** プロジェクトローカル由来ならそのルート。グローバル設定由来ならnull */
+      projectRoot: string | null;
+    }
+  | {
+      kind: "builtin";
+      name: BuiltinLayoutName;
+      /** ビルトインは設定ファイル由来ではないため常にnull（trust判定の対象外） */
+      projectRoot: null;
+    };
 
 /**
- * プリセット名を解決する。project → globalの順で探し、同名はproject側が優先される
+ * プリセット名を解決する。project → global → ビルトインの順で探し、同名はproject側が優先される
  * （どちらが効いたかはResolvedLayoutPreset.projectRootで判別でき、CLI側の表示・trust promptの
- * 要否判定に使う）。
+ * 要否判定に使う）。ビルトインを最後に見るのは、同名のユーザー定義プリセットを隠さないため。
  */
 export async function resolveLayoutPresetByName(
   name: string,
@@ -155,10 +169,11 @@ export async function resolveLayoutPresetByName(
   const projectRoot = await resolveProjectRoot(cwd);
   if (projectRoot) {
     const preset = (await loadProjectLayouts(projectRoot))[name];
-    if (preset) return { name, preset, projectRoot };
+    if (preset) return { kind: "config", name, preset, projectRoot };
   }
   const global = globalLayouts[name];
-  if (global) return { name, preset: global, projectRoot: null };
+  if (global) return { kind: "config", name, preset: global, projectRoot: null };
+  if (isBuiltinLayoutName(name)) return { kind: "builtin", name, projectRoot: null };
   return null;
 }
 
@@ -173,13 +188,15 @@ export async function loadProjectPreset(
 export interface LayoutListEntry {
   name: string;
   description?: string;
-  /** プロジェクトローカル由来ならそのルート。グローバル設定由来ならnull */
+  /** プロジェクトローカル由来ならそのルート。グローバル設定・ビルトイン由来ならnull */
   projectRoot: string | null;
+  /** 設定ファイルではなくビルトイン（builtin-layouts.ts）由来 */
+  builtin?: boolean;
 }
 
 /**
- * cwdから見えるプリセットを一覧する。同名はproject側だけを返す（実際にapplyされる方に揃える）。
- * 並び順はproject → globalで、その中は名前順
+ * cwdから見えるプリセットを一覧する。同名は優先される側だけを返す（実際にapplyされる方に揃える）。
+ * 並び順はproject → global → ビルトインで、その中は名前順
  */
 export async function listResolvedLayouts(
   cwd: string | undefined,
@@ -199,7 +216,15 @@ export async function listResolvedLayouts(
     .filter(([name]) => !(name in projectLayouts))
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, preset]) => toEntry(name, preset, null));
-  return [...projectEntries, ...globalEntries];
+  const builtinEntries = BUILTIN_LAYOUT_NAMES.filter(
+    (name) => !(name in projectLayouts) && !(name in globalLayouts),
+  ).map((name) => ({
+    name,
+    description: BUILTIN_LAYOUT_DESCRIPTIONS[name],
+    projectRoot: null,
+    builtin: true,
+  }));
+  return [...projectEntries, ...globalEntries, ...builtinEntries];
 }
 
 /**

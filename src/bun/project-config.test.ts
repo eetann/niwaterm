@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LayoutsConfig } from "@niwaterm/config";
+import { BUILTIN_LAYOUT_DESCRIPTIONS } from "./builtin-layouts";
 import {
   listResolvedLayouts,
   loadProjectLayouts,
@@ -159,6 +160,20 @@ describe("resolveLayoutPresetByName", () => {
   test("どちらにも無ければnull", async () => {
     expect(await resolveLayoutPresetByName("missing", root, GLOBAL)).toBeNull();
   });
+
+  test("設定に無いビルトイン名はビルトインとして解決される", async () => {
+    expect(await resolveLayoutPresetByName("empty", root, GLOBAL)).toEqual({
+      kind: "builtin",
+      name: "empty",
+      projectRoot: null,
+    });
+  });
+
+  test("同名のユーザー定義プリセットがあればビルトインは隠れる", async () => {
+    const shadowed: LayoutsConfig = { empty: { layout: { kind: "tile", tabs: [{}] } } };
+    const resolved = await resolveLayoutPresetByName("empty", root, shadowed);
+    expect(resolved?.kind).toBe("config");
+  });
 });
 
 describe("listResolvedLayouts", () => {
@@ -167,18 +182,36 @@ describe("listResolvedLayouts", () => {
     zzz: { layout: { kind: "tile", tabs: [{}] } },
   };
 
-  test("プロジェクト→グローバルの順に並び、同名はプロジェクト側だけを返す", async () => {
+  const BUILTIN_EMPTY = {
+    name: "empty",
+    description: BUILTIN_LAYOUT_DESCRIPTIONS.empty,
+    projectRoot: null,
+    builtin: true,
+  };
+
+  test("プロジェクト→グローバル→ビルトインの順に並び、同名はプロジェクト側だけを返す", async () => {
     await writeProjectConfig(root, DEV_PRESET_SOURCE);
     expect(await listResolvedLayouts(root, GLOBAL)).toEqual([
       { name: "dev", description: "project dev", projectRoot: root },
       { name: "zzz", projectRoot: null },
+      BUILTIN_EMPTY,
     ]);
   });
 
-  test(".niwaterm/が無ければグローバルのみ", async () => {
+  test(".niwaterm/が無ければグローバルとビルトインのみ", async () => {
     expect(await listResolvedLayouts(root, GLOBAL)).toEqual([
       { name: "dev", description: "global dev", projectRoot: null },
       { name: "zzz", projectRoot: null },
+      BUILTIN_EMPTY,
+    ]);
+  });
+
+  test("ビルトインと同名のユーザー定義プリセットがあれば、ビルトイン側は出さない", async () => {
+    const shadowed: LayoutsConfig = {
+      empty: { description: "user empty", layout: { kind: "tile", tabs: [{}] } },
+    };
+    expect(await listResolvedLayouts(root, shadowed)).toEqual([
+      { name: "empty", description: "user empty", projectRoot: null },
     ]);
   });
 });

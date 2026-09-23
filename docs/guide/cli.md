@@ -206,10 +206,21 @@ niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [
 
 `niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）とプロジェクトローカルの`.niwaterm/config.ts`（「プロジェクトローカルのレイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
 
-- `layout list` — 定義済みプリセットを`name<TAB>解決元<TAB>description`形式で表示する。解決元は`[project: <projectRoot>]`か`[global]`。`--cwd`はプロジェクトローカルのプリセットを探す起点で、省略時は実行したディレクトリ。1件も定義されていない場合はその旨を表示する
+- `layout list` — 定義済みプリセットを`name<TAB>解決元<TAB>description`形式で表示する。解決元は`[project: <projectRoot>]`・`[global]`・`[builtin]`のいずれか。`--cwd`はプロジェクトローカルのプリセットを探す起点で、省略時は実行したディレクトリ。ユーザー定義が1件も無い場合はビルトインだけが並び、その旨を併せて表示する
 - `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。ただし対象Boardがタイル1つ・タブ1つだけのときは閉じて失われるものが無いため、確認プロンプトは出ない（非対話環境でも実行できる）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（プロジェクトローカル由来のプリセットでは`--cwd`ではなくプロジェクトルートが基準になる。`--replace`/`--replace-force`時、最初に到達するタイルだけは既存タブを使い回すが、そのタブのPTYも基準cwdで起動し直されるためタイル間でcwdが食い違うことはない）。成功時は`board: <boardId><TAB>preset: <name>`を表示し、プロジェクトローカル由来なら`[project: <projectRoot>]`が付く
 
 指定した`name`が未定義の場合、指定した`workspaceId`/`boardId`が存在しない場合、プリセットの検証に失敗した場合はいずれもエラーメッセージと共に終了コード1を返す（検証失敗の主な原因は`shellProfile`の未知のid、`focus:true`の重複、ratioの範囲外指定等）。検証失敗時はBoardに一切変更を加えない。
+
+### ビルトインのプリセット
+
+設定ファイルに何も書かなくても使えるプリセットがある。`layout list`では解決元が`[builtin]`と表示され、同名のプリセットを`niwaterm.config.ts`や`.niwaterm/config.ts`に定義するとそちらが優先されてビルトインは隠れる。
+
+```sh
+# 今のBoardを片付けて、タイル1つ・タブ1つの状態に戻す
+niwaterm layout apply empty --replace
+```
+
+- `empty` — Boardをタイル1つ・タブ1つへ畳む。**残る1タブもシェルを起動し直す**ので、そのBoardで動いていたプロセスは1つ残らず止まる。引き継ぐのは残るタブの作業ディレクトリだけで、タブ名・タイル名・タブ変数は消える（他のプリセットと違い`--cwd`は見ない。片付けた結果として知らないディレクトリに立っている、という状態を避けるため）。残る1タブがブラウザタブだった場合はterminalタブへ置き換わる。`--replace`を付けなければ空のBoardを1つ作るだけなので、`board new`と同じ意味になる
 
 ### 起動時レイアウト
 

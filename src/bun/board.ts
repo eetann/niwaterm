@@ -807,6 +807,14 @@ export function createBoard(opts: BoardOptions) {
     return true;
   }
 
+  /** タブ変数をすべて消す。レイアウトの"empty"適用のように、タブを素の状態へ戻す操作向け */
+  function clearTabVars(tabId: TabId): boolean {
+    if (!hasAnyTab(tabId)) return false;
+    tabVars.delete(tabId);
+    opts.onDirty();
+    return true;
+  }
+
   function getTabVar(tabId: TabId, key: string): GetTabVarResult {
     if (!hasAnyTab(tabId)) return { found: false, reason: "tab-not-found" };
     const value = tabVars.get(tabId)?.get(key);
@@ -909,6 +917,7 @@ export function createBoard(opts: BoardOptions) {
     findTileIdForTab,
     getTabText,
     setTabVar,
+    clearTabVars,
     getTabVar,
     listTabVars,
     setTabName,

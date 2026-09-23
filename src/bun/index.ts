@@ -25,6 +25,7 @@ import type {
 import { defaultBoardConfig, scaleLineHeight } from "@niwaterm/config";
 import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
+import { isBuiltinLayoutName } from "./builtin-layouts";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
@@ -41,7 +42,7 @@ import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-vi
 import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
 import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
-import { applyLayoutPreset } from "./layout-apply";
+import { applyBuiltinLayout, applyLayoutPreset, type ApplyLayoutResult } from "./layout-apply";
 import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
@@ -725,28 +726,28 @@ async function applyStartupLayouts(): Promise<void> {
     cwd,
     tabCwd,
   } of windowManager.listStartupLayoutBoards()) {
+    // ビルトインは同名のユーザー定義プリセットが無いときだけ効く（resolveLayoutPresetByNameと同じ優先順位）
+    const builtinName =
+      !projectRoot && layouts[preset] === undefined && isBuiltinLayoutName(preset) ? preset : null;
     const layoutPreset = projectRoot
       ? await loadProjectPreset(projectRoot, preset)
       : layouts[preset];
-    if (!layoutPreset) {
+    let result: ApplyLayoutResult;
+    if (builtinName) {
+      result = applyBuiltinLayout(windowManager, builtinName, boardId);
+    } else if (layoutPreset) {
+      result = applyLayoutPreset(windowManager, shellProfiles, layoutPreset, "replace", boardId, {
+        ...(projectRoot ? { projectRoot } : {}),
+        ...(cwd !== undefined ? { invocationCwd: cwd } : {}),
+        ...(tabCwd !== undefined ? { tabBaseCwd: tabCwd } : {}),
+      });
+    } else {
       const source = projectRoot ? `${projectRoot}の.niwaterm/config.ts` : "設定";
       const message = `Board ${boardId}に紐づくレイアウトプリセット "${preset}" が${source}に見つかりません`;
       console.log(`[bun] ${message}`);
       sendNotification({ title: "起動時レイアウトを適用できません", body: message });
       continue;
     }
-    const result = applyLayoutPreset(
-      windowManager,
-      shellProfiles,
-      layoutPreset,
-      "replace",
-      boardId,
-      {
-        ...(projectRoot ? { projectRoot } : {}),
-        ...(cwd !== undefined ? { invocationCwd: cwd } : {}),
-        ...(tabCwd !== undefined ? { tabBaseCwd: tabCwd } : {}),
-      },
-    );
     if (!result.ok) {
       console.log(
         `[bun] failed to apply startup layout "${preset}" to ${boardId}: ${result.error}`,

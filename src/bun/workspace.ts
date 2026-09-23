@@ -906,6 +906,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTabId(tabId)?.setTabVar(tabId, key, value) ?? false;
   }
 
+  function clearTabVars(tabId: TabId): boolean {
+    return findBoardOwnerByTabId(tabId)?.clearTabVars(tabId) ?? false;
+  }
+
   function getTabVar(tabId: TabId, key: string): GetTabVarResult {
     const owner = findBoardOwnerByTabId(tabId);
     if (!owner) return { found: false, reason: "tab-not-found" };
@@ -1111,6 +1115,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getTabText,
     getPopupInfo,
     setTabVar,
+    clearTabVars,
     getTabVar,
     listTabVars,
     findTabsByVar,

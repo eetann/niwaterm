@@ -26,17 +26,21 @@ const listCommand = define({
     if (!result.ok) {
       failAndExit(`layout listに失敗しました: ${result.error}`);
     }
-    if (result.layouts.length === 0) {
-      console.log(
-        "レイアウトプリセットが設定されていません（niwaterm.config.tsのlayouts、または.niwaterm/config.tsを参照）",
-      );
-      return;
-    }
-    // 解決元を必ず出す: 同名プリセットはプロジェクト側が優先されるため、
-    // どちらが適用されるのかが名前だけでは分からない
+    // 解決元を必ず出す: 同名プリセットはproject → global → builtinの順で優先されるため、
+    // どれが適用されるのかが名前だけでは分からない
     for (const layout of result.layouts) {
-      const source = layout.projectRoot ? `[project: ${layout.projectRoot}]` : "[global]";
+      const source = layout.builtin
+        ? "[builtin]"
+        : layout.projectRoot
+          ? `[project: ${layout.projectRoot}]`
+          : "[global]";
       console.log(`${layout.name}\t${source}\t${layout.description ?? ""}`);
+    }
+    // ビルトインは常に出るので、ユーザー定義が1件も無いことは件数からは分からない
+    if (result.layouts.every((layout) => layout.builtin)) {
+      console.log(
+        "（ユーザー定義のレイアウトプリセットはありません。niwaterm.config.tsのlayouts、または.niwaterm/config.tsを参照）",
+      );
     }
   },
 });
