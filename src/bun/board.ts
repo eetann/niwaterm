@@ -45,6 +45,9 @@ export type BoardId = string;
 /** ベルが鳴ったことを表すタブ変数のキー。値は"1"で、既読時はキーごと削除する */
 export const BELL_TAB_VAR = "bell";
 
+/** エージェントの状態を表すタブ変数のキー。contrib/agent-integration/のhooksが書き込む */
+export const AGENT_STATUS_TAB_VAR = "agent_status";
+
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
 
 export interface BoardRenderState {

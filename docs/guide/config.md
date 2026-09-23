@@ -392,6 +392,8 @@ prefix + `v`（`copy-mode`アクション）でコピーモードに入る。マ
 - **タブへのマーク**: タブバーとサイドバーのBoard行にベルのアイコンが出る。そのタブが画面に出た時点で自動的に消える（ウィンドウがフォーカスされていない間は、画面に出ていても消えない）
 - **デスクトップ通知**: そのタブが今まさに画面に出ている時以外に出す（別Board・別ワークスペース・非アクティブタブ、またはniwatermのウィンドウが後ろにある場合）。目の前に出ているタブならマークだけで気づけるため通知しない。同じタブでベルが続く場合、通知は5秒間隔まで間引く（マークは常に付く）
 
+ただし、そのタブの`agent_status`が`working`の間はマークも通知も出さない。エージェントは手が要らない途中経過でもBELを鳴らすため（Claude Codeは長いコマンドが一定時間を超えると鳴らす）、そのまま扱うと作業中ずっとベルが積もる。手が要る場面では`agent_status`が`blocked`（応答待ち）・`idle`（完了）へ変わり、サイドバーのバッジで分かる。`agent_status`は[エージェント統合](cli.md)のhooksが書き込むタブ変数で、hooksを入れていなければこの間引きは働かない。
+
 ### 処理を差し替える（`niwa.on("bell", ...)`）
 
 `keybindings`の関数の中で`niwa.on("bell", handler)`を呼ぶと、**既定の処理の代わりに**そのハンドラが走る。
@@ -431,12 +433,15 @@ niwa.on("bell", (event) => {
 | `tileId` / `boardId` / `workspaceId` | `string` | そのタブの所在 |
 | `windowFocused` | `boolean` | 鳴った時点でniwatermのウィンドウがフォーカスされていたか |
 | `visible` | `boolean` | 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブなら`false`） |
+| `agentStatus` | `string \| null` | 鳴った時点のタブ変数`agent_status`（`idle` / `working` / `blocked`）。エージェントが動いていないタブは`null` |
+
+`agentStatus`を見れば、既定の処理と同じ間引きを自前のハンドラでも書ける。逆に作業中のベルも拾いたい場合は、`niwa.bell.default(event)`を呼ばず`niwa.bell.mark(event.tabId)`を直接呼ぶ。
 
 ### `niwa.bell`
 
 | メソッド | 意味 |
 |---|---|
-| `default(event)` | 既定の処理（マーク＋画面に出ていないタブなら通知）を実行する |
+| `default(event)` | 既定の処理（マーク＋画面に出ていないタブなら通知。`agentStatus`が`working`なら何もしない）を実行する |
 | `mark(tabId)` | タブにマークを付ける。マークはそのタブが画面に出た時点で自動的に消える |
 | `clear(tabId)` | タブのマークを消す |
 

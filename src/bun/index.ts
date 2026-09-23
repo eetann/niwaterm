@@ -23,6 +23,7 @@ import type {
   ShellProfile,
 } from "@niwaterm/config";
 import { scaleLineHeight } from "@niwaterm/config";
+import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
@@ -577,6 +578,7 @@ function handleBell(tabId: TabId): void {
   const location = windowManager.locateTab(tabId);
   if (!location) return;
   const windowId = windowManager.windowIdOfTab(tabId);
+  const agentStatus = windowManager.getTabVar(tabId, AGENT_STATUS_TAB_VAR);
   const event: NiwaBellEvent = {
     tabId,
     tabName: windowManager.getTabName(tabId),
@@ -587,6 +589,7 @@ function handleBell(tabId: TabId): void {
     // ベルは「手が離れている」扱いにしたいので、アプリ全体ではなくウィンドウ単位で見る
     windowFocused: windowId !== null && (views.get(windowId)?.focused ?? false),
     visible: windowManager.isTabVisible(tabId),
+    agentStatus: agentStatus.found ? agentStatus.value : null,
   };
   if (!bellHandler) {
     runDefaultBell(event);

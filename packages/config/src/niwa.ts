@@ -235,6 +235,12 @@ export interface NiwaBellEvent {
   windowFocused: boolean;
   /** 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブならfalse） */
   visible: boolean;
+  /**
+   * 鳴った時点でそのタブに書かれていたエージェントの状態（contrib/agent-integration/のhooksが
+   * 書き込むタブ変数agent_status。"idle" / "working" / "blocked"）。hooksを入れていない、
+   * あるいはエージェントが動いていないタブではnull
+   */
+  agentStatus: string | null;
 }
 
 export type NiwaBellHandler = (event: NiwaBellEvent) => void | Promise<void>;

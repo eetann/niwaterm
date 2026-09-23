@@ -66,6 +66,15 @@ export const DEFAULT_RESIZE_AMOUNT = 0.05;
  */
 export const BELL_NOTIFY_INTERVAL_MS = 5000;
 
+/**
+ * 既定の処理がベルを捨てるagent_statusの値。エージェントは作業の途中経過でもBELを出すため
+ * （Claude Codeは長いコマンドが一定時間を超えた時点で鳴らす）、そのまま扱うと「まだ働いている
+ * 最中」のマークと通知が積もる。手が要る場面はagent_statusがblocked/idleへ変わり、
+ * サイドバーのバッジで分かる。
+ * 詳細: docs/known-issues/claude-code-rings-bell-while-still-working.md
+ */
+const AGENT_WORKING_STATUS = "working";
+
 export interface NiwaApiHandle {
   niwa: Niwa;
   /** configファイル実行後に呼び出し、niwa.prefix/keybindで登録された内容を取り出す */
@@ -311,9 +320,11 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   /**
    * ベルの既定の処理。マークは画面に出ていないタブの目印なので常に付ける（表示中のタブのマークは
    * 次の描画で消える）。通知は今まさに見ているタブ以外で鳴った時に出す（別Board・別ワークスペース・
-   * 非アクティブタブ・ウィンドウが後ろ、のいずれも画面を見ているだけでは気づけないため）
+   * 非アクティブタブ・ウィンドウが後ろ、のいずれも画面を見ているだけでは気づけないため）。
+   * 作業中のエージェントが鳴らしたベルだけは丸ごと捨てる（AGENT_WORKING_STATUS参照）
    */
   function defaultBell(event: NiwaBellEvent): void {
+    if (event.agentStatus === AGENT_WORKING_STATUS) return;
     markBell(event.tabId);
     if (event.windowFocused && event.visible) return;
     const now = Date.now();

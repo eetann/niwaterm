@@ -47,5 +47,7 @@ hook本体はCLIの更新で反映される。購読イベントやCLI名を更�
 | `agent_status_text` | 任意の文字列 | 要約。各イベントで更新し、内容がなければクリアする |
 
 `agent`が空のタブは状態表示の対象外。通常のセッション終了時に3キーともクリアする。
+`agent_status`が`working`のタブでは、そのタブのターミナルが出したBELをniwatermが捨てる
+（エージェントは手が要らない途中経過でもBELを鳴らすため。`docs/known-issues/claude-code-rings-bell-while-still-working.md`）。
 新しいエージェントへの対応では、`contrib/agent-integration/<agent-name>/`の設定とREADMEに加えて、
 CLI側の状態マッピングとセットアップ対象を追加する。

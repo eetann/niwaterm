@@ -561,7 +561,7 @@ describe('niwa.on("bell") / niwa.bell', () => {
   /** テスト用のベルイベント。tabId以外は既定の処理が見る項目だけ埋める */
   function bellEvent(
     tabId: string,
-    state: { windowFocused: boolean; visible: boolean },
+    state: { windowFocused: boolean; visible: boolean; agentStatus?: string },
   ): NiwaBellEvent {
     return {
       tabId,
@@ -571,6 +571,7 @@ describe('niwa.on("bell") / niwa.bell', () => {
       workspaceId: "workspace-0",
       windowFocused: state.windowFocused,
       visible: state.visible,
+      agentStatus: state.agentStatus ?? null,
     };
   }
 
@@ -639,6 +640,38 @@ describe('niwa.on("bell") / niwa.bell', () => {
 
     runDefaultBell(bellEvent(tabId, { windowFocused: false, visible: true }));
 
+    expect(notified).toEqual(["build"]);
+  });
+
+  test("作業中のエージェントが鳴らしたベルはマークも通知もしない", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(
+      bellEvent(tabId, { windowFocused: false, visible: false, agentStatus: "working" }),
+    );
+
+    expect(workspaceManager.getTabVar(tabId, "bell").found).toBe(false);
+    expect(notified).toEqual([]);
+  });
+
+  test("応答待ち・完了したエージェントのベルは通常どおり扱う", () => {
+    const notified: string[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => notified.push(opts.body ?? opts.title),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(
+      bellEvent(tabId, { windowFocused: false, visible: false, agentStatus: "blocked" }),
+    );
+
+    expect(workspaceManager.getTabVar(tabId, "bell")).toEqual({ found: true, value: "1" });
     expect(notified).toEqual(["build"]);
   });
 
