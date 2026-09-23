@@ -316,6 +316,7 @@ const confirmDialogRoot = createMemoRoot(confirmDialogRootEl, "confirm-dialog");
 let confirmDialogOpen = false;
 let confirmDialogTitle = "";
 let confirmDialogDescription: string | undefined;
+let confirmDialogDanger = false;
 let confirmDialogOnConfirm: (() => void) | null = null;
 
 function renderConfirmDialog(): void {
@@ -324,6 +325,7 @@ function renderConfirmDialog(): void {
       open: confirmDialogOpen,
       title: confirmDialogTitle,
       description: confirmDialogDescription,
+      danger: confirmDialogDanger,
       onConfirm: () => {
         const onConfirm = confirmDialogOnConfirm;
         closeConfirmDialog();
@@ -336,6 +338,7 @@ function renderConfirmDialog(): void {
 
 function closeConfirmDialog(): void {
   confirmDialogOpen = false;
+  confirmDialogDanger = false;
   confirmDialogOnConfirm = null;
   renderConfirmDialog();
   imeEl.focus({ preventScroll: true });
@@ -345,9 +348,11 @@ function openConfirmDialog(
   title: string,
   description: string | undefined,
   onConfirm: () => void,
+  danger = false,
 ): void {
   confirmDialogTitle = title;
   confirmDialogDescription = description;
+  confirmDialogDanger = danger;
   confirmDialogOnConfirm = onConfirm;
   confirmDialogOpen = true;
   renderConfirmDialog();
@@ -2146,6 +2151,21 @@ function closeThisWindow(): void {
 }
 
 /**
+ * コマンドパレット・キーバインドからのniwaterm自体の終了。全ウィンドウの全PTYが落ちる
+ * 最も破壊的な操作なので、確認ダイアログを警告表示付きで挟む
+ */
+function quitApp(): void {
+  openConfirmDialog(
+    "niwatermを終了しますか？",
+    "すべてのウィンドウが閉じ、実行中のプロセスは強制終了されます。",
+    () => {
+      sendMessage("quitApp");
+    },
+    true,
+  );
+}
+
+/**
  * キーバインド・コマンドパレットからのアクティブBoardの名前変更。サイドバーのインライン編集と違い
  * サイドバーの表示状態に依存しないよう、入力ダイアログで受ける（初期値・空文字列の扱いは
  * サイドバー側と揃える）
@@ -3274,6 +3294,10 @@ function handleTileCommand(cmd: TileCommand): void {
   // ウィンドウ単位の操作もフォーカス中タイルに依存しない
   if (cmd.type === "closeWindow") {
     closeThisWindow();
+    return;
+  }
+  if (cmd.type === "quitApp") {
+    quitApp();
     return;
   }
   if (cmd.type === "commandPalette") {

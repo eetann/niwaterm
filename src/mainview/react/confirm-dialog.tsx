@@ -1,6 +1,7 @@
 // 破壊的操作（タブ再起動・Board削除等）向けの確認ダイアログ。
 // キーバインド起点でもサイドバーの右クリック起点でも使うため、y/n（Escでキャンセル）の
 // キー操作とボタンのクリック、どちらでも完結できるようにしてある。
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +16,8 @@ export interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description?: string;
+  /** 取り返しのつかない操作。見出しへ警告アイコンを出して、他の確認と一目で区別できるようにする */
+  danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -23,6 +26,7 @@ export function ConfirmDialog({
   open,
   title,
   description,
+  danger,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -55,7 +59,10 @@ export function ConfirmDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            {danger && <AlertTriangle aria-hidden className="size-4 shrink-0 text-amber-500" />}
+            {title}
+          </DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {/*

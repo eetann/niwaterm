@@ -84,6 +84,7 @@ export const KEYBIND_ACTIONS = [
   "reset-font-size",
   "reload-config",
   "show-config",
+  "quit-app",
 ] as const;
 
 /** アクション名と対象idを`:`で繋ぐ形のアクション（例: `show-sidebar-view:notes`）の接頭辞 */

@@ -265,6 +265,9 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // promote-popupも既定キーを持たない（ポップアップのツールバーにボタンがあり、
   // 開閉のtoggle-popup（`）ほど頻度が高くないため）
   "promote-popup",
+  // quit-appも既定キーを持たない（全ウィンドウのプロセスがまとめて落ちる最も破壊的な操作で、
+  // OSのCmd+Q・×ボタンで代替できるため。実行前にy/n確認ダイアログを挟む）
+  "quit-app",
 ];
 
 describe("defaultKeybindings", () => {

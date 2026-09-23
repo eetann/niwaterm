@@ -71,7 +71,8 @@ export type TileCommand =
   | { type: "decreaseFontSize" }
   | { type: "resetFontSize" }
   | { type: "reloadConfig" }
-  | { type: "showConfig" };
+  | { type: "showConfig" }
+  | { type: "quitApp" };
 
 // keydownイベントから使うプロパティだけを受け取る（テストでモックしやすくするため最小化）
 // codeはCmd+Shift+[/]（Shiftで文字自体が変わるためkeyでは判定できない）にのみ使う
@@ -285,6 +286,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "reloadConfig" };
     case "show-config":
       return { type: "showConfig" };
+    case "quit-app":
+      return { type: "quitApp" };
     default: {
       // KEYBIND_ACTIONSへ足したアクションのcase書き忘れをコンパイル時に弾く。
       // 対象id付きのアクション（show-sidebar-view:<id>・set-board-status:<id>）は先に

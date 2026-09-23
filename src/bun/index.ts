@@ -173,6 +173,8 @@ export type NiwaRPC = {
       newWindow: {};
       /** close-windowアクションからの、このwebviewが載っているOSウィンドウを閉じる要求 */
       closeWindow: {};
+      /** quit-appアクションからの、mainview側のConfirmDialogで確認済みのniwaterm終了要求 */
+      quitApp: {};
       switchWorkspace: { workspaceId: WorkspaceId };
       /** サイドバーのD&D・move-workspace-*キーバインドからの並び替え。toIndexは0始まり（範囲外はbun側でクランプ） */
       moveWorkspace: { workspaceId: WorkspaceId; toIndex: number };
@@ -499,6 +501,19 @@ function cleanup() {
   windowManager.dispose();
   ipcServer?.close();
   cleanupConfigImportDir();
+}
+
+/**
+ * quit-appアクションからのniwaterm自体の終了。Electrobunはprocess.exitを上書きしており、
+ * before-quitイベント（ウィンドウ枠・レイアウト骨格の保存＋cleanup）を経てネイティブ側の
+ * 終了シーケンスへ入るため、Cmd+Qやメニューからの終了と同じ道筋になる。
+ * ハンドラの中から同期的に落とすと呼び出し元へ応答を返す前にプロセスが消えるため、
+ * 返し終える余地を残してから落とす
+ */
+function quitApp(): void {
+  setTimeout(() => {
+    process.exit(0);
+  }, EXIT_GRACE_MS);
 }
 
 let userConfigLoaded: boolean;
@@ -1026,6 +1041,9 @@ function createWindowRpc(windowId: WindowId) {
         closeWindow: () => {
           finalizeWindow(windowId, true);
           windowManager.closeWindow(windowId);
+        },
+        quitApp: () => {
+          quitApp();
         },
         switchWorkspace: ({ workspaceId }: { workspaceId: WorkspaceId }) => {
           windowManager.switchWorkspace(workspaceId);

@@ -5,6 +5,7 @@
 // 検索対象（CommandItemのvalue）は英語ラベル(labelEn)にしている。IME切り替えなしで
 // 検索できるようにするための意図的な選択で、日本語ラベル(label)は補助として小さく表示するのみ。
 import {
+  AlertTriangle,
   AppWindow,
   ArrowDown,
   ArrowDownToLine,
@@ -69,7 +70,8 @@ export type CommandPaletteCategory =
   | "表示"
   | "編集"
   | "スクロール"
-  | "設定";
+  | "設定"
+  | "アプリ";
 
 export interface CommandPaletteActionDef {
   action: Exclude<KeybindAction, "command-palette">;
@@ -81,6 +83,8 @@ export interface CommandPaletteActionDef {
   icon: LucideIcon;
   /** fuzzy検索でヒットさせたい追加の別名等 */
   keywords?: string[];
+  /** 取り返しのつかない操作。パレット上でアイコンを警告色にして、他の項目と見分けられるようにする */
+  danger?: true;
 }
 
 export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
@@ -516,6 +520,19 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     category: "設定",
     icon: SlidersHorizontal,
     keywords: ["config show", "font size", "settings"],
+  },
+  // 「アプリ」カテゴリを末尾に置くのは、cmdkが先に並ぶカテゴリの項目を優先して選択状態にするため
+  // （docs/known-issues/cmdk-earlier-group-wins-over-better-match.md）。全ウィンドウのプロセスが
+  // まとめて落ちる操作なので、他のコマンドを検索したときに巻き込まれる側へ置く。
+  // 同じ理由でkeywordsも他コマンドの名前を構成しない語だけに絞る
+  {
+    action: "quit-app",
+    labelEn: "Quit niwaterm",
+    label: "niwatermを終了する",
+    category: "アプリ",
+    icon: AlertTriangle,
+    keywords: ["quit", "exit", "終了"],
+    danger: true,
   },
 ];
 
