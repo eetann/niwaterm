@@ -399,7 +399,7 @@ export function SidebarWorkspaceList({
           )}
           {entries?.map((entry) => (
             <ContextMenuCheckboxItem
-              key={`${entry.projectRoot ?? ""} ${entry.name}`}
+              key={`${entry.projectRoot ?? ""}\u0000${entry.name}`}
               checked={startup?.preset === entry.name}
               title={
                 entry.projectRoot ? `${entry.projectRoot}/.niwaterm/config.ts` : entry.description
