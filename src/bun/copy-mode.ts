@@ -239,13 +239,16 @@ function lineStart(cursor: CopyModePoint): Motion {
   return { cursor: { x: 0, y: cursor.y }, updateDesiredX: true };
 }
 
+/** 行テキストの最初の非空白セルの桁（全角は2桁を占める）。非空白が無ければ0 */
+export function firstNonBlankColumn(line: string): number {
+  return cellsOf(line).find((cell) => charClass(cell.ch) !== "blank")?.col ?? 0;
+}
+
 /** 行の最初の非空白文字（^） */
 function firstNonBlank(ctx: CopyModeContext, cursor: CopyModePoint): Motion {
   const line = lineAt(ctx, cursor.y);
   if (line === null) return { cursor, updateDesiredX: true };
-  const cells = cellsOf(line);
-  const found = cells.find((cell) => charClass(cell.ch) !== "blank");
-  return { cursor: { x: found?.col ?? 0, y: cursor.y }, updateDesiredX: true };
+  return { cursor: { x: firstNonBlankColumn(line), y: cursor.y }, updateDesiredX: true };
 }
 
 /** 行の最後の非空白文字（$）。空行なら0桁 */

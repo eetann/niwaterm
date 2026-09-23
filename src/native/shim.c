@@ -125,9 +125,46 @@ void niwa_mouse_event_set_position(GhosttyMouseEvent event, float x, float y) {
   ghostty_mouse_event_set_position(event, pos);
 }
 
+// プロンプトブロックの高さの上限。これを超えて継続行が続く場合、シェルが
+// OSC 133のC（コマンド実行の開始）を出しておらず出力行まで継続行として
+// 記録されているとみなし、コマンド行の推定をあきらめてブロック先頭へ戻す
+#define NIWA_MAX_PROMPT_BLOCK_ROWS 8
+
+// niwa_find_promptの結果。bun:ffiは構造体を返せないためint32を並べた領域へ書き込む
+// （JS側はInt32Arrayをそのまま渡せばよい）
+typedef struct {
+  /** OSC 133のAでマークされた行。プロンプトブロックの先頭で、画面座標 */
+  int32_t prompt_row;
+  /** コマンドを打った行（プロンプトブロックの最終行）。単一行プロンプトならprompt_rowと同じ */
+  int32_t input_row;
+} NiwaPromptLocation;
+
+// 画面座標yの行を引く。解決できなければ0以外を返す
+static int niwa_row_at(GhosttyTerminal term, int64_t y, GhosttyGridRef *out_ref,
+                       GhosttyRow *out_row) {
+  GhosttyPoint point;
+  memset(&point, 0, sizeof(point));
+  point.tag = GHOSTTY_POINT_TAG_SCREEN;
+  point.value.coordinate.x = 0;
+  point.value.coordinate.y = (uint32_t)y;
+
+  memset(out_ref, 0, sizeof(*out_ref));
+  out_ref->size = sizeof(*out_ref);
+  if (ghostty_terminal_grid_ref(term, point, out_ref) != GHOSTTY_SUCCESS) return 1;
+  return ghostty_grid_ref_row(out_ref, out_row) != GHOSTTY_SUCCESS;
+}
+
+static GhosttyRowSemanticPrompt niwa_row_semantic(GhosttyRow row) {
+  GhosttyRowSemanticPrompt semantic = GHOSTTY_ROW_SEMANTIC_NONE;
+  if (ghostty_row_get(row, GHOSTTY_ROW_DATA_SEMANTIC_PROMPT, &semantic) != GHOSTTY_SUCCESS) {
+    return GHOSTTY_ROW_SEMANTIC_NONE;
+  }
+  return semantic;
+}
+
 // OSC 133でプロンプトの先頭行としてマークされた行を、画面座標のfrom_yから
-// direction方向（-1=上へ、1=下へ）に探す。見つかった行をout_yへ入れて
-// GHOSTTY_SUCCESSを返し、last_yまで走査して見つからなければGHOSTTY_NO_VALUEを返す。
+// direction方向（-1=上へ、1=下へ）に探す。見つかればoutを埋めてGHOSTTY_SUCCESSを返し、
+// last_yまで走査して見つからなければGHOSTTY_NO_VALUEを返す。
 // from_y自身も走査対象に含めるかは呼び出し側が起点をずらして決める。
 //
 // 複数行プロンプト・折り返したプロンプトの2行目以降は
@@ -136,8 +173,8 @@ void niwa_mouse_event_set_position(GhosttyMouseEvent event, float x, float y) {
 //
 // 1行ずつJSから呼ぶとスクロールバック1万行で1万回のFFI往復になるうえ、
 // grid_refの解決はヘッダーのコメント通り軽くないため、走査はC側で回して最初の一致で打ち切る。
-int niwa_find_prompt_row(GhosttyTerminal term, uint32_t from_y, int32_t direction, uint32_t last_y,
-                         uint32_t *out_y) {
+int niwa_find_prompt(GhosttyTerminal term, uint32_t from_y, int32_t direction, uint32_t last_y,
+                     NiwaPromptLocation *out) {
   if (direction == 0) return GHOSTTY_INVALID_VALUE;
   int32_t step = direction > 0 ? 1 : -1;
 
@@ -145,30 +182,28 @@ int niwa_find_prompt_row(GhosttyTerminal term, uint32_t from_y, int32_t directio
     if (step > 0 ? y > (int64_t)last_y : y < (int64_t)last_y) break;
     if (y < 0) break;
 
-    GhosttyPoint point;
-    memset(&point, 0, sizeof(point));
-    point.tag = GHOSTTY_POINT_TAG_SCREEN;
-    point.value.coordinate.x = 0;
-    point.value.coordinate.y = (uint32_t)y;
-
     GhosttyGridRef ref;
-    memset(&ref, 0, sizeof(ref));
-    ref.size = sizeof(ref);
+    GhosttyRow row;
     // スクロールバックの外へ流れた行など、解決できない行は飛ばさず打ち切る
     // （その先も解決できないため）
-    if (ghostty_terminal_grid_ref(term, point, &ref) != GHOSTTY_SUCCESS) break;
+    if (niwa_row_at(term, y, &ref, &row) != 0) break;
+    if (niwa_row_semantic(row) != GHOSTTY_ROW_SEMANTIC_PROMPT) continue;
 
-    GhosttyRow row;
-    if (ghostty_grid_ref_row(&ref, &row) != GHOSTTY_SUCCESS) break;
+    // プロンプトが複数行のとき、マークが付くのは1行目（powerlevel10kならコマンドの2行上の
+    // 区切り行）。コマンドを打った行はブロックの最終行なので、継続行を下へ辿って行き着く
+    int64_t input_row = y;
+    for (int64_t next = y + 1; next - y <= NIWA_MAX_PROMPT_BLOCK_ROWS; next++) {
+      GhosttyGridRef next_ref;
+      GhosttyRow next_row;
+      if (niwa_row_at(term, next, &next_ref, &next_row) != 0) break;
+      if (niwa_row_semantic(next_row) != GHOSTTY_ROW_SEMANTIC_PROMPT_CONTINUATION) break;
+      input_row = next;
+    }
+    if (input_row - y >= NIWA_MAX_PROMPT_BLOCK_ROWS) input_row = y;
 
-    GhosttyRowSemanticPrompt semantic = GHOSTTY_ROW_SEMANTIC_NONE;
-    if (ghostty_row_get(row, GHOSTTY_ROW_DATA_SEMANTIC_PROMPT, &semantic) != GHOSTTY_SUCCESS) {
-      break;
-    }
-    if (semantic == GHOSTTY_ROW_SEMANTIC_PROMPT) {
-      *out_y = (uint32_t)y;
-      return GHOSTTY_SUCCESS;
-    }
+    out->prompt_row = (int32_t)y;
+    out->input_row = (int32_t)input_row;
+    return GHOSTTY_SUCCESS;
   }
 
   return GHOSTTY_NO_VALUE;

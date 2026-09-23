@@ -10,6 +10,7 @@ import {
   createCopyModeState,
   findCopyModeMatch,
   findCopyModeMatches,
+  firstNonBlankColumn,
   type CopyModeContext,
   type CopyModeKey,
   type CopyModeMatch,
@@ -19,7 +20,12 @@ import {
   type CopyModeState,
   viewportOffsetForCursor,
 } from "./copy-mode";
-import { type CursorShape, createGhosttyTerminal, type MouseEventInput } from "./ghostty";
+import {
+  createGhosttyTerminal,
+  type CursorShape,
+  type MouseEventInput,
+  type PromptLocation,
+} from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
@@ -444,11 +450,31 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
    * あるのに飛べないなら端に着いただけ。原因が全く違うので取り違えないよう分けて伝える
    */
   function promptJumpMissReason(): string {
-    // findPromptRowは起点の行を含めないので、-1から下向きに探せば画面全体が対象になる
-    if (term.findPromptRow(-1, "down") === null) {
+    // findPromptは起点の行を含めないので、-1から下向きに探せば画面全体が対象になる
+    if (term.findPrompt(-1, "down") === null) {
       return "プロンプトマークがありません（シェル統合の導入が必要）";
     }
     return "これ以上プロンプトがありません";
+  }
+
+  /**
+   * カーソルを動かす先のプロンプトを探す。飛び先はブロックの先頭行ではなくコマンドを打った行
+   * （inputRow）で、先頭行のほうはpowerlevel10kのように区切りの空行から始まるプロンプトだと
+   * 前のコマンドの出力の末尾に見えてしまい、どのコマンドなのか分からないため。
+   *
+   * 起点がすでにそのブロックの中にあると同じコマンド行へ戻ってきてしまうので、
+   * 進めなかった場合は1つ先のプロンプトから探し直す
+   */
+  function findPromptFrom(fromY: number, direction: "up" | "down"): PromptLocation | null {
+    let from = fromY;
+    // 同じブロックへの着地は1回で解消する。保険としてもう1回だけ回す
+    for (let i = 0; i < 3; i++) {
+      const found = term.findPrompt(from, direction);
+      if (found === null) return null;
+      if (direction === "up" ? found.inputRow < fromY : found.inputRow > fromY) return found;
+      from = found.row;
+    }
+    return null;
   }
 
   /**
@@ -458,9 +484,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
    */
   function jumpPrompt(direction: "up" | "down"): boolean {
     const before = term.scrollbar().offset;
-    const y = term.findPromptRow(before, direction);
-    if (y === null) return false;
-    term.scrollToRow(y);
+    const found = term.findPrompt(before, direction);
+    if (found === null) return false;
+    // ビューポートはブロックの先頭行（プロンプトの1行目）に合わせる。
+    // コマンド行に合わせるとプロンプトの装飾が画面の上へ切れて文脈が分かりにくくなるため
+    term.scrollToRow(found.row);
     // 最後の1画面ぶんに収まるプロンプトはどれを指してもビューポートが同じ位置で
     // クランプされる。動かなかったなら、その先はもう見せるものが無い
     return term.scrollbar().offset !== before;
@@ -530,13 +558,25 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       }
       case "jumpPrompt": {
         const { direction } = result.effect;
-        const y = term.findPromptRow(result.state.cursor.y, direction);
-        if (y === null) {
+        const found = findPromptFrom(result.state.cursor.y, direction);
+        if (found === null) {
           copyModeMessage = promptJumpMissReason();
           copyMode = syncCopyModeViewport(result.state);
           return true;
         }
-        copyMode = syncCopyModeViewport({ ...result.state, cursor: { x: 0, y }, desiredX: 0 });
+        const x = firstNonBlankColumn(
+          term.dumpScreenRange({
+            startX: 0,
+            startY: found.inputRow,
+            endX: Math.max(currentCols - 1, 0),
+            endY: found.inputRow,
+          }),
+        );
+        copyMode = syncCopyModeViewport({
+          ...result.state,
+          cursor: { x, y: found.inputRow },
+          desiredX: x,
+        });
         return true;
       }
       case "exit":

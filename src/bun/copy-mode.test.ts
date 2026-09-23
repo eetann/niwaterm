@@ -8,6 +8,7 @@ import {
   createCopyModeState,
   findCopyModeMatch,
   findCopyModeMatches,
+  firstNonBlankColumn,
   type CopyModeContext,
   type CopyModeKey,
   type CopyModeState,
@@ -593,5 +594,22 @@ describe("プロンプトジャンプ（{ }）", () => {
   test("gの2打目待ちは解除する", () => {
     const pending = press(createCopyModeState({ x: 0, y: 0 }), ctx, "g");
     expect(applyCopyModeKey(pending, key("}"), ctx).state.pendingG).toBe(false);
+  });
+});
+
+describe("firstNonBlankColumn", () => {
+  test("先頭の空白を飛ばした桁を返す", () => {
+    expect(firstNonBlankColumn("  abc")).toBe(2);
+    expect(firstNonBlankColumn("> echo foo")).toBe(0);
+  });
+
+  test("全角文字は2桁を占める", () => {
+    expect(firstNonBlankColumn(" あab")).toBe(1);
+    expect(firstNonBlankColumn("あ い")).toBe(0);
+  });
+
+  test("空行・空白だけの行は0", () => {
+    expect(firstNonBlankColumn("")).toBe(0);
+    expect(firstNonBlankColumn("    ")).toBe(0);
   });
 });
