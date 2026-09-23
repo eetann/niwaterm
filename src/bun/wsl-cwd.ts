@@ -1,5 +1,6 @@
 // OSC 7等でWSLディストロのシェルから報告されたcwd（Linuxパス）を、Windows側の
-// Bun.spawnが解釈できるUNC形式（\\wsl.localhost\<distro>\...）へ変換する。
+// Bun.spawnが解釈できる形式（ドライブマウント配下はドライブレター、それ以外はUNC形式
+// \\wsl.localhost\<distro>\...）へ変換する。
 // packages/cli/src/ipc-client.tsのtoWindowsAccessibleCwdと同種の変換だが、あちらは
 // 「CLIプロセス自身がWSL内で動いているか（WSL_DISTRO_NAME環境変数）」で判定するのに対し、
 // こちらは「対象タブがwsl.exe系プロファイルで起動されたか」で判定する
@@ -14,7 +15,7 @@ export function extractWslDistro(shellCommand: string | undefined): string | nul
 }
 
 /**
- * タブが報告したcwdを、そのタブの起動シェルに応じて必要ならUNC形式へ変換する。
+ * タブが報告したcwdを、そのタブの起動シェルに応じてWindows側から辿れる形式へ変換する。
  * platform省略時はprocess.platformを使う（テストでWindows分岐を注入できるよう引数化している）。
  */
 export function resolveActualCwd(
@@ -25,7 +26,24 @@ export function resolveActualCwd(
   if (platform !== "win32" || !rawCwd.startsWith("/")) return rawCwd;
   const distro = extractWslDistro(shellCommand);
   if (!distro) return rawCwd;
-  return `\\\\wsl.localhost\\${distro}${rawCwd.replaceAll("/", "\\")}`;
+  return (
+    wslMountPathToWindowsPath(rawCwd) ??
+    `\\\\wsl.localhost\\${distro}${rawCwd.replaceAll("/", "\\")}`
+  );
+}
+
+/**
+ * WSLのドライブマウント経由のパス（`/mnt/c/Users/...`）をWindows側の絶対パス
+ * （`C:\Users\...`）へ戻す。windowsPathToWslMountPathの逆変換。
+ * ドライブマウント配下はディストロの9p名前空間には現れず、UNC形式
+ * （`\\wsl.localhost\<distro>\mnt\c\...`）にするとBun.spawnのcwdがENOENTになるため、
+ * UNCより先にこちらで畳む。形が違えばnull（`/etc/wsl.conf`でマウント先を変えている環境も同様）
+ */
+export function wslMountPathToWindowsPath(linuxPath: string): string | null {
+  const m = /^\/mnt\/([A-Za-z])(\/.*)?$/.exec(linuxPath);
+  if (!m) return null;
+  const [, drive, rest] = m;
+  return `${drive.toUpperCase()}:${(rest ?? "/").replaceAll("/", "\\")}`;
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   extractWslDistro,
   resolveActualCwd,
   windowsPathToWslMountPath,
+  wslMountPathToWindowsPath,
 } from "./wsl-cwd";
 
 describe("extractWslDistro", () => {
@@ -38,6 +39,12 @@ describe("resolveActualCwd", () => {
     expect(resolveActualCwd("/home/user/project", "wsl.exe -d NixOS", "win32")).toBe(
       "\\\\wsl.localhost\\NixOS\\home\\user\\project",
     );
+  });
+
+  test("win32かつWSLプロファイルでもドライブマウント配下はドライブレターへ戻す", () => {
+    expect(
+      resolveActualCwd("/mnt/c/Users/eetann/AppData/Local/Temp/repo", "wsl.exe -d NixOS", "win32"),
+    ).toBe("C:\\Users\\eetann\\AppData\\Local\\Temp\\repo");
   });
 
   test("win32かつWSLプロファイル以外（PowerShell等）のcwdはそのまま返す", () => {
@@ -105,5 +112,25 @@ describe("windowsPathToWslMountPath", () => {
   test("Windows絶対パス形式でない値はnullを返す", () => {
     expect(windowsPathToWslMountPath("/mnt/c/already/linux/path")).toBeNull();
     expect(windowsPathToWslMountPath("relative\\path")).toBeNull();
+  });
+});
+
+describe("wslMountPathToWindowsPath", () => {
+  test("ドライブマウント経由のパスをWindows絶対パスへ戻す", () => {
+    expect(wslMountPathToWindowsPath("/mnt/c/Users/eetann/proj")).toBe("C:\\Users\\eetann\\proj");
+  });
+
+  test("ドライブ文字は大文字化する", () => {
+    expect(wslMountPathToWindowsPath("/mnt/d/data")).toBe("D:\\data");
+  });
+
+  test("マウントポイント自身はドライブのルートを指す", () => {
+    expect(wslMountPathToWindowsPath("/mnt/c")).toBe("C:\\");
+  });
+
+  test("ドライブマウント配下でないパスはnullを返す", () => {
+    expect(wslMountPathToWindowsPath("/home/eetann/proj")).toBeNull();
+    expect(wslMountPathToWindowsPath("/mnt/wsl/instances")).toBeNull();
+    expect(wslMountPathToWindowsPath("C:\\already\\windows")).toBeNull();
   });
 });

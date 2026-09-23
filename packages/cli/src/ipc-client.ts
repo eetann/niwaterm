@@ -170,10 +170,25 @@ export function resolveIpcEndpoint(): IpcEndpoint {
 }
 
 /**
+ * WSLのドライブマウント経由のパス（`/mnt/c/Users/...`）をWindows側の絶対パス
+ * （`C:\Users\...`）へ戻す。ドライブマウント配下はディストロの9p名前空間には現れず、
+ * UNC形式にするとWindows側から辿れないため、UNCより先にこちらで畳む。
+ * 形が違えばnull（`/etc/wsl.conf`でマウント先を変えている環境も同様）。
+ * src/bun/wsl-cwd.tsのwslMountPathToWindowsPathと**意図的に重複**しているので、変更時は両方揃えること
+ */
+function toWindowsDrivePath(path: string): string | null {
+  const m = /^\/mnt\/([A-Za-z])(\/.*)?$/.exec(path);
+  if (!m) return null;
+  const [, drive, rest] = m;
+  return `${drive.toUpperCase()}:${(rest ?? "/").replaceAll("/", "\\")}`;
+}
+
+/**
  * WSL上のCLIからTCPブリッジ経由でWindows側アプリへcwdを渡す際、Linux絶対パス
  * （例: /home/eetann/proj）のままだとWindows側のBun.spawnがそのパスを解決できず
  * ENOENTになる（実機確認済み）。WSLディストロの9pマウント経由でWindowsから参照できる
- * \\wsl.localhost\<distro>\... 形式のUNCパスへ変換する。
+ * \\wsl.localhost\<distro>\... 形式のUNCパスへ変換する。ドライブマウント配下
+ * （/mnt/c/...）だけはWindows側のドライブそのものなのでドライブレターへ戻す。
  * WSLブリッジ以外（macOS・Windows実機からの直接接続）やWSL_DISTRO_NAME未設定、
  * 絶対パスでない場合はそのまま返す（変換できない時に無理に書き換えない）。
  *
@@ -183,6 +198,8 @@ export function resolveIpcEndpoint(): IpcEndpoint {
  */
 export function toAppAccessiblePath(endpoint: IpcEndpoint, path: string): string {
   if (endpoint.kind !== "tcp") return path;
+  const drivePath = toWindowsDrivePath(path);
+  if (drivePath !== null) return drivePath;
   const distro = process.env["WSL_DISTRO_NAME"];
   if (!distro || !path.startsWith("/")) return path;
   return `\\\\wsl.localhost\\${distro}${path.replaceAll("/", "\\")}`;
