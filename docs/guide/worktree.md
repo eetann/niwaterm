@@ -12,7 +12,7 @@ description: niwatermからgitワークツリーを作成・開閉・削除す�
 niwaterm worktree list [--cwd <dir>]
 niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
-niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
 niwaterm board worktree set <path> [--board <boardId>]
 niwaterm board worktree clear [--board <boardId>]
 niwaterm board worktree show [--board <boardId>]
@@ -146,12 +146,12 @@ niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace
 ## ワークツリーの削除
 
 ```sh
-niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
 ```
 
-ワークツリーをディレクトリごと削除し、そのワークツリーで開いたBoardを閉じる。`<worktree>`の指定方法は`worktree open`と同じ（ブランチ名・パス・ディレクトリ名）。メインワークツリーは削除できない。
+ワークツリーをディレクトリごと削除し、そのワークツリーで開いたBoardを閉じる。`<worktree>`の指定方法は`worktree open`と同じ（ブランチ名・パス・ディレクトリ名）で、スペース区切りで複数渡せる。同じワークツリーを指す重複指定は1つに畳む。メインワークツリーは削除できない。
 
-消えて困るものが残っていないかを先に数え、次のいずれかがあれば**何も消さずに終了コード1で止まる**。
+消えて困るものが残っていないかを先に数え、次のいずれかがあれば**何も消さずに終了コード1で止まる**。複数指定した場合、指定の解決もこの判定も**全対象について先に済ませる**ので、1つでも引っかかれば他の対象も消えない（片方だけ消えた中途半端な状態を作らないため）。理由は対象ごとに並べて表示する。
 
 | 止まる条件 | 理由 |
 |---|---|
@@ -167,15 +167,29 @@ worktree removeに失敗しました: /path/to/repo@feat-x は削除しません
 無視して削除するには--forceを付けてください
 ```
 
+複数指定したときは対象ごとに理由が並ぶ。
+
+```
+$ niwaterm worktree remove feat/x feat/y
+worktree removeに失敗しました:
+  - /path/to/repo@feat-x は削除しませんでした:
+      - 未コミットの変更が3件あります（ワークツリーごと消えます）
+  - /path/to/repo@feat-y は削除しませんでした:
+      - ワークツリーがロックされています: wip
+無視して削除するには--forceを付けてください
+```
+
 未pushのコミットまで見るのは`git worktree remove`がやらない部分で、リモートが1つも設定されていないリポジトリでは判定しない（push先が無いため）。判定はupstreamとの差分ではなく**リモート追跡ブランチ全体との差分**で行うので、upstream未設定のまま`worktree new`で作ったブランチでも取りこぼさない。実体ディレクトリが既に無いワークツリー（`worktree list`で`prunable`）は中身を問わずに消せる。
 
 `--force`はこれらをすべて無視する。
 
 ブランチは既定では残す。`--delete-branch`を付けると削除後に`git branch -d`し、未マージのブランチには`--force`も要る。ワークツリーを消した後にブランチの削除だけ失敗した場合は、その旨を表示して終了コード1になる（ワークツリーは削除済み）。detached HEADのワークツリーには効かず、警告を出して飛ばす。
 
+ガード判定を抜けた後の失敗（Windowsでディレクトリを掴まれている・ブランチが未マージ等）は対象ごとに扱う。そこで止めずに残りの対象を最後まで処理し、まとめて報告して終了コード1になる。削除できた分はそのまま削除済みになる。
+
 Boardは既定で閉じる。ワークツリーを消した後もBoardが残ると、cwdが存在しないタブだけが残るため。`--keep-board`で残せる。ワークスペースが1つだけの状態でその中の最後の1つのBoardを閉じようとした場合は閉じられないので、警告に留めて終了コード0を返す（削除自体は済んでいるため）。niwatermアプリが起動していない場合も同様に警告だけ出す。
 
-**Boardを閉じるのはワークツリーを消し終えた後**。先に閉じるとそのBoardのタブでこのコマンドを実行していた場合、PTYが落ちた巻き添えでCLI自身が殺され、gitを起動する前に止まってしまうため。同じ理由で、閉じるBoardが複数あるときは自分がいるBoardを最後に回す。
+**Boardを閉じるのはワークツリーを消し終えた後**。先に閉じるとそのBoardのタブでこのコマンドを実行していた場合、PTYが落ちた巻き添えでCLI自身が殺され、gitを起動する前に止まってしまうため。同じ理由で、閉じるBoardが複数あるときは自分がいるBoardを最後に回す。複数のワークツリーを指定した場合も、全部消し終えてから対応するBoardをまとめて閉じる。
 
 この順序のおかげで削除対象のワークツリーのタブから実行しても削除とBoardのcloseは完了するが、**自分のBoardを閉じた時点で出力先のタブごと消えるため、`board closed:`以降の表示と終了コードは受け取れない**（実機で確認済み）。スクリプトから終了コードを見たい場合は、そのワークツリー以外のタブから実行する。
 

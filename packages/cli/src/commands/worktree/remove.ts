@@ -10,13 +10,43 @@ import {
 import { findWorktreeBoards, type WorktreeBoard } from "../../worktree/board";
 import {
   deleteBranch,
-  findWorktreeByQuery,
   listWorktrees,
   mainWorktree,
   removeWorktree,
   type WorktreeEntry,
 } from "../../worktree/git";
-import { inspectWorktree, isInsideWorktree, removalBlockers } from "../../worktree/remove";
+import {
+  inspectWorktree,
+  isInsideWorktree,
+  removalBlockers,
+  resolveRemovalTargets,
+} from "../../worktree/remove";
+
+/** 複数行の理由を箇条書きの1項目へ畳む。2行目以降は先頭のマーカー分だけ下げる */
+function bullet(reason: string): string {
+  const [head, ...rest] = reason.split("\n");
+  return [`  - ${head}`, ...rest.map((line) => `    ${line}`)].join("\n");
+}
+
+/** 失敗理由をまとめて報告して終了する。1件だけならそのまま続け、複数なら箇条書きにする */
+function failWithReasons(reasons: string[], hint: string): never {
+  const only = reasons.length === 1 ? reasons[0] : undefined;
+  const body = only === undefined ? `\n${reasons.map(bullet).join("\n")}` : ` ${only}`;
+  failAndExit(`worktree removeに失敗しました:${body}${hint}`);
+}
+
+/** `--force`無しでは消せない対象を、理由付きで並べる。空配列なら全部消してよい */
+async function blockedReasons(repoRoot: string, targets: WorktreeEntry[]): Promise<string[]> {
+  const reasons: string[] = [];
+  for (const entry of targets) {
+    const blockers = removalBlockers(await inspectWorktree(repoRoot, entry));
+    if (blockers.length === 0) continue;
+    reasons.push(
+      `${entry.path} は削除しませんでした:\n${blockers.map((blocker) => `  - ${blocker}`).join("\n")}`,
+    );
+  }
+  return reasons;
+}
 
 /**
  * このCLIを実行しているタブが属するBoardを最後へ回す。そのBoardを閉じるとタブのPTYが落ち、
@@ -38,20 +68,31 @@ async function selfBoardLast(
 }
 
 /**
- * そのワークツリーで開いたBoardを閉じる。**ワークツリーを消し終えてから呼ぶこと**。
+ * それらのワークツリーで開いたBoardを閉じる。**ワークツリーを消し終えてから呼ぶこと**。
  * Boardを閉じるとその中のタブのPTYが落ち、そこからこのCLIを実行していた場合は
  * シェルごと巻き添えで殺される（先に閉じるとgitを起動する前に止まる）。
  * 閉じられないBoard（ワークスペースも1つだけの状態での最後の1つ等）があっても
  * 削除自体は済んでいるので警告に留める
  */
-async function closeWorktreeBoards(path: string): Promise<void> {
+async function closeWorktreeBoards(paths: string[]): Promise<void> {
   const endpoint = resolveIpcEndpoint();
-  const found = await findWorktreeBoards(endpoint, toAppAccessiblePath(endpoint, path));
-  if (!found.ok) {
-    console.error(`warning: 対応するBoardを探せませんでした: ${found.error}`);
-    return;
+  const boards: WorktreeBoard[] = [];
+  const seen = new Set<string>();
+  for (const path of paths) {
+    const found = await findWorktreeBoards(endpoint, toAppAccessiblePath(endpoint, path));
+    if (!found.ok) {
+      console.error(`warning: ${path} に対応するBoardを探せませんでした: ${found.error}`);
+      continue;
+    }
+    for (const board of found.boards) {
+      if (seen.has(board.boardId)) continue;
+      seen.add(board.boardId);
+      boards.push(board);
+    }
   }
-  for (const board of await selfBoardLast(endpoint, found.boards)) {
+  // 自分のBoardを最後へ回す判定は全対象のBoardが揃ってから行う（対象ごとに閉じると、
+  // 先に閉じたBoardの中に自分がいた場合に残りが閉じられない）
+  for (const board of await selfBoardLast(endpoint, boards)) {
     const closed = await closeBoard(endpoint, board.boardId);
     if (closed.ok) console.log(`board closed: ${board.boardId}`);
     else console.error(`warning: Board ${board.boardId} を閉じられませんでした: ${closed.error}`);
@@ -68,7 +109,9 @@ async function removeBranch(
   force: boolean,
 ): Promise<string | null> {
   if (entry.branch === null) {
-    console.error("warning: detached HEADのワークツリーのため--delete-branchは使われません");
+    console.error(
+      `warning: ${entry.path} はdetached HEADのワークツリーのため--delete-branchは使われません`,
+    );
     return null;
   }
   const deleted = await deleteBranch({ repoRoot, branch: entry.branch, force });
@@ -84,7 +127,9 @@ export default define({
     worktree: {
       type: "positional",
       required: true,
-      description: "削除するワークツリー（ブランチ名・パス・ディレクトリ名のいずれか）",
+      multiple: true,
+      description:
+        "削除するワークツリー（ブランチ名・パス・ディレクトリ名のいずれか）。スペース区切りで複数指定できる",
     },
     force: {
       type: "boolean",
@@ -120,55 +165,51 @@ export default define({
     }
     const repoRoot = main.path;
 
-    const query = ctx.values.worktree;
-    const found = findWorktreeByQuery(list.worktrees, query, cwd);
-    if (found.kind === "not-found") {
-      failAndExit(
-        `worktree removeに失敗しました: ワークツリーが見つかりません: ${query}（niwaterm worktree listで一覧を確認できます）`,
-      );
-    }
-    if (found.kind === "ambiguous") {
-      const paths = found.candidates.map((entry) => entry.path).join("\n  ");
-      failAndExit(
-        `worktree removeに失敗しました: ${query}に一致するワークツリーが複数あります。パスで指定してください:\n  ${paths}`,
-      );
-    }
-    const entry = found.worktree;
-    if (entry.main) {
-      failAndExit(
-        `worktree removeに失敗しました: メインワークツリーは削除できません: ${entry.path}`,
-      );
-    }
+    const found = resolveRemovalTargets(list.worktrees, ctx.values.worktree, cwd);
+    if (!found.ok) failWithReasons(found.errors, "");
+    const targets = found.targets;
 
     if (!force) {
-      const blockers = removalBlockers(await inspectWorktree(repoRoot, entry));
-      if (blockers.length > 0) {
-        failAndExit(
-          `worktree removeに失敗しました: ${entry.path} は削除しませんでした:\n` +
-            blockers.map((blocker) => `  - ${blocker}`).join("\n") +
-            "\n無視して削除するには--forceを付けてください",
-        );
+      const blocked = await blockedReasons(repoRoot, targets);
+      if (blocked.length > 0) {
+        failWithReasons(blocked, "\n無視して削除するには--forceを付けてください");
       }
     }
 
     // Windowsはカレントディレクトリにしているプロセスがあるとディレクトリを消せないため、
     // 自分のcwdだけでも先に外しておく（同じワークツリーで動いている他のシェルまでは面倒を見られない）
-    if (isInsideWorktree(entry.path, process.cwd())) process.chdir(repoRoot);
+    if (targets.some((entry) => isInsideWorktree(entry.path, process.cwd()))) {
+      process.chdir(repoRoot);
+    }
 
-    const removed = await removeWorktree({ repoRoot, path: entry.path, force });
-    if (!removed.ok) failAndExit(`worktree removeに失敗しました: ${removed.error}`);
-    console.log(`removed: ${entry.path}`);
+    const removedPaths: string[] = [];
+    const failures: string[] = [];
+    let branchFailed = false;
+    for (const entry of targets) {
+      const removed = await removeWorktree({ repoRoot, path: entry.path, force });
+      if (!removed.ok) {
+        failures.push(`${entry.path} を削除できませんでした: ${removed.error}`);
+        continue;
+      }
+      console.log(`removed: ${entry.path}`);
+      removedPaths.push(entry.path);
+      if (ctx.values["delete-branch"] !== true) continue;
+      const branchError = await removeBranch(repoRoot, entry, force);
+      if (branchError === null) continue;
+      branchFailed = true;
+      failures.push(
+        `ブランチ ${entry.branch} を削除できませんでした（ワークツリー ${entry.path} は削除済みです）: ${branchError}`,
+      );
+    }
 
-    const branchError =
-      ctx.values["delete-branch"] === true ? await removeBranch(repoRoot, entry, force) : null;
+    if (ctx.values["keep-board"] !== true && removedPaths.length > 0) {
+      await closeWorktreeBoards(removedPaths);
+    }
 
-    if (ctx.values["keep-board"] !== true) await closeWorktreeBoards(entry.path);
-
-    if (branchError !== null) {
-      failAndExit(
-        `worktree removeに失敗しました: ブランチ ${entry.branch} を削除できませんでした: ${branchError}\n` +
-          `ワークツリー ${entry.path} は削除済みです` +
-          (force ? "" : "\n未マージのブランチも削除するには--forceを付けてください"),
+    if (failures.length > 0) {
+      failWithReasons(
+        failures,
+        branchFailed && !force ? "\n未マージのブランチも削除するには--forceを付けてください" : "",
       );
     }
   },

@@ -11,7 +11,14 @@ import {
   removeWorktree,
   type WorktreeEntry,
 } from "./git";
-import { inspectWorktree, isInsideWorktree, NO_REMOTE, removalBlockers, UNKNOWN } from "./remove";
+import {
+  inspectWorktree,
+  isInsideWorktree,
+  NO_REMOTE,
+  removalBlockers,
+  resolveRemovalTargets,
+  UNKNOWN,
+} from "./remove";
 
 const NO_GIT_CONFIG = join(tmpdir(), "niwaterm-worktree-remove-test-absent-gitconfig");
 
@@ -110,6 +117,59 @@ describe("isInsideWorktree", () => {
 
   test("名前が前方一致するだけの兄弟ディレクトリは中ではない", () => {
     expect(isInsideWorktree(join(sep, "repo", "wt"), join(sep, "repo", "wt2"))).toBe(false);
+  });
+});
+
+/** テスト用のWorktreeEntry。指定した項目以外は「何も無い普通のワークツリー」で埋める */
+function makeEntry(overrides: Partial<WorktreeEntry> & { path: string }): WorktreeEntry {
+  return {
+    branch: null,
+    head: null,
+    detached: false,
+    bare: false,
+    locked: false,
+    lockedReason: null,
+    prunable: false,
+    prunableReason: null,
+    main: false,
+    ...overrides,
+  };
+}
+
+describe("resolveRemovalTargets", () => {
+  const root = join(sep, "repo");
+  const main = makeEntry({ path: root, branch: "main", main: true });
+  const featA = makeEntry({ path: join(sep, "repo@a"), branch: "feat/a" });
+  const featB = makeEntry({ path: join(sep, "repo@b"), branch: "feat/b" });
+  const worktrees = [main, featA, featB];
+
+  test("複数の指定をそれぞれのワークツリーへ解決する", () => {
+    const result = resolveRemovalTargets(worktrees, ["feat/a", featB.path], root);
+    expect(result).toEqual({ ok: true, targets: [featA, featB] });
+  });
+
+  test("同じワークツリーを指す重複指定は1つに畳む", () => {
+    const result = resolveRemovalTargets(worktrees, ["feat/a", featA.path], root);
+    expect(result).toEqual({ ok: true, targets: [featA] });
+  });
+
+  test("解決できない指定が混ざっていたら理由を全部並べ、対象は返さない", () => {
+    const result = resolveRemovalTargets(worktrees, ["feat/a", "missing", "main"], root);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("解決できてはいけない");
+    expect(result.errors).toHaveLength(2);
+    expect(result.errors[0]).toContain("missing");
+    expect(result.errors[1]).toContain("メインワークツリー");
+  });
+
+  test("ディレクトリ名が複数に一致する指定は候補を並べて止める", () => {
+    const dupA = makeEntry({ path: join(sep, "one", "wt"), branch: "feat/one" });
+    const dupB = makeEntry({ path: join(sep, "two", "wt"), branch: "feat/two" });
+    const result = resolveRemovalTargets([main, dupA, dupB], ["wt"], root);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("解決できてはいけない");
+    expect(result.errors[0]).toContain(dupA.path);
+    expect(result.errors[0]).toContain(dupB.path);
   });
 });
 

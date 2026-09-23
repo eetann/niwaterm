@@ -1,4 +1,4 @@
-// ワークツリー削除のガード判定。
+// ワークツリー削除の対象解決とガード判定。
 //
 // `git worktree remove`自体は未コミットの変更とロックしか見ず、未pushのコミットは黙って消す
 // （ワークツリーを消してもブランチは残るが、--delete-branchと組み合わせると取り返しがつかない）。
@@ -8,6 +8,7 @@ import { resolve, sep } from "node:path";
 import {
   countUncommittedChanges,
   countUnpushedCommits,
+  findWorktreeByQuery,
   hasRemotes,
   type WorktreeEntry,
 } from "./git";
@@ -85,4 +86,47 @@ export function isInsideWorktree(worktreePath: string, cwd: string): boolean {
   const base = resolve(worktreePath);
   const target = resolve(cwd);
   return target === base || target.startsWith(base + sep);
+}
+
+export type RemovalTargetsResult =
+  | { ok: true; targets: WorktreeEntry[] }
+  | { ok: false; errors: string[] };
+
+/**
+ * 削除対象の指定をワークツリーへ解決する。1つでも解決できなければ理由を全部並べて返し、
+ * 対象は返さない（一部だけ消えた中途半端な状態を作らないため、解決は全部揃ってから削除へ進む）。
+ * 同じワークツリーを指す重複指定は1つに畳む。文言はそのままユーザーへ出す
+ */
+export function resolveRemovalTargets(
+  worktrees: WorktreeEntry[],
+  queries: string[],
+  cwd: string,
+): RemovalTargetsResult {
+  const targets: WorktreeEntry[] = [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  for (const query of queries) {
+    const found = findWorktreeByQuery(worktrees, query, cwd);
+    if (found.kind === "not-found") {
+      errors.push(
+        `ワークツリーが見つかりません: ${query}（niwaterm worktree listで一覧を確認できます）`,
+      );
+      continue;
+    }
+    if (found.kind === "ambiguous") {
+      const paths = found.candidates.map((entry) => `  ${entry.path}`).join("\n");
+      errors.push(
+        `${query}に一致するワークツリーが複数あります。パスで指定してください:\n${paths}`,
+      );
+      continue;
+    }
+    if (found.worktree.main) {
+      errors.push(`メインワークツリーは削除できません: ${found.worktree.path}`);
+      continue;
+    }
+    if (seen.has(found.worktree.path)) continue;
+    seen.add(found.worktree.path);
+    targets.push(found.worktree);
+  }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, targets };
 }

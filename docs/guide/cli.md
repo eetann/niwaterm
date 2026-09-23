@@ -421,10 +421,10 @@ niwaterm tab var find --board <boardId> <key> <value>
 niwaterm worktree list [--cwd <dir>]
 niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
-niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
 ```
 
-gitのワークツリーを一覧・作成・削除し、それぞれをBoardとして開くコマンド。`list`はワークツリー一覧をTSVで表示するだけ、`new`／`open`は対象のワークツリーをBoardとして開き（`--open`で開き方を選ぶ）、`remove`はワークツリーをディレクトリごと削除してそのBoardを閉じる。`<worktree>`はブランチ名・パス・ディレクトリ名のいずれでも指定できる。
+gitのワークツリーを一覧・作成・削除し、それぞれをBoardとして開くコマンド。`list`はワークツリー一覧をTSVで表示するだけ、`new`／`open`は対象のワークツリーをBoardとして開き（`--open`で開き方を選ぶ）、`remove`はワークツリーをディレクトリごと削除してそのBoardを閉じる。`<worktree>`はブランチ名・パス・ディレクトリ名のいずれでも指定でき、`remove`だけはスペース区切りで複数渡せる。
 
 `new`の`<branch>`はローカル → リモート → 新規作成の順に探す（`--track`で選べる）。`origin/feat/x`のようにリモート名を付けて渡すとリモートからの作成を明示でき、作る前に`git fetch`が1回走る（`--no-fetch`で抑止）。
 
