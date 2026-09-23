@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DEFAULT_WORKTREE_FETCH,
   DEFAULT_WORKTREE_OPEN_MODE,
   isWorktreeOpenMode,
   pickWorktreeSettings,
@@ -18,6 +19,11 @@ describe("pickWorktreeSettings", () => {
     expect(
       pickWorktreeSettings({ worktree: { dir: ".worktrees/${branch}", open: "board-switch" } }),
     ).toEqual({ dir: ".worktrees/${branch}", open: "board-switch" });
+  });
+
+  test("worktree.fetchはbooleanだけを取り出す", () => {
+    expect(pickWorktreeSettings({ worktree: { fetch: false } })).toEqual({ fetch: false });
+    expect(pickWorktreeSettings({ worktree: { fetch: "no" } })).toEqual({});
   });
 
   test("worktree以外のキーには反応しない", () => {
@@ -131,6 +137,7 @@ describe("resolveWorktreeSettings", () => {
         dir: { value: DEFAULT_WORKTREE_DIR_TEMPLATE, source: "default" },
         open: { value: DEFAULT_WORKTREE_OPEN_MODE, source: "default" },
         layout: { value: undefined, source: "default" },
+        fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
       });
     });
@@ -148,6 +155,7 @@ describe("resolveWorktreeSettings", () => {
         dir: { value: "../from-git/${branch}", source: "git-config" },
         open: { value: "current-tab", source: "git-config" },
         layout: { value: undefined, source: "default" },
+        fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
       });
     });
@@ -192,8 +200,40 @@ describe("resolveWorktreeSettings", () => {
         dir: { value: "../from-global/${branch}", source: "global" },
         open: { value: "none", source: "git-config" },
         layout: { value: "from-project", source: "project" },
+        fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
       });
+    });
+  });
+
+  test("fetchはgit configのbool表記を解釈する", async () => {
+    await withTempDir(async (root) => {
+      await initRepo(join(root, "repo"), { "niwaterm.worktree.fetch": "false" });
+      expect(
+        (await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true })).fetch,
+      ).toEqual({ value: false, source: "git-config" });
+    });
+  });
+
+  test("fetchは設定ファイルのbooleanがgit configより優先される", async () => {
+    await withTempDir(async (root) => {
+      await initRepo(join(root, "repo"), { "niwaterm.worktree.fetch": "true" });
+      const sources = await sourcesIn(root, {
+        global: "export default { worktree: { fetch: false } };\n",
+      });
+      expect((await resolveWorktreeSettings(sources, { includeProject: true })).fetch).toEqual({
+        value: false,
+        source: "global",
+      });
+    });
+  });
+
+  test("git configの解釈できないfetchは無視して既定値へ落とす", async () => {
+    await withTempDir(async (root) => {
+      await initRepo(join(root, "repo"), { "niwaterm.worktree.fetch": "maybe" });
+      expect(
+        (await resolveWorktreeSettings(await sourcesIn(root, {}), { includeProject: true })).fetch,
+      ).toEqual({ value: DEFAULT_WORKTREE_FETCH, source: "default" });
     });
   });
 

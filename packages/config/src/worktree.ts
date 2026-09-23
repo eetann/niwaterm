@@ -54,6 +54,14 @@ export interface WorktreeConfig {
    */
   layout?: string;
   /**
+   * `niwaterm worktree new`がワークツリーを作る前にリモートをfetchするかどうか。未指定時はtrue。
+   * `--fetch`／`--no-fetch`で個別に上書きできる。falseにすると、pushされたばかりのブランチを
+   * 開くときに手でfetchしてから叩くことになる代わりに、作成のたびのネットワーク待ちが無くなる。
+   * 既存のワークツリーを開き直すだけのときと`--track local`のときは、trueでもfetchしない。
+   * 例: false
+   */
+  fetch?: boolean;
+  /**
    * ワークツリーを新規作成した直後に走るフック。既存のワークツリーを開き直した場合は走らない。
    * グローバル設定とプロジェクトローカル設定の両方に書いた場合は、グローバル→プロジェクトの順に
    * **両方**走る（dir・openのような上書きではない）。

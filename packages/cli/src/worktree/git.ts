@@ -291,30 +291,62 @@ export function findWorktreeByQuery(
   return { kind: "not-found" };
 }
 
+/** ワークツリーへ載せるブランチをどこから用意するか */
+export type WorktreeSource =
+  /** 既にあるローカルブランチをそのままチェックアウトする */
+  | { kind: "local" }
+  /** `<remote>/<branch>`をupstreamにしたローカルブランチを作る */
+  | { kind: "remote"; remote: string }
+  /** 新規ブランチを作る。fromは分岐元（省略時はHEAD） */
+  | { kind: "new"; from?: string };
+
 export interface AddWorktreeOptions {
   /** gitを実行する作業ディレクトリ。メインワークツリーを渡す */
   repoRoot: string;
   /** 作成先の絶対パス */
   path: string;
   branch: string;
-  /**
-   * 新規ブランチの分岐元。ブランチが既にある場合は指定できない
-   * （gitの`worktree add <path> <branch>`は分岐元を取らないため）
-   */
-  from?: string;
+  /** ブランチの用意の仕方。どれになるかはworktree/track.tsが決める */
+  source: WorktreeSource;
 }
 
 export type AddWorktreeResult = { ok: true } | { ok: false; error: string };
 
+/** sourceに応じた`git worktree add`の引数を組む */
+export function addWorktreeArgs(opts: AddWorktreeOptions): string[] {
+  switch (opts.source.kind) {
+    case "local":
+      return ["worktree", "add", opts.path, opts.branch];
+    case "remote":
+      // gitのDWIM（ローカルに無いブランチ名を、同名を持つ唯一のリモートから推測する挙動）には
+      // 任せない。リモートが複数あると`fatal: invalid reference`で落ち、どれを使うかも選べないため
+      return [
+        "worktree",
+        "add",
+        "--track",
+        "-b",
+        opts.branch,
+        opts.path,
+        `${opts.source.remote}/${opts.branch}`,
+      ];
+    case "new":
+      return [
+        "worktree",
+        "add",
+        "-b",
+        opts.branch,
+        opts.path,
+        ...(opts.source.from !== undefined ? [opts.source.from] : []),
+      ];
+  }
+}
+
 /**
- * ワークツリーを作る。ブランチが未作成なら`-b`で同時に作る。
+ * ワークツリーを作る。
  * 事前チェックはコマンド側で済ませる前提で、ここではgitのエラーをそのまま返す
  */
 export async function addWorktree(opts: AddWorktreeOptions): Promise<AddWorktreeResult> {
-  const args = (await branchExists(opts.branch, opts.repoRoot))
-    ? ["worktree", "add", opts.path, opts.branch]
-    : ["worktree", "add", "-b", opts.branch, opts.path, ...(opts.from ? [opts.from] : [])];
-  const result = await runGit(args, opts.repoRoot);
+  const result = await runGit(addWorktreeArgs(opts), opts.repoRoot);
   if (result === null) return { ok: false, error: GIT_NOT_FOUND.error };
   if (result.exitCode !== 0) {
     return { ok: false, error: result.stderr.trim() || "git worktree addが失敗しました" };
@@ -343,10 +375,47 @@ export async function gitConfigSection(prefix: string, cwd: string): Promise<Map
   return values;
 }
 
+/** 設定されているリモート名の一覧。1つも無ければ空配列 */
+export async function listRemotes(cwd: string): Promise<string[]> {
+  const result = await runGit(["remote"], cwd);
+  if (result === null || result.exitCode !== 0) return [];
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 /** リモートが1つでも設定されているか。未設定なら「未pushのコミット」という概念自体が無い */
 export async function hasRemotes(cwd: string): Promise<boolean> {
-  const result = await runGit(["remote"], cwd);
-  return result !== null && result.exitCode === 0 && result.stdout.trim().length > 0;
+  return (await listRemotes(cwd)).length > 0;
+}
+
+/** リモート追跡ブランチ（refs/remotes/<remote>/<branch>）が既に手元にあるか */
+export async function remoteBranchExists(
+  remote: string,
+  branch: string,
+  cwd: string,
+): Promise<boolean> {
+  const result = await runGit(
+    ["show-ref", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`],
+    cwd,
+  );
+  return result !== null && result.exitCode === 0;
+}
+
+export type FetchRemoteResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * リモートからfetchする。呼び出し側が続行できるよう失敗は理由を返すだけに留める
+ * （オフラインでもローカルブランチのワークツリーは作れるべきなので）
+ */
+export async function fetchRemote(remote: string, cwd: string): Promise<FetchRemoteResult> {
+  const result = await runGit(["fetch", remote], cwd);
+  if (result === null) return { ok: false, error: GIT_NOT_FOUND.error };
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.trim() || "git fetchが失敗しました" };
+  }
+  return { ok: true };
 }
 
 /**

@@ -14,10 +14,20 @@ import { ensureProjectTrust } from "../../worktree/trust";
 import {
   addWorktree,
   branchExists,
+  fetchRemote,
   findWorktreeByBranch,
+  listRemotes,
   listWorktrees,
   mainWorktree,
 } from "../../worktree/git";
+import {
+  isWorktreeTrackMode,
+  pickDefaultRemote,
+  resolveWorktreeSource,
+  splitRemoteRef,
+  WORKTREE_TRACK_MODES,
+  type WorktreeTrackMode,
+} from "../../worktree/track";
 
 /**
  * 作成後フックを順に実行する。Boardを開く前に終わらせるので、タブが立ち上がる時点で
@@ -41,6 +51,97 @@ async function runCreateHooks(hooks: WorktreeHook[], ctx: WorktreeHookContext): 
   }
 }
 
+interface TrackInput {
+  /** コマンドラインで受け取ったままのブランチ指定。リモート名が付いていることがある */
+  branch: string;
+  track?: string;
+  remote?: string;
+  from?: string;
+}
+
+interface TrackRequest {
+  mode: WorktreeTrackMode;
+  /** trackに使うリモート。リモートが無い・既定を決められない場合はnull */
+  remote: string | null;
+  /** リモート名を除いたローカルブランチ名。ワークツリーの置き場所もBoard名もこちらで決まる */
+  branch: string;
+}
+
+/**
+ * `--track`・`--remote`・ブランチ名に付いたリモート名から、ブランチの用意の仕方を決める。
+ * `origin/feat/x`のようにリモート名を付けた指定は`--track remote`の明示として扱い、
+ * `--from`（分岐元）は新規ブランチにしかならないので`--track new`として扱う
+ */
+function resolveTrackRequest(input: TrackInput, remotes: string[]): TrackRequest {
+  let explicitMode: WorktreeTrackMode | undefined;
+  if (input.track !== undefined) {
+    if (!isWorktreeTrackMode(input.track)) {
+      failAndExit(
+        `worktree newに失敗しました: --trackの値が不正です: ${input.track}（${WORKTREE_TRACK_MODES.join(" | ")}）`,
+      );
+    }
+    explicitMode = input.track;
+  }
+
+  const prefixed = splitRemoteRef(input.branch, remotes);
+  const branch = prefixed.branch;
+
+  if (prefixed.remote !== null && input.remote !== undefined && prefixed.remote !== input.remote) {
+    failAndExit(
+      `worktree newに失敗しました: ブランチ名のリモート（${prefixed.remote}）と--remote（${input.remote}）が食い違っています`,
+    );
+  }
+  if (input.from !== undefined && explicitMode !== undefined && explicitMode !== "new") {
+    failAndExit("worktree newに失敗しました: --fromは--track newでのみ使えます");
+  }
+  if (input.from !== undefined && prefixed.remote !== null) {
+    failAndExit(
+      `worktree newに失敗しました: --fromはリモート名付きのブランチ指定（${input.branch}）とは一緒に使えません`,
+    );
+  }
+  if (input.remote !== undefined && !remotes.includes(input.remote)) {
+    const known =
+      remotes.length > 0 ? `設定済み: ${remotes.join(", ")}` : "リモートが設定されていません";
+    failAndExit(`worktree newに失敗しました: リモート ${input.remote} がありません（${known}）`);
+  }
+
+  const mode: WorktreeTrackMode =
+    explicitMode ??
+    (prefixed.remote !== null ? "remote" : input.from !== undefined ? "new" : "auto");
+
+  const explicitRemote = prefixed.remote ?? input.remote;
+  if (explicitRemote !== undefined) return { mode, remote: explicitRemote, branch };
+  // 手元のブランチしか見ないモードでは、リモートが決まらなくても困らない
+  if (mode === "local" || mode === "new") return { mode, remote: null, branch };
+
+  const fallback = pickDefaultRemote(remotes);
+  if (fallback.ok) return { mode, remote: fallback.remote, branch };
+  // autoはリモートを選べなくてもローカル・新規で解決できるので、ここでは止めない
+  if (mode === "auto") return { mode, remote: null, branch };
+  failAndExit(`worktree newに失敗しました: ${fallback.error}`);
+}
+
+interface FetchBeforeCreateOptions {
+  repoRoot: string;
+  remote: string | null;
+  mode: WorktreeTrackMode;
+  enabled: boolean;
+}
+
+/**
+ * ワークツリーを作る前にリモートを更新する。失敗しても止めないのは、オフラインでも
+ * ローカルブランチのワークツリーは作れるべきだから
+ */
+async function fetchBeforeCreate(opts: FetchBeforeCreateOptions): Promise<void> {
+  // localは手元のブランチしか見ないので、ネットワークに出る意味が無い
+  if (!opts.enabled || opts.remote === null || opts.mode === "local") return;
+  console.log(`fetching ${opts.remote}...`);
+  const result = await fetchRemote(opts.remote, opts.repoRoot);
+  if (!result.ok) {
+    console.error(`warning: git fetch ${opts.remote}に失敗しました: ${result.error}`);
+  }
+}
+
 export default define({
   name: "new",
   description: "ワークツリーを作成し、niwatermで開く",
@@ -48,11 +149,26 @@ export default define({
     branch: {
       type: "positional",
       required: true,
-      description: "ワークツリーで使うブランチ名（未作成なら新規ブランチとして作る）",
+      description:
+        "ワークツリーで使うブランチ名（origin/feat/xのようにリモート名を付けてもよい。どこにも無ければ新規ブランチとして作る）",
     },
     from: {
       type: "string",
       description: "新規ブランチの分岐元（省略時はHEAD）。既存ブランチを指定した場合は使えない",
+    },
+    track: {
+      type: "string",
+      description: `ブランチの用意の仕方（${WORKTREE_TRACK_MODES.join(" | ")}）。省略時はauto（ローカル→リモート→新規の順に探す）`,
+    },
+    remote: {
+      type: "string",
+      description: "trackするリモート名（省略時はリモートが1つならそれ、複数ならorigin）",
+    },
+    fetch: {
+      type: "boolean",
+      negatable: true,
+      description:
+        "ワークツリーを作る前にリモートをfetchする（--no-fetchで抑止。省略時は設定のworktree.fetch、既定はfetchする）",
     },
     path: {
       type: "string",
@@ -91,13 +207,25 @@ export default define({
   },
   run: async (ctx) => {
     const cwd = ctx.values.cwd ?? process.cwd();
-    const branch = ctx.values.branch;
 
     const list = await listWorktrees(cwd);
     if (!list.ok) failAndExit(`worktree newに失敗しました: ${list.error}`);
     const main = mainWorktree(list.worktrees);
     if (!main) failAndExit("worktree newに失敗しました: メインワークツリーを特定できませんでした");
     const repoRoot = main.path;
+
+    // リモート名を剥がしてからでないと、ワークツリーの置き場所もBoard名も
+    // origin付きの文字列で決まってしまう
+    const track = resolveTrackRequest(
+      {
+        branch: ctx.values.branch,
+        ...(ctx.values.track !== undefined ? { track: ctx.values.track } : {}),
+        ...(ctx.values.remote !== undefined ? { remote: ctx.values.remote } : {}),
+        ...(ctx.values.from !== undefined ? { from: ctx.values.from } : {}),
+      },
+      await listRemotes(repoRoot),
+    );
+    const branch = track.branch;
 
     // プロジェクトローカル設定はimportした時点でコードが走るため、読む前に承認を取る
     const trust = await ensureProjectTrust(repoRoot, { assumeTrusted: ctx.values.trust === true });
@@ -130,6 +258,9 @@ export default define({
       const ignored = [
         ...(ctx.values.from !== undefined ? ["--from"] : []),
         ...(ctx.values.path !== undefined ? ["--path"] : []),
+        ...(ctx.values.track !== undefined ? ["--track"] : []),
+        ...(ctx.values.remote !== undefined ? ["--remote"] : []),
+        ...(ctx.values.fetch !== undefined ? [ctx.values.fetch ? "--fetch" : "--no-fetch"] : []),
       ];
       if (ignored.length > 0) {
         console.error(`warning: 作成済みのワークツリーのため${ignored.join("・")}は使われません`);
@@ -141,6 +272,20 @@ export default define({
           `worktree newに失敗しました: ブランチ ${branch} は既にあるため--fromは指定できません`,
         );
       }
+      await fetchBeforeCreate({
+        repoRoot,
+        remote: track.remote,
+        mode: track.mode,
+        enabled: ctx.values.fetch ?? plan.fetch.value,
+      });
+      const source = await resolveWorktreeSource({
+        repoRoot,
+        branch,
+        mode: track.mode,
+        remote: track.remote,
+        ...(ctx.values.from !== undefined ? { from: ctx.values.from } : {}),
+      });
+      if (!source.ok) failAndExit(`worktree newに失敗しました: ${source.error}`);
       const explicit = ctx.values.path;
       path =
         explicit === undefined
@@ -148,12 +293,7 @@ export default define({
           : isAbsolute(explicit)
             ? explicit
             : resolve(cwd, explicit);
-      const added = await addWorktree({
-        repoRoot,
-        path,
-        branch,
-        ...(ctx.values.from !== undefined ? { from: ctx.values.from } : {}),
-      });
+      const added = await addWorktree({ repoRoot, path, branch, source: source.source });
       if (!added.ok) failAndExit(`worktree newに失敗しました: ${added.error}`);
       console.log(`created: ${path}`);
     }

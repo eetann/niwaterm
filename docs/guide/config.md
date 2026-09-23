@@ -1001,6 +1001,7 @@ niwaterm layout apply dev --startup
 | `dir` | `string` | 新規ワークツリーの置き場所テンプレート | `../${repo}@${branch}` |
 | `open` | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値 | `"board"` |
 | `layout` | `string` | Boardへ適用するレイアウトプリセット名（`--layout`の既定値） | なし（適用しない） |
+| `fetch` | `boolean` | ワークツリーを作る前にリモートをfetchするか（`--fetch`／`--no-fetch`の既定値） | `true` |
 | `onCreate` | `(ctx) => void \| Promise<void>` | ワークツリーを新規作成した直後に走るフック | なし |
 
 ```ts
@@ -1019,6 +1020,8 @@ worktree: {
 テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
 `layout`は`layouts`のキー（「レイアウト」節参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は`docs/guide/worktree.md`「レイアウトプリセットの適用」節。
+
+`fetch`は、リモートのブランチをワークツリーとして開くときに手元のリモート追跡ブランチが古いままにならないよう、**ワークツリーを新規に作る前**に`git fetch`を打つかどうか。既存のワークツリーを開き直すだけのときと`--track local`のときは、`true`でもfetchしない。作成のたびのネットワーク待ちが気になる場合は`false`にして、必要なときだけ`--fetch`を付ける。詳細は`docs/guide/worktree.md`「リモートのブランチから作る」節。
 
 `onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/worktree.md`「作成後フック」節。
 

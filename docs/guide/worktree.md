@@ -10,7 +10,7 @@ description: niwatermからgitワークツリーを作成・開閉・削除す�
 
 ```sh
 niwaterm worktree list [--cwd <dir>]
-niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree remove <worktree> [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
 niwaterm board worktree set <path> [--board <boardId>]
@@ -62,14 +62,14 @@ gitが無い・gitリポジトリの外・`--cwd`のディレクトリが存在�
 ## ワークツリーの作成
 
 ```sh
-niwaterm worktree new <branch> [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
+niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 ```
 
-ワークツリーを作り、それをniwatermで開く。ブランチが未作成なら`git worktree add -b`で同時に作り、既にあればそれをチェックアウトする。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
+ワークツリーを作り、それをniwatermで開く。ブランチは**ローカル → リモート → 新規作成**の順に探す（探し方は`--track`で選べる。「リモートのブランチから作る」節）。`--from`は新規ブランチの分岐元（省略時はHEAD）で、既存ブランチに対して指定するとエラーになる（gitの`worktree add <path> <branch>`が分岐元を取らないため）。
 
 作成先は「ワークツリーの置き場所」で決まるが、`--path`で個別に上書きできる（相対パスは実行したディレクトリ基準）。
 
-**そのブランチのワークツリーが既にある場合はエラーにせず、作成を飛ばしてそれを開く**。同じコマンドを何度叩いても同じ結果になるので、「あれば使う、無ければ作る」を分岐なしで書ける。このとき作成時にしか効かない`--from`／`--path`を渡していると、効いていない旨の警告を出す。
+**そのブランチのワークツリーが既にある場合はエラーにせず、作成を飛ばしてそれを開く**。同じコマンドを何度叩いても同じ結果になるので、「あれば使う、無ければ作る」を分岐なしで書ける。このとき作成時にしか効かない`--from`／`--path`／`--track`／`--remote`／`--fetch`を渡していると、効いていない旨の警告を出す。
 
 `--open`は作成後の開き方で、次の4つから選ぶ。
 
@@ -87,6 +87,47 @@ Boardで開く場合、**そのBoardにはブランチ名が付く**。`board`�
 さらに、**そのワークツリーのBoardが既に開いていれば新しく作らずそれを使う**（`board-switch`ならそのBoardへ遷移し、別のワークスペースにあればワークスペースごと切り替える）。このとき`--name`を指定していれば、使い回すBoardの名前も指定どおりに付け替える（`--layout`と違って名前の変更はタブを閉じないため）。判定にはBoardを開いたときに記録したワークツリーのパスを使い、タブのcwdは見ない（`cd`で変わるため）。Board名を変えても紐づけは切れず、別リポジトリの同名ブランチと取り違えることもない。
 
 `current-tab`は`cd <path>`をそのタブへ送る（`tab send-keys`と同じ経路）。コマンドを実行しているシェルはCLIが終わるまで入力を読まないので、キーはtty側で待たされてからプロンプトへ流れる。`--open none`以外はniwatermアプリが起動している必要がある。
+
+## リモートのブランチから作る
+
+ローカルに無いブランチ名を渡すと、**リモート追跡ブランチを探してそこから作る**。同僚がpushしたブランチをレビューしたいときは、ブランチ名を渡すだけで済む。
+
+```sh
+niwaterm worktree new feat/x          # ローカル → リモート → 新規 の順に探す
+niwaterm worktree new origin/feat/x   # リモートから、と明示する
+```
+
+`origin/feat/x`のようにリモート名を付けた指定も受け付ける（`git branch -r`の出力をそのまま貼れる）。ローカルブランチ名・ワークツリーの置き場所・Board名は、リモート名を除いた`feat/x`で決まる。できたローカルブランチには`<remote>/<branch>`がupstreamとして設定されるので、そのまま`git push`・`git pull`できる。
+
+探し方は`--track`で選ぶ。
+
+| 値 | 挙動 |
+|---|---|
+| `auto`（既定） | ローカルにあればそれを使い、無くてリモートにあればtrackし、どちらにも無ければ`--from`（既定はHEAD）から新規に作る |
+| `remote` | リモート追跡ブランチからtrackする。無ければエラー |
+| `local` | ローカルブランチを使う。無ければエラー |
+| `new` | 必ず新規ブランチを作る。リモートに同名があっても無視し、ローカルに同名があればエラー |
+
+`auto`がローカルを先に見るのは、同名のローカルブランチがある状態でリモートからブランチを作ろうとしてもgitが弾くため。手元にブランチがあるなら、それが作業の続きになる。
+
+`--from`（分岐元）を付けると暗黙に`--track new`になる。分岐元の指定は新規ブランチにしか意味が無いためで、`--track remote`や`origin/feat/x`と組み合わせるとエラーになる。
+
+リモートが複数ある場合は`origin`を使い、`--remote upstream`または`upstream/feat/x`で選べる。リモートが1つならそれが使われる。`origin`が無くリモートが複数ある場合、`auto`はリモートを見ずにローカル・新規で解決し、`--track remote`は「どれを使うか決められない」というエラーで止まる。
+
+> **note**: gitにも「ローカルに無いブランチ名を、同名を持つ唯一のリモートから推測する」挙動（`git worktree add <path> <branch>`のDWIM）があるが、niwatermはこれに任せず自分で解決している。あの挙動はリモートが複数あると`fatal: invalid reference`で落ちるだけで、どちらのリモートかを選ぶ余地が無いため。
+
+### fetchのタイミング
+
+**ワークツリーを新規に作る前に`git fetch <remote>`を1回打つ**。pushされたばかりのブランチでも、手でfetchしてから叩き直さずに済むようにするため。
+
+次の場合はfetchしない。
+
+- `--no-fetch`を付けたとき、または設定の`worktree.fetch`が`false`のとき（`--fetch`で個別に打ち消せる）
+- `--track local`のとき（手元のブランチしか見ないので、ネットワークに出る意味が無い）
+- そのブランチのワークツリーが既にあって、開くだけのとき
+- リモートが1つも設定されていないとき
+
+fetchが失敗しても**警告を出して続行する**。オフラインでもローカルブランチのワークツリーは作れるべきで、ネットワークの都合で作成自体が止まるのは困るため。
 
 ## ワークツリーを開く
 
@@ -144,14 +185,14 @@ Windowsは**カレントディレクトリにしているプロセスがある�
 
 新規ワークツリーを作る場所は、`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）を展開するテンプレートで決める。既定は`../${repo}@${branch}`で、メインワークツリーの隣に`<repo>@<branch>`という名前で並ぶ。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は`niwaterm@feat-worktree`になる。
 
-テンプレートは次の順で探し、最初に見つかったものを使う。`--open`の既定値（`worktree.open`）も同じ順で解決する。
+テンプレートは次の順で探し、最初に見つかったものを使う。`--open`の既定値（`worktree.open`）・fetchするかどうか（`worktree.fetch`）も同じ順で解決する。
 
 | 優先 | 置き場所 | 用途 |
 |---|---|---|
 | 1 | `<repoRoot>/.niwaterm/config.ts`の`worktree.*` | そのリポジトリ固有の方針（チームで共有できる） |
 | 2 | `~/.config/niwaterm/niwaterm.config.ts`の`worktree.*` | ユーザー共通の方針 |
 | 3 | git configの`niwaterm.worktree.*` | niwatermを入れていない環境とも設定を共有したい場合の補助口 |
-| 4 | （既定値） | `dir`は`../${repo}@${branch}`、`open`は`board` |
+| 4 | （既定値） | `dir`は`../${repo}@${branch}`、`open`は`board`、`fetch`は`true` |
 
 解決は**項目ごとに独立している**。`dir`はグローバル設定、`open`はこのリポジトリだけ別、といった混ぜ方ができる。
 
@@ -160,6 +201,7 @@ git configを一番弱くしているのは、niwatermの設定の正本が`niwa
 ```sh
 git config niwaterm.worktree.dir '.worktrees/${branch}'
 git config niwaterm.worktree.open board-switch
+git config niwaterm.worktree.fetch false
 ```
 
 テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は`docs/guide/config.md`「ワークツリー」節を参照。
