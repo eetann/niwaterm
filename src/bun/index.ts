@@ -27,7 +27,13 @@ import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
-import { cleanupConfigImportDir, configFilePath, loadAndResolveConfig } from "./config";
+import {
+  cleanupConfigImportDir,
+  configFilePath,
+  decideConfigLoadOutcome,
+  loadAndResolveConfig,
+} from "./config";
+import type { ConfigDiagnostic } from "./config-diagnostics";
 import { buildConfigSummary, type ConfigSummary } from "./config-summary";
 import { watchConfigFile } from "./config-watcher";
 import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-view-handlers";
@@ -491,6 +497,10 @@ function cleanup() {
 }
 
 let userConfigLoaded: boolean;
+/** 直近の読み込み試行が失敗した理由。成功・ファイル不在ならnull */
+let configLoadError: string | null = null;
+/** 今効いている設定を解決したときに出た警告。読み込みに失敗した回のぶんでは上書きしない */
+let configDiagnostics: ConfigDiagnostic[] = [];
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
@@ -591,6 +601,8 @@ function currentConfigSummary(): ConfigSummary {
   return buildConfigSummary({
     configFile: configFilePath(),
     configFileLoaded: userConfigLoaded,
+    loadError: configLoadError,
+    diagnostics: configDiagnostics,
     appearance: effectiveAppearance(),
     baseFontSize: appearance.fontSize,
     baseLineHeight: appearance.lineHeight,
@@ -607,9 +619,37 @@ function currentConfigSummary(): ConfigSummary {
   });
 }
 
+/** 設定を一度でも適用したか。falseの間は失敗しても既定値を当てるしかない（残せる前の状態が無い） */
+let configApplied = false;
+
+/**
+ * 設定ファイルを読み直して適用する。読めなかったときは既に適用済みの設定をそのまま残す:
+ * 全項目を既定値へ落とすと、設定ファイル1箇所のtypoでprefixもテーマもカスタムビューも
+ * 同時に消え、編集を戻すための操作すら効かなくなる。
+ * 読めなかったことはconsole.logだけでは気づけないためデスクトップ通知でも知らせる
+ * （同じ理由で直った時も1回だけ知らせる）。
+ */
 async function refreshConfig(): Promise<void> {
+  const next = await loadAndResolveConfig(
+    configFilePath(),
+    windowManager,
+    detectedShellProfiles,
+    sendNotification,
+    () => handleConfigFileChanged(),
+  );
+  const outcome = decideConfigLoadOutcome({
+    configFile: configFilePath(),
+    loadError: next.loadError,
+    previousError: configLoadError,
+    alreadyApplied: configApplied,
+  });
+  configLoadError = next.loadError;
+  if (outcome.notification) sendNotification(outcome.notification);
+  if (!outcome.apply) return;
+
   ({
     userConfigLoaded,
+    diagnostics: configDiagnostics,
     keybindings,
     appearance,
     browser,
@@ -626,13 +666,8 @@ async function refreshConfig(): Promise<void> {
     runKeybindHandler,
     bellHandler,
     runDefaultBell,
-  } = await loadAndResolveConfig(
-    configFilePath(),
-    windowManager,
-    detectedShellProfiles,
-    sendNotification,
-    () => handleConfigFileChanged(),
-  ));
+  } = next);
+  configApplied = true;
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
   windowManager.applyMaxScrollback(terminalConfig.scrollback);
 }
@@ -715,6 +750,11 @@ async function handleConfigFileChanged(): Promise<void> {
     await refreshConfig();
     sendConfig();
     scheduleRenderAll();
+  } catch (err) {
+    // ここまで漏れてくるのは設定の中身ではなくリロード処理自体の不具合。
+    // 投げっぱなしにするとファイル監視のコールバック上でunhandled rejectionになる
+    console.log(`[bun] config reload failed: ${String(err)}`);
+    sendNotification({ title: "設定の再読み込みに失敗しました", body: String(err) });
   } finally {
     configReloadInFlight = false;
     if (configReloadPending) {

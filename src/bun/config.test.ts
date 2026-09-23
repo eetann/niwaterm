@@ -12,9 +12,11 @@ import {
   defaultUiColors,
   platformDefaultKeybindings,
 } from "@niwaterm/config";
+import { type ConfigDiagnostics, createConfigDiagnostics } from "./config-diagnostics";
 import {
   configDirPath,
   configFilePath,
+  decideConfigLoadOutcome,
   loadUserConfig,
   resolveAppearance,
   resolveBoard,
@@ -24,6 +26,7 @@ import {
   resolveLayouts,
   resolveMouse,
   resolveSelectionMenu,
+  restoreConfigDirInMessage,
   resolveShell,
   resolveShellProfiles,
   resolveTerminal,
@@ -78,6 +81,15 @@ function createTestNiwaApi(): NiwaApiHandle {
   });
 }
 
+/**
+ * 診断を集めつつ、ConfigDiagnosticsが同時に出すconsole.logをテスト出力から抑える。
+ * 戻り値のrestoreをfinallyで呼ぶこと
+ */
+function captureDiagnostics(): { diag: ConfigDiagnostics; restore: () => void } {
+  const logSpy = spyOn(console, "log").mockImplementation(() => {});
+  return { diag: createConfigDiagnostics(), restore: () => logSpy.mockRestore() };
+}
+
 describe("configFilePath", () => {
   const originalConfigDir = process.env["NIWATERM_CONFIG_DIR"];
 
@@ -117,8 +129,18 @@ describe("loadUserConfig", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("ファイルが存在しない場合はnullを返す", async () => {
-    expect(await loadUserConfig(join(dir, "not-found.config.ts"))).toBeNull();
+  /** 読み込み失敗（configはnull・errorに理由が入る）を確かめる */
+  async function expectLoadFailure(path: string): Promise<void> {
+    const result = await loadUserConfig(path);
+    expect(result.config).toBeNull();
+    expect(result.error).toBeTruthy();
+  }
+
+  test("ファイルが存在しない場合はconfig・errorともnullを返す（失敗と区別する）", async () => {
+    expect(await loadUserConfig(join(dir, "not-found.config.ts"))).toEqual({
+      config: null,
+      error: null,
+    });
   });
 
   test("export defaultされたオブジェクトを読み込める", async () => {
@@ -127,27 +149,35 @@ describe("loadUserConfig", () => {
       path,
       `export default { keybindings: { prefix: "ctrl+b", bindings: { d: "close-tile" } } };\n`,
     );
-    expect(await loadUserConfig(path)).toEqual({
+    expect((await loadUserConfig(path)).config).toEqual({
       keybindings: { prefix: "ctrl+b", bindings: { d: "close-tile" } },
     });
   });
 
-  test("構文エラーの場合はnullを返し、理由をログ出力する", async () => {
+  test("構文エラーの場合はconfigがnullになり、errorへ理由が入る", async () => {
     const path = join(dir, "broken.config.ts");
     await writeFile(path, "export default { this is not valid typescript ;;;\n");
-    const logSpy = spyOn(console, "log").mockImplementation(() => {});
-    try {
-      expect(await loadUserConfig(path)).toBeNull();
-      expect(logSpy).toHaveBeenCalled();
-    } finally {
-      logSpy.mockRestore();
-    }
+    await expectLoadFailure(path);
   });
 
-  test("keybindings以外の形（配列やnull）の場合はnullを返す", async () => {
+  test("importできないモジュールを参照している場合もerrorへ理由が入る", async () => {
+    const path = join(dir, "missing-import.config.ts");
+    await writeFile(
+      path,
+      `import { x } from "./does-not-exist.ts";\nexport default { appearance: { fontSize: x } };\n`,
+    );
+    const result = await loadUserConfig(path);
+    expect(result.config).toBeNull();
+    expect(result.error).toContain("does-not-exist");
+    // importは一時ディレクトリのコピーに対して走るが、メッセージには元の設定ディレクトリが出る
+    expect(result.error).toContain(dir);
+    expect(result.error).not.toMatch(/niwaterm-config-[A-Za-z0-9]{6}[/\\]/u);
+  });
+
+  test("keybindings以外の形（配列やnull）の場合は読み込み失敗として扱う", async () => {
     const path = join(dir, "invalid-shape.config.ts");
     await writeFile(path, "export default { keybindings: null };\n");
-    expect(await loadUserConfig(path)).toBeNull();
+    await expectLoadFailure(path);
   });
 
   test("keybindingsが関数（KeybindingsFn）の場合も読み込める", async () => {
@@ -156,40 +186,44 @@ describe("loadUserConfig", () => {
       path,
       `export default { keybindings: (niwa) => { niwa.keybind("d", "close-tile"); } };\n`,
     );
-    const loaded = await loadUserConfig(path);
+    const loaded = (await loadUserConfig(path)).config;
     expect(typeof loaded?.keybindings).toBe("function");
   });
 
-  test("appearance以外の形（配列やnull）の場合はnullを返す", async () => {
+  test("appearance以外の形（配列やnull）の場合は読み込み失敗として扱う", async () => {
     const path = join(dir, "invalid-appearance-shape.config.ts");
     await writeFile(path, "export default { appearance: null };\n");
-    expect(await loadUserConfig(path)).toBeNull();
+    await expectLoadFailure(path);
   });
 
-  test("browser以外の形（配列やnull）の場合はnullを返す", async () => {
+  test("browser以外の形（配列やnull）の場合は読み込み失敗として扱う", async () => {
     const path = join(dir, "invalid-browser-shape.config.ts");
     await writeFile(path, "export default { browser: null };\n");
-    expect(await loadUserConfig(path)).toBeNull();
+    await expectLoadFailure(path);
   });
 
-  test("mouse以外の形（配列やnull）の場合はnullを返す", async () => {
+  test("mouse以外の形（配列やnull）の場合は読み込み失敗として扱う", async () => {
     const path = join(dir, "invalid-mouse-shape.config.ts");
     await writeFile(path, "export default { mouse: null };\n");
-    expect(await loadUserConfig(path)).toBeNull();
+    await expectLoadFailure(path);
   });
 
-  test("shell以外の形（配列やnull）の場合はnullを返す", async () => {
+  test("shell以外の形（配列やnull）の場合は読み込み失敗として扱う", async () => {
     const path = join(dir, "invalid-shell-shape.config.ts");
     await writeFile(path, "export default { shell: null };\n");
-    expect(await loadUserConfig(path)).toBeNull();
+    await expectLoadFailure(path);
   });
 
   test("同一パスへの2回目の読み込みでも、ファイルが更新されていれば最新の内容を返す（キャッシュバスティング）", async () => {
     const path = join(dir, "hot-reload.config.ts");
     await writeFile(path, `export default { keybindings: { bindings: { d: "close-tile" } } };\n`);
-    expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "close-tile" } } });
+    expect((await loadUserConfig(path)).config).toEqual({
+      keybindings: { bindings: { d: "close-tile" } },
+    });
     await writeFile(path, `export default { keybindings: { bindings: { d: "new-tab" } } };\n`);
-    expect(await loadUserConfig(path)).toEqual({ keybindings: { bindings: { d: "new-tab" } } });
+    expect((await loadUserConfig(path)).config).toEqual({
+      keybindings: { bindings: { d: "new-tab" } },
+    });
   });
 
   test("複数ファイル分割: エントリがimportする非エントリファイルの更新も2回目の読み込みで反映される", async () => {
@@ -200,10 +234,10 @@ describe("loadUserConfig", () => {
       entryPath,
       `import { fontSize } from "./font";\nexport default { appearance: { fontSize } };\n`,
     );
-    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 14 } });
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 14 } });
 
     await writeFile(fontPath, "export const fontSize = 20;\n");
-    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 20 } });
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 20 } });
   });
 
   test("複数ファイル分割: サブディレクトリ配置の非エントリファイルも解決できる", async () => {
@@ -218,7 +252,7 @@ describe("loadUserConfig", () => {
       entryPath,
       `import { applyVimKeys } from "./keys/vim";\nexport default { keybindings: applyVimKeys };\n`,
     );
-    const loaded = await loadUserConfig(entryPath);
+    const loaded = (await loadUserConfig(entryPath)).config;
     expect(typeof loaded?.keybindings).toBe("function");
   });
 
@@ -235,7 +269,7 @@ describe("loadUserConfig", () => {
       entryPath,
       `import { fontSize } from "fake-pkg";\nexport default { appearance: { fontSize } };\n`,
     );
-    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 18 } });
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 18 } });
   });
 
   test("エントリファイル自体がシンボリックリンクでも解決できる（dotfiles管理でniwaterm.config.ts等をリンクしている場合）", async () => {
@@ -243,7 +277,81 @@ describe("loadUserConfig", () => {
     const entryPath = join(dir, "niwaterm.config.ts");
     await writeFile(realPath, `export default { appearance: { fontSize: 22 } };\n`);
     await symlink(realPath, entryPath);
-    expect(await loadUserConfig(entryPath)).toEqual({ appearance: { fontSize: 22 } });
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 22 } });
+  });
+});
+
+describe("restoreConfigDirInMessage", () => {
+  test("Windowsの一時importディレクトリを設定ディレクトリへ置き換える", () => {
+    const message = String.raw`ResolveMessage: Cannot find module './handlers.ts' imported from C:\Users\me\AppData\Local\Temp\niwaterm-config-DTFnBI\niwaterm.config.ts`;
+    expect(restoreConfigDirInMessage(message, String.raw`C:\Users\me\.config\niwaterm`)).toBe(
+      String.raw`ResolveMessage: Cannot find module './handlers.ts' imported from C:\Users\me\.config\niwaterm\niwaterm.config.ts`,
+    );
+  });
+
+  test("一時ディレクトリが出てこないメッセージはそのまま返す", () => {
+    expect(restoreConfigDirInMessage("SyntaxError: Unexpected token", "/home/me")).toBe(
+      "SyntaxError: Unexpected token",
+    );
+  });
+});
+
+describe("decideConfigLoadOutcome", () => {
+  const configFile = "/home/user/.config/niwaterm/niwaterm.config.ts";
+
+  test("読み込めたら適用する。前回もエラーが無ければ通知はしない", () => {
+    expect(
+      decideConfigLoadOutcome({
+        configFile,
+        loadError: null,
+        previousError: null,
+        alreadyApplied: true,
+      }),
+    ).toEqual({ apply: true, notification: null });
+  });
+
+  test("エラーから復帰したときは1回だけ知らせる", () => {
+    const outcome = decideConfigLoadOutcome({
+      configFile,
+      loadError: null,
+      previousError: "SyntaxError",
+      alreadyApplied: true,
+    });
+    expect(outcome.apply).toBe(true);
+    expect(outcome.notification?.title).toBe("設定ファイルを読み込み直しました");
+  });
+
+  test("適用済みの状態で読み込めなくなったら適用せず、直前の設定を残す", () => {
+    const outcome = decideConfigLoadOutcome({
+      configFile,
+      loadError: "SyntaxError",
+      previousError: null,
+      alreadyApplied: true,
+    });
+    expect(outcome.apply).toBe(false);
+    expect(outcome.notification?.body).toContain("直前に読み込めた設定のまま");
+  });
+
+  test("同じエラーが続く間は通知を繰り返さない（保存のたびに鳴らさない）", () => {
+    expect(
+      decideConfigLoadOutcome({
+        configFile,
+        loadError: "SyntaxError",
+        previousError: "SyntaxError",
+        alreadyApplied: true,
+      }),
+    ).toEqual({ apply: false, notification: null });
+  });
+
+  test("まだ一度も適用していなければ、読めなくても既定値を当てる（残せる前の状態が無い）", () => {
+    const outcome = decideConfigLoadOutcome({
+      configFile,
+      loadError: "SyntaxError",
+      previousError: null,
+      alreadyApplied: false,
+    });
+    expect(outcome.apply).toBe(true);
+    expect(outcome.notification?.body).toBe("SyntaxError");
   });
 });
 
@@ -355,6 +463,37 @@ describe("resolveKeybindings", () => {
     // 上書きしていないキーはデフォルトのまま
     expect(resolved.bindings?.["w"]).toBe(platformDefaults.bindings?.["w"]);
     expect(resolved.prefix).toBe(platformDefaults.prefix);
+  });
+
+  test("keybindingsの関数が途中で例外を投げても、そこまでの登録を残して例外は外へ出さない", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const resolved = resolveKeybindings(
+        {
+          keybindings: (niwa) => {
+            niwa.prefix("cmd+j");
+            niwa.keybind("d", "close-tile");
+            (undefined as unknown as { boom: () => void }).boom();
+            niwa.keybind("z", "new-tab");
+          },
+        },
+        createTestNiwaApi(),
+        diag,
+      );
+      expect(resolved.prefix).toBe("cmd+j");
+      expect(resolved.bindings?.["d"]).toBe("close-tile");
+      // 例外より後ろの登録だけが欠ける
+      expect(resolved.bindings?.["z"]).toBe(platformDefaults.bindings?.["z"]);
+      expect(diag.list()).toEqual([
+        {
+          level: "error",
+          scope: "keybindings",
+          message: expect.stringContaining("関数が途中で失敗しました"),
+        },
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test("keybindingsが関数の場合、niwa.keybindに渡した関数ハンドラはcustom BindingTargetになる", () => {
@@ -812,6 +951,27 @@ describe("resolveLayouts", () => {
 });
 
 describe("resolveCustomViews", () => {
+  test("pathの指すファイルが無くてもビューは残し、警告だけ出す", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const { views } = resolveCustomViews(
+        { customViews: [{ name: "Notes", path: "./definitely-missing.html" }] },
+        diag,
+      );
+      // 存在するかどうかでid採番が変わると、HTMLを置いた途端にキーバインドから指すidがずれる
+      expect(views.map((view) => view.id)).toEqual(["notes"]);
+      expect(diag.list()).toEqual([
+        {
+          level: "warn",
+          scope: "customViews[0].path",
+          message: expect.stringContaining("ファイルが見つかりません"),
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   test("nullを渡すと空（機能オフ）を返す", () => {
     expect(resolveCustomViews(null).views).toEqual([]);
   });
@@ -821,13 +981,20 @@ describe("resolveCustomViews", () => {
   });
 
   test("pathを指定するとconfigDirPath基準のfile://に解決される", () => {
-    const { views } = resolveCustomViews({
-      customViews: [{ name: "Notes", path: "./notes.html" }],
-    });
-    expect(views).toHaveLength(1);
-    expect(views[0]?.name).toBe("Notes");
-    // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
-    expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    // 実在しないパスなので存在チェックの警告が出る。ここで見たいのは解決結果だけなので捨てる
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const { views } = resolveCustomViews(
+        { customViews: [{ name: "Notes", path: "./notes.html" }] },
+        diag,
+      );
+      expect(views).toHaveLength(1);
+      expect(views[0]?.name).toBe("Notes");
+      // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
+      expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    } finally {
+      restore();
+    }
   });
 
   test("urlを指定するとそのまま使われる", () => {
@@ -843,11 +1010,17 @@ describe("resolveCustomViews", () => {
   });
 
   test("pathとurlが両方指定されている場合はpathが優先される", () => {
-    const { views } = resolveCustomViews({
-      customViews: [{ path: "./notes.html", url: "https://example.com" }],
-    });
-    // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
-    expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const { views } = resolveCustomViews(
+        { customViews: [{ path: "./notes.html", url: "https://example.com" }] },
+        diag,
+      );
+      // Windowsのfile:// URLは file:///C:/... 形式になるためpathToFileURLで期待値を作る
+      expect(views[0]?.url).toBe(pathToFileURL(join(configDirPath(), "notes.html")).href);
+    } finally {
+      restore();
+    }
   });
 
   test("nameを省略すると並び順の連番へフォールバックする", () => {

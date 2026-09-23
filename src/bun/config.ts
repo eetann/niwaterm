@@ -1,7 +1,10 @@
 // ユーザー設定ファイル（~/.config/niwaterm/niwaterm.config.ts）の読み込み。
-// ファイル不在・importエラー・スキーマ不一致いずれでも例外を投げずnullを返す（persistence.tsのloadPersistedStateと同じ設計）。
+// ファイル不在・importエラー・スキーマ不一致いずれでも例外を投げない（persistence.tsのloadPersistedStateと同じ設計）。
+// 不備は握り潰さずConfigDiagnosticsへ積み、ファイル自体を読めなかった場合はloadErrorで呼び出し元へ伝える。
+// 設定の一部の誤りが他の項目まで巻き込まないよう、値はフィールド単位・エントリ単位で検証し、
+// ユーザー関数（keybindingsのKeybindingsFn）の例外もセクション内で止める。
 
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readdir, rm, stat, symlink } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -46,6 +49,12 @@ import {
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
 import { resolveBackgroundImage } from "./background-image";
+import {
+  type ConfigDiagnostic,
+  type ConfigDiagnostics,
+  createConfigDiagnostics,
+  describeValue,
+} from "./config-diagnostics";
 import {
   createCustomViewHandlers,
   type CustomViewHandlersById,
@@ -183,24 +192,92 @@ export function cleanupConfigImportDir(): void {
   previousImportDirs.clear();
 }
 
+export interface LoadUserConfigResult {
+  /** 読み込めた設定。ファイル不在・読み込み失敗はnull */
+  config: NiwatermConfig | null;
+  /**
+   * 読み込めなかった理由。ファイル不在と成功時はnull。
+   * 「設定ファイルはあるのに読めていない」をファイル不在と区別するために分けている
+   * （呼び出し元は前者でだけ直前の設定を残す）
+   */
+  error: string | null;
+}
+
+/** importFreshConfigが作る一時ディレクトリのパス。mkdtempがプレフィックスへ6文字を足す */
+const TEMP_IMPORT_DIR_PATTERN = /[^\s"']*niwaterm-config-[A-Za-z0-9]{6}/gu;
+
 /**
- * ファイル不在・importエラー・exportがNiwatermConfigの形をしていない、いずれでも例外を投げずnullを返す。
+ * エラーメッセージに出る一時importディレクトリのパスを、元の設定ディレクトリへ戻す。
+ * importFreshConfigがソースをコピーしてから読むため、そのまま見せるとユーザーが見たことのない
+ * パスが出て、どのファイルを直せばよいのか分からなくなる
+ */
+export function restoreConfigDirInMessage(message: string, configDir: string): string {
+  return message.replaceAll(TEMP_IMPORT_DIR_PATTERN, configDir);
+}
+
+/**
+ * ファイル不在・importエラー・exportがNiwatermConfigの形をしていない、いずれでも例外を投げない。
  * 一時ディレクトリへソースをコピーしてからimportし、毎回ファイルツリーの最新内容を読み込む（ホットリロード対応）。
  */
-export async function loadUserConfig(path: string): Promise<NiwatermConfig | null> {
+export async function loadUserConfig(path: string): Promise<LoadUserConfigResult> {
   try {
-    if (!(await Bun.file(path).exists())) return null;
+    if (!(await Bun.file(path).exists())) return { config: null, error: null };
     const mod = await importFreshConfig(path);
     const candidate = (mod as { default?: unknown }).default ?? mod;
     if (!isNiwatermConfig(candidate)) {
-      console.log(`[bun] config file did not export a valid NiwatermConfig: ${path}`);
-      return null;
+      return { config: null, error: `NiwatermConfigの形のexportがありません: ${path}` };
     }
-    return candidate;
+    return { config: candidate, error: null };
   } catch (err) {
-    console.log(`[bun] failed to load config file: ${String(err)}`);
-    return null;
+    return { config: null, error: restoreConfigDirInMessage(String(err), dirname(path)) };
   }
+}
+
+export interface ConfigLoadOutcome {
+  /** 解決結果を適用するか。falseなら直前に適用した設定をそのまま使い続ける */
+  apply: boolean;
+  /** 出すデスクトップ通知。不要ならnull */
+  notification: NiwaNotifyOptions | null;
+}
+
+/**
+ * 読み込み結果を適用するか・ユーザーへ知らせるかを決める。
+ *
+ * 読めなかったときは適用済みの設定を残す: 全項目を既定値へ落とすと、設定ファイル1箇所のtypoで
+ * prefixもテーマもカスタムビューも同時に消え、編集を戻すための操作すら効かなくなる。
+ * まだ一度も適用していない（起動直後）の場合だけは、残せる前の状態が無いので既定値を当てる。
+ *
+ * 通知はエラーの内容が変わったときだけ出す。ホットリロードはファイル保存のたびに走るので、
+ * 直し途中の同じエラーで何度も鳴らさない。
+ */
+export function decideConfigLoadOutcome(args: {
+  configFile: string;
+  loadError: string | null;
+  /** 直前の読み込み試行のエラー。初回・前回成功時はnull */
+  previousError: string | null;
+  /** 設定を一度でも適用したか */
+  alreadyApplied: boolean;
+}): ConfigLoadOutcome {
+  const { configFile, loadError, previousError, alreadyApplied } = args;
+  if (loadError === null) {
+    return {
+      apply: true,
+      notification:
+        previousError === null
+          ? null
+          : { title: "設定ファイルを読み込み直しました", body: configFile },
+    };
+  }
+  const changed = loadError !== previousError;
+  return {
+    apply: !alreadyApplied,
+    notification: changed
+      ? {
+          title: "設定ファイルを読み込めません",
+          body: alreadyApplied ? `${loadError}\n直前に読み込めた設定のままにしています` : loadError,
+        }
+      : null,
+  };
 }
 
 /**
@@ -213,35 +290,54 @@ export async function loadUserConfig(path: string): Promise<NiwatermConfig | nul
 export function resolveKeybindings(
   userConfig: NiwatermConfig | null,
   niwaApi: NiwaApiHandle,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
 ): KeybindingsConfig {
   const platformDefault = platformDefaultKeybindings(process.platform);
-  applyKeybindingsObject(niwaApi.niwa, platformDefault, "defaultKeybindings");
+  applyKeybindingsObject(niwaApi.niwa, platformDefault, "defaultKeybindings", diag);
 
   const user = userConfig?.keybindings;
   if (typeof user === "function") {
-    user(niwaApi.niwa);
+    // 途中で例外が出てもそこまでのniwa.keybind/prefix呼び出しは登録済みのまま残す。
+    // ここで投げ直すと呼び出し元が設定ごと捨ててしまい、キーバインド以外の設定まで既定値へ落ちる
+    try {
+      user(niwaApi.niwa);
+    } catch (err) {
+      diag.error(
+        "keybindings",
+        `関数が途中で失敗しました（失敗より前の登録だけが有効です）: ${String(err)}`,
+      );
+    }
   } else if (user) {
-    applyKeybindingsObject(niwaApi.niwa, user, "keybindings");
+    applyKeybindingsObject(niwaApi.niwa, user, "keybindings", diag);
   }
 
   return niwaApi.extractKeybindingsConfig();
 }
 
 /** KeybindingsConfig（prefix/bindings/direct/repeatTimeoutMs）の内容をniwa.keybind呼び出し列に変換して登録する */
-function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: string): void {
+function applyKeybindingsObject(
+  niwa: Niwa,
+  config: KeybindingsConfig,
+  source: string,
+  diag: ConfigDiagnostics,
+): void {
   if (config.prefix !== undefined) {
     if (parseKeyBindingString(config.prefix)) {
       niwa.prefix(config.prefix);
     } else {
-      console.log(`[bun] ignoring invalid ${source}.prefix: "${String(config.prefix)}"`);
+      diag.warn(
+        `${source}.prefix`,
+        `キー指定として解釈できないため既定値を使います: ${describeValue(config.prefix)}`,
+      );
     }
   }
   if (config.repeatTimeoutMs !== undefined) {
     if (typeof config.repeatTimeoutMs === "number" && config.repeatTimeoutMs > 0) {
       niwa.repeatTimeout(config.repeatTimeoutMs);
     } else {
-      console.log(
-        `[bun] ignoring invalid ${source}.repeatTimeoutMs: "${String(config.repeatTimeoutMs)}"`,
+      diag.warn(
+        `${source}.repeatTimeoutMs`,
+        `正の数ではないため既定値を使います: ${describeValue(config.repeatTimeoutMs)}`,
       );
     }
   }
@@ -249,8 +345,9 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
     if (rawEntry === undefined) continue;
     const resolved = resolveBindingEntry(rawEntry);
     if (!parseSecondKeyString(key) || !resolved || !isKeybindAction(resolved.target)) {
-      console.log(
-        `[bun] ignoring invalid ${source}.bindings entry: "${key}" -> ${JSON.stringify(rawEntry)}`,
+      diag.warn(
+        `${source}.bindings["${key}"]`,
+        `キーかアクション名が不正なためこのエントリだけ無視します: ${describeValue(rawEntry)}`,
       );
       continue;
     }
@@ -263,8 +360,9 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
     if (rawEntry === undefined) continue;
     const resolved = resolveBindingEntry(rawEntry);
     if (!parseKeyBindingString(key) || !resolved || !isKeybindAction(resolved.target)) {
-      console.log(
-        `[bun] ignoring invalid ${source}.direct entry: "${key}" -> ${JSON.stringify(rawEntry)}`,
+      diag.warn(
+        `${source}.direct["${key}"]`,
+        `キーかアクション名が不正なためこのエントリだけ無視します: ${describeValue(rawEntry)}`,
       );
       continue;
     }
@@ -277,6 +375,7 @@ function applyKeybindingsObject(niwa: Niwa, config: KeybindingsConfig, source: s
 }
 
 function resolveField<T>(
+  diag: ConfigDiagnostics,
   section: string,
   fieldName: string,
   userValue: unknown,
@@ -285,7 +384,10 @@ function resolveField<T>(
 ): T {
   if (userValue === undefined) return defaultValue;
   if (isValid(userValue)) return userValue;
-  console.log(`[bun] ignoring invalid ${section}.${fieldName}: ${String(userValue)}`);
+  diag.warn(
+    `${section}.${fieldName}`,
+    `値が不正なため既定値(${describeValue(defaultValue)})を使います: ${describeValue(userValue)}`,
+  );
   return defaultValue;
 }
 
@@ -313,10 +415,11 @@ function isOpacity(value: unknown): value is number {
  * defaultUiColorsにユーザー設定をマージした最終値を返す。全フィールドが同じ「CSSカラー値の
  * 文字列」なので、キーを並べて回すだけで済む
  */
-function resolveUiColors(user: AppearanceConfig["ui"]): ResolvedUiColors {
+function resolveUiColors(user: AppearanceConfig["ui"], diag: ConfigDiagnostics): ResolvedUiColors {
   const resolved = { ...defaultUiColors };
   for (const key of Object.keys(defaultUiColors) as (keyof ResolvedUiColors)[]) {
     resolved[key] = resolveField(
+      diag,
       "appearance.ui",
       key,
       user?.[key],
@@ -331,7 +434,10 @@ function resolveUiColors(user: AppearanceConfig["ui"]): ResolvedUiColors {
  * defaultAppearanceにユーザー設定をマージし、フィールド単位・ansiColorsはindex単位で
  * 不正値を警告付きで除外した最終値を返す（resolveKeybindingsと同じper-entry方針）。
  */
-export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAppearanceConfig {
+export function resolveAppearance(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedAppearanceConfig {
   const user = userConfig?.appearance;
 
   const ansiColors = [...defaultAppearance.ansiColors];
@@ -342,13 +448,17 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       if (isNonEmptyString(color)) {
         ansiColors[i] = color;
       } else {
-        console.log(`[bun] ignoring invalid appearance.ansiColors[${i}]: ${String(color)}`);
+        diag.warn(
+          `appearance.ansiColors[${i}]`,
+          `色として使えないためこの1色だけ既定値を使います: ${describeValue(color)}`,
+        );
       }
     }
   }
 
   return {
     fontFamily: resolveField(
+      diag,
       "appearance",
       "fontFamily",
       user?.fontFamily,
@@ -356,6 +466,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isNonEmptyString,
     ),
     fontSize: resolveField(
+      diag,
       "appearance",
       "fontSize",
       user?.fontSize,
@@ -363,6 +474,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isPositiveNumber,
     ),
     lineHeight: resolveField(
+      diag,
       "appearance",
       "lineHeight",
       user?.lineHeight,
@@ -370,6 +482,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isPositiveNumber,
     ),
     foreground: resolveField(
+      diag,
       "appearance",
       "foreground",
       user?.foreground,
@@ -377,6 +490,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isNonEmptyString,
     ),
     background: resolveField(
+      diag,
       "appearance",
       "background",
       user?.background,
@@ -384,6 +498,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isNonEmptyString,
     ),
     backgroundOpacity: resolveField(
+      diag,
       "appearance",
       "backgroundOpacity",
       user?.backgroundOpacity,
@@ -392,6 +507,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
     ),
     backgroundImage: resolveBackgroundImage(
       resolveField(
+        diag,
         "appearance",
         "backgroundImage",
         user?.backgroundImage,
@@ -401,6 +517,7 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
     ),
     ansiColors,
     tabBar: resolveField(
+      diag,
       "appearance",
       "tabBar",
       user?.tabBar,
@@ -408,23 +525,28 @@ export function resolveAppearance(userConfig: NiwatermConfig | null): ResolvedAp
       isTabBarMode,
     ),
     titleBar: resolveField(
+      diag,
       "appearance",
       "titleBar",
       user?.titleBar,
       defaultAppearance.titleBar,
       isTitleBarMode,
     ),
-    ui: resolveUiColors(user?.ui),
+    ui: resolveUiColors(user?.ui, diag),
   };
 }
 
 /**
  * defaultBrowserConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
-export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrowserConfig {
+export function resolveBrowser(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedBrowserConfig {
   const user = userConfig?.browser;
   return {
     defaultUrl: resolveField(
+      diag,
       "browser",
       "defaultUrl",
       user?.defaultUrl,
@@ -437,10 +559,14 @@ export function resolveBrowser(userConfig: NiwatermConfig | null): ResolvedBrows
 /**
  * defaultBoardConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
-export function resolveBoard(userConfig: NiwatermConfig | null): ResolvedBoardConfig {
+export function resolveBoard(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedBoardConfig {
   const user = userConfig?.board;
   return {
     newTabCwd: resolveField(
+      diag,
       "board",
       "newTabCwd",
       user?.newTabCwd,
@@ -455,10 +581,14 @@ export function resolveBoard(userConfig: NiwatermConfig | null): ResolvedBoardCo
 /**
  * defaultTerminalConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
-export function resolveTerminal(userConfig: NiwatermConfig | null): ResolvedTerminalConfig {
+export function resolveTerminal(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedTerminalConfig {
   const user = userConfig?.terminal;
   return {
     scrollback: resolveField(
+      diag,
       "terminal",
       "scrollback",
       user?.scrollback,
@@ -471,10 +601,14 @@ export function resolveTerminal(userConfig: NiwatermConfig | null): ResolvedTerm
 /**
  * defaultMouseConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
-export function resolveMouse(userConfig: NiwatermConfig | null): ResolvedMouseConfig {
+export function resolveMouse(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedMouseConfig {
   const user = userConfig?.mouse;
   return {
     copyOnSelect: resolveField(
+      diag,
       "mouse",
       "copyOnSelect",
       user?.copyOnSelect,
@@ -488,11 +622,17 @@ export function resolveMouse(userConfig: NiwatermConfig | null): ResolvedMouseCo
  * mouse.selectionMenuを取り出す。未設定・関数以外はnull（右クリックメニューは組み込み項目だけになる）。
  * 関数の中身は右クリックのたびに評価されるため、ここでは型だけを確かめる
  */
-export function resolveSelectionMenu(userConfig: NiwatermConfig | null): SelectionMenuFn | null {
+export function resolveSelectionMenu(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): SelectionMenuFn | null {
   const fn = userConfig?.mouse?.selectionMenu;
   if (fn === undefined) return null;
   if (typeof fn !== "function") {
-    console.log(`[bun] ignoring invalid mouse.selectionMenu: ${String(fn)}`);
+    diag.warn(
+      "mouse.selectionMenu",
+      `関数ではないため右クリックメニューは組み込み項目だけになります: ${describeValue(fn)}`,
+    );
     return null;
   }
   return fn;
@@ -522,9 +662,23 @@ function uniqueViewId(base: string, used: ReadonlySet<string>): string {
   return `${base}-${suffix}`;
 }
 
-/** pathがあればconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。どちらも無効ならnull */
-function resolveCustomViewUrl(user: CustomViewConfig): string | null {
-  if (isNonEmptyString(user.path)) return pathToFileURL(resolve(configDirPath(), user.path)).href;
+/**
+ * pathがあればconfigDirPath()基準でfile://に解決し、無ければurlをそのまま使う。どちらも無効ならnull。
+ * 指したファイルが無くてもビューは残す（存在するかどうかでid採番が変わると、HTMLを置いた途端に
+ * キーバインド・CLIから指すidがずれる）。代わりに警告を出して空白のビューの理由が分かるようにする
+ */
+function resolveCustomViewUrl(
+  user: CustomViewConfig,
+  scope: string,
+  diag: ConfigDiagnostics,
+): string | null {
+  if (isNonEmptyString(user.path)) {
+    const filePath = resolve(configDirPath(), user.path);
+    if (!existsSync(filePath)) {
+      diag.warn(`${scope}.path`, `ファイルが見つかりません（ビューは空白になります）: ${filePath}`);
+    }
+    return pathToFileURL(filePath).href;
+  }
   if (isNonEmptyString(user.url)) return user.url;
   return null;
 }
@@ -546,7 +700,10 @@ export interface ResolvedCustomViews {
  * どちらが出るか決まらなくなる）。ワークスペース一覧のidは予約語として先に押さえておく。
  * nameは省略時、サイドバーのラベルが同じにならないよう連番付きへフォールバックする
  */
-export function resolveCustomViews(userConfig: NiwatermConfig | null): ResolvedCustomViews {
+export function resolveCustomViews(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedCustomViews {
   const list = userConfig?.customViews;
   if (!Array.isArray(list)) return { views: [], handlersById: {} };
 
@@ -554,20 +711,21 @@ export function resolveCustomViews(userConfig: NiwatermConfig | null): ResolvedC
   const handlersById: CustomViewHandlersById = {};
   const usedIds = new Set<string>([WORKSPACES_VIEW_ID]);
   for (const [index, user] of list.entries()) {
+    const scope = `customViews[${index}]`;
     if (typeof user !== "object" || user === null) {
-      console.log(`[bun] ignoring non-object customViews[${index}]`);
+      diag.warn(scope, `オブジェクトではないためこの要素だけ無視します: ${describeValue(user)}`);
       continue;
     }
-    const url = resolveCustomViewUrl(user);
+    const url = resolveCustomViewUrl(user, scope, diag);
     if (url === null) {
-      console.log(`[bun] customViews[${index}] requires either path or url; ignoring`);
+      diag.warn(scope, "pathかurlのどちらかが必要なためこの要素だけ無視します");
       continue;
     }
     const name = isNonEmptyString(user.name) ? user.name : `Custom View ${index + 1}`;
     const handlers = validCustomViewHandlers(user.handlers);
     for (const key of Object.keys(user.handlers ?? {})) {
       if (!(key in handlers)) {
-        console.log(`[bun] ignoring non-function customViews[${index}].handlers.${key}`);
+        diag.warn(`${scope}.handlers.${key}`, "関数ではないためこのハンドラだけ無視します");
       }
     }
     const preferredId = isNonEmptyString(user.id) ? slugifyViewId(user.id) : slugifyViewId(name);
@@ -584,11 +742,14 @@ export function resolveCustomViews(userConfig: NiwatermConfig | null): ResolvedC
  * （pty.ts側のOS標準シェルにフォールバックする。appearance/browserと異なりOS共通の
  * 既定値を持たないため、defaultAppearanceのような具体的なデフォルト定数は無い）。
  */
-export function resolveShell(userConfig: NiwatermConfig | null): string | undefined {
+export function resolveShell(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): string | undefined {
   const user = userConfig?.shell?.default;
   if (user === undefined) return undefined;
   if (isNonEmptyString(user)) return user;
-  console.log(`[bun] ignoring invalid shell.default: ${String(user)}`);
+  diag.warn("shell.default", `文字列ではないためOS標準のシェルを使います: ${describeValue(user)}`);
   return undefined;
 }
 
@@ -597,11 +758,17 @@ export function resolveShell(userConfig: NiwatermConfig | null): string | undefi
  * （pty.ts側のOS標準ホームディレクトリにフォールバックする。resolveShellと同じ方針で
  * 具体的なデフォルト定数は持たない）。
  */
-export function resolveWorkspaceDefaultCwd(userConfig: NiwatermConfig | null): string | undefined {
+export function resolveWorkspaceDefaultCwd(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): string | undefined {
   const user = userConfig?.workspace?.defaultCwd;
   if (user === undefined) return undefined;
   if (isNonEmptyString(user)) return user;
-  console.log(`[bun] ignoring invalid workspace.defaultCwd: ${String(user)}`);
+  diag.warn(
+    "workspace.defaultCwd",
+    `文字列ではないためOS標準のホームディレクトリを使います: ${describeValue(user)}`,
+  );
   return undefined;
 }
 
@@ -628,6 +795,7 @@ function isValidShellProfile(value: unknown): value is ShellProfile {
 export function resolveShellProfiles(
   userConfig: NiwatermConfig | null,
   detected: ShellProfile[],
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
 ): ShellProfile[] {
   const byId = new Map<string, ShellProfile>();
   for (const profile of detected) {
@@ -636,15 +804,21 @@ export function resolveShellProfiles(
   const userProfiles = userConfig?.shell?.profiles;
   if (userProfiles !== undefined) {
     if (Array.isArray(userProfiles)) {
-      for (const profile of userProfiles) {
+      for (const [index, profile] of userProfiles.entries()) {
         if (isValidShellProfile(profile)) {
           byId.set(profile.id, profile);
         } else {
-          console.log(`[bun] ignoring invalid shell.profiles entry: ${JSON.stringify(profile)}`);
+          diag.warn(
+            `shell.profiles[${index}]`,
+            `id/name/commandが揃っていないためこの1件だけ無視します: ${describeValue(profile)}`,
+          );
         }
       }
     } else {
-      console.log(`[bun] ignoring invalid shell.profiles: ${String(userProfiles)}`);
+      diag.warn(
+        "shell.profiles",
+        `配列ではないため自動検出ぶんだけを使います: ${describeValue(userProfiles)}`,
+      );
     }
   }
   return [...byId.values()];
@@ -662,8 +836,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * （ratio範囲・shellProfile存在確認・focus重複等）は実行時の状態に依存するためapply時
  * （layout-apply.ts）に行う
  */
-export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig {
-  return normalizeLayouts(userConfig?.layouts, "layouts");
+export function resolveLayouts(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): LayoutsConfig {
+  return normalizeLayouts(userConfig?.layouts, "layouts", diag);
 }
 
 /**
@@ -671,16 +848,23 @@ export function resolveLayouts(userConfig: NiwatermConfig | null): LayoutsConfig
  * 同じ検証を使えるよう、NiwatermConfigではなくlayoutsの生値を受け取る形で切り出している。
  * sourceは警告ログに出す出所（"layouts" / "<projectRoot>/.niwaterm/config.ts layouts"）
  */
-export function normalizeLayouts(user: unknown, source: string): LayoutsConfig {
+export function normalizeLayouts(
+  user: unknown,
+  source: string,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): LayoutsConfig {
   if (user === undefined) return {};
   if (!isPlainObject(user)) {
-    console.log(`[bun] ignoring invalid ${source}: ${String(user)}`);
+    diag.warn(
+      source,
+      `オブジェクトではないためプリセット無しとして扱います: ${describeValue(user)}`,
+    );
     return {};
   }
   const result: LayoutsConfig = {};
   for (const [name, preset] of Object.entries(user)) {
     if (!isPlainObject(preset) || !isPlainObject(preset["layout"])) {
-      console.log(`[bun] ignoring invalid ${source} entry: ${name}`);
+      diag.warn(`${source}.${name}`, "layoutフィールドが無いためこのプリセットだけ無視します");
       continue;
     }
     result[name] = preset as unknown as LayoutPreset;
@@ -702,6 +886,13 @@ export async function loadAndResolveConfig(
 ): Promise<{
   /** 設定ファイルを読み込めたか。falseならファイル不在か読み込み失敗で、全項目が既定値 */
   userConfigLoaded: boolean;
+  /**
+   * 設定ファイルはあるのに読めなかった理由。ファイル不在・成功時はnull。
+   * nullでないときこの戻り値は全項目が既定値なので、呼び出し元は直前の解決結果を残す判断に使う
+   */
+  loadError: string | null;
+  /** 既定値へ落とした項目・無視した項目。`niwaterm config show`・設定モーダルに出す */
+  diagnostics: ConfigDiagnostic[];
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
@@ -725,8 +916,16 @@ export async function loadAndResolveConfig(
   /** ベルの既定の処理（niwa.bell.defaultと同じもの）。ハンドラ未登録時の処理として呼ぶ */
   runDefaultBell: (event: NiwaBellEvent) => void;
 }> {
-  const userConfig = await loadUserConfig(path);
-  const shellProfiles = resolveShellProfiles(userConfig, detectedShellProfiles);
+  const diag = createConfigDiagnostics();
+  const { config: userConfig, error: loadError } = await loadUserConfig(path);
+  // 読み込み失敗はloadErrorとして別に返すため、diagnosticsへは積まない（表示が二重になる）
+  if (loadError !== null) {
+    console.log(`[bun] failed to load config file: ${loadError}`);
+  }
+  const shellProfiles = resolveShellProfiles(userConfig, detectedShellProfiles, diag);
+  // niwa.tab.createが引くため、niwaApiを作る前に確定させる。遅延評価にすると
+  // タブを作るたびに解決し直すことになり、不正値の警告も毎回出てしまう
+  const defaultShell = resolveShell(userConfig, diag);
   // niwa.tab.createのshellProfile解決に使うため、resolveKeybindingsより先にshellProfilesを確定させる
   const niwaApi = createNiwaApi({
     workspaceManager,
@@ -736,31 +935,34 @@ export async function loadAndResolveConfig(
       NIWATERM_BRIDGE_PORT: String(getWslBridgePort() ?? ""),
       NIWATERM_APP_VARIANT: APP_VARIANT,
     }),
-    getDefaultShell: () => resolveShell(userConfig),
+    getDefaultShell: () => defaultShell,
     sendNotification,
     reloadConfig,
   });
   // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
   // 登録内容の取り出しはその後でなければならない
-  const keybindings = resolveKeybindings(userConfig, niwaApi);
-  const customViews = resolveCustomViews(userConfig);
+  const keybindings = resolveKeybindings(userConfig, niwaApi, diag);
+  const customViews = resolveCustomViews(userConfig, diag);
   return {
     userConfigLoaded: userConfig !== null,
+    loadError,
     keybindings,
-    appearance: resolveAppearance(userConfig),
-    browser: resolveBrowser(userConfig),
-    board: resolveBoard(userConfig),
-    terminal: resolveTerminal(userConfig),
+    appearance: resolveAppearance(userConfig, diag),
+    browser: resolveBrowser(userConfig, diag),
+    board: resolveBoard(userConfig, diag),
+    terminal: resolveTerminal(userConfig, diag),
     customViews: customViews.views,
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
-    defaultShell: resolveShell(userConfig),
+    defaultShell,
     shellProfiles,
-    layouts: resolveLayouts(userConfig),
-    mouse: resolveMouse(userConfig),
-    selectionMenu: createSelectionMenu(resolveSelectionMenu(userConfig), niwaApi.niwa),
-    workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig),
+    layouts: resolveLayouts(userConfig, diag),
+    mouse: resolveMouse(userConfig, diag),
+    selectionMenu: createSelectionMenu(resolveSelectionMenu(userConfig, diag), niwaApi.niwa),
+    workspaceDefaultCwd: resolveWorkspaceDefaultCwd(userConfig, diag),
     runKeybindHandler: niwaApi.runHandler,
     bellHandler: niwaApi.extractBellHandler(),
     runDefaultBell: niwaApi.runDefaultBell,
+    // 収集はここまでの全resolveXが終わってから。listは呼んだ時点のスナップショットを返す
+    diagnostics: diag.list(),
   };
 }

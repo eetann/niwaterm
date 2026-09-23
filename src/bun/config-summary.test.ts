@@ -13,6 +13,8 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
   return {
     configFile: "/home/user/.config/niwaterm/niwaterm.config.ts",
     configFileLoaded: true,
+    loadError: null,
+    diagnostics: [],
     appearance: defaultAppearance,
     baseFontSize: defaultAppearance.fontSize,
     baseLineHeight: defaultAppearance.lineHeight,
@@ -39,6 +41,15 @@ describe("buildConfigSummary", () => {
     const summary = buildConfigSummary(input({ configFileLoaded: false }));
     expect(summary.configFile).toBe("/home/user/.config/niwaterm/niwaterm.config.ts");
     expect(summary.configFileLoaded).toBe(false);
+  });
+
+  test("読み込みエラーと無視した項目の診断をそのまま通す", () => {
+    const diagnostics = [
+      { level: "warn" as const, scope: "appearance.fontSize", message: "値が不正なため既定値" },
+    ];
+    const summary = buildConfigSummary(input({ loadError: "SyntaxError: ...", diagnostics }));
+    expect(summary.loadError).toBe("SyntaxError: ...");
+    expect(summary.diagnostics).toEqual(diagnostics);
   });
 
   test("セクション名は設定ファイルのトップレベルキーと同じ", () => {

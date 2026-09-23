@@ -49,6 +49,31 @@ export function ConfigDialog({ open, onOpenChange, summary }: ConfigDialogProps)
               {summary.configFile}
               {!summary.configFileLoaded && " (未読み込み。全項目が既定値です)"}
             </p>
+            {/* 「設定したのに効かない」時に真っ先に見る情報なので、設定値一覧より前に出す */}
+            {summary.loadError !== null && (
+              <section className="rounded-sm border border-destructive/50 p-2">
+                <h3 className="mb-1 font-semibold text-destructive text-sm">読み込みエラー</h3>
+                <p className="break-words font-mono text-xs">{summary.loadError}</p>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  {summary.configFileLoaded
+                    ? "直前に読み込めた設定のまま動いています（以下はその内容）"
+                    : "全項目が既定値です"}
+                </p>
+              </section>
+            )}
+            {summary.diagnostics.length > 0 && (
+              <section>
+                <h3 className="mb-1 font-semibold text-sm">無視した設定</h3>
+                <ul className="space-y-1 text-xs">
+                  {summary.diagnostics.map((diagnostic) => (
+                    <li key={`${diagnostic.scope}:${diagnostic.message}`} className="break-words">
+                      <span className="font-mono text-muted-foreground">{diagnostic.scope}</span>
+                      <span className="ml-2">{diagnostic.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
             {summary.sections.map((section) => (
               <section key={section.name}>
                 <h3 className="mb-1 font-semibold text-sm">{section.name}</h3>

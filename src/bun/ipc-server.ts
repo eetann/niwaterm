@@ -1790,6 +1790,8 @@ export async function createIpcServer(
   getConfigSummary: () => ConfigSummary = () => ({
     configFile: "",
     configFileLoaded: false,
+    loadError: null,
+    diagnostics: [],
     sections: [],
   }),
   windowOps: WindowOps = singleWindowOps(workspaceManager),

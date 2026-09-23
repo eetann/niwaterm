@@ -19,6 +19,7 @@ import type {
   ResolvedUiColors,
   ShellProfile,
 } from "@niwaterm/config";
+import type { ConfigDiagnostic } from "./config-diagnostics";
 import { buildKeybindList } from "./keybind-list";
 
 /** 値が無い項目の表示。未設定でも既定値で動く項目はnoteへフォールバック先を書く */
@@ -45,12 +46,21 @@ export interface ConfigSummary {
   configFile: string;
   /** 読み込めたか。falseならファイル不在か読み込み失敗で、全項目が既定値 */
   configFileLoaded: boolean;
+  /**
+   * 直近の読み込み試行が失敗した理由。成功・ファイル不在ならnull。
+   * configFileLoadedがtrueのままこれが入っているときは、読み込めていた頃の設定で動き続けている
+   */
+  loadError: string | null;
+  /** 既定値へ落とした項目・無視した項目。設定したのに効かない原因の手がかり */
+  diagnostics: ConfigDiagnostic[];
   sections: ConfigSummarySection[];
 }
 
 export interface ConfigSummaryInput {
   configFile: string;
   configFileLoaded: boolean;
+  loadError: string | null;
+  diagnostics: ConfigDiagnostic[];
   /** 実行時ズームを反映した実効値 */
   appearance: ResolvedAppearanceConfig;
   /** ズームを掛ける前の、設定ファイル由来のフォントサイズ */
@@ -230,6 +240,8 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
   return {
     configFile: input.configFile,
     configFileLoaded: input.configFileLoaded,
+    loadError: input.loadError,
+    diagnostics: input.diagnostics,
     sections: [
       appearanceSection(input.appearance, input.baseFontSize, input.baseLineHeight),
       keybindingsSection(input.keybindings),

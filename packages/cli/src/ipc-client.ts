@@ -817,8 +817,24 @@ export interface ConfigSummarySection {
   entries: ConfigSummaryEntry[];
 }
 
+/** warnはその項目だけ既定値へ落ちた状態、errorはセクション単位で効いていない状態 */
+export interface ConfigDiagnostic {
+  level: "warn" | "error";
+  /** 設定ファイル上の位置（`appearance.fontSize`・`customViews[1].path`） */
+  scope: string;
+  message: string;
+}
+
 export type ShowConfigResult =
-  | { ok: true; configFile: string; configFileLoaded: boolean; sections: ConfigSummarySection[] }
+  | {
+      ok: true;
+      configFile: string;
+      configFileLoaded: boolean;
+      /** 直近の読み込みが失敗した理由。成功・ファイル不在ならnull */
+      loadError: string | null;
+      diagnostics: ConfigDiagnostic[];
+      sections: ConfigSummarySection[];
+    }
   | { ok: false; error: string };
 
 export async function showConfig(endpoint: IpcEndpoint): Promise<ShowConfigResult> {
@@ -827,6 +843,8 @@ export async function showConfig(endpoint: IpcEndpoint): Promise<ShowConfigResul
     const body = (await res.json().catch(() => null)) as {
       configFile?: unknown;
       configFileLoaded?: unknown;
+      loadError?: unknown;
+      diagnostics?: unknown;
       sections?: unknown;
       error?: unknown;
     } | null;
@@ -835,6 +853,10 @@ export async function showConfig(endpoint: IpcEndpoint): Promise<ShowConfigResul
         ok: true,
         configFile: typeof body.configFile === "string" ? body.configFile : "",
         configFileLoaded: body.configFileLoaded === true,
+        loadError: typeof body.loadError === "string" ? body.loadError : null,
+        diagnostics: Array.isArray(body.diagnostics)
+          ? (body.diagnostics as ConfigDiagnostic[])
+          : [],
         sections: body.sections as ConfigSummarySection[],
       };
     }

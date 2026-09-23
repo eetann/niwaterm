@@ -321,7 +321,21 @@ ctrl+shift+c      copy-selection
 niwaterm config show
 ```
 
-現在有効な設定値の一覧を、設定ファイル（`niwaterm.config.ts`）のトップレベルキーごとに表示する。1行目は読み込んでいる設定ファイルのパスで、読み込めていない場合（ファイルが無い・importに失敗した）はその旨が付く。
+現在有効な設定値の一覧を、設定ファイル（`niwaterm.config.ts`）のトップレベルキーごとに表示する。1行目は読み込んでいる設定ファイルのパスで、一度も読み込めていない場合（ファイルが無い・importに失敗した）はその旨が付く。
+
+設定値の一覧より前に、直近の読み込みが失敗していれば`[読み込みエラー]`が、既定値へ落とした項目・無視した項目があれば`[無視した設定]`が出る。不正な値はその項目だけを落として残りを活かすため、「書いたのに効かない」ときの切り分けはここから始める。
+
+```
+config: /Users/you/.config/niwaterm/niwaterm.config.ts
+
+[読み込みエラー]
+ResolveMessage: Cannot find module './custom-views/notes-handlers.ts'
+直前に読み込めた設定のまま動いています（下の一覧はその内容）
+
+[無視した設定]
+- appearance.fontSize: 値が不正なため既定値(13)を使います: "13px"
+! keybindings: 関数が途中で失敗しました（失敗より前の登録だけが有効です）: TypeError: ...
+```
 
 ```
 config: /Users/you/.config/niwaterm/niwaterm.config.ts
