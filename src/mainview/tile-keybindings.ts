@@ -147,22 +147,46 @@ function keyBodyFromEvent(e: KeyboardEventLike): string {
   }
 }
 
-function keyboardEventToCanonical(e: KeyboardEventLike): string {
-  return canonicalizeParsed({
-    cmd: e.metaKey,
-    ctrl: e.ctrlKey,
-    shift: e.shiftKey,
-    alt: e.altKey,
-    key: keyBodyFromEvent(e),
-  });
+// Shiftで入力する記号（US配列の`|`・`:`、JIS配列の`|`・`+`等）はShiftの効果がe.key自体に
+// 既に表れている。Shiftフラグまで比較すると`"|"`のバインドが`shift+|`扱いになって一致しないため、
+// 大文字小文字の無い1文字のe.keyに限り、Shift付きで一致しなければShift無しでも引き直す。
+// どの記号にShiftが要るかは配列で変わるため、利用者にshift+の有無を書き分けさせない。
+// e.codeから復元するキー（[ ] `・alt+英数字）はShiftでe.keyが変わる前提で扱っているので対象外
+function shiftIsAbsorbedByKey(e: KeyboardEventLike): boolean {
+  if (!e.shiftKey || e.key.length !== 1) return false;
+  if (e.code === "BracketRight" || e.code === "BracketLeft" || e.code === "Backquote") return false;
+  if (e.altKey && altKeyBodyFromCode(e.code) !== null) return false;
+  return e.key.toLowerCase() === e.key.toUpperCase();
 }
 
-function keyboardEventToSecondKeyCanonical(e: KeyboardEventLike): string {
-  return canonicalizeSecondKey({
-    shift: e.shiftKey,
-    alt: e.altKey,
-    key: keyBodyFromEvent(e),
-  });
+function keyboardEventToCanonicals(e: KeyboardEventLike): string[] {
+  const toCanonical = (shift: boolean) =>
+    canonicalizeParsed({
+      cmd: e.metaKey,
+      ctrl: e.ctrlKey,
+      shift,
+      alt: e.altKey,
+      key: keyBodyFromEvent(e),
+    });
+  return shiftIsAbsorbedByKey(e)
+    ? [toCanonical(true), toCanonical(false)]
+    : [toCanonical(e.shiftKey)];
+}
+
+function keyboardEventToSecondKeyCanonicals(e: KeyboardEventLike): string[] {
+  const toCanonical = (shift: boolean) =>
+    canonicalizeSecondKey({ shift, alt: e.altKey, key: keyBodyFromEvent(e) });
+  return shiftIsAbsorbedByKey(e)
+    ? [toCanonical(true), toCanonical(false)]
+    : [toCanonical(e.shiftKey)];
+}
+
+function lookup<T>(map: ReadonlyMap<string, T>, canonicals: string[]): T | undefined {
+  for (const c of canonicals) {
+    const entry = map.get(c);
+    if (entry) return entry;
+  }
+  return undefined;
 }
 
 export function actionToTileCommand(action: KeybindAction): TileCommand {
@@ -329,10 +353,8 @@ export function createKeybindResolver(
   let repeatDeadline: number | null = null;
 
   function matchesPrefix(e: KeyboardEventLike): boolean {
-    return (
-      compiled.prefix !== null &&
-      keyboardEventToCanonical(e) === canonicalizeParsed(compiled.prefix)
-    );
+    if (compiled.prefix === null) return false;
+    return keyboardEventToCanonicals(e).includes(canonicalizeParsed(compiled.prefix));
   }
 
   // 2打目キー待ちでない時、リピート窓が有効ならprefix無しで同じテーブルを引く。
@@ -344,7 +366,7 @@ export function createKeybindResolver(
       repeatDeadline = null;
       return null;
     }
-    const entry = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
+    const entry = lookup(compiled.bindings, keyboardEventToSecondKeyCanonicals(e));
     if (!entry || !entry.repeat) {
       repeatDeadline = null;
       return null;
@@ -361,7 +383,7 @@ export function createKeybindResolver(
         repeatDeadline = null;
         return { kind: "consumed" };
       }
-      const entry = compiled.bindings.get(keyboardEventToSecondKeyCanonical(e));
+      const entry = lookup(compiled.bindings, keyboardEventToSecondKeyCanonicals(e));
       if (!entry) {
         repeatDeadline = null;
         return { kind: "consumed" };
@@ -384,7 +406,7 @@ export function createKeybindResolver(
 
     // cmd/ctrl/altのいずれも伴わないキーはターミナルへの通常入力に予約されている
     if (e.metaKey || e.ctrlKey || e.altKey) {
-      const entry = compiled.direct.get(keyboardEventToCanonical(e));
+      const entry = lookup(compiled.direct, keyboardEventToCanonicals(e));
       if (entry) return { kind: "command", command: bindingTargetToTileCommand(entry.target) };
     }
 

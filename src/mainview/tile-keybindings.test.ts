@@ -267,6 +267,53 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("Shiftで入力する記号は、shift+無しで書いたバインドに一致する", () => {
+    const custom = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { "|": "split-vertical", ":": "command-palette" },
+    });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("|", { shiftKey: true, code: "Backslash" }))).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "vertical" },
+    });
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key(":", { shiftKey: true, code: "Semicolon" }))).toEqual({
+      kind: "command",
+      command: { type: "commandPalette" },
+    });
+  });
+
+  test("記号にshift+付きのバインドがあればそちらを優先する", () => {
+    const custom = compileKeybindings({
+      prefix: "ctrl+b",
+      bindings: { "|": "split-vertical", "shift+|": "split-horizontal" },
+    });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("|", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "horizontal" },
+    });
+  });
+
+  test("英字のShiftは無視しない（shift+dとdを区別する）", () => {
+    const custom = compileKeybindings({ prefix: "ctrl+b", bindings: { d: "split-vertical" } });
+    const resolver = createKeybindResolver(custom);
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("D", { shiftKey: true }))).toEqual({ kind: "consumed" });
+  });
+
+  test("directバインドでもShiftで入力する記号はshift+無しの表記に一致する", () => {
+    const custom = compileKeybindings({ direct: { "cmd+|": "split-vertical" } });
+    const resolver = createKeybindResolver(custom);
+    expect(resolver.handleKeydown(key("|", { metaKey: true, shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "split", orientation: "vertical" },
+    });
+  });
+
   test("prefix -> PageUp/PageDown でページ単位スクロール", () => {
     const upResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     upResolver.handleKeydown(prefix());
