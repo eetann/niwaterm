@@ -21,7 +21,7 @@ niwaterm init              # 設定ディレクトリ(~/.config/niwaterm/)のセ
 niwaterm list              # ワークスペース・タイル・タブの一覧
 niwaterm worktree list     # gitのワークツリー一覧（アプリ未起動でも動く）
 niwaterm worktree open dev # 既存ワークツリーをBoardとして開く
-niwaterm docs list         # 利用可能なドキュメントトピックの一覧
+niwaterm docs list         # 利用可能なドキュメントトピックの一覧（--jsonでパース向けの出力）
 niwaterm docs show cli     # 全コマンドの使い方・IPCサーバー仕様を表示
 ```
 

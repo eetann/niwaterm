@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { cli, define } from "gunshi";
+import { renderUsage } from "gunshi/renderer";
+import { cliName, docsHintLine } from "./agent-hint";
 import { failAndExit } from "./cli-error";
 import agentCommand from "./commands/agent";
 import boardCommand from "./commands/board";
@@ -23,6 +25,12 @@ import workspaceCommand from "./commands/workspace";
 import worktreeCommand from "./commands/worktree";
 
 const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
+const VERSION = "0.0.1";
+
+// `docs show cli | head`のようにパイプ先が先に閉じたとき、EPIPEで異常終了させない
+process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code !== "EPIPE") throw err;
+});
 
 // hookの不正な引数も成功扱いにするため、通常の引数検証・ヘルプ表示を通さない。
 if (process.argv[2] === "_hook") {
@@ -31,22 +39,31 @@ if (process.argv[2] === "_hook") {
   process.exit(0);
 }
 
+// gunshiのバージョン表示はctx.env.versionをそのまま出すだけで差し込む余地が無いため、
+// cli()へ渡す前に処理する。導線はバージョン文字列をパースする側を壊さないようstderrへ出す
+if (process.argv[2] === "-v" || process.argv[2] === "--version") {
+  console.log(VERSION);
+  console.error(docsHintLine());
+  process.exit(0);
+}
+
 const mainCommand = define({
-  name: "niwaterm",
+  name: cliName(),
   description: DESCRIPTION,
   run: () => {
-    console.log(
-      'Run "niwaterm --help" for available commands, or "niwaterm docs show cli" for full docs',
-    );
+    console.log(`"${cliName()} --help" でコマンド一覧を表示できます。`);
+    console.log(docsHintLine());
   },
 });
 
 try {
   await cli(process.argv.slice(2), mainCommand, {
-    name: "niwaterm",
-    version: "0.0.1",
+    name: cliName(),
+    version: VERSION,
     description: DESCRIPTION,
     renderHeader: null,
+    // ctx.env.renderUsageはサブコマンドのヘルプでも使われるため、ここだけで全ヘルプに導線が付く
+    renderUsage: async (ctx) => `${await renderUsage(ctx)}\n\n${docsHintLine()}`,
     subCommands: {
       agent: agentCommand,
       ping: pingCommand,

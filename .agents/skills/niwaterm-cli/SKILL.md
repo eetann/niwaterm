@@ -53,9 +53,10 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 コマンドの全オプション・使用例・終了コード・IPCサーバー仕様は次のコマンドで確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
 
     niwaterm docs show cli        # コマンド全体
+    niwaterm docs show config     # 設定ファイル（キーバインド・外観・レイアウト等）の書き方
     niwaterm docs show worktree   # ワークツリー管理（置き場所・フック・レイアウト・Boardとの紐づけ）
 
-トピック一覧の確認は`niwaterm docs list`、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。
+トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックは`docs/guide/`から自動で列挙されるので、ここに挙げた以外が増えていることもある。
 
 ## 典型的な流れ
 

@@ -520,12 +520,13 @@ niwaterm ping --help
 ```
 
 ```sh
-niwaterm docs list
-niwaterm docs show cli
-niwaterm docs show worktree
+niwaterm docs list [--json]
+niwaterm docs show <name>
 ```
 
-`niwaterm docs list`は利用可能なドキュメントトピックの一覧、`niwaterm docs show <name>`はそのトピックのドキュメントそのものをターミナルへ出力する（`cli`はこのドキュメント、`worktree`は`docs/guide/worktree.md`）。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでドキュメント全体を取得できる。
+`niwaterm docs list`は利用可能なドキュメントトピックを`name<TAB>description`形式で表示する。`--json`を付けると、トピックの配列と次の操作を示す`help`を持つJSONで出力する。`niwaterm docs show <name>`はそのトピックのドキュメントそのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでドキュメント全体を取得できる。
+
+トピックは`docs/guide/`配下のMarkdownから組み立てられ、`name`は拡張子を除いたファイル名、説明はfrontmatterの`description`をそのまま使う。guideを増やせば一覧にも載るため、CLI側にトピックを登録する必要はない。
 
 ## コマンド命名規則
 
@@ -537,6 +538,16 @@ niwaterm docs show worktree
 - `.agents/skills/niwaterm-cli/SKILL.md` — Claude Codeなどのエージェントがniwatermを操作する際に自律的に発見できるスキル定義
 
 いずれもコマンドの詳細はこのドキュメント（`niwaterm docs show cli`）への導線に留め、内容を書き写さない。
+
+エージェントはコマンドを予測できない順序で叩くため、`docs`コマンドへの導線は入口ごとに出す。
+
+- `--version` — バージョン文字列をパースする側を壊さないよう、導線だけstderrへ出す
+- `--help` — フッターに出す。サブコマンドのヘルプにも同じものが付く
+- 失敗時のエラー出力 — AIエージェントからの実行と判定できたときだけ出す。人間の実行では毎回のノイズになるため
+
+エージェントかどうかはgunshiの`getAgentProfile()`（`AI_AGENT`・`CLAUDECODE`等の環境変数を見る）で判定する。
+
+導線に埋め込むコマンド名は`NIWATERM_CLI_NAME`で変えられる。開発用の`niwaterm-dev`は`exec bun <エントリ>`の形のラッパーで起動名が残らず、既定の`niwaterm`のまま案内すると常用インスタンス側のCLIへ誘導してしまうため、ラッパー側でこの変数を渡している。
 
 ## スコープ外（roadmap参照）
 
