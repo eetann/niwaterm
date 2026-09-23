@@ -44,10 +44,10 @@ niwaterm list
 レイアウトプリセットが紐づいているBoardには`[startup: <name>]`（起動時にそのプリセットで組み直す）または`[preset: <name>]`（プリセット名は覚えているが起動時は骨格を復元する）が付く（「起動時レイアウト」節）。この表示を確認できるよう、紐づけのあるBoardはワークスペース内に1つしか無くてもBoard行を省略しない。
 
 ```sh
-niwaterm notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent]
+niwaterm notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent] [--tab <tabId>]
 ```
 
-OSのデスクトップ通知を出す。AIエージェントがタスク完了等をユーザーへ知らせる用途を想定（`--title`のみ必須）。クリックしてもniwatermへのフォーカス移動は行わない。Windows実機ではElectrobun本体の通知APIが機能しない既知の不具合があり、PowerShell経由の代替実装を使っている（詳細: `docs/known-issues/windows-shell-notifyicon-not-registered.md`）。
+OSのデスクトップ通知を出す。AIエージェントがタスク完了等をユーザーへ知らせる用途を想定（`--title`のみ必須）。macOSでは通知をクリックすると`--tab`のタブへ遷移する。`--tab`省略時はコマンドを実行したタブが遷移先になり、niwaterm外から実行した場合はクリックしても遷移しない。Windowsはクリックしても遷移しない。Windows実機ではElectrobun本体の通知APIが機能しない既知の不具合があり、PowerShell経由の代替実装を使っている（詳細: `docs/known-issues/windows-shell-notifyicon-not-registered.md`）。
 
 ```sh
 niwaterm tab send-keys --tab <tabId> <keys...>

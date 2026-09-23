@@ -93,7 +93,7 @@ export default defineConfig({
 | `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない）。`opts.description`で一覧表示（`niwaterm keybind list`）用の説明を付けられる |
 | `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
 | `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
-| `niwa.notify(opts)` | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent? }`（`title`のみ必須）。クリックしてもniwatermへのフォーカス移動は行わない |
+| `niwa.notify(opts)` | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent?, tabId? }`（`title`のみ必須）。macOSでは`tabId`を渡すと、通知のクリックでそのタブへ遷移する（Windowsはクリックしても遷移しない） |
 | `niwa.reloadConfig()` | 設定ファイルを再読み込みする（ファイル監視での自動リロード・`reload-config`キーバインドと同じ処理）。完了を`await`できるため、`niwa.keybind`の関数ハンドラ内で「リロード→完了後に`niwa.notify`で知らせる」のような組み立てができる |
 | `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
 | `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
@@ -417,7 +417,7 @@ prefix + `v`（`copy-mode`アクション）でコピーモードに入る。マ
 既定の挙動は2つ。
 
 - **タブへのマーク**: タブバーとサイドバーのBoard行にベルのアイコンが出る。そのタブが画面に出た時点で自動的に消える（ウィンドウがフォーカスされていない間は、画面に出ていても消えない）
-- **デスクトップ通知**: そのタブが今まさに画面に出ている時以外に出す（別Board・別ワークスペース・非アクティブタブ、またはniwatermのウィンドウが後ろにある場合）。目の前に出ているタブならマークだけで気づけるため通知しない。同じタブでベルが続く場合、通知は5秒間隔まで間引く（マークは常に付く）
+- **デスクトップ通知**: そのタブが今まさに画面に出ている時以外に出す（別Board・別ワークスペース・非アクティブタブ、またはniwatermのウィンドウが後ろにある場合）。目の前に出ているタブならマークだけで気づけるため通知しない。同じタブでベルが続く場合、通知は5秒間隔まで間引く（マークは常に付く）。macOSでは通知をクリックするとベルが鳴ったタブへ遷移する
 
 ただし、そのタブの`agent_status`が`working`の間はマークも通知も出さない。エージェントは手が要らない途中経過でもBELを鳴らすため（Claude Codeは長いコマンドが一定時間を超えると鳴らす）、そのまま扱うと作業中ずっとベルが積もる。手が要る場面では`agent_status`が`blocked`（応答待ち）・`idle`（完了）へ変わり、サイドバーのバッジで分かる。`agent_status`は[エージェント統合](cli.md)のhooksが書き込むタブ変数で、hooksを入れていなければこの間引きは働かない。
 
@@ -433,7 +433,7 @@ export default defineConfig({
     niwa.on("bell", (event) => {
       // 今見ていないワークスペースで鳴ったベルだけ通知する
       if (event.workspaceId !== niwa.workspace.current()) {
-        niwa.notify({ title: "ベル", body: event.tabName ?? event.tabId });
+        niwa.notify({ title: "ベル", body: event.tabName ?? event.tabId, tabId: event.tabId });
       }
     });
   },

@@ -690,4 +690,17 @@ describe('niwa.on("bell") / niwa.bell', () => {
 
     expect(notified).toHaveLength(1);
   });
+
+  test("通知にはクリック時の遷移先としてベルが鳴ったタブを載せる", () => {
+    const tabIds: (string | undefined)[] = [];
+    const { workspaceManager, runDefaultBell } = createTestSetup({}, () => [], {
+      sendNotification: (opts) => tabIds.push(opts.tabId),
+    });
+    resolvePending(workspaceManager);
+    const tabId = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+
+    runDefaultBell(bellEvent(tabId, { windowFocused: false, visible: false }));
+
+    expect(tabIds).toEqual([tabId]);
+  });
 });

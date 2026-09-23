@@ -51,12 +51,14 @@ fi
 # （src/bun/pty.tsのwithPtyExec参照）
 [tasks."build:native:mac"]
 hide = true
-description = "shimとniwaterm-ptyexecをmacOS向けにビルドする（build:nativeから呼ばれる）"
+description = "shim・niwaterm-ptyexec・通知ヘルパーをmacOS向けにビルドする（build:nativeから呼ばれる）"
 run = '''
 cc -dynamiclib -Ivendor/libghostty/include src/native/shim.c \
   -Lvendor/libghostty/lib -lghostty-vt -Wl,-rpath,@loader_path \
   -o vendor/libghostty/lib/libniwashim.dylib
 cc -O2 src/native/ptyexec.c -o vendor/libghostty/lib/niwaterm-ptyexec
+cc -dynamiclib -fobjc-arc -framework Foundation -framework UserNotifications \
+  src/native/macnotify.m -o vendor/libghostty/lib/libniwamacnotify.dylib
 '''
 
 # zigはWindowsのみDLL本体をbin/へ出す（lib/に入るのはリンク用のインポートライブラリ）。

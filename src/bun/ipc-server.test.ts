@@ -2658,6 +2658,49 @@ describe("POST /notify", () => {
     expect(notified).toEqual([{ title: "ビルド完了", body: "npm run build", silent: true }]);
   });
 
+  test("tabIdを渡すとクリック時の遷移先としてsendNotificationへ渡る", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const notified: unknown[] = [];
+    server = await createIpcServer(
+      socketPath,
+      mgr,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (opts) => notified.push(opts),
+    );
+
+    const res = await fetch("http://localhost/notify", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "完了", tabId: "tab-1" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(notified).toEqual([{ title: "完了", tabId: "tab-1" }]);
+  });
+
+  test("tabIdが文字列でなければ400を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/notify", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "完了", tabId: 1 }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   test("title未指定は400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);

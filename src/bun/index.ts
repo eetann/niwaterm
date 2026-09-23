@@ -53,6 +53,7 @@ import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profile
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import { enableWindowTransparency } from "./win-window";
 import { sendWindowsNotification } from "./windows-notification";
+import { createMacNotifier } from "./mac-notification";
 import {
   defaultWindowFrame,
   isFrameRestorable,
@@ -549,10 +550,14 @@ const detectedShellProfiles = await detectShellProfiles();
 
 const restoreFrom = await loadPersistedState(persistedFilePath());
 
-// ElectrobunのUtils.showNotificationはWindows実機で機能しない（windows-notification.ts参照）ため、
-// Windowsだけ自前のPowerShell経由実装に差し替える
+// ElectrobunのUtils.showNotificationはWindows実機で機能せず（windows-notification.ts参照）、
+// macOSではクリックされた通知を識別できない（mac-notification.ts参照）ため、両OSとも自前実装に
+// 差し替える。macOSのヘルパーが未ビルドの場合だけElectrobun実装へフォールバックする
+const macNotifier = createMacNotifier();
 const sendNotification: (opts: NiwaNotifyOptions) => void =
-  process.platform === "win32" ? sendWindowsNotification : Utils.showNotification;
+  process.platform === "win32"
+    ? sendWindowsNotification
+    : (macNotifier?.send ?? Utils.showNotification);
 
 // Boardに紐づくワークツリーが消えていないかの監視。renderのたびに同期statを打つわけにいかないため
 // キャッシュ越しに引く（dir-existence.ts）
@@ -832,6 +837,22 @@ try {
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
   console.log(`[bun] failed to start ipc server: ${String(err)}`);
+}
+
+// 通知のクリックはネイティブ側のキューに積まれるだけなので、ここで取り出して通知元タブへ遷移する
+// （JSCallbackで直接受けない理由はsrc/native/macnotify.m参照）。遷移先のタブが既に閉じられていれば何もしない
+const NOTIFICATION_CLICK_POLL_INTERVAL_MS = 300;
+if (macNotifier) {
+  setInterval(() => {
+    for (
+      let tabId = macNotifier.pollClickedTabId();
+      tabId;
+      tabId = macNotifier.pollClickedTabId()
+    ) {
+      if (!windowManager.showTab(tabId as TabId)) continue;
+      activateWindow(windowManager.windowIdOfTab(tabId as TabId));
+    }
+  }, NOTIFICATION_CLICK_POLL_INTERVAL_MS);
 }
 
 process.on("exit", cleanup);

@@ -696,6 +696,7 @@ interface NotifyRequestBody {
   body?: string;
   subtitle?: string;
   silent?: boolean;
+  tabId?: string;
 }
 
 function parseNotifyBody(body: unknown): NotifyRequestBody | null {
@@ -704,6 +705,7 @@ function parseNotifyBody(body: unknown): NotifyRequestBody | null {
     body?: unknown;
     subtitle?: unknown;
     silent?: unknown;
+    tabId?: unknown;
   };
   if (typeof b.title !== "string" || b.title.length === 0) return null;
   const result: NotifyRequestBody = { title: b.title };
@@ -718,6 +720,10 @@ function parseNotifyBody(body: unknown): NotifyRequestBody | null {
   if (b.silent !== undefined) {
     if (typeof b.silent !== "boolean") return null;
     result.silent = b.silent;
+  }
+  if (b.tabId !== undefined) {
+    if (typeof b.tabId !== "string") return null;
+    result.tabId = b.tabId;
   }
   return result;
 }
@@ -1684,7 +1690,8 @@ function buildApp(
       return c.json(
         {
           ok: false,
-          error: "expected { title: string, body?: string, subtitle?: string, silent?: boolean }",
+          error:
+            "expected { title: string, body?: string, subtitle?: string, silent?: boolean, tabId?: string }",
         },
         400,
       );

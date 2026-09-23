@@ -1470,6 +1470,7 @@ export function sendNotification(
   body?: string,
   subtitle?: string,
   silent?: boolean,
+  tabId?: string,
 ): Promise<SendNotificationResult> {
-  return postJson(endpoint, "/notify", { title, body, subtitle, silent });
+  return postJson(endpoint, "/notify", { title, body, subtitle, silent, tabId });
 }

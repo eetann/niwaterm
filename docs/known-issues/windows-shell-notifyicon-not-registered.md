@@ -34,7 +34,7 @@ niwaterm側でWindows専用の代替実装を追加した（`src/bun/windows-not
 
 `Bun.spawn(["powershell.exe", "-EncodedCommand", <base64>])`で実行する。title/bodyはPowerShellのシングルクォート文字列リテラルとしてエスケープしてから埋め込み、XMLエスケープは`[System.Security.SecurityElement]::Escape()`に委譲することで、PowerShellコマンドインジェクションとXMLインジェクションの両方を防いでいる。
 
-`src/bun/index.ts`で`process.platform === "win32"`ならこの実装、それ以外（macOS）は引き続きElectrobunの`Utils.showNotification`を使う分岐にした。
+`src/bun/index.ts`で`process.platform === "win32"`ならこの実装を使う分岐にした（macOSはクリックで通知元タブへ遷移させるため、別の自前実装`src/bun/mac-notification.ts`を使う）。
 
 クリック時のアクティベーション（トースト側の`ToastActivated`相当、クリックで通知元タブへフォーカスを移す機能）は、常駐プロセスかCOM Activator登録が必要で実装コストが大きいため、現時点では対応していない（表示のみ）。将来対応する場合はこのファイルの回避策実装が起点になる。
 

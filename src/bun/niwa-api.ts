@@ -343,6 +343,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     deps.sendNotification({
       title: "ベル",
       body: event.tabName ?? undefined,
+      tabId: event.tabId,
     });
   }
 

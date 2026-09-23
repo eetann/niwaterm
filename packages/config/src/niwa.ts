@@ -191,6 +191,8 @@ export interface NiwaNotifyOptions {
   subtitle?: string;
   /** trueなら通知音を鳴らさない */
   silent?: boolean;
+  /** 通知元のタブ。指定するとクリック時にそのタブへ遷移する（macOSのみ。他OSでは無視される） */
+  tabId?: string;
 }
 
 export interface NiwaClipboardApi {
