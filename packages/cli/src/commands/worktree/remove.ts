@@ -7,7 +7,7 @@ import {
   resolveTarget,
   toAppAccessiblePath,
 } from "../../ipc-client";
-import { findWorktreeBoards, type WorktreeBoard } from "../../worktree/board";
+import { findWorktreeBoards } from "../../worktree/board";
 import {
   deleteBranch,
   listWorktrees,
@@ -49,34 +49,26 @@ async function blockedReasons(repoRoot: string, targets: WorktreeEntry[]): Promi
 }
 
 /**
- * このCLIを実行しているタブが属するBoardを最後へ回す。そのBoardを閉じるとタブのPTYが落ち、
- * シェルごとCLI自身が巻き添えで殺されるため、先に閉じると残りのBoardが閉じられずに残る。
- * 呼び出し元タブが分からない場合（niwatermの外から実行した等）は順序をそのままにする
+ * このCLIを実行しているタブが属するBoard。分からなければnull。
+ * `NIWATERM_TAB_ID`が無いまま解決させるとアクティブなBoardが返るため、環境変数がある場合だけ問う
+ * （niwatermの外から実行した場合は閉じてもCLIが死なないので、除外してはいけない）
  */
-async function selfBoardLast(
-  endpoint: IpcEndpoint,
-  boards: WorktreeBoard[],
-): Promise<WorktreeBoard[]> {
-  if (boards.length < 2) return boards;
-  const resolved = await resolveTarget(endpoint, process.env["NIWATERM_TAB_ID"]);
-  if (!resolved.ok) return boards;
-  const self = resolved.target.boardId;
-  return [
-    ...boards.filter((board) => board.boardId !== self),
-    ...boards.filter((board) => board.boardId === self),
-  ];
+async function selfBoardId(endpoint: IpcEndpoint): Promise<string | null> {
+  const tabId = process.env["NIWATERM_TAB_ID"];
+  if (tabId === undefined) return null;
+  const resolved = await resolveTarget(endpoint, tabId);
+  return resolved.ok ? resolved.target.boardId : null;
 }
 
 /**
- * それらのワークツリーで開いたBoardを閉じる。**ワークツリーを消し終えてから呼ぶこと**。
- * Boardを閉じるとその中のタブのPTYが落ち、そこからこのCLIを実行していた場合は
- * シェルごと巻き添えで殺される（先に閉じるとgitを起動する前に止まる）。
- * 閉じられないBoard（ワークスペースも1つだけの状態での最後の1つ等）があっても
- * 削除自体は済んでいるので警告に留める
+ * それらのワークツリーで開いたBoardを閉じる。**このCLIを実行しているタブが属するBoardは閉じない**。
+ * 閉じるとそのタブのPTYが落ち、シェルごとCLI自身が巻き添えで殺されるため、残りのBoardも
+ * 閉じられず出力と終了コードも受け取れなくなる。閉じられないBoard（ワークスペースも1つだけの
+ * 状態での最後の1つ等）があっても削除自体は済んでいるので警告に留める
  */
 async function closeWorktreeBoards(paths: string[]): Promise<void> {
   const endpoint = resolveIpcEndpoint();
-  const boards: WorktreeBoard[] = [];
+  const self = await selfBoardId(endpoint);
   const seen = new Set<string>();
   for (const path of paths) {
     const found = await findWorktreeBoards(endpoint, toAppAccessiblePath(endpoint, path));
@@ -87,15 +79,16 @@ async function closeWorktreeBoards(paths: string[]): Promise<void> {
     for (const board of found.boards) {
       if (seen.has(board.boardId)) continue;
       seen.add(board.boardId);
-      boards.push(board);
+      if (board.boardId === self) {
+        console.error(
+          `warning: Board ${board.boardId} はこのコマンドを実行しているBoardのため閉じません（cwdが消えたタブが残ります）`,
+        );
+        continue;
+      }
+      const closed = await closeBoard(endpoint, board.boardId);
+      if (closed.ok) console.log(`board closed: ${board.boardId}`);
+      else console.error(`warning: Board ${board.boardId} を閉じられませんでした: ${closed.error}`);
     }
-  }
-  // 自分のBoardを最後へ回す判定は全対象のBoardが揃ってから行う（対象ごとに閉じると、
-  // 先に閉じたBoardの中に自分がいた場合に残りが閉じられない）
-  for (const board of await selfBoardLast(endpoint, boards)) {
-    const closed = await closeBoard(endpoint, board.boardId);
-    if (closed.ok) console.log(`board closed: ${board.boardId}`);
-    else console.error(`warning: Board ${board.boardId} を閉じられませんでした: ${closed.error}`);
   }
 }
 
