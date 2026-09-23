@@ -92,7 +92,7 @@ niwaterm tile zoom [--tile <tileId>]
 niwaterm popup open [--cwd <dir>] [--width <1-100>] [--height <1-100>] [--wait] [--capture-stdout] [command...]
 ```
 
-タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxの`popup`/`floating`相当。設計判断の詳細: `docs/adr/0005-adopt-workspace-scoped-single-popup.md`）。アクティブなワークスペースにつき最大1つだけ開ける。`--cwd`省略時はフォーカス中タイルのアクティブタブが実際にいるディレクトリを使う。`--width`/`--height`は表示サイズ（1〜100のパーセント、省略時は既定値）。`command...`を指定すると、デフォルトシェル（WSLプロファイル等も含む）の`-c`/`-Command`相当でそのコマンドを実行し（例: `niwaterm popup open lazygit`）、コマンドが終了すると自動的にポップアップも閉じる（ワンショット実行。lazygit・nvim等のフルスクリーンTUIでも機能する）。省略時は通常のシェルが起動したままになる。成功時、新規`tabId`を表示する。
+タイル・タブに所属しない一時的なポップアップ画面を開く（tmuxの`popup`/`floating`相当。設計判断の詳細: `docs/adr/0005-adopt-workspace-scoped-single-popup.md`）。アクティブなワークスペースにつき最大1つだけ開ける。`--cwd`省略時はフォーカス中タイルのアクティブタブが実際にいるディレクトリを使う。`--width`/`--height`はウィンドウに対する表示サイズ（1〜100のパーセント、省略時は80%）。`command...`を指定すると、デフォルトシェル（WSLプロファイル等も含む）の`-c`/`-Command`相当でそのコマンドを実行し（例: `niwaterm popup open lazygit`）、コマンドが終了すると自動的にポップアップも閉じる（ワンショット実行。lazygit・nvim等のフルスクリーンTUIでも機能する）。省略時は通常のシェルが起動したままになる。成功時、新規`tabId`を表示する。
 
 表示/非表示の切り替えはキーバインド（既定: prefix `ctrl+b` → `` ` ``、macOS/Windows共通）でも行える。GUIでは`popup-box`右上のツールバーからも操作できる。ポップアップが既に開いている場合、このコマンドはエラーメッセージと共に終了コード1を返す。
 

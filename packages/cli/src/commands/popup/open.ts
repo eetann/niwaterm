@@ -13,11 +13,11 @@ export default define({
     },
     width: {
       type: "number",
-      description: "表示幅（1〜100のパーセント、省略時は既定値）",
+      description: "ウィンドウに対する表示幅（1〜100のパーセント、省略時は80%）",
     },
     height: {
       type: "number",
-      description: "表示高さ（1〜100のパーセント、省略時は既定値）",
+      description: "ウィンドウに対する表示高さ（1〜100のパーセント、省略時は80%）",
     },
     wait: {
       type: "boolean",

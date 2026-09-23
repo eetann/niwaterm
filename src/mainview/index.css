@@ -486,7 +486,6 @@ body {
   flex-direction: column;
   width: 80%;
   height: 80%;
-  max-width: 1200px;
   padding: 0 4px 4px;
   background: var(--term-bg);
   border: 1px solid var(--ui-border);
