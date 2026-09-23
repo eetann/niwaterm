@@ -144,7 +144,7 @@ body {
  * 幅200px程度のサイドバーや1行分の高さしかないタブバーでは内容を圧迫するため。
  * scrollbar-widthは継承しないので`*`へ当て、スクロール領域が増えてもクラスの付け忘れで
  * 素の見た目に戻らないようにする。
- * 幅をpx単位で決められる::-webkit-scrollbar系は使わない: macOSのWKWebViewは疑似要素を
+ * 幅をpx単位で決められる::-webkit-scrollbar系は原則使わない: macOSのWKWebViewは疑似要素を
  * 当てた時点でオーバーレイ表示（普段は隠れ、レイアウトを占有しない）を失って常時表示の
  * スクロールバーになるうえ、Chromiumはscrollbar-width/colorが初期値以外だと疑似要素側を
  * 無視するため、両者を併用しても片方しか効かない
@@ -152,6 +152,36 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--ui-scrollbar) transparent;
+}
+
+/*
+ * 例外としてmacOSの常時表示型スクロールバー（オーバーレイにならない設定・環境）だけは疑似要素で描く。
+ * WKWebViewのthinは常時表示型だと13px程度までしか細くならないため。オーバーレイを失う問題は
+ * 元々常時表示なので関係しない。判定とクラスの付け外しはscrollbar-mode.ts
+ */
+html.classic-scrollbar * {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+html.classic-scrollbar ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.classic-scrollbar ::-webkit-scrollbar-track,
+html.classic-scrollbar ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html.classic-scrollbar ::-webkit-scrollbar-thumb {
+  background: var(--ui-scrollbar);
+  border-radius: 3px;
+}
+
+/* scrollbar-mode.tsがクラスを付け替えた直後だけ付き、表示済みのスクロールバーを作り直させる */
+html.scrollbar-rebuild * {
+  overflow: hidden !important;
 }
 
 /*

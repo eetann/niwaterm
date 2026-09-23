@@ -73,6 +73,7 @@ import {
 } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { isLightBackground } from "./theme-mode";
+import { syncScrollbarMode } from "./scrollbar-mode";
 import { resolveTileDropZone, splitForDropZone, type TileDropZone } from "./tile-drop-zone";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
 import {
@@ -3865,6 +3866,8 @@ document.addEventListener("dragend", clearTabDragOver);
 
 window.addEventListener("focus", () => {
   sendMessage("windowFocusChanged", { focused: true });
+  // 他アプリでシステム設定を変えたりマウスを抜き差ししたりすると、スクロールバーの型が変わりうる
+  syncScrollbarMode();
   // URL入力欄編集中に他アプリへ切替→復帰すると、windowのfocusイベントで
   // imeElへフォーカスを奪われ編集が中断してしまうため、その場合はスキップする
   if (document.activeElement instanceof HTMLInputElement) return;
@@ -3880,6 +3883,7 @@ imeEl.focus({ preventScroll: true });
 
 // ---- 起動 ----
 setupPalette();
+syncScrollbarMode();
 applyAppearance(defaultAppearance);
 applySidebarWidth(sidebarWidth);
 attachSidebarDividerDrag();
