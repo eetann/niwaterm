@@ -23,6 +23,16 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && (( $+commands[niwaterm] )); then
   autoload -Uz add-zsh-hook
   add-zsh-hook precmd _niwaterm_report_branch
 
+  # OSC 133でプロンプトの位置をマークする（libghostty-vtがネイティブにパースする）。
+  # niwatermのプロンプトジャンプ（prefix + shift+up/down、コピーモードの { }）がこのマークを辿る。
+  # Aがプロンプトの開始、Cがコマンド実行の開始。Cを出さないとコマンド出力の行まで
+  # プロンプトの継続行として記録される。
+  # starship等が自前でOSC 133を出す環境で二重に出ても、同じ行に同じマークが付くだけで実害は無い
+  _niwaterm_mark_prompt() { print -n '\e]133;A\a'; }
+  _niwaterm_mark_output() { print -n '\e]133;C\a'; }
+  add-zsh-hook precmd _niwaterm_mark_prompt
+  add-zsh-hook preexec _niwaterm_mark_output
+
   # カレントディレクトリをOSC 7で通知する。libghostty-vtがネイティブにパースするため
   # niwaterm CLIのサブプロセス起動は不要（毎回送ってもコストはほぼゼロ）
   _niwaterm_report_pwd() { print -n '\e]7;kitty-shell-cwd://'"$HOST""$PWD"'\a'; }

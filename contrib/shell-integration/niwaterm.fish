@@ -20,6 +20,18 @@ if test -n "$NIWATERM_TAB_ID"; and type -q niwaterm
         end
     end
 
+    # OSC 133でプロンプトの位置をマークする（libghostty-vtがネイティブにパースする）。
+    # niwatermのプロンプトジャンプ（prefix + shift+up/down、コピーモードの { }）がこのマークを辿る。
+    # Aがプロンプトの開始、Cがコマンド実行の開始。Cを出さないとコマンド出力の行まで
+    # プロンプトの継続行として記録される。
+    # 二重に出ても同じ行に同じマークが付くだけなので、fish本体や他ツールとの共存は問題にならない
+    function _niwaterm_mark_prompt --on-event fish_prompt
+        printf '\e]133;A\a'
+    end
+    function _niwaterm_mark_output --on-event fish_preexec
+        printf '\e]133;C\a'
+    end
+
     # カレントディレクトリをOSC 7で通知する。libghostty-vtがネイティブにパースするため
     # niwaterm CLIのサブプロセス起動は不要。--on-variable PWDでcd時のみ発火する
     function _niwaterm_report_pwd --on-variable PWD

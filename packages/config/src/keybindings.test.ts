@@ -275,10 +275,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の32個のアクションに1つずつ割り当てられている", () => {
+  test("UNASSIGNED_BINDING_ACTIONS以外の34個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(32);
-    expect(new Set(actions).size).toBe(32);
+    expect(actions.length).toBe(34);
+    expect(new Set(actions).size).toBe(34);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -396,17 +396,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings32件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings34件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(32);
+    expect(compiled.bindings.size).toBe(34);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings32件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings34件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(32);
+    expect(compiled.bindings.size).toBe(34);
     expect(compiled.direct.size).toBe(2);
   });
 

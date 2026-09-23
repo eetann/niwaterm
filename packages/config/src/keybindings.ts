@@ -78,6 +78,8 @@ export const KEYBIND_ACTIONS = [
   "scroll-page-down",
   "scroll-to-top",
   "scroll-to-bottom",
+  "jump-prompt-up",
+  "jump-prompt-down",
   "command-palette",
   "increase-font-size",
   "decrease-font-size",
@@ -189,6 +191,11 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   pagedown: "scroll-page-down",
   home: "scroll-to-top",
   end: "scroll-to-bottom",
+  // OSC 133でマークされたプロンプトへ飛ぶ。素のup/down（フォーカス移動）と同じ方向感覚のまま
+  // 「1コマンドぶん」動かせるようshiftを足した形にする。
+  // 記号キー（{ }等）はキーボードレイアウトによってshiftの要否が変わるため既定には使わない
+  "shift+up": "jump-prompt-up",
+  "shift+down": "jump-prompt-down",
 };
 
 // 既定のprefixキー。tmux標準のCtrl+bをそのまま踏襲する（prefixキーは全操作の唯一の入り口であり、

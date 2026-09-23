@@ -124,3 +124,52 @@ void niwa_mouse_event_set_position(GhosttyMouseEvent event, float x, float y) {
   pos.y = y;
   ghostty_mouse_event_set_position(event, pos);
 }
+
+// OSC 133でプロンプトの先頭行としてマークされた行を、画面座標のfrom_yから
+// direction方向（-1=上へ、1=下へ）に探す。見つかった行をout_yへ入れて
+// GHOSTTY_SUCCESSを返し、last_yまで走査して見つからなければGHOSTTY_NO_VALUEを返す。
+// from_y自身も走査対象に含めるかは呼び出し側が起点をずらして決める。
+//
+// 複数行プロンプト・折り返したプロンプトの2行目以降は
+// GHOSTTY_ROW_SEMANTIC_PROMPT_CONTINUATIONになるため、GHOSTTY_ROW_SEMANTIC_PROMPTだけを
+// 拾えば1プロンプトにつき1回だけ止まる。
+//
+// 1行ずつJSから呼ぶとスクロールバック1万行で1万回のFFI往復になるうえ、
+// grid_refの解決はヘッダーのコメント通り軽くないため、走査はC側で回して最初の一致で打ち切る。
+int niwa_find_prompt_row(GhosttyTerminal term, uint32_t from_y, int32_t direction, uint32_t last_y,
+                         uint32_t *out_y) {
+  if (direction == 0) return GHOSTTY_INVALID_VALUE;
+  int32_t step = direction > 0 ? 1 : -1;
+
+  for (int64_t y = (int64_t)from_y;; y += step) {
+    if (step > 0 ? y > (int64_t)last_y : y < (int64_t)last_y) break;
+    if (y < 0) break;
+
+    GhosttyPoint point;
+    memset(&point, 0, sizeof(point));
+    point.tag = GHOSTTY_POINT_TAG_SCREEN;
+    point.value.coordinate.x = 0;
+    point.value.coordinate.y = (uint32_t)y;
+
+    GhosttyGridRef ref;
+    memset(&ref, 0, sizeof(ref));
+    ref.size = sizeof(ref);
+    // スクロールバックの外へ流れた行など、解決できない行は飛ばさず打ち切る
+    // （その先も解決できないため）
+    if (ghostty_terminal_grid_ref(term, point, &ref) != GHOSTTY_SUCCESS) break;
+
+    GhosttyRow row;
+    if (ghostty_grid_ref_row(&ref, &row) != GHOSTTY_SUCCESS) break;
+
+    GhosttyRowSemanticPrompt semantic = GHOSTTY_ROW_SEMANTIC_NONE;
+    if (ghostty_row_get(row, GHOSTTY_ROW_DATA_SEMANTIC_PROMPT, &semantic) != GHOSTTY_SUCCESS) {
+      break;
+    }
+    if (semantic == GHOSTTY_ROW_SEMANTIC_PROMPT) {
+      *out_y = (uint32_t)y;
+      return GHOSTTY_SUCCESS;
+    }
+  }
+
+  return GHOSTTY_NO_VALUE;
+}

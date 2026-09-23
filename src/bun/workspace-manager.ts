@@ -694,6 +694,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handleScrollToBottom(tabId);
   }
 
+  function handleJumpPrompt(tabId: TabId, direction: "up" | "down"): void {
+    findOwnerByTabId(tabId)?.handleJumpPrompt(tabId, direction);
+  }
+
   function handleResize(
     tabId: TabId,
     cols: number,
@@ -926,6 +930,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     handleScroll,
     handleScrollToTop,
     handleScrollToBottom,
+    handleJumpPrompt,
     snapshot,
     listWorkspaces,
     isTabVisible,

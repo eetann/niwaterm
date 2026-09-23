@@ -411,6 +411,8 @@ export function createWindowManager(opts: WindowManagerOptions) {
       byTab(tabId)?.handleScroll(tabId, deltaLines),
     handleScrollToTop: (tabId: TabId) => byTab(tabId)?.handleScrollToTop(tabId),
     handleScrollToBottom: (tabId: TabId) => byTab(tabId)?.handleScrollToBottom(tabId),
+    handleJumpPrompt: (tabId: TabId, direction: "up" | "down") =>
+      byTab(tabId)?.handleJumpPrompt(tabId, direction),
     snapshot: (windowId?: WindowId) => managerOf(windowId).snapshot(),
     listWorkspaces: (windowId?: WindowId) => managerOf(windowId).listWorkspaces(),
     isTabVisible: (tabId: TabId) => byTab(tabId)?.isTabVisible(tabId) ?? false,

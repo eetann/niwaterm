@@ -299,6 +299,22 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
+  test("prefix -> Shift+Up/Shift+Down で前後のプロンプトへ", () => {
+    const upResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    upResolver.handleKeydown(prefix());
+    expect(upResolver.handleKeydown(key("ArrowUp", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "jumpPrompt", direction: "up" },
+    });
+
+    const downResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    downResolver.handleKeydown(prefix());
+    expect(downResolver.handleKeydown(key("ArrowDown", { shiftKey: true }))).toEqual({
+      kind: "command",
+      command: { type: "jumpPrompt", direction: "down" },
+    });
+  });
+
   test("prefix -> =/-/0 でフォントサイズ拡大/縮小/リセット", () => {
     const increaseResolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     increaseResolver.handleKeydown(prefix());

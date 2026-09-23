@@ -140,6 +140,10 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
     args: [FFIType.ptr, FFIType.f32, FFIType.f32],
     returns: FFIType.void,
   },
+  niwa_find_prompt_row: {
+    args: [FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.u32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
 });
 
 // GhosttyTerminalOption
@@ -295,6 +299,7 @@ export function createGhosttyTerminal(
   const u16Out = new Uint16Array(1);
   const u8Out = new Uint8Array(1);
   const i32Out = new Int32Array(1);
+  const u32Out = new Uint32Array(1);
 
   /** DSR等のクエリ応答をPTYへ書き戻すコールバックを登録する */
   function onWritePty(fn: (data: Uint8Array) => void): void {
@@ -684,6 +689,28 @@ export function createGhosttyTerminal(
   }
 
   /**
+   * OSC 133でプロンプトの先頭行としてマークされた行を、画面座標のfromYからdirection方向へ探す。
+   * fromY自身は含めない（同じプロンプトへ止まり続けないため）。見つからなければnull。
+   *
+   * 複数行プロンプト・折り返したプロンプトの2行目以降はcontinuationとして別扱いされるので、
+   * 1つのプロンプトにつき1行だけが返る。シェルがOSC 133を出さない環境では常にnullになる
+   */
+  function findPromptRow(fromY: number, direction: "up" | "down"): number | null {
+    const lastRow = Math.max(scrollbar().total, 1) - 1;
+    const start = direction === "up" ? Math.trunc(fromY) - 1 : Math.trunc(fromY) + 1;
+    if (start < 0 || start > lastRow) return null;
+    const rc = shim.symbols.niwa_find_prompt_row(
+      term,
+      start,
+      direction === "up" ? -1 : 1,
+      direction === "up" ? 0 : lastRow,
+      ptr(u32Out),
+    );
+    if (rc !== 0) return null;
+    return u32Out[0] ?? null;
+  }
+
+  /**
    * ビューポートの位置と全体の行数（GhosttyTerminalScrollbar）。
    * offsetはビューポート先頭の画面座標行で、scrollToRowへそのまま渡せる同じ行空間
    */
@@ -768,6 +795,7 @@ export function createGhosttyTerminal(
     dumpHtml,
     dumpText,
     dumpScreenRange,
+    findPromptRow,
     scrollbar,
     viewportPinned,
     scrollDelta,

@@ -448,6 +448,8 @@ gitのワークツリーを一覧・作成・削除し、それぞれをBoardと
 
 同スクリプトはカレントディレクトリもOSC 7（`kitty-shell-cwd://`スキーム）で通知し、タブ変数`cwd`へ自動反映する（`niwaterm tab var set`のCLI呼び出しは経由しない、ターミナルのネイティブ機能）。libghostty-vt（vt-only版）はURIを未パースのまま返す仕様のため、パスのデコードはniwaterm側（`src/bun/pwd-report.ts`）で行っている。ホスト名検証はしていない。ghostty本家はSSH越しの偽装対策としてホスト名を検証する。niwatermはWSLディストロをシェルプロファイルとして正式サポートしており、その場合シェル側とniwaterm本体側のホスト名は常に不一致になるため、意図的に検証を省いている。`niwaterm tile split`/`niwaterm tab new`で`--cwd`省略時、分割元・対象タイルのアクティブタブのこの値がデフォルトの作業ディレクトリとして使われる。Windows上のWSLプロファイルタブはWindows側から見えるUNC形式へ自動変換される（`src/bun/wsl-cwd.ts`）。**zsh/bash/fishはOSC 7送信に対応、PowerShell版シェル統合は現時点でブランチ通知のみ**。OSC 7自体はlibghostty-vt側に制約は無く、niwaterm.ps1へのOSC 7送信追加は今後の対応として残っている。
 
+同スクリプトはプロンプトの位置もOSC 133（セマンティックプロンプト）で通知する。これもlibghostty-vtのネイティブ機能で、niwatermの[プロンプトジャンプ](/guide/config.md)（prefix + `shift+up` / `shift+down`、コピーモードの `{` / `}`）がこのマークを辿る。zsh/fishはプロンプト開始（A）とコマンド実行開始（C）の両方を、bashはPS0が使える4.4以降で両方（3.2ではAのみ）、PowerShellはPSReadLineの`PSConsoleHostReadLine`を包んで両方を送る。starship等が自前でOSC 133を出す環境で二重に送られても、同じ行に同じマークが付くだけで実害は無い。
+
 ```sh
 # ~/.zshrc
 [ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.zsh

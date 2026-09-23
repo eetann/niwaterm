@@ -439,6 +439,33 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     return null;
   }
 
+  /**
+   * プロンプトへ飛べなかった理由の文言。画面のどこにもマークが無ければシェル統合の未導入で、
+   * あるのに飛べないなら端に着いただけ。原因が全く違うので取り違えないよう分けて伝える
+   */
+  function promptJumpMissReason(): string {
+    // findPromptRowは起点の行を含めないので、-1から下向きに探せば画面全体が対象になる
+    if (term.findPromptRow(-1, "down") === null) {
+      return "プロンプトマークがありません（シェル統合の導入が必要）";
+    }
+    return "これ以上プロンプトがありません";
+  }
+
+  /**
+   * コピーモードに入らずにビューポートだけを前後のプロンプトへ動かす。見つかった行が
+   * ビューポートの先頭に来るようスクロールする（そのコマンドの出力を上から読めるため）。
+   * 飛べなければfalseを返す
+   */
+  function jumpPrompt(direction: "up" | "down"): boolean {
+    const before = term.scrollbar().offset;
+    const y = term.findPromptRow(before, direction);
+    if (y === null) return false;
+    term.scrollToRow(y);
+    // 最後の1画面ぶんに収まるプロンプトはどれを指してもビューポートが同じ位置で
+    // クランプされる。動かなかったなら、その先はもう見せるものが無い
+    return term.scrollbar().offset !== before;
+  }
+
   function isCopyMode(): boolean {
     return copyMode !== null;
   }
@@ -499,6 +526,17 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
           copyModeMessage = `見つかりません: ${search.query}`;
         }
         copyMode = syncCopyModeViewport(found ?? result.state);
+        return true;
+      }
+      case "jumpPrompt": {
+        const { direction } = result.effect;
+        const y = term.findPromptRow(result.state.cursor.y, direction);
+        if (y === null) {
+          copyModeMessage = promptJumpMissReason();
+          copyMode = syncCopyModeViewport(result.state);
+          return true;
+        }
+        copyMode = syncCopyModeViewport({ ...result.state, cursor: { x: 0, y }, desiredX: 0 });
         return true;
       }
       case "exit":
@@ -622,6 +660,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     scroll,
     scrollToTop,
     scrollToBottom,
+    jumpPrompt,
     renderState,
     dumpText,
     setCallbacks,

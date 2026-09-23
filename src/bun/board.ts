@@ -641,6 +641,11 @@ export function createBoard(opts: BoardOptions) {
     opts.onDirty();
   }
 
+  function handleJumpPrompt(tabId: TabId, direction: "up" | "down"): void {
+    if (!sessions.get(tabId)?.jumpPrompt(direction)) return;
+    opts.onDirty();
+  }
+
   function handleResize(
     tabId: TabId,
     cols: number,
@@ -906,6 +911,7 @@ export function createBoard(opts: BoardOptions) {
     handleScroll,
     handleScrollToTop,
     handleScrollToBottom,
+    handleJumpPrompt,
     snapshot,
     getLayout,
     getFocusedTileId,

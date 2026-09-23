@@ -69,6 +69,7 @@ function createTestWorkspaceManager(): {
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
+      jumpPrompt: () => false,
       renderState: () => ({
         kind: "terminal",
         html: "",
@@ -4347,6 +4348,7 @@ describe("ウィンドウ（複数OSウィンドウ）", () => {
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
+      jumpPrompt: () => false,
       renderState: () => ({
         kind: "terminal",
         html: "",

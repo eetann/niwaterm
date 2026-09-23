@@ -25,6 +25,7 @@ function createFakeSessionFactory() {
       scroll: () => {},
       scrollToTop: () => {},
       scrollToBottom: () => {},
+      jumpPrompt: () => false,
       renderState: () => ({
         kind: "terminal",
         html: "",

@@ -66,6 +66,7 @@ export type TileCommand =
   | { type: "pasteClipboard" }
   | { type: "scrollPage"; direction: "up" | "down" }
   | { type: "scrollToEdge"; edge: "top" | "bottom" }
+  | { type: "jumpPrompt"; direction: "up" | "down" }
   | { type: "commandPalette" }
   | { type: "increaseFontSize" }
   | { type: "decreaseFontSize" }
@@ -274,6 +275,10 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "scrollToEdge", edge: "top" };
     case "scroll-to-bottom":
       return { type: "scrollToEdge", edge: "bottom" };
+    case "jump-prompt-up":
+      return { type: "jumpPrompt", direction: "up" };
+    case "jump-prompt-down":
+      return { type: "jumpPrompt", direction: "down" };
     case "command-palette":
       return { type: "commandPalette" };
     case "increase-font-size":

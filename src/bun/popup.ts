@@ -300,6 +300,11 @@ export function createPopup(opts: PopupOptions) {
     opts.onDirty();
   }
 
+  function handleJumpPrompt(direction: "up" | "down"): void {
+    if (!session?.jumpPrompt(direction)) return;
+    opts.onDirty();
+  }
+
   function handleResize(c: number, r: number, cellWidthPx: number, cellHeightPx: number): void {
     if (pendingOpts) {
       spawnSession(c, r);
@@ -361,6 +366,7 @@ export function createPopup(opts: PopupOptions) {
     handleScroll,
     handleScrollToTop,
     handleScrollToBottom,
+    handleJumpPrompt,
     handleResize,
     getTabText,
     renderState,

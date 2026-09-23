@@ -88,6 +88,11 @@ export type CopyModeEffect =
    * ビューポート外の行テキストが要るため、実際の探索は呼び出し側（terminal-session.ts）が行う
    */
   | { type: "search"; search: CopyModeSearch }
+  /**
+   * OSC 133でマークされた前後のプロンプト行へカーソルを移す。行のマークはlibghostty-vtの
+   * グリッドにしか無く行テキストからは分からないため、探索は呼び出し側が行う
+   */
+  | { type: "jumpPrompt"; direction: "up" | "down" }
   | { type: "exit" };
 
 export interface CopyModeKeyResult {
@@ -829,6 +834,20 @@ export function applyCopyModeKey(
         handled: true,
       };
     }
+    // viの段落移動（{ }）に充てる。シェルのプロンプトはセッションの段落の切れ目そのもので、
+    // tmuxのコピーモードも{ }を段落移動に使っている
+    case "{":
+      return {
+        state: { ...state, pendingG: false },
+        effect: { type: "jumpPrompt", direction: "up" },
+        handled: true,
+      };
+    case "}":
+      return {
+        state: { ...state, pendingG: false },
+        effect: { type: "jumpPrompt", direction: "down" },
+        handled: true,
+      };
     case "v":
       return {
         state: {

@@ -3499,6 +3499,10 @@ function handleTileCommand(cmd: TileCommand): void {
       if (!currentTabId) return;
       sendMessage(cmd.edge === "top" ? "scrollToTop" : "scrollToBottom", { tabId: currentTabId });
       break;
+    case "jumpPrompt":
+      if (!currentTabId) return;
+      sendMessage("jumpPrompt", { tabId: currentTabId, direction: cmd.direction });
+      break;
   }
 }
 

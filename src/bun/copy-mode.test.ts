@@ -567,3 +567,31 @@ describe("検索キー（/ ? n N）", () => {
     expect(result.state.anchor).toEqual({ x: 0, y: 0 });
   });
 });
+
+describe("プロンプトジャンプ（{ }）", () => {
+  const ctx = ctxOf(["$ one", "out", "$ two", "out"]);
+
+  test("{で上方向・}で下方向のジャンプを依頼する", () => {
+    const up = applyCopyModeKey(createCopyModeState({ x: 0, y: 2 }), key("{"), ctx);
+    expect(up.effect).toEqual({ type: "jumpPrompt", direction: "up" });
+    const down = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("}"), ctx);
+    expect(down.effect).toEqual({ type: "jumpPrompt", direction: "down" });
+  });
+
+  test("行のマークは呼び出し側しか知らないため、カーソルはこの場では動かさない", () => {
+    const result = applyCopyModeKey(createCopyModeState({ x: 3, y: 2 }), key("{"), ctx);
+    expect(result.state.cursor).toEqual({ x: 3, y: 2 });
+  });
+
+  test("選択中でも選択は解除しない（V + }でコマンド1つぶんを選べる）", () => {
+    const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "V");
+    const result = applyCopyModeKey(selecting, key("}"), ctx);
+    expect(result.state.selectionMode).toBe("line");
+    expect(result.state.anchor).toEqual({ x: 0, y: 0 });
+  });
+
+  test("gの2打目待ちは解除する", () => {
+    const pending = press(createCopyModeState({ x: 0, y: 0 }), ctx, "g");
+    expect(applyCopyModeKey(pending, key("}"), ctx).state.pendingG).toBe(false);
+  });
+});

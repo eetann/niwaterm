@@ -130,6 +130,8 @@ export type NiwaRPC = {
       scroll: { tabId: TabId; deltaLines: number };
       scrollToTop: { tabId: TabId };
       scrollToBottom: { tabId: TabId };
+      /** OSC 133のプロンプトマークを辿ってビューポートを前後のコマンドへ動かす */
+      jumpPrompt: { tabId: TabId; direction: "up" | "down" };
       copySelection: { text: string };
       pasteFromClipboard: { tabId: TabId };
       openLink: { url: string };
@@ -904,6 +906,9 @@ function createWindowRpc(windowId: WindowId) {
         },
         scrollToBottom: ({ tabId }: { tabId: TabId }) => {
           windowManager.handleScrollToBottom(tabId);
+        },
+        jumpPrompt: ({ tabId, direction }: { tabId: TabId; direction: "up" | "down" }) => {
+          windowManager.handleJumpPrompt(tabId, direction);
         },
         copySelection: ({ text }: { text: string }) => {
           writeClipboardText(text);

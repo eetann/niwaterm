@@ -851,6 +851,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     findBoardOwnerByTabId(tabId)?.handleScrollToBottom(tabId);
   }
 
+  function handleJumpPrompt(tabId: TabId, direction: "up" | "down"): void {
+    if (popup.hasTab(tabId)) {
+      popup.handleJumpPrompt(direction);
+      return;
+    }
+    findBoardOwnerByTabId(tabId)?.handleJumpPrompt(tabId, direction);
+  }
+
   function handleResize(
     tabId: TabId,
     cols: number,
@@ -1100,6 +1108,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     handleScroll,
     handleScrollToTop,
     handleScrollToBottom,
+    handleJumpPrompt,
     snapshot,
     listBoards,
     listVisibleTabIds,
