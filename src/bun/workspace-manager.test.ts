@@ -506,6 +506,24 @@ describe("Board名の自動命名(board.naming)", () => {
     expect(autoNamesOf(mgr)).toEqual(["niwaterm"]);
   });
 
+  test("cwdを指定せず開いたBoardは、タブがcwdを報告した時点でdirectoryの名前が決まる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    mgr.newBoard(workspaceId);
+    // どこで起動したか分からない間は名前を決められない（表示側が連番へフォールバックする）
+    expect(autoNamesOf(mgr)[1]).toBeNull();
+
+    // newBoardで作ったBoardがアクティブなので、そのタブがcwdを報告してくる
+    const tabId = activeTabIdOf(mgr);
+    mgr.setTabVar(tabId, "cwd", "/home/eetann/ghq/niwaterm");
+    expect(autoNamesOf(mgr)[1]).toBe("niwaterm");
+
+    // 一度決まれば以後のcdでは変わらない
+    mgr.setTabVar(tabId, "cwd", "/home/eetann/docs/roadmap");
+    expect(autoNamesOf(mgr)[1]).toBe("niwaterm");
+  });
+
   test("directory-followはフォーカス中タブのcwdへ追従する", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(

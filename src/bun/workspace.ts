@@ -203,7 +203,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       initialCwd,
       restoredMeta,
       onDirty: () => {
-        refreshFollowingAutoName(id);
+        refreshAutoNameFromCwd(id);
         opts.onDirty();
       },
       onAllTabsClosed: () => handleBoardEmptied(id),
@@ -520,12 +520,16 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   /**
-   * 追従方式（board.naming: "directory-follow"）の自動名を今のcwdへ合わせる。Boardの描画更新の
-   * たびに通るので、cdだけでなくタイル移動・タブ切り替えでも名前が付け替わる。
+   * タブが報告しているcwdから自動名を決め直す。Boardの描画更新のたびに通る。
+   * 追従方式（board.naming: "directory-follow"）は毎回付け替えるので、cdだけでなくタイル移動・
+   * タブ切り替えでも名前が変わる。"directory"はまだ名前が付いていない間だけ拾って以後は固定する
+   * （cwdを指定せずに開いたBoardが実際どこで起動したかは、シェルがOSC 7で報告するまで分からない）。
    * cwdを報告しないシェル（OSC 7未対応）のタブでは付いている名前をそのまま残す
    */
-  function refreshFollowingAutoName(boardId: BoardId): void {
-    if (namingMode() !== "directory-follow" || hasExplicitName(boardId)) return;
+  function refreshAutoNameFromCwd(boardId: BoardId): void {
+    if (hasExplicitName(boardId)) return;
+    const mode = namingMode();
+    if (mode === "sequential" || (mode === "directory" && boardAutoNames.has(boardId))) return;
     const name = directoryName(getBoardFocusedCwd(boardId));
     if (name !== null) boardAutoNames.set(boardId, name);
   }
