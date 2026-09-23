@@ -1776,12 +1776,12 @@ describe("POST /move-board-to-workspace", () => {
     const res = await moveBoardToWorkspace(boardA2, wsB);
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, sourceWorkspaceClosed: false });
+    expect(await res.json()).toEqual({ ok: true });
     expect(boardIdsOf(mgr, wsA)).toEqual([boardA1]);
     expect(boardIdsOf(mgr, wsB)?.at(-1)).toBe(boardA2);
   });
 
-  test("移動元が空になった場合はsourceWorkspaceClosedで知らせる", async () => {
+  test("移動元が空になってもワークスペースは残る", async () => {
     const { mgr } = createTestWorkspaceManager();
     const { wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces(mgr);
     server = await createIpcServer(socketPath, mgr);
@@ -1789,9 +1789,9 @@ describe("POST /move-board-to-workspace", () => {
     await moveBoardToWorkspace(boardA2, wsB);
     const res = await moveBoardToWorkspace(boardA1, wsB);
 
-    expect(await res.json()).toEqual({ ok: true, sourceWorkspaceClosed: true });
-    expect(mgr.snapshot().workspaceIds).toEqual([wsB]);
-    expect(boardIdsOf(mgr, wsA)).toBeUndefined();
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mgr.snapshot().workspaceIds).toEqual([wsA, wsB]);
+    expect(boardIdsOf(mgr, wsA)).toEqual([]);
   });
 
   test("存在しないboardId・workspaceIdは404を返す", async () => {

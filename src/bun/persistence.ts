@@ -299,8 +299,9 @@ function isPersistedWorkspace(value: unknown): value is PersistedWorkspace {
   const v = value as Record<string, unknown>;
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
   if (typeof v["activeBoardIndex"] !== "number") return false;
+  // 空配列はBoard 0個のワークスペース（作業対象が一時的に無い置き場）として有効
   const boards = v["boards"];
-  return Array.isArray(boards) && boards.length > 0 && boards.every(isPersistedBoard);
+  return Array.isArray(boards) && boards.every(isPersistedBoard);
 }
 
 function isPersistedState(value: unknown): value is PersistedState {

@@ -416,11 +416,26 @@ describe("Board操作", () => {
     );
   });
 
-  test("最後の1つのBoardはcloseBoardしても閉じられず、last-board理由を返す（誤操作防止）", () => {
+  test("ワークスペースが1つだけなら、最後のBoardは閉じられずlast-board理由を返す（誤操作防止）", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const onlyBoardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
     expect(mgr.closeBoard(onlyBoardId)).toEqual({ ok: false, reason: "last-board" });
+  });
+
+  test("他にワークスペースがあれば、最後のBoardを閉じてBoard 0個のワークスペースを残せる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const firstId = mgr.snapshot().activeWorkspaceId;
+    const secondId = mgr.newWorkspace();
+    const onlyBoardId = mgr.listWorkspaces().find((e) => e.workspaceId === secondId)
+      ?.activeBoardId as string;
+
+    expect(mgr.closeBoard(onlyBoardId)).toEqual({ ok: true });
+
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, secondId]);
+    expect(mgr.listWorkspaces().find((e) => e.workspaceId === secondId)?.activeBoardId).toBeNull();
+    expect(mgr.snapshot().workspace.board).toBeNull();
   });
 
   test("存在しないboardIdへのcloseBoardはnot-found理由を返す", () => {
@@ -582,10 +597,7 @@ describe("moveBoardToWorkspace", () => {
 
   test("Boardが移動先ワークスペースの末尾へ移り、移動元からは消える", () => {
     const { mgr, wsA, wsB, boardA1, boardA2, boardB1, boardIdsOf } = createTwoWorkspaces();
-    expect(mgr.moveBoardToWorkspace(boardA2, wsB)).toEqual({
-      ok: true,
-      sourceWorkspaceClosed: false,
-    });
+    expect(mgr.moveBoardToWorkspace(boardA2, wsB)).toEqual({ ok: true });
     expect(boardIdsOf(wsA)).toEqual([boardA1]);
     expect(boardIdsOf(wsB)).toEqual([boardB1, boardA2]);
   });
@@ -637,22 +649,21 @@ describe("moveBoardToWorkspace", () => {
     expect(mgr.listWorkspaces().find((e) => e.workspaceId === wsA)?.activeBoardId).toBe(boardA1);
   });
 
-  test("移動元の最後のBoardを移すとそのワークスペースごと閉じられる", () => {
-    const { mgr, wsB, boardA1, boardA2 } = createTwoWorkspaces();
+  test("移動元の最後のBoardを移しても、そのワークスペースはBoard 0個のまま残る", () => {
+    const { mgr, wsA, wsB, boardA1, boardA2, boardIdsOf } = createTwoWorkspaces();
     mgr.moveBoardToWorkspace(boardA2, wsB);
-    expect(mgr.moveBoardToWorkspace(boardA1, wsB)).toEqual({
-      ok: true,
-      sourceWorkspaceClosed: true,
-    });
-    expect(mgr.snapshot().workspaceIds).toEqual([wsB]);
+    expect(mgr.moveBoardToWorkspace(boardA1, wsB)).toEqual({ ok: true });
+    expect(mgr.snapshot().workspaceIds).toEqual([wsA, wsB]);
+    expect(boardIdsOf(wsA)).toEqual([]);
   });
 
-  test("表示中のワークスペースが空になって閉じられたら、移動先のワークスペースへ切り替わる", () => {
+  test("表示中のワークスペースが空になっても切り替わらない（空のまま表示する）", () => {
     const { mgr, wsA, wsB, boardA1, boardA2 } = createTwoWorkspaces();
     mgr.moveBoardToWorkspace(boardA2, wsB);
     expect(mgr.snapshot().activeWorkspaceId).toBe(wsA);
     mgr.moveBoardToWorkspace(boardA1, wsB);
-    expect(mgr.snapshot().activeWorkspaceId).toBe(wsB);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(wsA);
+    expect(mgr.snapshot().workspace.board).toBeNull();
   });
 
   test("移動先で最後のタブが終了したとき、消えるのは移したBoardだけ（移動先が空扱いにならない）", () => {
@@ -666,10 +677,7 @@ describe("moveBoardToWorkspace", () => {
 
   test("同じワークスペースを指定した場合はtoIndexへの並び替えとして扱う", () => {
     const { mgr, wsA, boardA1, boardA2, boardIdsOf } = createTwoWorkspaces();
-    expect(mgr.moveBoardToWorkspace(boardA2, wsA, 0)).toEqual({
-      ok: true,
-      sourceWorkspaceClosed: false,
-    });
+    expect(mgr.moveBoardToWorkspace(boardA2, wsA, 0)).toEqual({ ok: true });
     expect(boardIdsOf(wsA)).toEqual([boardA2, boardA1]);
   });
 
@@ -1083,17 +1091,33 @@ describe("タブ名・タイル名(setTabName/setTileName)", () => {
 });
 
 describe("ワークスペースが空になった時の挙動", () => {
-  test("あるワークスペースの最後のタブのプロセスが終了すると、そのワークスペースは削除されアクティブが切り替わる", () => {
+  test("他にワークスペースがあれば、最後のタブのプロセスが終了してもBoard 0個のまま残る", () => {
     const { created, factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     const firstId = mgr.snapshot().activeWorkspaceId;
-    mgr.newWorkspace();
+    const secondId = mgr.newWorkspace();
     resolvePending(mgr);
 
     created[1]?.opts.onExit?.(0);
 
-    expect(mgr.snapshot().workspaceIds).toEqual([firstId]);
-    expect(mgr.snapshot().activeWorkspaceId).toBe(firstId);
+    expect(mgr.snapshot().workspaceIds).toEqual([firstId, secondId]);
+    expect(mgr.snapshot().activeWorkspaceId).toBe(secondId);
+    expect(mgr.snapshot().workspace.board).toBeNull();
+    expect(mgr.snapshot().workspace.activeBoardId).toBeNull();
+  });
+
+  test("Board 0個のワークスペースでもnewBoardで作業を再開できる", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const secondId = mgr.newWorkspace();
+    resolvePending(mgr);
+    created[1]?.opts.onExit?.(0);
+
+    const boardId = mgr.newBoard(secondId);
+
+    expect(boardId).not.toBeNull();
+    expect(mgr.snapshot().workspace.activeBoardId).toBe(boardId as string);
+    expect(mgr.snapshot().workspace.board).not.toBeNull();
   });
 
   test("最後の1つのワークスペースの最後のタブが終了するとonAllWorkspacesClosedが呼ばれる", () => {
@@ -1368,6 +1392,26 @@ describe("serializeForPersistence", () => {
 
     expect(restored.serializeForPersistence()).toEqual(persisted);
     expect(persisted.workspaces[0]?.name).toBe("main");
+  });
+
+  test("Board 0個のワークスペースも名前ごと保存・復元される", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const secondId = mgr.newWorkspace();
+    mgr.setWorkspaceName(secondId, "review");
+    resolvePending(mgr);
+    created[1]?.opts.onExit?.(0);
+
+    const persisted = mgr.serializeForPersistence();
+    expect(persisted.workspaces[1]?.boards).toEqual([]);
+
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+
+    expect(restored.listWorkspaces().map((e) => e.name)).toEqual([null, "review"]);
+    expect(restored.listWorkspaces()[1]?.boards).toEqual([]);
+    expect(restored.snapshot().workspace.board).toBeNull();
   });
 });
 
@@ -1859,6 +1903,22 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
       width: undefined,
       height: undefined,
     });
+    expect(mgr.openPopup()).toBeNull();
+  });
+
+  test("Board 0個になると開いていたpopupは閉じられ、新たに開くこともできない", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const secondId = mgr.newWorkspace();
+    resolvePending(mgr);
+    const popupTabId = mgr.openPopup() as string;
+    mgr.handleResize(popupTabId, 80, 24, 8, 16);
+
+    // 2つ目のワークスペースの唯一のタブが終了し、そのワークスペースがBoard 0個になる
+    created[1]?.opts.onExit?.(0);
+
+    expect(mgr.snapshot().activeWorkspaceId).toBe(secondId);
+    expect(mgr.snapshot().workspace.popup).toBeNull();
     expect(mgr.openPopup()).toBeNull();
   });
 

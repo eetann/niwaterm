@@ -768,11 +768,13 @@ function buildApp(
     return windowOps.managerOf(scopeWindowId(c));
   }
 
-  /** そのウィンドウのアクティブなBoard。省略可能な--boardのフォールバックに使う */
+  /** そのウィンドウのアクティブなBoard。省略可能な--boardのフォールバックに使う（Board 0個ならundefined） */
   function activeBoardId(c: Context): string | undefined {
-    return scoped(c)
-      .listWorkspaces()
-      .find((w) => w.active)?.activeBoardId;
+    return (
+      scoped(c)
+        .listWorkspaces()
+        .find((w) => w.active)?.activeBoardId ?? undefined
+    );
   }
 
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
@@ -825,8 +827,10 @@ function buildApp(
     const workspaceId = location?.workspaceId ?? owner.getActiveWorkspaceId();
     const boardId =
       location?.boardId ?? owner.listWorkspaces().find((w) => w.active)?.activeBoardId;
+    // Board 0個のワークスペースには対象になるタイル・タブが無い（それぞれ404で返す）
     if (!boardId) return c.json({ ok: false, error: "active board not found" }, 404);
     const tileId = location?.tileId ?? owner.getFocusedTileId();
+    if (!tileId) return c.json({ ok: false, error: "focused tile not found" }, 404);
     // ポップアップのタブはタイル階層に居ないためlocationはnullになるが、tabId自体は
     // 呼び出し元のものが正しい
     const tabId =
@@ -996,7 +1000,7 @@ function buildApp(
           : `workspace not found: ${parsed.workspaceId}`;
       return c.json({ ok: false, error }, 404);
     }
-    return c.json({ ok: true, sourceWorkspaceClosed: result.sourceWorkspaceClosed });
+    return c.json({ ok: true });
   });
 
   app.get("/shell-profiles", (c) => c.json({ ok: true, profiles: getShellProfiles() }));

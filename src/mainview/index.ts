@@ -84,6 +84,8 @@ import { isWideChar } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
+const noBoardEl = document.getElementById("no-board") as HTMLDivElement;
+const noBoardNewButtonEl = document.getElementById("no-board-new") as HTMLButtonElement;
 const measureEl = document.getElementById("measure") as HTMLSpanElement;
 const imeEl = document.getElementById("ime-input") as HTMLTextAreaElement;
 const compositionEl = document.getElementById("composition") as HTMLDivElement;
@@ -706,6 +708,13 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         activeBoardId = p.workspace.activeBoardId;
         boardIds = p.workspace.boardIds;
         const activeBoard = p.workspace.board;
+        if (!activeBoard) {
+          renderNoBoard();
+          lastWorkspaces = p.workspaces;
+          if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
+          return;
+        }
+        setNoBoardVisible(false);
         lastLayout = activeBoard.layout;
         lastTabNames = activeBoard.tabNames;
         lastBellTabIds = new Set(activeBoard.bellTabIds);
@@ -1122,6 +1131,35 @@ function flushPendingTermHtml(): void {
 }
 
 // ---- タイル木構造 → DOM reconciliation ----
+/**
+ * Boardが1つも無いワークスペースの表示。タイル木のDOMを全て片付けたうえで案内へ差し替える
+ * （片付けないと、最後のBoardが閉じられた後もそのタブのDOMが残る）
+ */
+function renderNoBoard(): void {
+  gcStale(new Set(), new Set(), new Set());
+  lastLayout = null;
+  lastTabNames = {};
+  lastBellTabIds = new Set();
+  zoomedTileId = null;
+  focusedTileId = null;
+  currentTabId = null;
+  applyPopupState(null);
+  updateFocusHighlight();
+  setNoBoardVisible(true);
+}
+
+function setNoBoardVisible(visible: boolean): void {
+  noBoardEl.hidden = !visible;
+  tileTreeEl.hidden = visible;
+}
+
+// Board 0個の状態から抜ける唯一のGUI操作（この画面にはCLIを打つタブも無い）
+noBoardNewButtonEl.addEventListener("click", () => {
+  if (!activeWorkspaceId) return;
+  sendMessage("newBoard", { workspaceId: activeWorkspaceId });
+  imeEl.focus({ preventScroll: true });
+});
+
 function renderLayout(layout: TileNode, tabs: Record<TabId, TabRenderState>): void {
   const seenTabIds = new Set<TabId>();
   const seenSplitIds = new Set<TileId>();
@@ -1875,35 +1913,21 @@ function moveSidebarBoard(boardId: BoardId, toIndex: number): void {
  * Boardの別ワークスペースへの移動要求。サイドバーのD&Dと移動先ピッカーの共通の出口。
  * toIndexは移動先ワークスペース内の0始まりの挿入位置で、省略時は末尾（ピッカー経由は
  * 「どの行の間か」という文脈が無いため省略する）。
- * 移動元に他のBoardが無い場合、移し終えるとそのワークスペースは空になりbun側が畳む。
- * ワークスペース名と開いているポップアップが失われる破壊的操作なので、その時だけ確認を挟む
+ * 移動元は最後のBoardを失ってもBoard 0個のまま残るため、確認は挟まない
  */
 function requestMoveBoardToWorkspace(
   boardId: BoardId,
   workspaceId: WorkspaceId,
   toIndex?: number,
 ): void {
-  const sourceIndex = lastWorkspaces.findIndex((w) => w.boards.some((b) => b.boardId === boardId));
-  const source = sourceIndex >= 0 ? lastWorkspaces[sourceIndex] : undefined;
+  const source = lastWorkspaces.find((w) => w.boards.some((b) => b.boardId === boardId));
   if (!source || source.workspaceId === workspaceId) return;
-  const send = () => {
-    sendMessage("moveBoardToWorkspace", {
-      boardId,
-      workspaceId,
-      ...(toIndex !== undefined ? { toIndex } : {}),
-    });
-    imeEl.focus({ preventScroll: true });
-  };
-  if (source.boards.length > 1) {
-    send();
-    return;
-  }
-  const boardIndex = source.boards.findIndex((b) => b.boardId === boardId);
-  openConfirmDialog(
-    `ワークスペース「${workspaceLabel(source, sourceIndex)}」を閉じますか？`,
-    `${boardLabel(source.boards[boardIndex], boardIndex)}は移動元で最後のBoardのため、移すとそのワークスペースは空になり閉じられます（開いているポップアップも閉じられます）。`,
-    send,
-  );
+  sendMessage("moveBoardToWorkspace", {
+    boardId,
+    workspaceId,
+    ...(toIndex !== undefined ? { toIndex } : {}),
+  });
+  imeEl.focus({ preventScroll: true });
 }
 
 /**
@@ -1944,7 +1968,7 @@ function renameSidebarBoard(boardId: BoardId, name: string): void {
 
 /**
  * サイドバーからのBoard削除。Board内の全タイル・全タブのPTYがまとめて落ちる破壊的操作なので、
- * タブ再起動と同じ確認ダイアログを挟む。ワークスペース内最後の1つはbun側が閉じない
+ * タブ再起動と同じ確認ダイアログを挟む。ワークスペースが1つだけのときの最後の1つはbun側が閉じない
  * （SidebarWorkspaceList側でもメニュー項目を無効化しているので、ここには来ない想定）
  */
 function closeSidebarBoard(boardId: BoardId, name: string): void {

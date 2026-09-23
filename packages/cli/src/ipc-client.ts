@@ -360,7 +360,8 @@ export interface BoardListEntry {
 export interface WorkspaceListEntry {
   workspaceId: string;
   active: boolean;
-  activeBoardId: BoardId;
+  /** Boardが1つも無いWorkspaceではnull */
+  activeBoardId: BoardId | null;
   /** このWorkspaceが持つ全Board（ADR 0006）。単一Boardの場合が大半 */
   boards: BoardListEntry[];
   name: string | null;
@@ -660,9 +661,7 @@ export function moveBoard(
   return postJson(endpoint, "/move-board", { boardId, direction });
 }
 
-export type MoveBoardToWorkspaceResult =
-  /** sourceWorkspaceClosedは移動元が空になって閉じられたかどうか */
-  { ok: true; sourceWorkspaceClosed: boolean } | { ok: false; error: string };
+export type MoveBoardToWorkspaceResult = { ok: true } | { ok: false; error: string };
 
 export function moveBoardToWorkspace(
   endpoint: IpcEndpoint,

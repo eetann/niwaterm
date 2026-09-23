@@ -47,10 +47,6 @@ export default define({
       if (!result.ok) {
         failAndExit(`board moveに失敗しました: ${result.error}`);
       }
-      // 副作用としてワークスペースが1つ消えるのは気づきにくいので、成功時でも必ず知らせる
-      if (result.sourceWorkspaceClosed) {
-        console.log("移動元のワークスペースは空になったため閉じました");
-      }
       return;
     }
     const result = await moveBoard(endpoint, await target.boardId(), up ? "up" : "down");

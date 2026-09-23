@@ -5,7 +5,8 @@ import { createTargetResolver } from "../../resolve-target";
 
 export default define({
   name: "close",
-  description: "指定したBoardを閉じる（ワークスペース内最後の1つは閉じられない）",
+  description:
+    "指定したBoardを閉じる（ワークスペースが1つだけの場合、その中の最後の1つは閉じられない）",
   args: {
     board: {
       type: "string",

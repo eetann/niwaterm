@@ -344,8 +344,10 @@ function render(windowId: WindowId) {
  * 保持はウィンドウごと（webviewごと）に分ける
  */
 function dropUnchangedPaletteCss(view: WindowView, snap: AppRenderState): void {
+  const board = snap.workspace.board;
+  if (!board) return;
   // popupのPTY描画状態もboard.tabsに同居しているため、ここを見るだけで両方拾える
-  for (const [tabId, state] of Object.entries(snap.workspace.board.tabs)) {
+  for (const [tabId, state] of Object.entries(board.tabs)) {
     if (state.kind !== "terminal" || state.paletteCss === null) continue;
     if (view.lastPaletteCssByTabId.get(tabId) === state.paletteCss) state.paletteCss = null;
     else view.lastPaletteCssByTabId.set(tabId, state.paletteCss);
@@ -1000,6 +1002,7 @@ function createWindowRpc(windowId: WindowId) {
         },
         resizeTileInDirection: ({ direction }: { direction: "up" | "down" | "left" | "right" }) => {
           const tileId = windowManager.getFocusedTileId(windowId);
+          if (!tileId) return;
           windowManager.resizeTileInDirection(tileId, direction, DEFAULT_RESIZE_AMOUNT);
         },
         resizeSplit: ({ splitId, ratio }: { splitId: TileId; ratio: number }) => {

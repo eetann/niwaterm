@@ -274,6 +274,38 @@ body {
   height: 100%;
 }
 
+/* Board 0個のワークスペースで#tile-treeの代わりに出す案内 */
+#no-board {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--term-fg);
+  cursor: default;
+}
+
+#no-board-message {
+  margin: 0;
+  opacity: 0.7;
+}
+
+#no-board-new {
+  padding: 6px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+#no-board-new:hover {
+  border-color: var(--ui-accent);
+}
+
 .split {
   display: flex;
   width: 100%;

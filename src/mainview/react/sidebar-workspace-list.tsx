@@ -793,7 +793,9 @@ export function SidebarWorkspaceList({
                     workspace.workspaceId,
                     board,
                     boardIndex,
-                    workspace.boards.length > 1,
+                    // 最後の1つでも、他にワークスペースがあればBoard 0個の状態で残せる。
+                    // ワークスペースも1つだけなら閉じるとウィンドウごと畳むことになるため無効化する
+                    workspace.boards.length > 1 || workspaces.length > 1,
                   ),
                 )}
                 {workspace.popup && renderPopupCard(workspace.workspaceId, workspace.popup)}

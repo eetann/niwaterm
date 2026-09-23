@@ -159,12 +159,16 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       return deps.reloadConfig();
     },
     tile: {
+      // getFocusedTileIdはアクティブワークスペースがBoard 0個のときnullを返す。
+      // その場合タイルを主語にした操作は成立しないため、各APIの「対象なし」の戻り値で返す
       current() {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return null;
         return { id: tileId, cwd: focusedTileCwd(tileId) };
       },
       split(opts) {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return null;
         return workspaceManager.splitTile(tileId, opts.orientation, opts.ratio, opts.cwd);
       },
       focus(direction) {
@@ -172,6 +176,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
       resize(opts) {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return false;
         return workspaceManager.resizeTileInDirection(
           tileId,
           opts.direction,
@@ -180,10 +185,12 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
       zoom() {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return false;
         return workspaceManager.toggleZoomTile(tileId) ?? false;
       },
       close() {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return;
         const activeTabId = workspaceManager.getActiveTabId(tileId);
         if (activeTabId) workspaceManager.closeTab(tileId, activeTabId);
       },
@@ -191,11 +198,13 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     tab: {
       current() {
         const tileId = workspaceManager.getFocusedTileId();
+        if (tileId === null) return null;
         const tabId = workspaceManager.getActiveTabId(tileId);
         return tabId ? { tabId } : null;
       },
       create(opts) {
         const tileId = opts?.tileId ?? workspaceManager.getFocusedTileId();
+        if (tileId === null) return null;
         const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);
         if (!resolved.ok) {
           console.log(`[bun] niwa.tab.new: ${resolved.error}`);

@@ -28,12 +28,8 @@ export type { BoardId } from "./board";
 
 export type WorkspaceId = string;
 
-/**
- * moveBoardToWorkspaceの結果。sourceWorkspaceClosedは移動元が空になって畳まれたかどうかで、
- * CLI・webviewがその旨をユーザーへ伝えるために使う
- */
 export type MoveBoardToWorkspaceResult =
-  | { ok: true; sourceWorkspaceClosed: boolean }
+  | { ok: true }
   | { ok: false; reason: "board-not-found" | "workspace-not-found" };
 
 export type CloseWorkspaceResult =
@@ -59,7 +55,8 @@ export interface BoardStatusEntry extends BoardListEntry {
 export interface WorkspaceListEntry {
   workspaceId: WorkspaceId;
   active: boolean;
-  activeBoardId: BoardId;
+  /** Boardが1つも無いワークスペースではnull */
+  activeBoardId: BoardId | null;
   /** サイドバー表示用。このWorkspaceが持つ全Boardのレイアウト骨格（ADR 0006） */
   boards: BoardStatusEntry[];
   /** ユーザーがサイドバーから設定したワークスペース名。未設定はnull（表示側で連番にフォールバック） */
@@ -166,21 +163,22 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return id;
   }
 
-  // あるworkspaceの最後のboard・最後のタイル・最後のタブが閉じられた時の挙動。
-  // そのworkspace自体を削除し、他のworkspaceへ切り替える。最後の1つだった場合のみアプリを終了する。
+  /**
+   * あるworkspaceの最後のboard・最後のタイル・最後のタブが閉じられた時の挙動。
+   * 他にworkspaceが残っているならBoard 0個のまま残す（作業対象が一時的に無くなるだけの
+   * 置き場としてのworkspaceを消さないため）。それが最後の1つだった場合は、従来どおり
+   * 畳んでウィンドウを閉じる（「最後のタブを閉じたら終了」の導線を保つ）
+   */
   function handleWorkspaceEmptied(id: WorkspaceId): void {
+    if (order.length > 1) {
+      opts.onDirty();
+      return;
+    }
     workspaces.get(id)?.dispose();
     workspaces.delete(id);
     workspaceNames.delete(id);
     order = order.filter((wid) => wid !== id);
-    if (order.length === 0) {
-      opts.onAllWorkspacesClosed();
-      return;
-    }
-    if (activeId === id) {
-      activeId = order[order.length - 1];
-    }
-    opts.onDirty();
+    opts.onAllWorkspacesClosed();
   }
 
   const restoreFrom = opts.restoreFrom;
@@ -366,7 +364,9 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   function closeBoard(boardId: BoardId): CloseBoardResult {
     const owner = findOwnerByBoardId(boardId);
     if (!owner) return { ok: false, reason: "not-found" };
-    return owner.closeBoard(boardId);
+    // 他にworkspaceが残っていればBoard 0個のまま残せる。最後の1つの場合だけは、
+    // 閉じるとウィンドウごと畳むことになるため誤操作防止の制限を残す
+    return owner.closeBoard(boardId, { allowEmpty: workspaces.size > 1 });
   }
 
   /**
@@ -387,9 +387,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
    * タブ・実行中のプロセスはそのまま維持される（タブ単体のワークスペース跨ぎ移動が非対応なのとは
    * 事情が違う。moveTab参照）。toIndexは移動先での0始まりの挿入位置で、省略・範囲外は末尾。
    * アクティブなBoardは移動元・移動先とも変更しない。
-   * 移動元がこれで空になる場合はそのワークスペースごと畳み（sourceWorkspaceClosed: true）、
-   * 表示中だったなら移動先のワークスペースへ切り替える。空になるのが破壊的かどうかの確認は
-   * 呼び出し側の責務（webviewはmainview/index.tsが確認ダイアログを出す）
+   * 移動元がこれでBoard 0個になっても、移動先という別のworkspaceが必ず残っているため畳まない
    */
   function moveBoardToWorkspace(
     boardId: BoardId,
@@ -404,25 +402,14 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       // 同一ワークスペース内なら並び替えと同じ意味になる（D&Dの取り違え・CLIの指定ミスを
       // エラーにせず吸収する）。挿入位置の指定が無ければ何も動かさない
       if (toIndex !== undefined) moveBoard(boardId, toIndex);
-      return { ok: true, sourceWorkspaceClosed: false };
+      return { ok: true };
     }
     const source = workspaces.get(sourceId) as Workspace;
     const detached = source.detachBoard(boardId);
     if (!detached) return { ok: false, reason: "board-not-found" };
     target.adoptBoard(detached, toIndex);
-    const sourceWorkspaceClosed = source.isEmpty();
-    if (sourceWorkspaceClosed) {
-      // Boardが0個のワークスペースはactiveBoardIdが何も指さず描画に耐えないため畳む。
-      // 移したBoardは既に移動先が抱えているので、disposeで落ちるのはポップアップだけ
-      source.dispose();
-      workspaces.delete(sourceId);
-      workspaceNames.delete(sourceId);
-      order = order.filter((id) => id !== sourceId);
-      // 表示中のワークスペースが消えた場合は、今移したBoardがある側を見せる
-      if (activeId === sourceId) activeId = toWorkspaceId;
-    }
     opts.onDirty();
-    return { ok: true, sourceWorkspaceClosed };
+    return { ok: true };
   }
 
   function setBoardName(boardId: BoardId, name: string): boolean {
@@ -597,9 +584,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     workspaces.get(activeId)?.focusDirection(direction);
   }
 
-  // niwa APIのniwa.tile.current()向け。focusDirectionと同じくアクティブworkspace固定の例外的操作
-  function getFocusedTileId(): TileId {
-    return (workspaces.get(activeId) as Workspace).getFocusedTileId();
+  // niwa APIのniwa.tile.current()向け。focusDirectionと同じくアクティブworkspace固定の例外的操作。
+  // アクティブworkspaceがBoard 0個ならタイルが1つも無いためnull
+  function getFocusedTileId(): TileId | null {
+    return workspaces.get(activeId)?.getFocusedTileId() ?? null;
   }
 
   function getActiveTabId(tileId: TileId): TabId | null {
@@ -845,7 +833,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           return board;
         });
         const name = workspaceNames.get(id);
-        const activeBoardIndex = ws.getActiveBoardIndex();
+        // Board 0個のworkspaceでは-1が返る。復元側が無視する値なので0へ丸めておく
+        const activeBoardIndex = Math.max(0, ws.getActiveBoardIndex());
         return name !== undefined
           ? { boards, activeBoardIndex, name }
           : { boards, activeBoardIndex };

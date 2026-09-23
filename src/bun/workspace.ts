@@ -32,6 +32,14 @@ export type { GetTabVarResult } from "./board";
 
 export type CloseBoardResult = { ok: true } | { ok: false; reason: "not-found" | "last-board" };
 
+export interface CloseBoardOptions {
+  /**
+   * 最後の1Boardでも閉じてよいか。Board 0個のWorkspaceを残せるかはウィンドウ全体の状況
+   * （他にWorkspaceがあるか）で決まるため、判断はworkspace-manager.ts側が持つ
+   */
+  allowEmpty?: boolean;
+}
+
 /**
  * ワークスペース間の移動中、どのWorkspaceにも属していないBoard（detachBoard→adoptBoardの受け渡し）。
  * Boardインスタンスが自分のPTYセッションを抱えたまま移るため、タブ単体の移動と違いセッションの
@@ -47,11 +55,12 @@ export interface DetachedBoard {
 }
 
 export interface WorkspaceRenderState {
-  activeBoardId: BoardId;
+  /** Boardが1つも無いWorkspaceではnull（mainview側は案内画面を出す） */
+  activeBoardId: BoardId | null;
   /** 表示順 */
   boardIds: BoardId[];
-  /** アクティブなBoardの描画データのみ */
-  board: BoardRenderState;
+  /** アクティブなBoardの描画データのみ。Boardが1つも無ければnull */
+  board: BoardRenderState | null;
   /** サイドバー描画用。全Boardのレイアウト骨格（PTY内容は含まない、listBoards()と同一データ） */
   boards: BoardListEntry[];
   /**
@@ -125,7 +134,11 @@ export interface WorkspaceOptions {
   /** 新規作成時（initialBoards省略時）の最初のBoard・最初のタブに使うcwd */
   initialCwd?: string;
   onDirty: () => void;
-  /** 最後の1Boardの最後のタブが閉じられた時に呼ばれる（Workspace自体が空になった） */
+  /**
+   * 最後の1Boardの最後のタブが閉じられた時に呼ばれる（Workspace自体が空になった）。
+   * このWorkspaceを畳むか、Board 0個のまま残すかは呼び出し側の判断。残す場合の再描画要求も
+   * 呼び出し側が出す（畳んだ後にこちらからonDirtyを呼ぶと、破棄済みのWorkspaceを描画しにいく）
+   */
   onAllTabsClosed: () => void;
   getDefaultShell?: BoardOptions["getDefaultShell"];
   getDefaultCwd?: BoardOptions["getDefaultCwd"];
@@ -143,7 +156,9 @@ export interface WorkspaceOptions {
 export function createWorkspace(opts: WorkspaceOptions) {
   const boards = new Map<BoardId, Board>();
   let order: BoardId[] = [];
-  let activeBoardId: BoardId;
+  // Boardが1つも無い間はnull。Board 0個のWorkspaceは「レビュー中のワークツリー用」のように
+  // 中身が一時的に空になる置き場として残す
+  let activeBoardId: BoardId | null;
   // Board名。getPersistableBoards経由で永続化対象になる
   const boardNames = new Map<BoardId, string>();
   // Boardに紐づくレイアウトプリセットと起動時の組み直し方。boardNamesと同じく
@@ -190,17 +205,32 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return id;
   }
 
+  function forgetBoardMeta(id: BoardId): void {
+    boardNames.delete(id);
+    boardStartups.delete(id);
+    boardWorktreePaths.delete(id);
+    boardStatuses.delete(id);
+  }
+
+  /**
+   * Board 0個になった後始末。ポップアップの描画データはアクティブBoardのtabsに相乗りしているため、
+   * Boardが無い間は開いていても画面に出せない。開きっぱなしのPTYが見えない所に残らないよう閉じる
+   */
+  function handleWorkspaceBecameEmpty(): void {
+    activeBoardId = null;
+    popup.close();
+  }
+
   // あるBoardの最後のタイル・最後のタブが閉じられた時の挙動。
   // そのBoard自体を削除し、他のBoardへ切り替える。最後の1つだった場合のみWorkspace自体を空とみなす。
   function handleBoardEmptied(id: BoardId): void {
     boards.get(id)?.dispose();
     boards.delete(id);
-    boardNames.delete(id);
-    boardStartups.delete(id);
-    boardWorktreePaths.delete(id);
-    boardStatuses.delete(id);
+    forgetBoardMeta(id);
     order = order.filter((bid) => bid !== id);
     if (order.length === 0) {
+      handleWorkspaceBecameEmpty();
+      // 畳むか空のまま残すかは呼び出し側の判断。onDirtyもそちらに任せる
       opts.onAllTabsClosed();
       return;
     }
@@ -210,7 +240,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     opts.onDirty();
   }
 
-  if (opts.initialBoards && opts.initialBoards.length > 0) {
+  // 空配列は「Boardが0個のWorkspaceを復元する」指定。省略（undefined）とは意味が違う
+  if (opts.initialBoards) {
     for (const initialBoard of opts.initialBoards) {
       const id = createAndRegisterBoard(initialBoard.tree, undefined, initialBoard.restoredMeta);
       // setBoardName/setBoardStartupは経由しない（onDirtyを呼ぶため。初期構築フェーズは
@@ -222,7 +253,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       if (initialBoard.status !== undefined) boardStatuses.set(id, initialBoard.status);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
-    activeBoardId = order[clampedIndex];
+    activeBoardId = order.length === 0 ? null : order[clampedIndex];
   } else {
     activeBoardId = createAndRegisterBoard(undefined, opts.initialCwd);
   }
@@ -234,9 +265,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return undefined;
   }
 
+  /** アクティブなBoard。Boardが1つも無ければundefined */
+  function activeBoard(): Board | undefined {
+    return activeBoardId === null ? undefined : boards.get(activeBoardId);
+  }
+
   /** 画面に出ているタブ。アクティブでないBoardのタブは見えていないため含まない */
   function listVisibleTabIds(): TabId[] {
-    return (boards.get(activeBoardId) as Board).listVisibleTabIds();
+    return activeBoard()?.listVisibleTabIds() ?? [];
   }
 
   function clearBell(tabId: TabId): boolean {
@@ -287,7 +323,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return boards.has(boardId);
   }
 
-  function getActiveBoardId(): BoardId {
+  /** Boardが1つも無いWorkspaceではnull */
+  function getActiveBoardId(): BoardId | null {
     return activeBoardId;
   }
 
@@ -314,17 +351,18 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return true;
   }
 
-  function closeBoard(boardId: BoardId): CloseBoardResult {
+  function closeBoard(boardId: BoardId, options: CloseBoardOptions = {}): CloseBoardResult {
     if (!boards.has(boardId)) return { ok: false, reason: "not-found" };
-    if (boards.size === 1) return { ok: false, reason: "last-board" }; // 最後の1つは閉じない（誤操作防止）
+    // 最後の1つを閉じるとWorkspaceがBoard 0個になる。それを許すかは呼び出し側の判断
+    if (boards.size === 1 && options.allowEmpty !== true)
+      return { ok: false, reason: "last-board" };
     boards.get(boardId)?.dispose();
     boards.delete(boardId);
-    boardNames.delete(boardId);
-    boardStartups.delete(boardId);
-    boardWorktreePaths.delete(boardId);
-    boardStatuses.delete(boardId);
+    forgetBoardMeta(boardId);
     order = order.filter((id) => id !== boardId);
-    if (activeBoardId === boardId) {
+    if (order.length === 0) {
+      handleWorkspaceBecameEmpty();
+    } else if (activeBoardId === boardId) {
       activeBoardId = order[order.length - 1];
     }
     opts.onDirty();
@@ -334,9 +372,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   /**
    * Boardを別ワークスペースへ移すために所有権だけ手放す（PTYは落とさない）。名前・起動時レイアウトの
    * 紐づけも一緒に持ち出し、移動先のadoptBoardがそのまま引き継ぐ。
-   * 切り離した結果Boardが0個になってもここでは何もしない（そのWorkspaceごと畳むかどうかは
-   * workspace-manager.tsの判断）。onDirtyも呼ばない: 移動の途中経過（Boardがどこにも属さない状態・
-   * activeBoardIdが空を指す状態）で描画されないよう、移動が完了してから呼び出し側がまとめて促す
+   * 切り離した結果Board 0個になったWorkspaceを畳むかどうかはworkspace-manager.tsの判断。
+   * onDirtyは呼ばない: 移動の途中経過（Boardがどこにも属さない状態）で描画されないよう、
+   * 移動が完了してから呼び出し側がまとめて促す
    */
   function detachBoard(boardId: BoardId): DetachedBoard | null {
     const board = boards.get(boardId);
@@ -347,11 +385,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const startup = boardStartups.get(boardId);
     const worktreePath = boardWorktreePaths.get(boardId);
     const status = boardStatuses.get(boardId);
-    boardNames.delete(boardId);
-    boardStartups.delete(boardId);
-    boardWorktreePaths.delete(boardId);
-    boardStatuses.delete(boardId);
-    if (activeBoardId === boardId && order.length > 0) {
+    forgetBoardMeta(boardId);
+    if (order.length === 0) {
+      // ポップアップを閉じる分のonDirtyだけは出る（開いていた場合のみ）
+      handleWorkspaceBecameEmpty();
+    } else if (activeBoardId === boardId) {
       activeBoardId = order[order.length - 1];
     }
     return {
@@ -367,7 +405,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
   /**
    * detachBoardで切り離したBoardをこのWorkspaceへ迎え入れる。toIndexは0始まりの挿入位置で、
    * 省略・範囲外は末尾（サイドバーの並びで一番下）。アクティブBoardは変更しない
-   * （移動しただけで表示中のBoardが切り替わるのは予期しづらいため）。
+   * （移動しただけで表示中のBoardが切り替わるのは予期しづらいため。Board 0個だった場合のみ、
+   * 迎えたBoardをアクティブにする）。
    * detachBoardと同じくonDirtyは呼ばない
    */
   function adoptBoard(detached: DetachedBoard, toIndex?: number): void {
@@ -383,9 +422,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
     if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
     if (detached.status !== undefined) boardStatuses.set(boardId, detached.status);
+    if (activeBoardId === null) activeBoardId = boardId;
   }
 
-  /** detachBoardで最後のBoardを失ったかどうか。この状態のWorkspaceは描画に耐えないため即座に畳む */
+  /** Boardを1つも持っていないか（空のまま残すか畳むかの判断はworkspace-manager.ts側） */
   function isEmpty(): boolean {
     return boards.size === 0;
   }
@@ -513,7 +553,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // ポップアップはWorkspace直下の状態（ADR 0005・ADR 0006）。cwd・サイズの継承元は
   // 「現在アクティブなBoard」のフォーカス中タブとする（openPopup実行時点でのアクティブBoard）
   function openPopup(popupOpts: OpenPopupOptions = {}): TabId | null {
-    const inherited = boards.get(activeBoardId)?.getFocusedTabSnapshot();
+    // ポップアップの描画データはアクティブBoardのtabsに相乗りしているため、Boardが無い間は開けない
+    if (activeBoardId === null) return null;
+    const inherited = activeBoard()?.getFocusedTabSnapshot();
     const base = inherited ?? { cols: opts.initialCols, rows: opts.initialRows };
     // cwdの上書きはここで行う。getFocusedTabSnapshotはタブが実際に報告したcwdの参照元でもあり
     // （getBoardFocusedCwd）、そちらまで紐づけへ寄せると解決起点が実態からずれる
@@ -542,9 +584,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
    * 通常タブとして編入する（タブへ昇格。ADR 0005）。PTYセッションは作り直さない
    */
   function promotePopup(): { tileId: TileId; tabId: TabId } | null {
+    const board = activeBoard();
+    if (!board) return null;
     const promoted = popup.takeForPromotion();
     if (!promoted) return null;
-    const board = boards.get(activeBoardId) as Board;
     const tileId = board.getFocusedTileId();
     const ok = board.adoptTab(promoted.tabId, promoted.session, {
       cols: promoted.cols,
@@ -609,11 +652,12 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   // 「現在フォーカス」基準の操作のため例外的にtileIdを取らず、アクティブなBoardへルーティングする
   function focusDirection(direction: "up" | "down" | "left" | "right"): void {
-    boards.get(activeBoardId)?.focusDirection(direction);
+    activeBoard()?.focusDirection(direction);
   }
 
-  function getFocusedTileId(): TileId {
-    return (boards.get(activeBoardId) as Board).getFocusedTileId();
+  /** Boardが1つも無いWorkspaceではnull */
+  function getFocusedTileId(): TileId | null {
+    return activeBoard()?.getFocusedTileId() ?? null;
   }
 
   function getActiveTabId(tileId: TileId): TabId | null {
@@ -811,7 +855,16 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   function snapshot(): WorkspaceRenderState {
-    const active = boards.get(activeBoardId) as Board;
+    const active = activeBoard();
+    if (!active) {
+      return {
+        activeBoardId: null,
+        boardIds: [...order],
+        board: null,
+        boards: listBoards(),
+        popup: null,
+      };
+    }
     const activeBoardState = active.snapshot();
     const popupState = popup.snapshot();
     const popupRenderState = popupState ? popup.renderState() : null;
@@ -869,8 +922,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     });
   }
 
+  /** Boardが1つも無いWorkspaceでは-1（永続化では復元時にクランプされる） */
   function getActiveBoardIndex(): number {
-    return order.indexOf(activeBoardId);
+    return activeBoardId === null ? -1 : order.indexOf(activeBoardId);
   }
 
   /** サイドバー一覧用の軽量な参照。非アクティブなWorkspaceでもポップアップの有無・表示状態を把握できるようにする */

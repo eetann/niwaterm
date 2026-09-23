@@ -41,7 +41,8 @@ async function selfBoardLast(
  * そのワークツリーで開いたBoardを閉じる。**ワークツリーを消し終えてから呼ぶこと**。
  * Boardを閉じるとその中のタブのPTYが落ち、そこからこのCLIを実行していた場合は
  * シェルごと巻き添えで殺される（先に閉じるとgitを起動する前に止まる）。
- * 閉じられないBoard（ワークスペース内最後の1つ等）があっても削除自体は済んでいるので警告に留める
+ * 閉じられないBoard（ワークスペースも1つだけの状態での最後の1つ等）があっても
+ * 削除自体は済んでいるので警告に留める
  */
 async function closeWorktreeBoards(path: string): Promise<void> {
   const endpoint = resolveIpcEndpoint();
