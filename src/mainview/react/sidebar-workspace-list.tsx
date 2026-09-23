@@ -717,6 +717,11 @@ export function SidebarWorkspaceList({
             )}
           >
             {/*
+              区切り線はドロップ判定を途切れさせないようワークスペース枠の内側へ置く。
+              兄弟要素として枠の外へ出すと、その1px分がどのワークスペースにも属さない帯になる
+            */}
+            {workspaceIndex > 0 && <div className="mx-1 mb-1 h-px bg-border" />}
+            {/*
               見出し行はBoardの受け皿も兼ねる（落とすとそのワークスペースの末尾へ移る）。
               折りたたみ中はBoard行が無く、行間へ落とす手段が他に無いため
             */}
