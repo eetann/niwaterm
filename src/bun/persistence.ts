@@ -108,8 +108,14 @@ export interface PersistedBoardStartup {
 /** 1つのBoard（Tileツリー1本）の永続化データ（ADR 0006） */
 export interface PersistedBoard {
   layout: PersistedTileNode;
-  /** ユーザーがサイドバーから設定したBoard名。未設定は省略する */
+  /** ユーザー・CLIが明示的に付けたBoard名。未設定は省略する */
   name?: string;
+  /**
+   * 名前を付けていないBoardへ設定（board.naming）が自動で付けた名前。未設定は省略する。
+   * 起動のたびに付け直すのではなく保存するのは、表示順から導く連番と違って並び替えでも
+   * 名前が動かないようにするため（"directory"方式ではBoardを開いた時のcwdが後から引けない）
+   */
+  autoName?: string;
   /**
    * `layout apply`で適用したレイアウトプリセット名と起動時の扱い。
    * プリセット由来でないBoardでは省略する。restoreMode: "layout"であってもプリセットが
@@ -288,6 +294,7 @@ function isPersistedBoard(value: unknown): value is PersistedBoard {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
+  if (v["autoName"] !== undefined && typeof v["autoName"] !== "string") return false;
   if (v["startup"] !== undefined && !isPersistedBoardStartup(v["startup"])) return false;
   if (v["worktreePath"] !== undefined && typeof v["worktreePath"] !== "string") return false;
   if (v["status"] !== undefined && typeof v["status"] !== "string") return false;

@@ -184,11 +184,12 @@ function hasUnreadBell(board: BoardStatusEntry): boolean {
 }
 
 /**
- * Board行の表示名。ユーザーが名前を設定していなければワークスペース内の並び順で連番へフォールバックする。
+ * Board行の表示名。ユーザーが名前を設定していなければ設定（board.naming）による自動名を出す。
+ * 自動名すら付けられなかった場合（cwdが分からない等）だけワークスペース内の並び順で連番にする。
  * サイドバー以外（キーバインド・コマンドパレット起点の名前変更ダイアログ）でも同じラベルを出すためexportする
  */
 export function boardLabel(board: BoardStatusEntry, index: number): string {
-  return board.name || `Board ${index + 1}`;
+  return board.name || board.autoName || `Board ${index + 1}`;
 }
 
 /**

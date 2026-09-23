@@ -111,7 +111,7 @@ export default defineConfig({
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
 | `niwa.popup.run(command, opts?)` | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列 |
 | `niwa.board.create(cwd?)` | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない） |
-| `niwa.board.move(boardId, index)` | Boardを所属ワークスペース内の表示順（サイドバーの並び・名前未設定時の連番ラベル）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え） |
+| `niwa.board.move(boardId, index)` | Boardを所属ワークスペース内の表示順（サイドバーの並び）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え） |
 | `niwa.board.moveToWorkspace(boardId, workspaceId, index?)` | Boardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`、サイドバーで別ワークスペースへドラッグ&ドロップするのと同じ）。レイアウト・タブ・実行中のプロセスはそのまま移る。`index`は移動先での挿入位置（0始まり）で、省略・範囲外は末尾。アクティブなBoardは移動元・移動先とも変更しない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる） |
 | `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
 | `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
@@ -302,7 +302,7 @@ keybindings: {
 | `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
+| `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `set-board-status:<id>` | アクティブなBoardに作業フェーズを設定する（`<id>`は下記「Board設定」の`board.statuses`のid）。設定側にしか書けないアクションなので既定キーは無い |
 | `clear-board-status` | アクティブなBoardの作業フェーズを解除する（既定キーは無いため使うには自分で割り当てる必要がある） |
@@ -853,11 +853,12 @@ workspace: {
 
 ## Board設定
 
-`board`は、新しいタブを開くときのcwdの決め方と、Boardへ付けられるステータスの候補を指定するオブジェクト。
+`board`は、新しいタブを開くときのcwdの決め方、名前を付けていないBoardに自動で付く名前、Boardへ付けられるステータスの候補を指定するオブジェクト。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `newTabCwd` | `"inherit"` \| `"worktree"` | 新しいタブのcwd。`"inherit"`（既定）は今のタブのcwdを引き継ぐ、`"worktree"`はそのBoardに紐づくワークツリーを使う |
+| `naming` | `"directory"` \| `"directory-follow"` \| `"sequential"` | 名前を付けていないBoardの自動命名。`"directory"`（既定）は開いた時点のディレクトリ名で固定、`"directory-follow"`はフォーカス中タブのcwdへ追従、`"sequential"`は`Board 1`のような連番 |
 
 ```ts
 board: {
@@ -866,6 +867,26 @@ board: {
 ```
 
 `"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照。
+
+### 自動命名（`board.naming`）
+
+Boardに名前を付けていないとき、サイドバーへ何を出すかを決める。
+
+```ts
+board: {
+  naming: "directory-follow",
+},
+```
+
+- `"directory"`（既定）: Boardを開いた時点のcwdのディレクトリ名。以後`cd`しても変わらない
+- `"directory-follow"`: フォーカス中タイルのアクティブタブのcwdのディレクトリ名。`cd`のたびに付け替わり、タイル移動・タブ切り替えでも追従する（tmuxの`automatic-rename`相当）
+- `"sequential"`: `Board 1`のような連番。番号はBoardを作った時点で決まるので、サイドバーで並び替えても動かない。閉じて空いた番号は次のBoardが引き継ぐ
+
+いずれの方式でも、**明示的に付けた名前の方が優先される**。`niwaterm board rename`・サイドバーのBoard行のダブルクリック・キーバインドの`rename-board`で付けた名前と、`niwaterm worktree new`／`worktree open`がBoardへ付けるブランチ名がこれにあたる。名前を空にして確定すると自動命名へ戻る。
+
+ディレクトリ名を使う2つの方式は、タブがcwdを報告していないと名前を決められない。この場合はサイドバーの並び順による連番（`Board 1`）が出る。開いた直後のcwdはniwaterm自身が知っているため`"directory"`では基本的に問題にならないが、`"directory-follow"`の追従はシェルのOSC 7報告に頼るため、**OSC 7を送らないシェル（Windowsの`cmd`・PowerShell等）のタブでは働かない**。
+
+設定を書き換えると既に開いているBoardにも反映される（明示的に付けた名前はそのまま残る）。
 
 ### ステータス（`board.statuses`）
 

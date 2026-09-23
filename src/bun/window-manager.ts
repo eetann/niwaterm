@@ -57,6 +57,7 @@ type SharedWorkspaceOptions = Pick<
   | "getDefaultShell"
   | "getDefaultCwd"
   | "getNewTabCwd"
+  | "getBoardNaming"
   | "getMaxScrollback"
   | "isWorktreeMissing"
   | "onBell"
@@ -113,6 +114,7 @@ export function createWindowManager(opts: WindowManagerOptions) {
       ...(opts.getDefaultShell !== undefined ? { getDefaultShell: opts.getDefaultShell } : {}),
       ...(opts.getDefaultCwd !== undefined ? { getDefaultCwd: opts.getDefaultCwd } : {}),
       ...(opts.getNewTabCwd !== undefined ? { getNewTabCwd: opts.getNewTabCwd } : {}),
+      ...(opts.getBoardNaming !== undefined ? { getBoardNaming: opts.getBoardNaming } : {}),
       ...(opts.getMaxScrollback !== undefined ? { getMaxScrollback: opts.getMaxScrollback } : {}),
       ...(opts.isWorktreeMissing !== undefined
         ? { isWorktreeMissing: opts.isWorktreeMissing }
@@ -262,6 +264,11 @@ export function createWindowManager(opts: WindowManagerOptions) {
   /** 全ウィンドウの全タブのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
   function applyMaxScrollback(lines: number): void {
     for (const entry of entries.values()) entry.workspaces.applyMaxScrollback(lines);
+  }
+
+  /** 全ウィンドウの全BoardへBoard名の自動命名の方式を反映する（設定ファイルのホットリロード用） */
+  function refreshBoardAutoNames(): void {
+    for (const entry of entries.values()) entry.workspaces.refreshBoardAutoNames();
   }
 
   function dispose(): void {
@@ -444,6 +451,7 @@ export function createWindowManager(opts: WindowManagerOptions) {
     // 最後に見えていたメインウィンドウの状態を消さないよう、空のまま返さずpersistentState()を使う
     serializeForPersistence: () => persistentState() ?? focused().serializeForPersistence(),
     applyMaxScrollback,
+    refreshBoardAutoNames,
     dispose,
   };
 }

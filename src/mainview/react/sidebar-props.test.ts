@@ -24,6 +24,7 @@ function board(
     focusedTileId?: string;
     tabVars?: Record<string, Record<string, string>>;
     name?: string | null;
+    autoName?: string | null;
     zoomedTileId?: string | null;
     startup?: BoardStatusEntry["startup"];
     worktreePath?: string | null;
@@ -40,6 +41,7 @@ function board(
     tabNames: {},
     tileNames: {},
     name: options.name ?? null,
+    autoName: options.autoName ?? null,
     zoomedTileId: options.zoomedTileId ?? null,
     startup: options.startup ?? null,
     worktreePath: options.worktreePath ?? null,
@@ -147,6 +149,22 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.label).toBe("roadmap-doc");
+  });
+
+  test("Board.autoNameは連番より優先し、Board.nameには負ける", () => {
+    const workspaces = [
+      workspace("ws-1", [
+        board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), { autoName: "niwaterm" }),
+        board("board-2", leaf("tile-2", ["tab-2"], "tab-2"), {
+          name: "roadmap-doc",
+          autoName: "niwaterm",
+        }),
+      ]),
+    ];
+
+    const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
+
+    expect(items[0]?.boards.map((b) => b.label)).toEqual(["niwaterm", "roadmap-doc"]);
   });
 
   test("Workspace.nameに設定があればデフォルトの連番の代わりにそれを使う", () => {

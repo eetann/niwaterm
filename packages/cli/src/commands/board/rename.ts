@@ -15,7 +15,7 @@ export default define({
     },
     name: {
       type: "positional",
-      description: "設定する名前。空文字列を指定するとデフォルトの連番ラベルへ戻る",
+      description: "設定する名前。空文字列を指定すると自動名（board.naming）へ戻る",
     },
   },
   run: async (ctx) => {

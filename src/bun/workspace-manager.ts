@@ -107,6 +107,8 @@ export interface WorkspaceManagerOptions {
   getDefaultCwd?: WorkspaceOptions["getDefaultCwd"];
   /** 新しいタブのcwdをBoardの紐づけワークツリーから決める（省略時は今のタブのcwdを引き継ぐ） */
   getNewTabCwd?: WorkspaceOptions["getNewTabCwd"];
+  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory" */
+  getBoardNaming?: WorkspaceOptions["getBoardNaming"];
   /**
    * 紐づけワークツリーが消えているかの判定。listWorkspacesのworktreeMissingに載る。
    * 省略時は常に存在扱い（サイドバーに警告アイコンが出ない）
@@ -154,6 +156,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
       getNewTabCwd: opts.getNewTabCwd,
+      getBoardNaming: opts.getBoardNaming,
       getMaxScrollback: opts.getMaxScrollback,
       onBell: opts.onBell,
       createSession: opts.createSession,
@@ -187,6 +190,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       const initialBoards: InitialBoard[] = persistedWorkspace.boards.map((persistedBoard) => {
         const initialBoard: InitialBoard = {};
         if (persistedBoard.name !== undefined) initialBoard.name = persistedBoard.name;
+        if (persistedBoard.autoName !== undefined) initialBoard.autoName = persistedBoard.autoName;
         if (persistedBoard.startup !== undefined) initialBoard.startup = persistedBoard.startup;
         if (persistedBoard.worktreePath !== undefined)
           initialBoard.worktreePath = persistedBoard.worktreePath;
@@ -370,7 +374,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   }
 
   /**
-   * Boardの表示順（サイドバーの並び・未設定時の連番ラベル）の並び替え。所属ワークスペース内で
+   * Boardの表示順（サイドバーの並び）の並び替え。所属ワークスペース内で
    * 完結する（別のワークスペースへ移すのはmoveBoardToWorkspace）。toIndexは0始まりで範囲外はクランプする
    */
   function moveBoard(boardId: BoardId, toIndex: number): boolean {
@@ -827,6 +831,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         const boards: PersistedBoard[] = ws.getPersistableBoards().map((b) => {
           const board: PersistedBoard = { layout: b.layout };
           if (b.name !== undefined) board.name = b.name;
+          if (b.autoName !== undefined) board.autoName = b.autoName;
           if (b.startup !== undefined) board.startup = b.startup;
           if (b.worktreePath !== undefined) board.worktreePath = b.worktreePath;
           if (b.status !== undefined) board.status = b.status;
@@ -846,6 +851,11 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   /** 配下の全ワークスペースのスクロールバック保持行数を差し替える（設定ファイルのホットリロード用） */
   function applyMaxScrollback(lines: number): void {
     for (const ws of workspaces.values()) ws.applyMaxScrollback(lines);
+  }
+
+  /** 配下の全BoardへBoard名の自動命名の方式を反映する（設定ファイルのホットリロード用） */
+  function refreshBoardAutoNames(): void {
+    for (const ws of workspaces.values()) ws.refreshBoardAutoNames();
   }
 
   function dispose(): void {
@@ -935,6 +945,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setWorkspaceName,
     serializeForPersistence,
     applyMaxScrollback,
+    refreshBoardAutoNames,
     dispose,
   };
 }

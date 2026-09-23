@@ -346,7 +346,10 @@ export interface BoardListEntry {
   active: boolean;
   focusedTileId: TileId;
   layout: TileSummary;
+  /** ユーザー・CLIが明示的に付けたBoard名（`board rename`）。未設定はnull */
   name: string | null;
+  /** 名前を付けていないBoardへ設定（board.naming）が自動で付けた名前。付けられなければnull */
+  autoName: string | null;
   /** 紐づくレイアウトプリセットと起動時の組み直し方（board startup / layout apply --startup）。未設定はnull */
   startup: { preset: string; restoreMode: "layout" | "restore" } | null;
   /** 紐づくgitワークツリーの絶対パス（`board worktree set`・`worktree new`・`worktree open`）。未設定はnull */
@@ -681,7 +684,7 @@ export interface NewBoardOptions {
   activate?: boolean;
   /** 対応するgitワークツリーの絶対パス。`worktree open`が既存Boardを見つける判定キーになる */
   worktreePath?: string;
-  /** Boardの表示名。空文字列は名前なし（デフォルトの連番ラベル）として扱う */
+  /** Boardの表示名。空文字列は名前なし（設定board.namingによる自動名）として扱う */
   name?: string;
 }
 

@@ -1,5 +1,5 @@
-// Board設定。新しいタブを開くときのcwdの決め方と、Boardに付けられるステータスの候補を
-// niwaterm.config.tsから変更できるようにする。
+// Board設定。新しいタブを開くときのcwdの決め方、Board名の自動命名の方式、Boardに付けられる
+// ステータスの候補をniwaterm.config.tsから変更できるようにする。
 // browser.tsと同様、全フィールドoptionalの型を「ユーザーの部分上書き」に使う。
 //
 // workspace.defaultCwdとは別物。あちらは「新規ワークスペースの最初のタブ」だけに効く初期値で、
@@ -16,6 +16,23 @@ const NEW_TAB_CWD_MODES: readonly NewTabCwdMode[] = ["inherit", "worktree"];
 
 export function isNewTabCwdMode(value: unknown): value is NewTabCwdMode {
   return typeof value === "string" && (NEW_TAB_CWD_MODES as readonly string[]).includes(value);
+}
+
+/**
+ * 名前を付けていないBoardに自動で付く名前の決め方。
+ * "directory": Boardを開いた時点のディレクトリ名で固定する。
+ * "directory-follow": フォーカス中タブのcwdへ追従する（tmuxのautomatic-rename相当）。
+ * "sequential": `Board 1`のような、ワークスペース内で重ならない連番。
+ *
+ * どの方式でも、ユーザー・CLIが明示的に付けた名前（`board rename`・`worktree open`の
+ * ブランチ名）の方が優先される。
+ */
+export type BoardNaming = "directory" | "directory-follow" | "sequential";
+
+const BOARD_NAMINGS: readonly BoardNaming[] = ["directory", "directory-follow", "sequential"];
+
+export function isBoardNaming(value: unknown): value is BoardNaming {
+  return typeof value === "string" && (BOARD_NAMINGS as readonly string[]).includes(value);
 }
 
 /** ステータスのidに許す文字。キーバインドの`set-board-status:<id>`へそのまま埋め込むため空白を除く */
@@ -46,6 +63,11 @@ export interface BoardConfig {
    */
   newTabCwd?: NewTabCwdMode;
   /**
+   * 名前を付けていないBoardの自動命名。既定は"directory"（開いた時点のディレクトリ名で固定）。
+   * "directory-follow"はcwdをOSC 7で報告するシェルでのみ追従できる。
+   */
+  naming?: BoardNaming;
+  /**
    * Boardへ付けられるステータスの候補。サイドバーの右クリックメニュー・コマンドパレットの
    * 選択肢になる。ここに無い文字列もCLIからは設定でき、その場合は文字列がそのまま既定色で出る。
    */
@@ -54,11 +76,13 @@ export interface BoardConfig {
 
 export interface ResolvedBoardConfig {
   newTabCwd: NewTabCwdMode;
+  naming: BoardNaming;
   statuses: ResolvedBoardStatus[];
 }
 
 export const defaultBoardConfig: ResolvedBoardConfig = {
   newTabCwd: "inherit",
+  naming: "directory",
   statuses: [],
 };
 

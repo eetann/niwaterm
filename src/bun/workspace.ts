@@ -3,6 +3,7 @@
 // tile/tabのid採番は既存方針どおりworkspace-manager.tsに一元化されたままで、このファイルはBoardId採番のみ担う。
 // ポップアップ（ADR 0005）はBoardをまたいでも同じものを使えるよう、Board単位ではなくこの層で
 // popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
+import type { BoardNaming } from "@niwaterm/config";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { PersistedBoardStartup, RestoredTreeMeta } from "./persistence";
@@ -15,6 +16,7 @@ import {
   type BoardRenderState,
   type GetTabVarResult,
 } from "./board";
+import { directoryName, isSequentialName, nextSequentialName } from "./board-naming";
 import { createPopup, type OpenPopupOptions, type Popup, type PopupRenderState } from "./popup";
 
 export type { BoardId, BoardRenderState, TabRenderState } from "./board";
@@ -49,6 +51,7 @@ export interface DetachedBoard {
   boardId: BoardId;
   board: Board;
   name?: string;
+  autoName?: string;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
   status?: string;
@@ -80,8 +83,10 @@ export interface BoardListEntry {
   tabVars: Record<TabId, Record<string, string>>;
   tabNames: Record<TabId, string>;
   tileNames: Record<TileId, string>;
-  /** ユーザーがサイドバーから設定したBoard名。未設定はnull（表示側で連番にフォールバック） */
+  /** ユーザー・CLIが明示的に付けたBoard名。未設定はnull（表示側はautoNameへフォールバックする） */
   name: string | null;
+  /** 名前を付けていないBoardへ設定（board.naming）が自動で付けた名前。付けられなければnull */
+  autoName: string | null;
   /** 一時的にズーム表示中のtileId（tmuxのresize-pane -Z相当）。ズームしていなければnull */
   zoomedTileId: TileId | null;
   /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
@@ -98,7 +103,7 @@ export interface NewBoardOptions {
   activate?: boolean;
   /** このBoardが対応するgitワークツリーの絶対パス */
   worktreePath?: string;
-  /** Boardの表示名。空文字列・空白のみは未設定（デフォルトの連番ラベル）として扱う */
+  /** Boardの表示名。空文字列・空白のみは未設定（設定board.namingによる自動名）として扱う */
   name?: string;
 }
 
@@ -115,6 +120,7 @@ export interface InitialBoard {
    */
   tree?: NonNullable<BoardOptions["initialTree"]>;
   name?: string;
+  autoName?: string;
   restoredMeta?: RestoredTreeMeta;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
@@ -148,6 +154,8 @@ export interface WorkspaceOptions {
    * ディレクトリの存在確認はここを渡す側（index.ts）の責務
    */
   getNewTabCwd?: (worktreePath: string | undefined) => string | undefined;
+  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory" */
+  getBoardNaming?: () => BoardNaming;
   getMaxScrollback?: BoardOptions["getMaxScrollback"];
   onBell?: BoardOptions["onBell"];
   createSession?: BoardOptions["createSession"];
@@ -159,8 +167,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // Boardが1つも無い間はnull。Board 0個のWorkspaceは「レビュー中のワークツリー用」のように
   // 中身が一時的に空になる置き場として残す
   let activeBoardId: BoardId | null;
-  // Board名。getPersistableBoards経由で永続化対象になる
+  // ユーザー・CLIが明示的に付けたBoard名。getPersistableBoards経由で永続化対象になる
   const boardNames = new Map<BoardId, string>();
+  // 名前を付けていないBoardへ自動で付いた名前。boardNamesと同じく永続化対象になる。
+  // 表示順（order）から毎回導くのではなく1つずつ持つのは、並び替えても名前が動かないようにするため
+  const boardAutoNames = new Map<BoardId, string>();
   // Boardに紐づくレイアウトプリセットと起動時の組み直し方。boardNamesと同じく
   // getPersistableBoards経由で永続化対象になる
   const boardStartups = new Map<BoardId, PersistedBoardStartup>();
@@ -191,7 +202,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
       initialTree,
       initialCwd,
       restoredMeta,
-      onDirty: () => opts.onDirty(),
+      onDirty: () => {
+        refreshFollowingAutoName(id);
+        opts.onDirty();
+      },
       onAllTabsClosed: () => handleBoardEmptied(id),
       getDefaultShell: opts.getDefaultShell,
       getDefaultCwd: opts.getDefaultCwd,
@@ -207,6 +221,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   function forgetBoardMeta(id: BoardId): void {
     boardNames.delete(id);
+    boardAutoNames.delete(id);
     boardStartups.delete(id);
     boardWorktreePaths.delete(id);
     boardStatuses.delete(id);
@@ -247,6 +262,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
       // setBoardName/setBoardStartupは経由しない（onDirtyを呼ぶため。初期構築フェーズは
       // dirty通知しない既存方針）
       if (initialBoard.name !== undefined) boardNames.set(id, initialBoard.name);
+      else if (initialBoard.autoName !== undefined) boardAutoNames.set(id, initialBoard.autoName);
+      else assignAutoName(id);
       if (initialBoard.startup !== undefined) boardStartups.set(id, initialBoard.startup);
       if (initialBoard.worktreePath !== undefined)
         boardWorktreePaths.set(id, initialBoard.worktreePath);
@@ -256,6 +273,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     activeBoardId = order.length === 0 ? null : order[clampedIndex];
   } else {
     activeBoardId = createAndRegisterBoard(undefined, opts.initialCwd);
+    assignAutoName(activeBoardId, opts.initialCwd);
   }
 
   function findBoardOwnerByTileId(tileId: TileId): Board | undefined {
@@ -337,6 +355,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (options.worktreePath !== undefined) boardWorktreePaths.set(boardId, options.worktreePath);
     if (options.name !== undefined && options.name.trim() !== "")
       boardNames.set(boardId, options.name);
+    assignAutoName(boardId, cwd);
     if (options.activate !== false) activeBoardId = boardId;
     opts.onDirty();
     return boardId;
@@ -382,6 +401,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boards.delete(boardId);
     order = order.filter((id) => id !== boardId);
     const name = boardNames.get(boardId);
+    const autoName = boardAutoNames.get(boardId);
     const startup = boardStartups.get(boardId);
     const worktreePath = boardWorktreePaths.get(boardId);
     const status = boardStatuses.get(boardId);
@@ -396,6 +416,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       boardId,
       board,
       ...(name !== undefined ? { name } : {}),
+      ...(autoName !== undefined ? { autoName } : {}),
       ...(startup !== undefined ? { startup } : {}),
       ...(worktreePath !== undefined ? { worktreePath } : {}),
       ...(status !== undefined ? { status } : {}),
@@ -419,6 +440,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const requested = Number.isFinite(toIndex) ? Math.trunc(toIndex as number) : order.length;
     order.splice(Math.min(Math.max(0, requested), order.length), 0, boardId);
     if (detached.name !== undefined) boardNames.set(boardId, detached.name);
+    adoptAutoName(boardId, detached.autoName);
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
     if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
     if (detached.status !== undefined) boardStatuses.set(boardId, detached.status);
@@ -431,7 +453,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   /**
-   * ワークスペース内での表示順（サイドバーの並び・未設定時の連番ラベル）の並び替え。
+   * ワークスペース内での表示順（サイドバーの並び）の並び替え。
    * orderの位置だけを動かし、各Boardの中身（レイアウト・タブ）とアクティブBoardは変更しない。
    * toIndexは0始まりで、範囲外はクランプする（端へのD&D・キーバインド連打が失敗扱いに
    * ならないようにするため）。falseを返すのはboardIdが無い・toIndexが数値として不正な場合のみ
@@ -454,13 +476,83 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return moveBoard(boardId, fromIndex + delta);
   }
 
-  /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
+  function namingMode(): BoardNaming {
+    return opts.getBoardNaming?.() ?? "directory";
+  }
+
+  /**
+   * 明示的な名前（ユーザー・CLIが付けた名前）があるBoardか。この間は自動名を持たせない。
+   * 表示されないうえ、連番方式では見えない番号を消費してサイドバーの並びが飛び飛びに見えるため
+   */
+  function hasExplicitName(boardId: BoardId): boolean {
+    return boardNames.has(boardId);
+  }
+
+  /**
+   * 名前を付けていないBoardに出す自動名を、今の方式で決める。連番は既に振ってあれば振り直さない
+   * （閉じた・移動したBoardの都合で他のBoardの番号が動くと、番号で覚えている意味が無くなるため）。
+   * ディレクトリ名はcwdが分からなければ付けない（追従方式ならタブがcwdを報告した時点で付く）
+   */
+  function assignAutoName(boardId: BoardId, cwd?: string): void {
+    if (hasExplicitName(boardId)) return;
+    if (namingMode() === "sequential") {
+      const current = boardAutoNames.get(boardId);
+      if (current !== undefined && isSequentialName(current)) return;
+      boardAutoNames.set(boardId, nextSequentialName(boardAutoNames.values()));
+      return;
+    }
+    const name = directoryName(cwd ?? getBoardFocusedCwd(boardId) ?? opts.getDefaultCwd?.());
+    if (name !== null) boardAutoNames.set(boardId, name);
+  }
+
+  /**
+   * 別ワークスペースから移ってきたBoardの自動名を引き継ぐ。連番は移動先で既に使われていることが
+   * あるので、その場合だけ空き番号へ振り直す
+   */
+  function adoptAutoName(boardId: BoardId, autoName: string | undefined): void {
+    if (hasExplicitName(boardId)) return;
+    if (autoName === undefined) {
+      assignAutoName(boardId);
+      return;
+    }
+    const taken = isSequentialName(autoName) && [...boardAutoNames.values()].includes(autoName);
+    boardAutoNames.set(boardId, taken ? nextSequentialName(boardAutoNames.values()) : autoName);
+  }
+
+  /**
+   * 追従方式（board.naming: "directory-follow"）の自動名を今のcwdへ合わせる。Boardの描画更新の
+   * たびに通るので、cdだけでなくタイル移動・タブ切り替えでも名前が付け替わる。
+   * cwdを報告しないシェル（OSC 7未対応）のタブでは付いている名前をそのまま残す
+   */
+  function refreshFollowingAutoName(boardId: BoardId): void {
+    if (namingMode() !== "directory-follow" || hasExplicitName(boardId)) return;
+    const name = directoryName(getBoardFocusedCwd(boardId));
+    if (name !== null) boardAutoNames.set(boardId, name);
+  }
+
+  /**
+   * 設定（board.naming）の切り替えを既にあるBoardへ反映する（設定ファイルのホットリロード用）。
+   * ユーザー・CLIが付けた名前は方式によらず優先されるので触らない
+   */
+  function refreshBoardAutoNames(): void {
+    for (const boardId of order) {
+      if (hasExplicitName(boardId)) boardAutoNames.delete(boardId);
+      else assignAutoName(boardId);
+    }
+    opts.onDirty();
+  }
+
+  /** 空文字列（trim後）を渡すと設定（board.naming）による自動名へ戻す */
   function setBoardName(boardId: BoardId, name: string): boolean {
     if (!boards.has(boardId)) return false;
     if (name.trim() === "") {
       boardNames.delete(boardId);
+      // 自動名を付け直す。"directory"方式でもBoardを開いた時点のcwdはもう分からないので、
+      // 今フォーカスしているタブのcwdを基準にする
+      assignAutoName(boardId);
     } else {
       boardNames.set(boardId, name);
+      boardAutoNames.delete(boardId);
     }
     opts.onDirty();
     return true;
@@ -788,6 +880,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tabNames: board.listTabNames(),
         tileNames: board.listTileNames(),
         name: boardNames.get(id) ?? null,
+        autoName: boardAutoNames.get(id) ?? null,
         zoomedTileId: board.getZoomedTileId(),
         startup: boardStartups.get(id) ?? null,
         worktreePath: boardWorktreePaths.get(id) ?? null,
@@ -891,6 +984,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardId: BoardId;
     layout: PersistedTileNode;
     name?: string;
+    autoName?: string;
     startup?: PersistedBoardStartup;
     worktreePath?: string;
     status?: string;
@@ -903,6 +997,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tileNames: board.listTileNames(),
       });
       const name = boardNames.get(id);
+      const autoName = boardAutoNames.get(id);
       const startup = boardStartups.get(id);
       const worktreePath = boardWorktreePaths.get(id);
       const status = boardStatuses.get(id);
@@ -910,11 +1005,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
         boardId: BoardId;
         layout: PersistedTileNode;
         name?: string;
+        autoName?: string;
         startup?: PersistedBoardStartup;
         worktreePath?: string;
         status?: string;
       } = { boardId: id, layout };
       if (name !== undefined) entry.name = name;
+      if (autoName !== undefined) entry.autoName = autoName;
       if (startup !== undefined) entry.startup = startup;
       if (worktreePath !== undefined) entry.worktreePath = worktreePath;
       if (status !== undefined) entry.status = status;
@@ -954,6 +1051,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     moveBoard,
     moveBoardBy,
     setBoardName,
+    refreshBoardAutoNames,
     setBoardStartup,
     getBoardStartup,
     setBoardWorktreePath,

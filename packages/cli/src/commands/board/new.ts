@@ -18,7 +18,7 @@ export default define({
     name: {
       type: "string",
       short: "n",
-      description: "Boardの名前（省略時はデフォルトの連番ラベル）",
+      description: "Boardの名前（省略時は設定board.namingによる自動名）",
     },
   },
   run: async (ctx) => {

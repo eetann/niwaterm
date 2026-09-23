@@ -140,7 +140,7 @@ export interface NiwaBoardApi {
    */
   create(cwd?: string): string | null;
   /**
-   * Boardを所属ワークスペース内の表示順（サイドバーの並び・未設定時の連番ラベル）のindex番目へ
+   * Boardを所属ワークスペース内の表示順（サイドバーの並び）のindex番目へ
    * 移動する。indexは0始まりで、範囲外は先頭・末尾へクランプする。中身（レイアウト・タブ）と
    * アクティブなBoardは変更しない。別のワークスペースへ移すのはmoveToWorkspace。
    * boardIdが存在しない場合はfalse

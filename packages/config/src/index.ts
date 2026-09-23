@@ -13,8 +13,10 @@ export {
 } from "./appearance";
 export {
   type BoardConfig,
+  type BoardNaming,
   type BoardStatusPreset,
   defaultBoardConfig,
+  isBoardNaming,
   isNewTabCwdMode,
   type NewTabCwdMode,
   normalizeBoardStatuses,

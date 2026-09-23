@@ -265,6 +265,13 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
         name: "board",
         entries: [
           { key: "newTabCwd", value: input.board.newTabCwd },
+          {
+            key: "naming",
+            value: input.board.naming,
+            ...(input.board.naming === "directory-follow"
+              ? { note: "cwdをOSC 7で報告するシェルでのみ追従する" }
+              : {}),
+          },
           input.board.statuses.length === 0
             ? { key: "statuses", value: "(なし)" }
             : {

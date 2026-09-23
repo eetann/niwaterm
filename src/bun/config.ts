@@ -19,6 +19,7 @@ import {
   defaultUiColors,
   type CustomViewConfig,
   type CustomViewHandlers,
+  isBoardNaming,
   isKeybindAction,
   isNewTabCwdMode,
   isTabBarMode,
@@ -572,6 +573,14 @@ export function resolveBoard(
       user?.newTabCwd,
       defaultBoardConfig.newTabCwd,
       isNewTabCwdMode,
+    ),
+    naming: resolveField(
+      diag,
+      "board",
+      "naming",
+      user?.naming,
+      defaultBoardConfig.naming,
+      isBoardNaming,
     ),
     // 要素単位で落とす正規化なのでresolveFieldは通さない（不正な1件だけを捨てる）
     statuses: normalizeBoardStatuses(user?.statuses),

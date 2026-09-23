@@ -22,7 +22,7 @@ import type {
   ResolvedTerminalConfig,
   ShellProfile,
 } from "@niwaterm/config";
-import { scaleLineHeight } from "@niwaterm/config";
+import { defaultBoardConfig, scaleLineHeight } from "@niwaterm/config";
 import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
 import { createBrowserBridge } from "./browser-bridge";
@@ -507,7 +507,9 @@ let configDiagnostics: ConfigDiagnostic[] = [];
 let keybindings: KeybindingsConfig;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
-let boardConfig: ResolvedBoardConfig;
+// 復元したBoardの自動名は設定の読み込みより前に決まる（windowManagerの生成時）ため、
+// 未読込の間も方式を引けるよう既定値で初期化しておく
+let boardConfig: ResolvedBoardConfig = defaultBoardConfig;
 let terminalConfig: ResolvedTerminalConfig;
 let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
@@ -551,6 +553,7 @@ const windowManager = createWindowManager({
   // （紐づけ先が消えていると気づかずPTYの起動自体が失敗するため）
   getNewTabCwd: (worktreePath) =>
     resolveBoardNewTabCwd(boardConfig.newTabCwd, worktreePath, dirExistsSync),
+  getBoardNaming: () => boardConfig.naming,
   getMaxScrollback: () => terminalConfig.scrollback,
   isWorktreeMissing: (worktreePath) => worktreeExistence.isMissing(worktreePath),
   onBell: handleBell,
@@ -675,6 +678,8 @@ async function refreshConfig(): Promise<void> {
   configApplied = true;
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
   windowManager.applyMaxScrollback(terminalConfig.scrollback);
+  // 自動名は付いた時点の方式で固定されるので、方式を変えた分をここで付け直す
+  windowManager.refreshBoardAutoNames();
 }
 
 await refreshConfig();

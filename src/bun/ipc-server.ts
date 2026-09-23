@@ -401,7 +401,7 @@ interface NewBoardRequestBody {
   activate?: boolean;
   /** このBoardが対応するgitワークツリーの絶対パス（`niwaterm worktree new`・`worktree open`用） */
   worktreePath?: string;
-  /** Boardの表示名。空文字列は名前なし（デフォルトの連番ラベル）として扱う */
+  /** Boardの表示名。空文字列は名前なし（設定board.namingによる自動名）として扱う */
   name?: string;
 }
 

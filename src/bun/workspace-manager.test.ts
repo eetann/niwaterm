@@ -1,3 +1,4 @@
+import type { BoardNaming } from "@niwaterm/config";
 import { describe, expect, test } from "bun:test";
 import type { PersistedState } from "./persistence";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
@@ -473,6 +474,139 @@ describe("Board操作", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
     expect(mgr.setBoardName("not-found", "repoA")).toBe(false);
+  });
+});
+
+describe("Board名の自動命名(board.naming)", () => {
+  function autoNamesOf(mgr: WorkspaceManager): (string | null)[] {
+    return mgr.listWorkspaces()[0]?.boards.map((board) => board.autoName) ?? [];
+  }
+
+  function activeTabIdOf(mgr: WorkspaceManager): string {
+    return (mgr.snapshot().workspace.board.layout as TileLeaf).activeTabId;
+  }
+
+  test("既定(directory)はBoardを開いたcwdのディレクトリ名が自動名になる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, initialCwd: "/home/eetann/ghq/niwaterm" }),
+    );
+    mgr.newBoard(mgr.snapshot().activeWorkspaceId, "/home/eetann/docs/roadmap");
+
+    expect(autoNamesOf(mgr)).toEqual(["niwaterm", "roadmap"]);
+  });
+
+  test("directoryはBoardを開いた後にcwdが変わっても自動名を変えない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, initialCwd: "/home/eetann/ghq/niwaterm" }),
+    );
+    mgr.setTabVar(activeTabIdOf(mgr), "cwd", "/home/eetann/docs/roadmap");
+
+    expect(autoNamesOf(mgr)).toEqual(["niwaterm"]);
+  });
+
+  test("directory-followはフォーカス中タブのcwdへ追従する", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({
+        createSession: factory,
+        initialCwd: "/home/eetann/ghq/niwaterm",
+        getBoardNaming: () => "directory-follow",
+      }),
+    );
+    mgr.setTabVar(activeTabIdOf(mgr), "cwd", "/home/eetann/docs/roadmap");
+
+    expect(autoNamesOf(mgr)).toEqual(["roadmap"]);
+  });
+
+  test("sequentialは空いている番号を使い、並び替えても番号は動かない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getBoardNaming: () => "sequential" }),
+    );
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const second = mgr.newBoard(workspaceId);
+    mgr.newBoard(workspaceId);
+    expect(autoNamesOf(mgr)).toEqual(["Board 1", "Board 2", "Board 3"]);
+
+    // 並び替えで表示順が変わっても、付いている番号はそのまま
+    mgr.moveBoard(second as string, 0);
+    expect(autoNamesOf(mgr)).toEqual(["Board 2", "Board 1", "Board 3"]);
+
+    // 閉じて空いた番号は次のBoardが引き継ぐ
+    mgr.closeBoard(second as string);
+    mgr.newBoard(workspaceId);
+    expect(autoNamesOf(mgr)).toEqual(["Board 1", "Board 3", "Board 2"]);
+  });
+
+  test("ユーザーが付けた名前は自動名より優先され、空文字で戻すと自動名が付け直される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, initialCwd: "/home/eetann/ghq/niwaterm" }),
+    );
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+
+    mgr.setBoardName(boardId, "レビュー待ち");
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.name).toBe("レビュー待ち");
+    // 明示的な名前が付いている間は自動名を持たない
+    expect(autoNamesOf(mgr)).toEqual([null]);
+
+    mgr.setTabVar(activeTabIdOf(mgr), "cwd", "/home/eetann/docs/roadmap");
+    mgr.setBoardName(boardId, "");
+    expect(mgr.listWorkspaces()[0]?.boards[0]?.name).toBeNull();
+    // 開いた時点のcwdはもう分からないので、今フォーカスしているタブのcwdで付け直す
+    expect(autoNamesOf(mgr)).toEqual(["roadmap"]);
+  });
+
+  test("明示的な名前が付いたBoardは連番を消費せず、名前を消すと空き番号が付く", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getBoardNaming: () => "sequential" }),
+    );
+    const workspaceId = mgr.snapshot().activeWorkspaceId;
+    const named = mgr.newBoard(workspaceId, undefined, { name: "feat/naming" }) as string;
+    mgr.newBoard(workspaceId);
+    expect(autoNamesOf(mgr)).toEqual(["Board 1", null, "Board 2"]);
+
+    mgr.setBoardName(named, "");
+    expect(autoNamesOf(mgr)).toEqual(["Board 1", "Board 3", "Board 2"]);
+  });
+
+  test("refreshBoardAutoNamesで方式の切り替えが既存のBoardへ反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    let naming: BoardNaming = "directory";
+    const mgr = createWorkspaceManager(
+      baseOpts({
+        createSession: factory,
+        initialCwd: "/home/eetann/ghq/niwaterm",
+        getBoardNaming: () => naming,
+      }),
+    );
+    mgr.newBoard(mgr.snapshot().activeWorkspaceId, "/home/eetann/docs/roadmap");
+
+    naming = "sequential";
+    mgr.refreshBoardAutoNames();
+
+    expect(autoNamesOf(mgr)).toEqual(["Board 1", "Board 2"]);
+  });
+
+  test("自動名は永続化され、復元時に付け直さない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, initialCwd: "/home/eetann/ghq/niwaterm" }),
+    );
+    const persisted = mgr.serializeForPersistence();
+    expect(persisted.workspaces[0]?.boards[0]?.autoName).toBe("niwaterm");
+
+    // 保存した値がそのまま使われることを、今のcwdからは導けない名前で確かめる
+    const board = persisted.workspaces[0]?.boards[0];
+    if (board) board.autoName = "保存した自動名";
+    const restored = createWorkspaceManager(
+      baseOpts({ createSession: factory, restoreFrom: persisted }),
+    );
+
+    expect(autoNamesOf(restored)).toEqual(["保存した自動名"]);
   });
 });
 

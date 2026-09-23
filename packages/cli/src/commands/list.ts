@@ -28,7 +28,9 @@ function printTile(tile: TileSummary, focusedTileId: string, depth: number): voi
 function printBoard(board: BoardListEntry, depth: number): void {
   const indent = "  ".repeat(depth);
   const suffix = board.active ? " (active)" : "";
-  const nameSuffix = board.name ? ` "${board.name}"` : "";
+  // 自動名はniwaterm側の表示と揃えるために出す（ユーザーが付けた名前と紛れないよう括弧なしにする）
+  const name = board.name ?? board.autoName;
+  const nameSuffix = name ? ` "${name}"` : "";
   const startupSuffix = board.startup
     ? ` [${board.startup.restoreMode === "layout" ? "startup" : "preset"}: ${board.startup.preset}]`
     : "";

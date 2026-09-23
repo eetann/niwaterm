@@ -1960,7 +1960,7 @@ function openMoveActiveBoardToWorkspacePicker(): void {
   );
 }
 
-/** サイドバーからのBoard名変更。空文字列を送るとbun側でデフォルトの連番ラベルへ戻る */
+/** サイドバーからのBoard名変更。空文字列を送るとbun側で自動名（board.naming）へ戻る */
 function renameSidebarBoard(boardId: BoardId, name: string): void {
   sendMessage("renameBoard", { boardId, name });
   imeEl.focus({ preventScroll: true });
@@ -2045,7 +2045,7 @@ function openRenameActiveBoardDialog(): void {
   if (!board) return;
   openPromptDialog(
     "Boardの名前を変更",
-    "空のまま確定すると既定の連番ラベルへ戻ります。",
+    "空のまま確定すると自動で付く名前へ戻ります。",
     boardLabel(board, index),
     (name) => {
       sendMessage("renameBoard", { boardId, name });
