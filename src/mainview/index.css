@@ -278,13 +278,16 @@ body {
 #no-board {
   position: absolute;
   inset: 0;
+  color: var(--term-fg);
+  cursor: default;
+}
+/* :not([hidden])で括る理由は#sidebar-switcherと同じ */
+#no-board:not([hidden]) {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--term-fg);
-  cursor: default;
 }
 
 #no-board-message {
