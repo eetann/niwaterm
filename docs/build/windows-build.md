@@ -287,6 +287,44 @@ vendorの同期に続けて、`win:sync` → `win:build`でWindows側の同期�
 > それぞれで`mise run win:start:built`を使ってビルド済みの`launcher.exe`を`electrobun dev`を
 > 経由せず直接起動する。Hutchを経由しないためこのロックの影響を受けない（ホットリロードは失われる）。
 
+### wipにだけ別の設定を読ませる
+
+永続化状態とIPCソケットはアプリ名別に分かれるが、設定ディレクトリ（`~/.config/niwaterm/`）は
+wipとdailyで共有している。設定まわりの検証で`niwaterm.config.ts`を書き換えると普段遣い側にも
+そのまま効いてしまうため、検証用の設定ディレクトリを`mise.local.toml`へ書いておく。
+
+```toml
+[env]
+NIWATERM_WIP_CONFIG_DIR = 'C:\Users\<ユーザー名>\.config\niwaterm-wip'
+```
+
+`mise run start` / `win:start` / `win:start:built`が、wip起動時にだけこの値を
+`NIWATERM_CONFIG_DIR`としてWindows側へ渡す（dailyには渡さないので普段遣いの設定は変わらない）。
+変数の意味・設定ディレクトリに何を置く必要があるかは[設定ファイル](/guide/config.md)の
+「設定ディレクトリを変える」節を参照。
+
+パスは**Windows側のもの**で書く（TOMLのリテラル文字列`'...'`ならバックスラッシュのエスケープは不要）。
+アプリはWindows実機で動くためWSL側のパスは見えず、`\\wsl.localhost\...`を指すリンクを置いても
+ファイル監視が変更を拾えずホットリロードが効かない。
+
+中身はWindows側で用意する。`%USERPROFILE%\.config\niwaterm\`の丸ごとコピーでは済まない
+（`node_modules\@niwaterm\config`はリポジトリの`packages/config`を指すジャンクションのため）ので、
+同じ実体を指すジャンクションを張り直す。
+
+```powershell
+# ジャンクションの現在の向き先を確認してからTargetに使う
+Get-ChildItem $env:USERPROFILE\.config\niwaterm\node_modules\@niwaterm | Select-Object Name,Target
+
+$dst = "$env:USERPROFILE\.config\niwaterm-wip"
+New-Item -ItemType Directory -Force -Path "$dst\node_modules\@niwaterm"
+Copy-Item "$env:USERPROFILE\.config\niwaterm\package.json" $dst
+Copy-Item "$env:USERPROFILE\.config\niwaterm\tsconfig.json" $dst
+New-Item -ItemType Junction -Path "$dst\node_modules\@niwaterm\config" -Target <上で確認した向き先>
+```
+
+あとは`niwaterm.config.ts`を置けば起動時に読まれる。実際に読まれている設定ディレクトリは
+`niwaterm-dev config show`の先頭行（`config: <パス>`）で確認できる。
+
 ### タスクバーから起動する
 
 普段遣いビルドはWSL側から`mise run start`せずに、Windows側のタスクバーやスタートメニューから

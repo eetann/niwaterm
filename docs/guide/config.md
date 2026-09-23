@@ -47,6 +47,14 @@ export default defineConfig({
 
 `file:`の代わりに`bun link`を使う方法もある（`niwaterm init`実行後、`packages/config`で`bun link`を実行し、`~/.config/niwaterm/`で`bun link @niwaterm/config`すると差し替えられる）。
 
+### 設定ディレクトリを変える（`NIWATERM_CONFIG_DIR`）
+
+環境変数`NIWATERM_CONFIG_DIR`に絶対パスを設定して起動すると、`~/.config/niwaterm/`の代わりにそのディレクトリを設定ディレクトリとして読む。niwatermを複数のビルドで使い分けていて、片方だけ別の設定で動かしたいとき（開発中のビルドで設定まわりを試しても普段遣いの設定を壊さないようにする等）に使う。未設定なら従来どおり`~/.config/niwaterm/`を読む。
+
+切り替わるのはディレクトリ単位で、設定ファイル1つだけを差し替えることはできない。`customViews`の`path`のような相対パスの基準も、ホットリロードの監視対象もそのディレクトリへ移るため、`niwaterm.config.ts`だけでなく`package.json`・`node_modules/`（`@niwaterm/config`の解決に必要）まで一式が要る。雛形は`NIWATERM_CONFIG_DIR=<パス> niwaterm init`で作れる。
+
+この変数はniwatermが開いたタブのシェルへは引き継がれない。タブの中から別のniwatermを起動したときに、起動元インスタンスの設定ディレクトリを巻き込まないようにするため。
+
 ## キーバインド
 
 niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。`repeat: true`を付けたバインドは、発火後`repeatTimeoutMs`（既定500ms）以内ならprefix無しで連打できる（tmuxの`bind-key -r`相当。詳細は下記「repeatによる連打」参照）。

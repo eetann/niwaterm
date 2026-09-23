@@ -7,6 +7,12 @@
 #
 #   [env]
 #   NIWATERM_WIN_WORKTREES_ROOT = "/mnt/c/Users/<ユーザー名>/niwaterm-worktrees"
+#   NIWATERM_WIP_CONFIG_DIR = 'C:\Users\<ユーザー名>\.config\niwaterm-wip'
+#
+# NIWATERM_WIP_CONFIG_DIRはniwaterm-wipにだけ読ませる設定ディレクトリ(niwaterm.config.ts等の置き場)。
+# 普段遣いの設定を書き換えずに設定まわりを検証するための口で、未設定なら従来どおり
+# 両方が~/.config/niwaterm/を読む。アプリはWindows実機で動くためWindows側のパスで書き、
+# 中身はniwaterm.config.ts・node_modules込みで一式必要(`niwaterm init`で雛形を作れる)。
 #
 # niwaterm-wip（開発中ビルド）はgtrで作成した追加のgit worktree（devブランチ）で、
 # niwaterm-daily（普段遣いビルド）はこのリポジトリ本体（mainブランチ、gitの
@@ -126,6 +132,11 @@ fi
 # HUTCH_HOME自体をアプリ名別に分けて回避する
 # （詳細: docs/known-issues/hutch-electrobun-release-lock-blocks-concurrent-dev.md）
 APP_NAME="${NIWATERM_APP_NAME:-niwaterm-wip}"
+# wip専用の設定ディレクトリはwip起動時にだけ渡す。dailyへ渡ると普段遣いのインスタンスが
+# 検証用の設定で起動してしまう
+if [ "$APP_NAME" = "niwaterm-wip" ] && [ -n "$NIWATERM_WIP_CONFIG_DIR" ]; then
+  export NIWATERM_CONFIG_DIR="$NIWATERM_WIP_CONFIG_DIR"
+fi
 export HUTCH_HOME="$HOME/.hutch-${APP_NAME#niwaterm-}"
 if [ ! -d "$HUTCH_HOME" ]; then
   echo "HUTCH_HOME ($HUTCH_HOME) がまだありません。このまま進めるとelectrobun/cottontail/bunの再ダウンロードが走ります。"
@@ -179,7 +190,13 @@ LOG_FILE="/tmp/niwaterm-win-${APP_NAME#niwaterm-}.log"
 # HUTCH_HOMEはWSL側のexportではWindows側のプロセスに伝わらないため、ここで明示的に渡す
 # （分離する理由はstartタスクのコメント参照）
 HUTCH_SUFFIX="${APP_NAME#niwaterm-}"
-nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
+# startタスクを経由せず単独で呼ばれた場合も同じ解決になるようフォールバックを持つ
+# （wip専用の設定ディレクトリを渡す理由はstartタスクのコメント参照）
+CONFIG_DIR=""
+if [ "$APP_NAME" = "niwaterm-wip" ]; then
+  CONFIG_DIR="${NIWATERM_CONFIG_DIR:-$NIWATERM_WIP_CONFIG_DIR}"
+fi
+nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:NIWATERM_CONFIG_DIR='$CONFIG_DIR'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun dev" > "$LOG_FILE" 2>&1 &
 disown
 echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LOG_FILE"
 echo "停止するには: mise run win:stop:mine"
@@ -203,7 +220,12 @@ else
   APP_NAME=niwaterm-wip
 fi
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
-powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$launcher = \$env:USERPROFILE + '\niwaterm-worktrees\\$WORKTREE_NAME\build\\$APP_NAME\dev-win-x64\\$APP_NAME-dev\bin\launcher.exe'; if (-not (Test-Path \$launcher)) { Write-Error (\"launcher.exeが見つかりません: \" + \$launcher + \" -- 先に mise run start でelectrobun devビルドを1回完了させてください\"); exit 1 }; Start-Process -FilePath \$launcher"
+# startタスクを経由しないため、wip専用の設定ディレクトリの引き渡しもここで行う（理由はstartタスク参照）
+CONFIG_DIR=""
+if [ "$APP_NAME" = "niwaterm-wip" ]; then
+  CONFIG_DIR="${NIWATERM_CONFIG_DIR:-$NIWATERM_WIP_CONFIG_DIR}"
+fi
+powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_CONFIG_DIR='$CONFIG_DIR'; \$launcher = \$env:USERPROFILE + '\niwaterm-worktrees\\$WORKTREE_NAME\build\\$APP_NAME\dev-win-x64\\$APP_NAME-dev\bin\launcher.exe'; if (-not (Test-Path \$launcher)) { Write-Error (\"launcher.exeが見つかりません: \" + \$launcher + \" -- 先に mise run start でelectrobun devビルドを1回完了させてください\"); exit 1 }; Start-Process -FilePath \$launcher"
 echo "launcher.exeを直接起動しました（$APP_NAME）。Hutchのグローバルビルドロックの影響を受けないため、もう片方が起動中でも同時起動できる"
 echo "停止するには: mise run win:stop:mine"
 '''

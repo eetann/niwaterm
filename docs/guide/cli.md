@@ -25,7 +25,7 @@ bun link
 niwaterm init
 ```
 
-`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる。既存ファイルは上書きしない（実行済みディレクトリへ再実行しても安全）。依存インストールを飛ばしたい場合は`--skip-install`を付ける。設定ファイルの書き方の詳細は`docs/guide/config.md`参照。
+`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる。既存ファイルは上書きしない（実行済みディレクトリへ再実行しても安全）。依存インストールを飛ばしたい場合は`--skip-install`を付ける。生成先は`NIWATERM_CONFIG_DIR`で変えられる（アプリ側の読み込み先と同じ変数）。設定ファイルの書き方の詳細は`docs/guide/config.md`参照。
 
 ## 使い方
 

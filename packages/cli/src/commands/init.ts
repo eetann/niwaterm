@@ -14,6 +14,8 @@ import { define } from "gunshi";
 import { failAndExit } from "../cli-error";
 
 function configDirPath(): string {
+  const override = process.env["NIWATERM_CONFIG_DIR"];
+  if (override) return resolve(override);
   return join(homedir(), ".config", "niwaterm");
 }
 
@@ -36,7 +38,8 @@ async function writeIfAbsent(path: string, content: string): Promise<void> {
 
 export default define({
   name: "init",
-  description: "設定ディレクトリ(~/.config/niwaterm/)をテンプレートからセットアップする",
+  description:
+    "設定ディレクトリ(~/.config/niwaterm/、NIWATERM_CONFIG_DIRで変更可)をテンプレートからセットアップする",
   args: {
     "skip-install": {
       type: "boolean",

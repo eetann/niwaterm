@@ -56,7 +56,13 @@ import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
 import type { WorkspaceManager } from "./workspace-manager";
 
+/**
+ * 設定ディレクトリ。NIWATERM_CONFIG_DIRが設定されていればそちらを使う（開発中ビルドへ普段遣いとは
+ * 別の設定を読ませるための口）。相対パスはアプリのcwd基準になり予測しづらいため絶対パスで渡す。
+ */
 export function configDirPath(): string {
+  const override = process.env["NIWATERM_CONFIG_DIR"];
+  if (override) return resolve(override);
   return join(homedir(), ".config", "niwaterm");
 }
 

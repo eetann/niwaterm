@@ -79,11 +79,30 @@ function createTestNiwaApi(): NiwaApiHandle {
 }
 
 describe("configFilePath", () => {
+  const originalConfigDir = process.env["NIWATERM_CONFIG_DIR"];
+
+  afterEach(() => {
+    if (originalConfigDir === undefined) delete process.env["NIWATERM_CONFIG_DIR"];
+    else process.env["NIWATERM_CONFIG_DIR"] = originalConfigDir;
+  });
+
   test(".config/niwaterm/niwaterm.config.ts を指す", () => {
+    delete process.env["NIWATERM_CONFIG_DIR"];
     // Windowsは区切りが \ になるため正規化してから比較する
     expect(configFilePath().replaceAll("\\", "/")).toMatch(
       /\.config\/niwaterm\/niwaterm\.config\.ts$/,
     );
+  });
+
+  test("NIWATERM_CONFIG_DIRを指定するとそのディレクトリ配下を指す", () => {
+    process.env["NIWATERM_CONFIG_DIR"] = join(tmpdir(), "niwaterm-wip-config");
+    expect(configDirPath()).toBe(join(tmpdir(), "niwaterm-wip-config"));
+    expect(configFilePath()).toBe(join(tmpdir(), "niwaterm-wip-config", "niwaterm.config.ts"));
+  });
+
+  test("NIWATERM_CONFIG_DIRが空文字なら既定のディレクトリを使う", () => {
+    process.env["NIWATERM_CONFIG_DIR"] = "";
+    expect(configDirPath().replaceAll("\\", "/")).toMatch(/\.config\/niwaterm$/);
   });
 });
 

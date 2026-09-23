@@ -156,6 +156,8 @@ export function appendCommandArgs(
  * 2. niwaterm自身のビルド時設定（NIWATERM_APP_NAME）。タブのシェルが読む必要は無く、
  *    残っているとタブ内で`mise run start`したときにブランチではなく起動中インスタンスの
  *    アプリ名が採用され、wipのつもりでdailyを組んでしまう。
+ * 3. 起動中インスタンスの設定ディレクトリ（NIWATERM_CONFIG_DIR）。タブ内から起動した別インスタンスや
+ *    `niwaterm init`が、そのタブを開いているインスタンス用の設定ディレクトリを引き継いでしまう。
  */
 const INHERITED_TERMINAL_ENV_KEYS = [
   "TMUX",
@@ -169,6 +171,7 @@ const INHERITED_TERMINAL_ENV_KEYS = [
   "ZELLIJ_SESSION_NAME",
   // タブ側が参照するアプリ名はAPP_VARIANT（board.ts・popup.tsが明示的に注入する）
   "NIWATERM_APP_NAME",
+  "NIWATERM_CONFIG_DIR",
 ];
 
 /**
