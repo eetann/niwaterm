@@ -79,5 +79,6 @@ DOM上のフォーカスとOSキーボードフォーカスは別物で、前者
 
 - [activateWindow()でpopup表示直後にキー入力が届かなくなる](/known-issues/windows-popup-activatewindow-focus-loss.md) — 原因1と同根。`activate()`の代わりに`show()`を使う手が有効な可能性がある
 - [Windowsでのビルド・実行手順](/build/windows-build.md) — 実機セットアップ・ログの見方
+- [ASCIIは打てるのに日本語入力だけができない（imeElからフォーカスが外れる）](/known-issues/chromium-disables-ime-when-focus-leaves-textarea.md) — 原因2を一般化したもの。mousedown以外にもフォーカスが外れる経路があり、こちらで一元的に拾い直している
 - `src/bun/index.ts` — `focusWebviewOnce()`、`ready`ハンドラ
 - `src/mainview/index.ts` — `tileTreeEl`の`mousedown` / `mouseup`リスナー

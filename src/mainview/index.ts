@@ -48,6 +48,7 @@ import {
 } from "./custom-view-bridge";
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
+import { shouldRecoverImeFocus } from "./ime-focus";
 import { keyToBytes } from "./key-to-bytes";
 import { compileLinkRules, type CompiledLinkRule, findLinkAt, type LinkSpan } from "./link-detect";
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
@@ -3338,6 +3339,11 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
+  // フォーカス中の要素がrenderでの差し替えごと消えると、focusoutが飛ばないままbodyへ落ちる。
+  // ここまで来た打鍵はターミナルかキーバインドが受ける＝imeElがフォーカスを持っているべき状態なので、
+  // 取りこぼした迷子をこの機会に拾い直す
+  recoverImeFocus();
+
   const result = keybindResolver.handleKeydown(e);
   if (result.kind === "command") {
     e.preventDefault();
@@ -3702,6 +3708,38 @@ imeEl.addEventListener("input", (e) => {
     sendMessage("input", { tabId: currentTabId, data: imeEl.value });
     imeEl.value = "";
   }
+});
+
+let imeFocusRecoveryScheduled = false;
+
+/**
+ * キー入力の受け口(imeEl)からフォーカスが外れたままなら戻す。
+ *
+ * 各UIの閉じ処理でもimeElへ戻しているが、対象が変わらないときの早期returnやRadixの
+ * フォーカス復帰との前後関係で取りこぼすことがある。取りこぼすとASCIIだけ打てて日本語入力が
+ * できない状態が残り続けるため、最後の砦としてここで一元的に拾い直す。
+ * 詳細: docs/known-issues/chromium-disables-ime-when-focus-leaves-textarea.md
+ */
+function recoverImeFocus(): void {
+  const selection = window.getSelection();
+  const state = {
+    active: document.activeElement,
+    hasSelection: selection != null && !selection.isCollapsed,
+    documentFocused: document.hasFocus(),
+  };
+  if (!shouldRecoverImeFocus(state)) return;
+  imeEl.focus({ preventScroll: true });
+}
+
+// Radixのフォーカス復帰・Reactの再renderはfocusoutより後に走るため、activeElementが
+// 落ち着いてから判定する。連続して飛ぶfocusoutは1回にまとめる
+document.addEventListener("focusout", () => {
+  if (imeFocusRecoveryScheduled) return;
+  imeFocusRecoveryScheduled = true;
+  setTimeout(() => {
+    imeFocusRecoveryScheduled = false;
+    recoverImeFocus();
+  }, 0);
 });
 
 // ---- ペースト（Cmd+V）----
