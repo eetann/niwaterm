@@ -184,6 +184,10 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     expect(actionToTileCommand("new-window")).toEqual({ type: "newWindow" });
   });
 
+  test("focus-url-bar はURL欄へのフォーカスコマンドへ変換される", () => {
+    expect(actionToTileCommand("focus-url-bar")).toEqual({ type: "focusUrlBar" });
+  });
+
   test("move-board-* は並び替え・別ワークスペースへの移動コマンドへ変換される", () => {
     expect(actionToTileCommand("move-board-up")).toEqual({ type: "moveBoard", delta: -1 });
     expect(actionToTileCommand("move-board-down")).toEqual({ type: "moveBoard", delta: 1 });

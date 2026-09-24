@@ -32,6 +32,7 @@ import {
   FolderX,
   Globe,
   LayoutTemplate,
+  Link,
   Maximize2,
   MoveDown,
   MoveLeft,
@@ -195,6 +196,14 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     label: "新しいカスタムビュータブを開く",
     category: "タブ",
     icon: AppWindow,
+  },
+  {
+    action: "focus-url-bar",
+    labelEn: "Focus URL Bar",
+    label: "ブラウザタブのURL欄へフォーカス",
+    category: "タブ",
+    icon: Link,
+    keywords: ["address bar", "location", "url", "goto"],
   },
   {
     action: "next-tab",

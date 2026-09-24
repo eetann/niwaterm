@@ -279,7 +279,15 @@ function shortcutLabelForAction(action: NonPaletteKeybindAction): string | undef
   return `${formatKeyToken(prefix)} ${formatKeyToken(entry[0])}`;
 }
 
+/**
+ * パレットを閉じ切った後にURL欄を掴み直すタブ。パレットのフォーカストラップは開いている間
+ * 外へ出たフォーカスを引き戻し、閉じる際も開く前の要素へ戻すため、選択時点でURL欄へ
+ * フォーカスしても残らない（onCloseAutoFocusが最後の機会になる）
+ */
+let commandPaletteCloseFocusTabId: TabId | null = null;
+
 function renderCommandPalette(): void {
+  updateWebviewOverlayVisibility();
   commandPaletteRoot.renderOnEvent(
     createElement(CommandPalette, {
       open: commandPaletteOpen,
@@ -289,7 +297,15 @@ function renderCommandPalette(): void {
         renderCommandPalette();
       },
       onSelectAction: (action: NonPaletteKeybindAction) => {
+        commandPaletteCloseFocusTabId = action === "focus-url-bar" ? currentTabId : null;
         handleTileCommand(actionToTileCommand(action));
+      },
+      onCloseAutoFocus: (event: Event) => {
+        const tabId = commandPaletteCloseFocusTabId;
+        commandPaletteCloseFocusTabId = null;
+        if (!tabId) return;
+        event.preventDefault();
+        focusBrowserUrlInput(tabId);
       },
       shellProfiles,
       onSelectShellProfile: (shellProfileId: string) => {
@@ -321,6 +337,7 @@ let confirmDialogDanger = false;
 let confirmDialogOnConfirm: (() => void) | null = null;
 
 function renderConfirmDialog(): void {
+  updateWebviewOverlayVisibility();
   confirmDialogRoot.renderOnEvent(
     createElement(ConfirmDialog, {
       open: confirmDialogOpen,
@@ -368,6 +385,7 @@ let promptDialogInitialValue = "";
 let promptDialogOnSubmit: ((value: string) => void) | null = null;
 
 function renderPromptDialog(): void {
+  updateWebviewOverlayVisibility();
   promptDialogRoot.renderOnEvent(
     createElement(PromptDialog, {
       open: promptDialogOpen,
@@ -412,6 +430,7 @@ let configDialogOpen = false;
 let lastConfigSummary: ConfigSummary | null = null;
 
 function renderConfigDialog(): void {
+  updateWebviewOverlayVisibility();
   configDialogRoot.renderOnEvent(
     createElement(ConfigDialog, {
       open: configDialogOpen,
@@ -433,6 +452,7 @@ let workspacePickerItems: WorkspacePickerItem[] = [];
 let workspacePickerOnSelect: ((workspaceId: WorkspaceId) => void) | null = null;
 
 function renderWorkspacePicker(): void {
+  updateWebviewOverlayVisibility();
   workspacePickerRoot.renderOnEvent(
     createElement(WorkspacePicker, {
       open: workspacePickerOpen,
@@ -1367,12 +1387,41 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
 }
 
 /**
+ * ブラウザタブのURL入力欄へフォーカスし、全選択して打ち替えられる状態にする。
+ * 対象がブラウザタブでなければ何もしない
+ */
+function focusBrowserUrlInput(tabId: TabId | null): void {
+  if (!tabId) return;
+  const inputEl = tabContentElByTabId
+    .get(tabId)
+    ?.querySelector<HTMLInputElement>('.browser-toolbar input[type="text"]');
+  if (!inputEl) return;
+  inputEl.focus({ preventScroll: true });
+  inputEl.select();
+}
+
+/**
+ * 次に生成するブラウザタブのURL欄を自動フォーカスしてよい期限(performance.now()基準)。
+ * 新規ブラウザタブはbunへ依頼してから描画状態のpushで返ってくるため、どのtabIdが生えるかを
+ * 依頼時点では知れない。そこで「UI操作で開いた直後に生えた最初のブラウザタブ」を対象にする。
+ * 期限を切るのは、タイル不在などで作成が失敗したときにフラグが残り、後からCLIで開いた
+ * ブラウザタブがフォーカスを奪わないようにするため
+ */
+let browserUrlAutoFocusDeadlineMs = 0;
+
+/** 依頼してから新規ブラウザタブが描画されるまでの猶予(ms)。往復のRPC1回ぶんに足る長さにしておく */
+const BROWSER_URL_AUTO_FOCUS_WINDOW_MS = 2000;
+
+/**
  * ブラウザタブ用の<electrobun-webview>とツールバー（戻る/進む/リロード/URL入力欄）を生成する。
  * リサイズはElectrobun側のOverlaySyncControllerがDOM位置に自動追従するため、
  * ターミナルタブと異なりResizeObserver/sendResizeは付けない。
  * sandbox/src属性はDOM追加（connectedCallback）より前に設定する必要がある。
  */
 function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, url: string): void {
+  const autoFocusUrl = performance.now() < browserUrlAutoFocusDeadlineMs;
+  browserUrlAutoFocusDeadlineMs = 0;
+
   const tabContentEl = document.createElement("div");
   tabContentEl.className = "tab-content browser";
 
@@ -1391,6 +1440,7 @@ function ensureBrowserTabContent(tabId: TabId, tileContentEl: HTMLDivElement, ur
     createElement(BrowserToolbar, {
       webviewEl,
       initialUrl: url,
+      autoFocusUrl,
       onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
     }),
   );
@@ -1520,6 +1570,36 @@ function browserNavigate(
 }
 
 /**
+ * 画面全体を覆うHTMLのオーバーレイ（コマンドパレット・各ダイアログ・ピッカー）が開いているか。
+ * ネイティブのwebview(OOPIF)は常にHTMLより手前へ描かれるため、開いている間はwebviewを
+ * 退避させないとオーバーレイが完全に隠れる
+ */
+function htmlOverlayOpen(): boolean {
+  return (
+    commandPaletteOpen ||
+    confirmDialogOpen ||
+    promptDialogOpen ||
+    configDialogOpen ||
+    workspacePickerOpen
+  );
+}
+
+/**
+ * オーバーレイの開閉に合わせて、webview（ブラウザタブ・サイドバーのcustomView）を出し入れする。
+ * 隠すだけではマウスイベントを奪い続けるためpassthroughも併用する
+ * （docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
+ */
+function updateWebviewOverlayVisibility(): void {
+  const suppressed = htmlOverlayOpen();
+  for (const [tabId, browserEl] of browserElByTabId) {
+    const shown = !suppressed && tabContentElByTabId.get(tabId)?.style.display !== "none";
+    browserEl.toggleHidden(!shown);
+    browserEl.togglePassthrough(!shown);
+  }
+  updateCustomViewPanelVisibility();
+}
+
+/**
  * タブの表示/非表示を切り替える。ブラウザタブはdisplay:noneだけでは
  * ネイティブOOPIFが隠れない（位置同期が0x0でスキップされ直前の位置に居座る）ため、
  * toggleHiddenも併せて呼ぶ必要がある。
@@ -1540,8 +1620,9 @@ function setTabVisible(tabId: TabId, visible: boolean): void {
     if (visible && wasHidden) sendResize(tabId);
   }
   const browserEl = browserElByTabId.get(tabId);
-  browserEl?.toggleHidden(!visible);
-  browserEl?.togglePassthrough(!visible);
+  const shown = visible && !htmlOverlayOpen();
+  browserEl?.toggleHidden(!shown);
+  browserEl?.togglePassthrough(!shown);
 }
 
 // ---- ポップアップ（タイルに所属しない一時的な画面。ADR 0005）----
@@ -2365,7 +2446,7 @@ function setSidebarView(viewId: string): void {
  */
 function updateCustomViewPanelVisibility(): void {
   for (const [viewId, panel] of customViewPanelById) {
-    const active = sidebarOpen && viewId === sidebarViewId;
+    const active = sidebarOpen && viewId === sidebarViewId && !htmlOverlayOpen();
     panel.webviewEl.toggleHidden(!active);
     panel.webviewEl.togglePassthrough(!active);
   }
@@ -3406,10 +3487,14 @@ function handleTileCommand(cmd: TileCommand): void {
       sendMessage("newTab", { tileId: focusedTileId });
       break;
     case "newBrowserTab":
+      browserUrlAutoFocusDeadlineMs = performance.now() + BROWSER_URL_AUTO_FOCUS_WINDOW_MS;
       sendMessage("newBrowserTab", { tileId: focusedTileId });
       break;
     case "newCustomViewTab":
       sendMessage("newCustomViewTab", { tileId: focusedTileId });
+      break;
+    case "focusUrlBar":
+      focusBrowserUrlInput(currentTabId);
       break;
     case "renameTab":
       openRenameFocusedTabDialog();
@@ -3656,8 +3741,11 @@ tileTreeEl.addEventListener("mousedown", (e) => {
 // imeEl.focus()しても既定動作に上書きされ、document.activeElementはbodyになる。
 // documentレベルのkeydownは動くのでASCIIは打てるが、編集可能要素にフォーカスが無いと
 // ChromiumはOSのIMEを無効にするため日本語入力だけができなくなる。
-// 既定動作が終わったmouseupで入れ直す。ドラッグ選択中（選択が残っている）は選択を壊すため触らない
-tileTreeEl.addEventListener("mouseup", () => {
+// 既定動作が終わったmouseupで入れ直す。ドラッグ選択中（選択が残っている）は選択を壊すため触らない。
+// ブラウザタブのツールバー（URL入力欄）はmousedown側と同じくネイティブのフォーカス遷移に任せる
+// （ここで奪い返すとURL欄をクリックしても入力できない）
+tileTreeEl.addEventListener("mouseup", (e) => {
+  if ((e.target as HTMLElement).closest(".browser-toolbar")) return;
   const selection = window.getSelection();
   if (selection && !selection.isCollapsed) return;
   imeEl.focus({ preventScroll: true });

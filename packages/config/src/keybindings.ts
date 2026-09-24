@@ -41,6 +41,7 @@ export const KEYBIND_ACTIONS = [
   "new-tab",
   "new-browser-tab",
   "new-custom-view-tab",
+  "focus-url-bar",
   "next-tab",
   "prev-tab",
   "rename-tab",
@@ -156,6 +157,9 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   z: "toggle-zoom",
   c: "new-tab",
   "shift+t": "new-browser-tab",
+  // ブラウザのCmd+L相当だが、lはhjklでのタイル移動に充てるユーザーが多いため避け、
+  // URLの頭文字を取る
+  u: "focus-url-bar",
   n: "next-tab",
   p: "prev-tab",
   // tmuxにpane名の概念は無いので踏襲元が無い。rename-boardの","と対で覚えられるよう、

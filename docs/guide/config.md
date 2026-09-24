@@ -269,6 +269,7 @@ keybindings: {
 | `z` | toggle-zoom |
 | `c` | new-tab |
 | `shift+t` | new-browser-tab |
+| `u` | focus-url-bar |
 | `n` / `p` | next-tab / prev-tab |
 | `r` | rename-tab |
 | `,` | rename-board |
@@ -287,7 +288,7 @@ keybindings: {
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 | `shift+up` / `shift+down` | jump-prompt-up / jump-prompt-down |
 
-**KeybindAction の一覧**（60種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（62種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -297,8 +298,9 @@ keybindings: {
 | `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照） |
 | `toggle-zoom` | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除。タブを右クリックして「ズーム表示」／「ズームを解除」を選んでも同じことができる） |
 | `new-tab` | 新規タブ作成 |
-| `new-browser-tab` | 新規ブラウザタブ作成（表示URLは`browser.defaultUrl`を参照） |
+| `new-browser-tab` | 新規ブラウザタブ作成（既定は prefix + `shift+t`。表示URLは`browser.defaultUrl`を参照）。開いた直後はURL欄にフォーカスが入り全選択されるので、URLを打ってEnterするだけで遷移できる（Escapeで元のURLへ戻す） |
 | `new-custom-view-tab` | `customViews`の先頭のビューを開くタブを作成（`customViews`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある。ビューを選んで開くにはCLIの`niwaterm tab new --custom-view --view <id>`を使う） |
+| `focus-url-bar` | 表示中のブラウザタブのURL欄へフォーカスし、全選択して打ち替えられる状態にする（既定は prefix + `u`。ブラウザのCmd+L相当だが、`l`をhjklのタイル移動に充てる設定と衝突しないようURLの頭文字にしている。Enterで遷移、Escapeで元のURLへ戻してターミナルへフォーカスを返す。ターミナルタブでは何もしない） |
 | `next-tab` / `prev-tab` | タブ切替 |
 | `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
@@ -612,6 +614,8 @@ browser: {
 ```
 
 不正な値（空文字列等）を指定した場合、警告付きで`about:blank`にフォールバックする。CLIから`niwaterm tab new --tile <tileId> --url <url>`のように`--url`を指定した場合は、この設定に関わらず指定したURLが優先される。
+
+キーバインド・コマンドパレットから開いた場合だけ、開いた直後のURL欄にフォーカスが入る（`defaultUrl`を設定していても全選択された状態なので、そのまま別のURLを打てる）。CLIの`tab new --url`ではフォーカスを奪わないため、エージェントからタブを生やしてもターミナルへの入力が逸れない。
 
 ## マウス設定
 

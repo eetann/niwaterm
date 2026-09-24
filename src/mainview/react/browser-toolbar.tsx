@@ -8,6 +8,11 @@ import { normalizeUrl } from "../normalize-url";
 export interface BrowserToolbarProps {
   webviewEl: WebviewTagElement;
   initialUrl: string;
+  /**
+   * マウント直後にURL欄をフォーカスし全選択する。URLを打ってEnterするだけで遷移できる状態で
+   * タブを開くために使う（全選択なので既定URLが入っていても上書き入力になり、Escで元へ戻せる）
+   */
+  autoFocusUrl?: boolean;
   onRequestTerminalFocus: () => void;
 }
 
@@ -19,6 +24,7 @@ export interface BrowserToolbarProps {
 export function BrowserToolbar({
   webviewEl,
   initialUrl,
+  autoFocusUrl,
   onRequestTerminalFocus,
 }: BrowserToolbarProps) {
   const [url, setUrl] = useState(initialUrl);
@@ -27,6 +33,16 @@ export function BrowserToolbar({
   // Escで編集を取り消す際に戻す先。did-navigateのたびに最新のURLへ更新する
   const lastKnownUrlRef = useRef(initialUrl);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // autoFocusUrlはタブ生成時のrenderで固定される（このrootへ同じコンポーネントが再renderされない）
+  // ため、実質マウント時の一度だけ走る
+  useEffect(() => {
+    if (!autoFocusUrl) return;
+    const inputEl = inputRef.current;
+    if (!inputEl) return;
+    inputEl.focus({ preventScroll: true });
+    inputEl.select();
+  }, [autoFocusUrl]);
 
   useEffect(() => {
     const updateNavButtons = () => {

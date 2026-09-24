@@ -56,6 +56,11 @@ export interface CommandPaletteProps {
   workspaces: readonly CommandPaletteWorkspaceItem[];
   onSelectWorkspace: (workspaceId: WorkspaceId) => void;
   shortcutLabelFor: (action: NonPaletteKeybindAction) => string | undefined;
+  /**
+   * 閉じ切った直後のフォーカス戻し。既定ではRadixが開く前の要素へ戻すため、
+   * 選んだコマンドがフォーカスを移す性質のものだった場合はここで奪い返す
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -124,6 +129,7 @@ export function CommandPalette({
   workspaces,
   onSelectWorkspace,
   shortcutLabelFor,
+  onCloseAutoFocus,
 }: CommandPaletteProps) {
   const grouped = useMemo(
     () =>
@@ -139,7 +145,7 @@ export function CommandPalette({
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <CommandDialog open={open} onOpenChange={onOpenChange} onCloseAutoFocus={onCloseAutoFocus}>
       <CommandInput placeholder="コマンドを検索..." />
       <CommandList>
         <CommandEmpty>該当するコマンドがありません</CommandEmpty>

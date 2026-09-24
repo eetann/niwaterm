@@ -35,6 +35,7 @@ export type TileCommand =
   | { type: "newTab" }
   | { type: "newBrowserTab" }
   | { type: "newCustomViewTab" }
+  | { type: "focusUrlBar" }
   | { type: "cycleTab"; delta: 1 | -1 }
   | { type: "renameTab" }
   | { type: "restartTab" }
@@ -225,6 +226,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "newBrowserTab" };
     case "new-custom-view-tab":
       return { type: "newCustomViewTab" };
+    case "focus-url-bar":
+      return { type: "focusUrlBar" };
     case "next-tab":
       return { type: "cycleTab", delta: 1 };
     case "prev-tab":

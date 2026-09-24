@@ -49,6 +49,20 @@ webviewEl.togglePassthrough(!active);
 macOSでの確認は`cliclick m:<x>,<y>`でカーソルを移動し、`screencapture -x -C`（`-C`でカーソルも撮る）で
 撮ったスクリーンショットを見るのが早い。
 
+## 派生: HTMLのオーバーレイがwebviewの裏に回る
+
+OOPIFはHTMLのレンダリングツリーの外側にいるので、`z-index`をいくら上げてもHTML側が手前へ来ない。
+そのため、画面全体を覆うHTMLのオーバーレイ（コマンドパレット・確認/入力ダイアログ・設定モーダル・
+ワークスペースピッカー）は、ブラウザタブやサイドバーのcustomViewが出ている領域では**丸ごと見えなくなる**。
+タイルが1枚だけの状態でブラウザタブを開いていると、パレットを開いても画面に何も出ないように見える
+（イベントは届いているので、そのままEnterを打つと見えないまま実行される）。
+
+対処は同じく`toggleHidden`＋`togglePassthrough`で、オーバーレイが開いている間だけ
+webviewを退避させ、閉じたら戻す（`src/mainview/index.ts`の`htmlOverlayOpen` /
+`updateWebviewOverlayVisibility`）。タブの表示切替（`setTabVisible`）とサイドバーのビュー切替
+（`updateCustomViewPanelVisibility`）も同じ判定を参照する必要がある。参照し忘れると、
+オーバーレイを閉じた後の再表示で状態が食い違う。
+
 ## 関連
 
 - 同じ「OOPIFはCSSの管轄外」問題として、`toggleHidden`中も`<electrobun-webview>`要素自身の

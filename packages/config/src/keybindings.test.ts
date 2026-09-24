@@ -275,10 +275,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の34個のアクションに1つずつ割り当てられている", () => {
+  test("UNASSIGNED_BINDING_ACTIONS以外の35個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(34);
-    expect(new Set(actions).size).toBe(34);
+    expect(actions.length).toBe(35);
+    expect(new Set(actions).size).toBe(35);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -295,6 +295,10 @@ describe("defaultKeybindings", () => {
 
   test("copy-modeはprefix + v（[はワークスペース切替に使っているため、viのvisualモードを連想させるv）", () => {
     expect(defaultKeybindings.bindings?.["v"]).toBe("copy-mode");
+  });
+
+  test("focus-url-barはprefix + u（lはhjklのタイル移動に使われがちなためURLの頭文字を充てる）", () => {
+    expect(defaultKeybindings.bindings?.["u"]).toBe("focus-url-bar");
   });
 
   test("next-sidebar-viewはprefix + shift+b（サイドバートグルのbと同系列で覚えられる）", () => {
@@ -396,17 +400,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings34件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings35件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(34);
+    expect(compiled.bindings.size).toBe(35);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings34件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings35件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(34);
+    expect(compiled.bindings.size).toBe(35);
     expect(compiled.direct.size).toBe(2);
   });
 
