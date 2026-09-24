@@ -860,6 +860,26 @@ body {
 }
 
 /*
+ * link.rulesで見つけた素のURLの下線（修飾キーを押している間だけ出る）。
+ * .termのinnerHTMLは出力のたびに丸ごと差し替わるため下線をHTMLへ埋め込まず、
+ * #hint-layerと同じくposition:fixedのビューポート座標で重ねる。
+ * z-indexは#popup(10)・#composition(11)より上、#hint-layer(20)より下
+ */
+#link-highlight {
+  position: fixed;
+  z-index: 12;
+  pointer-events: none;
+  border-bottom: 1px solid currentColor;
+  color: var(--term-fg);
+}
+
+/* リンクの上ではOSC 8の<a>と同じくポインタにして、クリックで開けることを示す */
+.tile .term.link-hover,
+#popup .term.link-hover {
+  cursor: pointer;
+}
+
+/*
  * ジャンプヒント（jump-hintアクション）のラベル。タイル・タブ・サイドバーの行の上へ重ねる。
  * position:fixedのレイヤーに置き、ラベル自身の座標もgetBoundingClientRectのビューポート座標を
  * そのまま使う（タイル木・サイドバーそれぞれの座標系へ変換せずに済ませるため）。

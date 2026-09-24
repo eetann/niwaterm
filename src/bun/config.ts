@@ -14,6 +14,7 @@ import {
   defaultAppearance,
   defaultBoardConfig,
   defaultBrowserConfig,
+  defaultLinkConfig,
   defaultMouseConfig,
   defaultTerminalConfig,
   defaultUiColors,
@@ -21,6 +22,9 @@ import {
   type CustomViewHandlers,
   isBoardNaming,
   isKeybindAction,
+  isLinkModifier,
+  type LinkRule,
+  isLinkOpenTarget,
   isNewTabCwdMode,
   isTabBarMode,
   isTitleBarMode,
@@ -30,6 +34,8 @@ import {
   type Niwa,
   type NiwaBellEvent,
   type NiwaBellHandler,
+  type NiwaLinkEvent,
+  type NiwaLinkHandler,
   type NiwaNotifyOptions,
   type NiwatermConfig,
   normalizeBoardStatuses,
@@ -41,7 +47,10 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  type ResolvedLinkConfig,
+  type ResolvedLinkRule,
   type ResolvedMouseConfig,
+  toResolvedLinkRule,
   type ResolvedTerminalConfig,
   type ResolvedUiColors,
   type SelectionMenuFn,
@@ -608,6 +617,83 @@ export function resolveTerminal(
 }
 
 /**
+ * link設定を解決する。rulesはユーザーが1件でも指定したら既定のルールを置き換える
+ * （既定のルールへ追記する形にすると「既定を外したい」が表現できないため）。
+ * 正規表現はwebviewへRPCで渡すためsource/flagsへ分解し、ここでコンパイルできるかまで見ておく
+ * （不正なパターンを送りつけても向こうで捨てられるだけで、警告を出す場所がなくなる）
+ */
+export function resolveLink(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+  platform: string = process.platform,
+): ResolvedLinkConfig {
+  const user = userConfig?.link;
+  const defaults = defaultLinkConfig(platform);
+  return {
+    rules: resolveLinkRules(user?.rules, resolvedDefaultLinkRules(defaults.rules), diag),
+    modifier: resolveField(
+      diag,
+      "link",
+      "modifier",
+      user?.modifier,
+      defaults.modifier,
+      isLinkModifier,
+    ),
+    open: resolveField(diag, "link", "open", user?.open, defaults.open, isLinkOpenTarget),
+  };
+}
+
+function resolveLinkRules(
+  rules: unknown,
+  defaults: ResolvedLinkRule[],
+  diag: ConfigDiagnostics,
+): ResolvedLinkRule[] {
+  if (rules === undefined) return defaults;
+  if (!Array.isArray(rules)) {
+    diag.warn("link.rules", `配列ではないため既定のルールを使います: ${describeValue(rules)}`);
+    return defaults;
+  }
+  // 空配列は「素のURLの検出をやめる」という明示的な指定として通す（OSC 8のリンクだけが残る）
+  if (rules.length === 0) return [];
+  const resolved: ResolvedLinkRule[] = [];
+  for (const [index, rule] of rules.entries()) {
+    const normalized = normalizeLinkRule(rule, `link.rules[${index}]`, diag);
+    if (normalized) resolved.push(normalized);
+  }
+  // 書いたルールが全滅した場合だけ既定へ戻す（1件でも生きていれば意図した置き換えとして扱う）
+  return resolved.length > 0 ? resolved : defaults;
+}
+
+function normalizeLinkRule(
+  rule: unknown,
+  field: string,
+  diag: ConfigDiagnostics,
+): ResolvedLinkRule | null {
+  if (!isPlainObject(rule)) {
+    diag.warn(field, `オブジェクトではないため無視します: ${describeValue(rule)}`);
+    return null;
+  }
+  const { regex, format } = rule as { regex?: unknown; format?: unknown };
+  const resolved = toResolvedLinkRule({ regex } as LinkRule);
+  if (!resolved) {
+    diag.warn(field, `regexが正規表現として解釈できないため無視します: ${describeValue(regex)}`);
+    return null;
+  }
+  if (format !== undefined && typeof format !== "string") {
+    diag.warn(
+      field,
+      `formatが文字列ではないため$0（マッチ全体）を使います: ${describeValue(format)}`,
+    );
+  }
+  return { ...resolved, format: typeof format === "string" ? format : "$0" };
+}
+
+/** 既定のルールを解決済みの形へ直す。既定値は必ず妥当なので落ちる要素は無い */
+function resolvedDefaultLinkRules(defaults: LinkRule[]): ResolvedLinkRule[] {
+  return defaults.map(toResolvedLinkRule).filter((rule) => rule !== null);
+}
+
+/**
  * defaultMouseConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
 export function resolveMouse(
@@ -892,6 +978,7 @@ export async function loadAndResolveConfig(
   detectedShellProfiles: ShellProfile[] = [],
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
   reloadConfig: () => Promise<void> = async () => {},
+  openLinkExternal: (url: string) => void = () => {},
 ): Promise<{
   /** 設定ファイルを読み込めたか。falseならファイル不在か読み込み失敗で、全項目が既定値 */
   userConfigLoaded: boolean;
@@ -907,6 +994,7 @@ export async function loadAndResolveConfig(
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
   terminal: ResolvedTerminalConfig;
+  link: ResolvedLinkConfig;
   /** ユーザー定義HTML UI（サイドバーのビュー・タブ）の一覧。設定に並べた順 */
   customViews: ResolvedCustomViewConfig[];
   /** customViewのhandlersの実行（HTML側のniwaterm.callの実体） */
@@ -924,6 +1012,10 @@ export async function loadAndResolveConfig(
   bellHandler: NiwaBellHandler | null;
   /** ベルの既定の処理（niwa.bell.defaultと同じもの）。ハンドラ未登録時の処理として呼ぶ */
   runDefaultBell: (event: NiwaBellEvent) => void;
+  /** niwa.on("open-link", ...)で登録されたハンドラ。未登録はnull（既定の処理を使う） */
+  linkHandler: NiwaLinkHandler | null;
+  /** リンクの既定の処理（niwa.link.defaultと同じもの）。ハンドラ未登録時の処理として呼ぶ */
+  runDefaultOpenLink: (event: NiwaLinkEvent) => void;
 }> {
   const diag = createConfigDiagnostics();
   const { config: userConfig, error: loadError } = await loadUserConfig(path);
@@ -935,6 +1027,8 @@ export async function loadAndResolveConfig(
   // niwa.tab.createが引くため、niwaApiを作る前に確定させる。遅延評価にすると
   // タブを作るたびに解決し直すことになり、不正値の警告も毎回出てしまう
   const defaultShell = resolveShell(userConfig, diag);
+  // niwa.link.defaultが開き先の判断に使うため、niwaApiを作る前に確定させる
+  const link = resolveLink(userConfig, diag);
   // niwa.tab.createのshellProfile解決に使うため、resolveKeybindingsより先にshellProfilesを確定させる
   const niwaApi = createNiwaApi({
     workspaceManager,
@@ -947,6 +1041,8 @@ export async function loadAndResolveConfig(
     getDefaultShell: () => defaultShell,
     sendNotification,
     reloadConfig,
+    openLinkExternal,
+    getLinkOpen: () => link.open,
   });
   // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
   // 登録内容の取り出しはその後でなければならない
@@ -960,6 +1056,7 @@ export async function loadAndResolveConfig(
     browser: resolveBrowser(userConfig, diag),
     board: resolveBoard(userConfig, diag),
     terminal: resolveTerminal(userConfig, diag),
+    link,
     customViews: customViews.views,
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
     defaultShell,
@@ -971,6 +1068,8 @@ export async function loadAndResolveConfig(
     runKeybindHandler: niwaApi.runHandler,
     bellHandler: niwaApi.extractBellHandler(),
     runDefaultBell: niwaApi.runDefaultBell,
+    linkHandler: niwaApi.extractLinkHandler(),
+    runDefaultOpenLink: niwaApi.runDefaultOpenLink,
     // 収集はここまでの全resolveXが終わってから。listは呼んだ時点のスナップショットを返す
     diagnostics: diag.list(),
   };

@@ -683,6 +683,114 @@ mouse: {
 
 相対パスを開くには`cwd`が要るので、シェル統合（`contrib/shell-integration/`）を入れておくと扱いやすい。
 
+## リンク設定
+
+ターミナル出力の中のURLは、**修飾キーを押しながらクリック**すると開ける。修飾キーを押している間だけ、マウスが乗っているURLに下線が出る。
+
+対象は2種類。
+
+- **OSC 8ハイパーリンク**: プログラムが明示的にリンクとして出力したもの（`gh`・`eza --hyperlink`等）。表示テキストとURLが違うことがある
+- **素のURL**: `link.rules`の正規表現で画面の文字列から見つけたもの。ただの`https://...`という出力がそのままクリックできる
+
+修飾キーを要求するのは、TUIアプリへのマウス操作の転送・テキスト選択と同じ左クリックを取り合わないため。修飾キーを押しながらのクリックはリンクの上でだけ横取りされ、リンクが無い場所ではこれまで通りアプリ側・選択側へ渡る。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `modifier` | `"cmd" \| "ctrl" \| "alt" \| "shift"` | リンクを開くのに押しておく修飾キー。未指定時はmacOSが`cmd`、Windowsが`ctrl` |
+| `open` | `"external" \| "browser-tab"` | 開き先。`external`はOS既定のブラウザ、`browser-tab`はniwaterm内のブラウザタブ。未指定時は`external` |
+| `rules` | `LinkRule[]` | 素のURLとみなすパターン。指定すると既定のルールを**置き換える**（追加ではない） |
+
+```ts
+link: {
+  modifier: "alt",
+  open: "browser-tab",
+},
+```
+
+macOSの既定が`cmd`なのは、macOSではctrl+クリックがOSレベルで右クリック扱いになりリンクを開く操作に使えないため（iTerm2・Terminal.appと同じ）。
+
+`open: "browser-tab"`にすると、クリックしたタブと同じタイルへブラウザタブが足される。`mailto:`のようにブラウザタブで扱えないURLはこの設定でも外部で開く。
+
+### URLとみなすパターン（`link.rules`）
+
+各ルールは`regex`（正規表現。`RegExp`でも文字列でもよい）と`format`（マッチから開くURLを組み立てるテンプレート。`$0`がマッチ全体、`$1`以降がキャプチャ。省略時は`$0`）を持つ。
+
+既定では次の3つが有効。
+
+| パターン | 開くURL |
+|---|---|
+| `https?://...` | マッチした文字列そのもの |
+| `mailto:...` | マッチした文字列そのもの |
+| メールアドレス（`user@example.com`） | `mailto:`を頭に付けたもの |
+
+URLの直後に置かれただけの句読点・閉じ括弧（`.` `,` `)` 等）はマッチに含めない。
+
+チケット番号のような独自の記法をリンクにしたい場合は、既定のルールごと書き直す。
+
+```ts
+import { defaultLinkRules, defineConfig } from "@niwaterm/config";
+
+export default defineConfig({
+  link: {
+    rules: [
+      ...defaultLinkRules,
+      { regex: /\bISSUE-(\d+)\b/, format: "https://example.com/issues/$1" },
+    ],
+  },
+});
+```
+
+`defaultLinkRules`は設定ファイルに書くのと同じ形（`{ regex, format }`）で公開しているので、上のように既定へ足す書き方でそのまま混ぜられる。ルールは先に書いたものが優先で、クリック位置を含むマッチが最初に見つかったルールが使われる。
+
+素のURLの検出を止めてOSC 8のリンクだけを残したい場合は`rules: []`を指定する。
+
+実際に開けるスキームは`http` / `https` / `mailto`に限られる（PTY越しの出力はリモートホスト由来のこともあるため、`file:`・`javascript:`等は開かない）。ルールで他のスキームを拾っても開く直前に弾かれるので、その場合は`format`で開けるURLへ組み替える。
+
+パターンは1行ずつに当てるため、**折り返して2行にまたがったURLは検出できない**（OSC 8のリンクは折り返しても1つのリンクとして扱われる）。
+
+正規表現として不正なルールは警告付きで無視され、残りのルールで動く。書いたルールが全滅した場合だけ既定のルールへ戻る。
+
+### 開く処理を差し替える（`niwa.on("open-link", ...)`）
+
+`keybindings`の関数の中で`niwa.on("open-link", handler)`を呼ぶと、**`link.open`の処理の代わりに**そのハンドラが走る。
+
+```ts
+import { defineConfig } from "@niwaterm/config";
+
+export default defineConfig({
+  keybindings: (niwa) => {
+    niwa.on("open-link", (event) => {
+      // 社内のリンクだけniwaterm内のブラウザタブで開き、他は外部ブラウザへ渡す
+      if (event.url.startsWith("https://internal.example.com/")) {
+        niwa.tab.create();
+        return;
+      }
+      niwa.link.openExternal(event.url);
+    });
+  },
+});
+```
+
+`link.open`の設定どおりの処理へ戻したいときは`niwa.link.default(event)`を呼ぶ。
+
+ハンドラは`async`にでき、`niwa`のAPI（`shell.run`・`notify`・`popup.open`等）をそのまま使える。
+
+ハンドラに渡る値（`NiwaLinkEvent`）は次の通り。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `url` | `string` | 開こうとしているURL（`format`を適用した後の値） |
+| `text` | `string` | 画面上でマッチした文字列そのもの。`format`でURLへ組み替えた場合は元の見た目が残る |
+| `tabId` / `tileId` | `string` | クリックされたタブとその所在 |
+| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
+
+`niwa.link`のメソッドは2つ。
+
+| メソッド | 意味 |
+|---|---|
+| `default(event)` | `link.open`の設定に従って開く（既定の処理と同じもの） |
+| `openExternal(url)` | `link.open`の設定に関わらずOS既定のブラウザで開く |
+
 ## ユーザー定義HTML UI（customViews）
 
 `customViews`は、ユーザーが用意したHTMLをniwaterm内（サイドバー・タブ）に表示するための設定。配列に並べた順でサイドバーのビュー切替に並ぶ。**未指定・空配列なら機能自体がオフ**になり、サイドバーの見た目・挙動は変化しない。

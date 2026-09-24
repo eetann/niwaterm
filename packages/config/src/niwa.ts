@@ -260,6 +260,31 @@ export interface NiwaBellApi {
   clear(tabId: string): void;
 }
 
+/** ターミナル出力の中のリンクがクリックされた時の状況。niwa.on("open-link", ...)のハンドラへ渡る */
+export interface NiwaLinkEvent {
+  /** 開こうとしているURL（link.rulesのformatを適用した後の値） */
+  url: string;
+  /** 画面上でマッチした文字列そのもの。formatでURLへ組み替えた場合は元の見た目が残る */
+  text: string;
+  tabId: string;
+  tileId: string;
+  /** そのタブが報告している作業ディレクトリ（OSC7シェル統合）。未報告ならundefined */
+  cwd: string | undefined;
+}
+
+export type NiwaLinkHandler = (event: NiwaLinkEvent) => void | Promise<void>;
+
+export interface NiwaLinkApi {
+  /**
+   * リンクの既定の処理（link.openの設定に従って、OS既定のブラウザかniwatermのブラウザタブで開く）を
+   * 実行する。niwa.on("open-link", ...)を定義すると既定の処理は走らなくなるため、条件によって
+   * 既定へ戻したい場合はハンドラの中からこれを呼ぶ
+   */
+  default(event: NiwaLinkEvent): void;
+  /** URLをOS既定のブラウザで開く（link.openの設定に関わらず外部で開く） */
+  openExternal(url: string): void;
+}
+
 export interface KeybindOptions {
   /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrl/altのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
@@ -306,6 +331,7 @@ export interface Niwa {
    * ハンドラの中からniwa.bell.default(event)を呼ぶ
    */
   on(event: "bell", handler: NiwaBellHandler): void;
+  on(event: "open-link", handler: NiwaLinkHandler): void;
   /**
    * 明示的な待ち時間(ms)。PTY起動〜シェルの入力受付までのタイミングはniwaterm側では検知しないため、
    * ハンドラ内で必要な待ちはこれで明示する（layoutsプリセットのdelayフィールドと同じ思想）
@@ -326,6 +352,7 @@ export interface Niwa {
   tile: NiwaTileApi;
   tab: NiwaTabApi;
   bell: NiwaBellApi;
+  link: NiwaLinkApi;
   popup: NiwaPopupApi;
   board: NiwaBoardApi;
   workspace: NiwaWorkspaceApi;

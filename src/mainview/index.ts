@@ -9,6 +9,7 @@ import {
   type ResolvedAppearanceConfig,
   type ResolvedBoardStatus,
   type ResolvedCustomViewConfig,
+  type ResolvedLinkConfig,
   type ResolvedMouseConfig,
   type ShellProfile,
   type TabBarMode,
@@ -48,6 +49,7 @@ import {
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
 import { keyToBytes } from "./key-to-bytes";
+import { compileLinkRules, type CompiledLinkRule, findLinkAt, type LinkSpan } from "./link-detect";
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { extractNavigatedUrl } from "./navigated-url";
 import { normalizeUrl } from "./normalize-url";
@@ -117,6 +119,7 @@ const configDialogRootEl = document.getElementById("config-dialog-root") as HTML
 const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
 const hintLayerEl = document.getElementById("hint-layer") as HTMLDivElement;
+const linkHighlightEl = document.getElementById("link-highlight") as HTMLDivElement;
 
 // ---- タイル/タブごとのDOM要素・状態管理 ----
 const tileElByTileId = new Map<TileId, HTMLElement>();
@@ -549,6 +552,20 @@ let lastWorkspaces: WorkspaceListEntry[] = [];
 let shellProfiles: ShellProfile[] = [];
 // bun側で解決されたマウス設定（configメッセージで受信）。copy-on-selectの有効・無効に使う
 let mouseConfig: ResolvedMouseConfig = defaultMouseConfig;
+// リンク関連の状態。configが届くまでrulesは空なので、素のURLの検出は行われない
+let linkConfig: ResolvedLinkConfig = { rules: [], modifier: "ctrl", open: "external" };
+let compiledLinkRules: CompiledLinkRule[] = [];
+/** 描画済みテキストの行分割のキャッシュ。.termのinnerHTML差し替えのたびに捨てる */
+const termLinesByTabId = new Map<TabId, string[]>();
+/** 最後にマウスが居た位置と修飾キーの状態。打鍵・再描画からホバー表示を更新するために持つ */
+let lastMouseTarget: EventTarget | null = null;
+let lastMouseClientX = 0;
+let lastMouseClientY = 0;
+let linkModifierDown = false;
+/** 下線を重ねている.term。カーソル形状を戻すために覚えておく */
+let linkHoverTermEl: HTMLDivElement | null = null;
+/** 押した時点のリンク。同じリンクの上でボタンを離した時に開く */
+let pressedLink: { tabId: TabId; url: string; text: string } | null = null;
 
 const SIDEBAR_OPEN_STORAGE_KEY = "niwaterm:sidebarOpen";
 
@@ -809,6 +826,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         keybindings,
         appearance,
         mouse,
+        link,
         customViews: views,
         shellProfiles: profiles,
         boardStatuses: statuses,
@@ -817,6 +835,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         mouse: ResolvedMouseConfig;
+        link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
         boardStatuses: ResolvedBoardStatus[];
@@ -827,6 +846,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         lastKeybindingsConfig = keybindings;
         applyAppearance(appearance);
         mouseConfig = mouse;
+        linkConfig = link;
+        compiledLinkRules = compileLinkRules(link.rules);
         applyCustomViews(views);
         shellProfiles = profiles;
         shellProfilesVersion++;
@@ -1123,9 +1144,12 @@ const pendingTermHtmlByTabId = new Map<TabId, string>();
  */
 const SELECTION_DRAG_MAX_MS = 2000;
 
-function setTermHtml(termEl: HTMLElement, html: string): void {
+function setTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
   termEl.innerHTML = html;
   fixGlyphs(termEl);
+  termLinesByTabId.delete(tabId);
+  // 表示が変わればホバー中のリンクの位置もずれるので、下線を出しているときだけ取り直す
+  if (linkModifierDown) refreshLinkHover();
 }
 
 // ---- パレット（インデックス指定色）----
@@ -1154,13 +1178,13 @@ function applyTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
     flushPendingTermHtml();
     return;
   }
-  setTermHtml(termEl, html);
+  setTermHtml(tabId, termEl, html);
 }
 
 function flushPendingTermHtml(): void {
   for (const [tabId, html] of pendingTermHtmlByTabId) {
     const termEl = termElByTabId.get(tabId);
-    if (termEl) setTermHtml(termEl, html);
+    if (termEl) setTermHtml(tabId, termEl, html);
   }
   pendingTermHtmlByTabId.clear();
 }
@@ -1653,6 +1677,7 @@ function teardownPopupContent(): void {
   // まだpopup自身のDOM要素を指している場合のみ削除し、昇格済みの正しい登録は残す
   if (termElByTabId.get(currentPopupTabId) === popupTermEl) {
     termElByTabId.delete(currentPopupTabId);
+    termLinesByTabId.delete(currentPopupTabId);
   }
   if (cursorElByTabId.get(currentPopupTabId) === popupCursorEl) {
     cursorElByTabId.delete(currentPopupTabId);
@@ -1885,6 +1910,7 @@ function gcStale(
     tabContentElByTabId.get(tabId)?.remove();
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
+    termLinesByTabId.delete(tabId);
     termOffsetByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     copyOverlayElByTabId.delete(tabId);
@@ -2947,6 +2973,13 @@ function flushMouseMotion(): void {
 }
 
 document.addEventListener("mousedown", (e) => {
+  // 修飾キー＋クリックでリンクを開く場面では、TUIアプリへのマウスレポートも既定のテキスト選択も
+  // 起こさない（実際に開くのは同じリンクの上でボタンを離したとき）
+  pressedLink = e.button === 0 && linkModifierHeld(e) ? linkAtEvent(e) : null;
+  if (pressedLink) {
+    e.preventDefault();
+    return;
+  }
   if (e.shiftKey) return;
   const hit = findTerminalAt(e.target);
   if (!hit || !isMouseTracking(hit.tabId)) return;
@@ -2991,6 +3024,7 @@ document.addEventListener("mouseup", (e) => {
 // テキスト選択が起きない（Shift併用のときだけ選択になる）ため、その場合は保留しない
 document.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
+  if (pressedLink) return;
   const hit = findTerminalAt(e.target);
   if (!hit) return;
   if (!e.shiftKey && isMouseTracking(hit.tabId)) return;
@@ -3862,18 +3896,143 @@ document.addEventListener("contextmenu", (e) => {
   e.preventDefault();
 });
 
-// ---- OSC 8ハイパーリンク（フォーマッタがHTML出力時に <a href> として埋め込む）----
-// documentレベルで委譲し、タイル・popup両方のターミナル出力内リンクをまとめて扱う
-document.addEventListener("click", (e) => {
-  const target = e.target as HTMLElement;
-  const anchor = target.closest<HTMLAnchorElement>(".term a[href]");
-  if (!anchor) return;
-  // ドラッグでのテキスト選択の終端クリックでは開かない（選択解除も兼ねて素通りさせる）
+// ---- ターミナル出力の中のリンク ----
+// OSC 8ハイパーリンク（フォーマッタが<a href>として出力する）と、link.rulesの正規表現で
+// 画面テキストから見つけた素のURLの両方を、修飾キー＋クリックで開く。修飾キーを要求するのは、
+// TUIアプリへのマウスレポート・テキスト選択と同じ左クリックを取り合わないため。
+// 素のURLは描画HTMLへ手を入れず、見つけた桁の範囲へ下線を重ねるだけにする（link-detect.ts参照）
+
+function linkModifierHeld(
+  e: Pick<MouseEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+): boolean {
+  switch (linkConfig.modifier) {
+    case "cmd":
+      return e.metaKey;
+    case "ctrl":
+      return e.ctrlKey;
+    case "alt":
+      return e.altKey;
+    case "shift":
+      return e.shiftKey;
+  }
+}
+
+/** 描画済みテキストの行分割。.termのinnerHTML差し替えまでは同じ内容を使い回す */
+function termLines(tabId: TabId, termEl: HTMLElement): string[] {
+  const cached = termLinesByTabId.get(tabId);
+  if (cached) return cached;
+  const lines = (termEl.textContent ?? "").split("\n");
+  termLinesByTabId.set(tabId, lines);
+  return lines;
+}
+
+/** ビューポート座標のセルに乗っている素のURLを引く。OSC 8のリンクはHTML側の<a>が持つので対象外 */
+function linkAtPoint(
+  target: EventTarget | null,
+  clientX: number,
+  clientY: number,
+): { tabId: TabId; termEl: HTMLDivElement; span: LinkSpan; row: number } | null {
+  if (compiledLinkRules.length === 0) return null;
+  const hit = findTerminalAt(target);
+  if (!hit) return null;
+  const rect = hit.termEl.getBoundingClientRect();
+  const col = Math.floor((clientX - rect.left) / cellWidth);
+  const row = Math.floor((clientY - rect.top) / cellHeight);
+  const line = termLines(hit.tabId, hit.termEl)[row];
+  if (line === undefined) return null;
+  const span = findLinkAt(line, col, compiledLinkRules);
+  return span ? { ...hit, span, row } : null;
+}
+
+function hideLinkHighlight(): void {
+  linkHoverTermEl?.classList.remove("link-hover");
+  linkHoverTermEl = null;
+  linkHighlightEl.hidden = true;
+}
+
+/** 素のURLに下線を重ねる。.termの位置を原点にしたセル座標を画面座標へ直す */
+function showLinkHighlight(termEl: HTMLDivElement, row: number, span: LinkSpan): void {
+  const rect = termEl.getBoundingClientRect();
+  linkHighlightEl.style.left = `${rect.left + span.startCol * cellWidth}px`;
+  linkHighlightEl.style.top = `${rect.top + row * cellHeight}px`;
+  linkHighlightEl.style.width = `${(span.endCol - span.startCol) * cellWidth}px`;
+  linkHighlightEl.style.height = `${cellHeight}px`;
+  linkHighlightEl.hidden = false;
+  if (linkHoverTermEl === termEl) return;
+  linkHoverTermEl?.classList.remove("link-hover");
+  termEl.classList.add("link-hover");
+  linkHoverTermEl = termEl;
+}
+
+/** 修飾キーの状態と最後のマウス位置から下線を出し直す。打鍵・再描画のどちらからも呼ぶ */
+function refreshLinkHover(): void {
+  if (!linkModifierDown) {
+    hideLinkHighlight();
+    return;
+  }
+  const hit = linkAtPoint(lastMouseTarget, lastMouseClientX, lastMouseClientY);
+  if (!hit) {
+    hideLinkHighlight();
+    return;
+  }
+  showLinkHighlight(hit.termEl, hit.row, hit.span);
+}
+
+/** イベント位置のリンク。OSC 8の<a>を優先し、無ければlink.rulesで見つけた素のURLを返す */
+function linkAtEvent(e: MouseEvent): { tabId: TabId; url: string; text: string } | null {
+  const hit = findTerminalAt(e.target);
+  if (!hit) return null;
+  const anchor = (e.target as HTMLElement).closest<HTMLAnchorElement>(".term a[href]");
+  if (anchor) return { tabId: hit.tabId, url: anchor.href, text: anchor.textContent ?? "" };
+  const span = linkAtPoint(e.target, e.clientX, e.clientY)?.span;
+  return span ? { tabId: hit.tabId, url: span.url, text: span.text } : null;
+}
+
+document.addEventListener("mousemove", (e) => {
+  lastMouseTarget = e.target;
+  lastMouseClientX = e.clientX;
+  lastMouseClientY = e.clientY;
+  linkModifierDown = linkModifierHeld(e);
+  refreshLinkHover();
+});
+
+// マウスを動かさずに修飾キーを押し下げ・解放した場合も下線を追従させる
+function handleLinkModifierKey(e: KeyboardEvent): void {
+  const held = linkModifierHeld(e);
+  if (held === linkModifierDown) return;
+  linkModifierDown = held;
+  refreshLinkHover();
+}
+document.addEventListener("keydown", handleLinkModifierKey);
+document.addEventListener("keyup", handleLinkModifierKey);
+// ウィンドウが後ろへ回ると修飾キーの解放が届かないため、押しっぱなし扱いのまま残さない
+window.addEventListener("blur", () => {
+  linkModifierDown = false;
+  hideLinkHighlight();
+});
+
+// documentレベルで委譲し、タイル・popup両方のターミナル出力内リンクをまとめて扱う。
+// 開く判断はclickではなくmouseupで行う: WebView2はOSC 8の<a>上でのctrl+クリックを
+// 「新しいウィンドウで開く」操作として自前で処理し、clickイベントをDOMへ配らない
+// （mousedown/mouseupは届く）。詳細: docs/known-issues/webview2-swallows-ctrl-click-on-anchor.md
+document.addEventListener("mouseup", (e) => {
+  const link = pressedLink;
+  pressedLink = null;
+  if (!link || e.button !== 0 || !linkModifierHeld(e)) return;
+  // ドラッグでのテキスト選択の終端では開かない（選択解除も兼ねて素通りさせる）
   const selection = window.getSelection();
   if (selection && !selection.isCollapsed) return;
-  e.preventDefault();
-  sendMessage("openLink", { url: anchor.href });
+  // 押した位置と離した位置が同じリンクの時だけ開く
+  if (linkAtEvent(e)?.url !== link.url) return;
+  sendMessage("openLink", { tabId: link.tabId, url: link.url, text: link.text });
+  hideLinkHighlight();
   imeEl.focus({ preventScroll: true });
+});
+
+// ターミナル出力の<a>はniwaterm側で開くので、webview自体を遷移させる既定の動作は常に止める
+// （修飾キー無しのクリックはどこへも遷移させず、選択・マウスレポートだけを通す）
+document.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest(".term a[href]")) e.preventDefault();
 });
 
 // ---- タブD&D（タイルの中央へドロップでそのタイルへ移動、端へドロップでタイルを分割）----

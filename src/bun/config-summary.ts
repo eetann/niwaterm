@@ -14,6 +14,7 @@ import type {
   ResolvedBoardConfig,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
+  ResolvedLinkConfig,
   ResolvedMouseConfig,
   ResolvedTerminalConfig,
   ResolvedUiColors,
@@ -74,6 +75,7 @@ export interface ConfigSummaryInput {
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
   mouse: ResolvedMouseConfig;
+  link: ResolvedLinkConfig;
   workspaceDefaultCwd: string | undefined;
   board: ResolvedBoardConfig;
   terminal: ResolvedTerminalConfig;
@@ -303,6 +305,19 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
       {
         name: "mouse",
         entries: [{ key: "copyOnSelect", value: String(input.mouse.copyOnSelect) }],
+      },
+      {
+        name: "link",
+        entries: [
+          { key: "modifier", value: input.link.modifier },
+          { key: "open", value: input.link.open },
+          {
+            key: "rules",
+            value: `${input.link.rules.length}件`,
+            // パターンそのものを並べると一覧が正規表現で埋まるため、件数と中身は別行に分ける
+            note: input.link.rules.map((rule) => `/${rule.source}/${rule.flags}`).join(" "),
+          },
+        ],
       },
       customViewsSection(input.customViews),
     ],

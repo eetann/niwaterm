@@ -5,6 +5,7 @@ import {
   isCustomBindingRef,
   type KeybindingsConfig,
   type NiwaBellEvent,
+  type NiwaLinkEvent,
   type ShellProfile,
 } from "@niwaterm/config";
 import { listLeaves, type TileLeaf, type TileNode } from "./tile-layout";
@@ -80,7 +81,10 @@ function createTestSetup(
   overrides: Partial<WorkspaceManagerOptions> = {},
   getShellProfiles: () => ShellProfile[] = () => [],
   depsOverrides: Partial<
-    Pick<Parameters<typeof createNiwaApi>[0], "sendNotification" | "reloadConfig">
+    Pick<
+      Parameters<typeof createNiwaApi>[0],
+      "sendNotification" | "reloadConfig" | "openLinkExternal" | "getLinkOpen"
+    >
   > = {},
 ) {
   const sessionOpts: TerminalSessionOptions[] = [];
@@ -99,6 +103,8 @@ function createTestSetup(
     getDefaultShell: () => "bash",
     sendNotification: () => {},
     reloadConfig: async () => {},
+    openLinkExternal: () => {},
+    getLinkOpen: () => "external" as const,
     ...depsOverrides,
   });
   return { workspaceManager, sessionOpts, ...api };
@@ -702,5 +708,111 @@ describe('niwa.on("bell") / niwa.bell', () => {
     runDefaultBell(bellEvent(tabId, { windowFocused: false, visible: false }));
 
     expect(tabIds).toEqual([tabId]);
+  });
+});
+
+describe('niwa.on("open-link") / niwa.link', () => {
+  /** テスト用のリンクイベント。開き先の判断が見る項目だけ埋める */
+  function linkEvent(url: string, tileId: string): NiwaLinkEvent {
+    return { url, text: url, tabId: "tab-0", tileId, cwd: undefined };
+  }
+
+  function firstTileId(workspaceManager: WorkspaceManager): string {
+    return (workspaceManager.snapshot().workspace.board.layout as TileLeaf).id;
+  }
+
+  test("ハンドラを登録していなければextractLinkHandlerはnullを返す", () => {
+    const { extractLinkHandler } = createTestSetup();
+    expect(extractLinkHandler()).toBeNull();
+  });
+
+  test("niwa.onで登録したハンドラを取り出せる（同じイベントへの再登録は後勝ち）", () => {
+    const { niwa, extractLinkHandler } = createTestSetup();
+    const first = (): void => {};
+    const second = (): void => {};
+
+    niwa.on("open-link", first);
+    niwa.on("open-link", second);
+
+    expect(extractLinkHandler()).toBe(second);
+  });
+
+  test("bellとopen-linkのハンドラは互いに影響しない", () => {
+    const { niwa, extractBellHandler, extractLinkHandler } = createTestSetup();
+    const onBell = (): void => {};
+    const onLink = (): void => {};
+
+    niwa.on("bell", onBell);
+    niwa.on("open-link", onLink);
+
+    expect(extractBellHandler()).toBe(onBell);
+    expect(extractLinkHandler()).toBe(onLink);
+  });
+
+  test("既定の処理はlink.openがexternalならOS既定のブラウザへ渡す", () => {
+    const opened: string[] = [];
+    const { workspaceManager, runDefaultOpenLink } = createTestSetup({}, () => [], {
+      openLinkExternal: (url) => opened.push(url),
+    });
+    resolvePending(workspaceManager);
+
+    runDefaultOpenLink(linkEvent("https://example.com", firstTileId(workspaceManager)));
+
+    expect(opened).toEqual(["https://example.com"]);
+  });
+
+  test("link.openがbrowser-tabならクリックされたタブと同じタイルへブラウザタブを足す", () => {
+    const opened: string[] = [];
+    const { workspaceManager, runDefaultOpenLink } = createTestSetup({}, () => [], {
+      openLinkExternal: (url) => opened.push(url),
+      getLinkOpen: () => "browser-tab",
+    });
+    resolvePending(workspaceManager);
+    const tileId = firstTileId(workspaceManager);
+    const before = (workspaceManager.snapshot().workspace.board.layout as TileLeaf).tabIds.length;
+
+    runDefaultOpenLink(linkEvent("https://example.com", tileId));
+
+    const leaf = workspaceManager.snapshot().workspace.board.layout as TileLeaf;
+    expect(leaf.tabIds).toHaveLength(before + 1);
+    expect(opened).toEqual([]);
+  });
+
+  test("browser-tabでもmailto:は外部で開く（ブラウザタブでは扱えないため）", () => {
+    const opened: string[] = [];
+    const { workspaceManager, runDefaultOpenLink } = createTestSetup({}, () => [], {
+      openLinkExternal: (url) => opened.push(url),
+      getLinkOpen: () => "browser-tab",
+    });
+    resolvePending(workspaceManager);
+
+    runDefaultOpenLink(linkEvent("mailto:user@example.com", firstTileId(workspaceManager)));
+
+    expect(opened).toEqual(["mailto:user@example.com"]);
+  });
+
+  test("browser-tabでもタイルが見つからなければ外部で開く", () => {
+    const opened: string[] = [];
+    const { workspaceManager, runDefaultOpenLink } = createTestSetup({}, () => [], {
+      openLinkExternal: (url) => opened.push(url),
+      getLinkOpen: () => "browser-tab",
+    });
+    resolvePending(workspaceManager);
+
+    runDefaultOpenLink(linkEvent("https://example.com", "tile-does-not-exist"));
+
+    expect(opened).toEqual(["https://example.com"]);
+  });
+
+  test("niwa.link.openExternalはlink.openの設定に関わらず外部で開く", () => {
+    const opened: string[] = [];
+    const { niwa } = createTestSetup({}, () => [], {
+      openLinkExternal: (url) => opened.push(url),
+      getLinkOpen: () => "browser-tab",
+    });
+
+    niwa.link.openExternal("https://example.com");
+
+    expect(opened).toEqual(["https://example.com"]);
   });
 });

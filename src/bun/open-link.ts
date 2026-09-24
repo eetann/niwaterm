@@ -10,3 +10,16 @@ export function isAllowedLinkUrl(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * niwaterm内のブラウザタブで開けるURLか。mailto:はOS側のメールクライアントへ渡すものなので、
+ * link.openがbrowser-tabでも外部で開く必要がある
+ */
+export function isBrowserTabUrl(url: string): boolean {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}

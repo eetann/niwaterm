@@ -25,6 +25,11 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     shellProfiles: [],
     layouts: {},
     mouse: defaultMouseConfig,
+    link: {
+      rules: [{ source: "https?://\\S+", flags: "", format: "$0" }],
+      modifier: "cmd",
+      open: "external",
+    },
     workspaceDefaultCwd: undefined,
     board: defaultBoardConfig,
     terminal: defaultTerminalConfig,
@@ -64,6 +69,7 @@ describe("buildConfigSummary", () => {
       "terminal",
       "workspace",
       "mouse",
+      "link",
       "customViews",
     ]);
   });

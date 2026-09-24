@@ -12,12 +12,15 @@ import type {
   LayoutsConfig,
   NiwaBellEvent,
   NiwaBellHandler,
+  NiwaLinkEvent,
+  NiwaLinkHandler,
   NiwaNotifyOptions,
   ResolvedAppearanceConfig,
   ResolvedBoardConfig,
   ResolvedBoardStatus,
   ResolvedBrowserConfig,
   ResolvedCustomViewConfig,
+  ResolvedLinkConfig,
   ResolvedMouseConfig,
   ResolvedTerminalConfig,
   ShellProfile,
@@ -135,7 +138,8 @@ export type NiwaRPC = {
       jumpPrompt: { tabId: TabId; direction: "up" | "down" };
       copySelection: { text: string };
       pasteFromClipboard: { tabId: TabId };
-      openLink: { url: string };
+      /** ターミナル出力の中のリンク（OSC 8・link.rulesのどちらも）のクリック */
+      openLink: { tabId: TabId; url: string; text: string };
       resize: {
         tabId: TabId;
         cols: number;
@@ -258,6 +262,8 @@ export type NiwaRPC = {
         keybindings: KeybindingsConfig;
         appearance: ResolvedAppearanceConfig;
         mouse: ResolvedMouseConfig;
+        /** ターミナル出力の中のURL判定ルールと、開くのに押しておく修飾キー（openはbun側で使う） */
+        link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
         /** Boardへ付けられるステータスの候補（board.statuses）。サイドバーのメニュー・コマンドパレットに並ぶ */
@@ -372,6 +378,7 @@ function sendConfig(windowId?: WindowId) {
       keybindings,
       appearance: effectiveAppearance(),
       mouse,
+      link: linkConfig,
       customViews,
       shellProfiles,
       boardStatuses: boardConfig.statuses,
@@ -543,6 +550,9 @@ let workspaceDefaultCwd: string | undefined;
 let runKeybindHandler: (id: string) => Promise<void>;
 let bellHandler: NiwaBellHandler | null;
 let runDefaultBell: (event: NiwaBellEvent) => void;
+let linkConfig: ResolvedLinkConfig;
+let linkHandler: NiwaLinkHandler | null;
+let runDefaultOpenLink: (event: NiwaLinkEvent) => void;
 
 // WSLディストロの増減は稀なイベントのため起動時に1回だけ検出し、ホットリロードのたびには
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
@@ -630,6 +640,36 @@ function handleBell(tabId: TabId): void {
   });
 }
 
+/**
+ * ターミナル出力の中のリンクがクリックされた時の処理。niwa.on("open-link", ...)が登録されて
+ * いればそちらへ丸ごと委ね、無ければ既定の処理（link.openの設定に従って開く）を行う。
+ * URLはPTY越しの出力（リモートホスト由来を含む）なので、どちらへ渡す前にもスキームを検証する
+ */
+function handleOpenLink(tabId: TabId, url: string, text: string): void {
+  if (!isAllowedLinkUrl(url)) {
+    console.log(`[bun] blocked opening link with disallowed scheme: ${url}`);
+    return;
+  }
+  // ポップアップのタブはタイルに属さず所在を引けないため、開き先のタイルはフォーカス中のものにする
+  // （タイルが1つも無ければ空文字列。既定の処理はブラウザタブを作れず外部ブラウザへ倒れる）
+  const tileId = windowManager.locateTab(tabId)?.tileId ?? windowManager.getFocusedTileId() ?? "";
+  const cwd = windowManager.getTabVar(tabId, "cwd");
+  const event: NiwaLinkEvent = {
+    url,
+    text,
+    tabId,
+    tileId,
+    cwd: cwd.found ? cwd.value : undefined,
+  };
+  if (!linkHandler) {
+    runDefaultOpenLink(event);
+    return;
+  }
+  Promise.resolve(linkHandler(event)).catch((err: unknown) => {
+    console.log(`[bun] open-link handler failed: ${String(err)}`);
+  });
+}
+
 function currentConfigSummary(): ConfigSummary {
   return buildConfigSummary({
     configFile: configFilePath(),
@@ -649,6 +689,7 @@ function currentConfigSummary(): ConfigSummary {
     workspaceDefaultCwd,
     board: boardConfig,
     terminal: terminalConfig,
+    link: linkConfig,
   });
 }
 
@@ -669,6 +710,7 @@ async function refreshConfig(): Promise<void> {
     detectedShellProfiles,
     sendNotification,
     () => handleConfigFileChanged(),
+    (url) => Utils.openExternal(url),
   );
   const outcome = decideConfigLoadOutcome({
     configFile: configFilePath(),
@@ -699,6 +741,9 @@ async function refreshConfig(): Promise<void> {
     runKeybindHandler,
     bellHandler,
     runDefaultBell,
+    link: linkConfig,
+    linkHandler,
+    runDefaultOpenLink,
   } = next);
   configApplied = true;
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
@@ -939,12 +984,8 @@ function createWindowRpc(windowId: WindowId) {
             if (text) windowManager.handlePaste(tabId, text);
           });
         },
-        openLink: ({ url }: { url: string }) => {
-          if (!isAllowedLinkUrl(url)) {
-            console.log(`[bun] blocked opening link with disallowed scheme: ${url}`);
-            return;
-          }
-          Utils.openExternal(url);
+        openLink: ({ tabId, url, text }: { tabId: TabId; url: string; text: string }) => {
+          handleOpenLink(tabId, url, text);
         },
         resize: (p: {
           tabId: TabId;

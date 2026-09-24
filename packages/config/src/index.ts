@@ -42,6 +42,20 @@ export type {
   LayoutsConfig,
 } from "./layout";
 export {
+  defaultLinkConfig,
+  defaultLinkRules,
+  isLinkModifier,
+  isLinkOpenTarget,
+  type LinkConfig,
+  type LinkModifier,
+  type LinkOpenTarget,
+  type LinkRule,
+  platformDefaultLinkModifier,
+  type ResolvedLinkConfig,
+  type ResolvedLinkRule,
+  toResolvedLinkRule,
+} from "./link";
+export {
   type MouseConfig,
   defaultMouseConfig,
   type ResolvedMouseConfig,
@@ -107,6 +121,9 @@ export {
   type NiwaBellEvent,
   type NiwaBellHandler,
   type NiwaClipboardApi,
+  type NiwaLinkApi,
+  type NiwaLinkEvent,
+  type NiwaLinkHandler,
   type NiwaNewTabOptions,
   type NiwaNotifyOptions,
   type NiwaPopupApi,

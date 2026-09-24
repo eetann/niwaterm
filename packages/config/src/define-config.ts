@@ -4,6 +4,7 @@ import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
 import type { KeybindingsConfig } from "./keybindings";
 import type { LayoutsConfig } from "./layout";
+import type { LinkConfig } from "./link";
 import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
@@ -68,6 +69,14 @@ export interface NiwatermConfig {
    * 例: { dev: { layout: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] } } }
    */
   layouts?: LayoutsConfig;
+  /**
+   * ターミナル出力の中のURLをクリックで開くための設定。URLとみなす正規表現（rules）・
+   * 開くのに押しておく修飾キー（modifier）・開き先（open）を指定する。
+   * 未指定のフィールドは既定値のまま有効。開く処理そのものを差し替えたい場合は
+   * keybindingsの関数形式の中でniwa.on("open-link", ...)を使う。
+   * 例: { open: "browser-tab" }
+   */
+  link?: LinkConfig;
   /**
    * マウス操作の挙動設定。選択時の自動コピー（copyOnSelect）と、選択範囲の右クリックメニューに
    * 並べる項目（selectionMenu）を指定する。未指定のフィールドはdefaultMouseConfigの値のまま有効。

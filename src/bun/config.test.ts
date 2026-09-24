@@ -7,6 +7,8 @@ import {
   defaultAppearance,
   defaultBoardConfig,
   defaultBrowserConfig,
+  defaultLinkConfig,
+  defaultLinkRules,
   defaultMouseConfig,
   defaultTerminalConfig,
   defaultUiColors,
@@ -24,6 +26,7 @@ import {
   resolveCustomViews,
   resolveKeybindings,
   resolveLayouts,
+  resolveLink,
   resolveMouse,
   resolveSelectionMenu,
   restoreConfigDirInMessage,
@@ -78,6 +81,8 @@ function createTestNiwaApi(): NiwaApiHandle {
     getDefaultShell: () => undefined,
     sendNotification: () => {},
     reloadConfig: async () => {},
+    openLinkExternal: () => {},
+    getLinkOpen: () => "external",
   });
 }
 
@@ -757,6 +762,101 @@ describe("resolveTerminal", () => {
     }
   });
 });
+describe("resolveLink", () => {
+  /** 既定のルールを解決済みの形（webviewへ送る形）へ直したもの */
+  const resolvedDefaultRules = defaultLinkRules.map((rule) => ({
+    source: rule.regex as string,
+    flags: "",
+    format: rule.format as string,
+  }));
+
+  test("nullを渡すとOSごとの既定値がそのまま返る", () => {
+    expect(resolveLink(null, createConfigDiagnostics(), "darwin")).toEqual({
+      ...defaultLinkConfig("darwin"),
+      rules: resolvedDefaultRules,
+    });
+    expect(resolveLink(null, createConfigDiagnostics(), "win32").modifier).toBe("ctrl");
+    expect(resolveLink(null, createConfigDiagnostics(), "darwin").modifier).toBe("cmd");
+  });
+
+  test("modifier・openを変更できる", () => {
+    const resolved = resolveLink({ link: { modifier: "alt", open: "browser-tab" } });
+    expect(resolved.modifier).toBe("alt");
+    expect(resolved.open).toBe("browser-tab");
+  });
+
+  test("rulesを指定すると既定のルールを置き換える", () => {
+    const resolved = resolveLink({
+      link: { rules: [{ regex: /ISSUE-(\d+)/u, format: "https://example.com/issues/$1" }] },
+    });
+    expect(resolved.rules).toEqual([
+      { source: "ISSUE-(\\d+)", flags: "u", format: "https://example.com/issues/$1" },
+    ]);
+  });
+
+  test("文字列で書いたregexも受け取り、formatの省略は$0になる", () => {
+    const resolved = resolveLink({ link: { rules: [{ regex: "https?://\\S+" }] } });
+    expect(resolved.rules).toEqual([{ source: "https?://\\S+", flags: "", format: "$0" }]);
+  });
+
+  test("g・yフラグは落とす（マッチ列挙のためgは利用側で必ず付けるため）", () => {
+    const resolved = resolveLink({ link: { rules: [{ regex: /todo/giy }] } });
+    expect(resolved.rules[0]?.flags).toBe("i");
+  });
+
+  test("不正なルールは警告付きで捨て、残りのルールで動かす", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveLink({
+        link: {
+          rules: [
+            { regex: "[" },
+            { regex: 42 as never },
+            "rule" as never,
+            { regex: "ok", format: 1 as never },
+          ],
+        },
+      });
+      expect(resolved.rules).toEqual([{ source: "ok", flags: "", format: "$0" }]);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("ルールが全滅した場合だけ既定のルールへ戻す", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(resolveLink({ link: { rules: [{ regex: "[" }] } }).rules).toEqual(
+        resolvedDefaultRules,
+      );
+      expect(resolveLink({ link: { rules: "url" as never } }).rules).toEqual(resolvedDefaultRules);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("rulesに空配列を渡すと素のURLの検出を無効にできる", () => {
+    expect(resolveLink({ link: { rules: [] } }).rules).toEqual([]);
+  });
+
+  test("不正なmodifier・openは警告付きで既定値へ落とす", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveLink(
+        { link: { modifier: "hyper" as never, open: "popup" as never } },
+        createConfigDiagnostics(),
+        "win32",
+      );
+      expect(resolved.modifier).toBe("ctrl");
+      expect(resolved.open).toBe("external");
+      expect(logSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
 describe("resolveMouse", () => {
   test("nullを渡すとdefaultMouseConfigがそのまま返る", () => {
     expect(resolveMouse(null)).toEqual(defaultMouseConfig);

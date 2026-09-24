@@ -12,15 +12,19 @@ import type {
   KeybindHandler,
   KeybindOptions,
   KeybindingsConfig,
+  LinkOpenTarget,
   Niwa,
   NiwaBellEvent,
   NiwaBellHandler,
+  NiwaLinkEvent,
+  NiwaLinkHandler,
   NiwaNotifyOptions,
   SecondKeyString,
   ShellProfile,
 } from "@niwaterm/config";
 import { BELL_TAB_VAR } from "./board";
 import { readClipboardText, writeClipboardText } from "./clipboard";
+import { isBrowserTabUrl } from "./open-link";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { runShellCommand } from "./shell-run";
 import { tmuxKeysToBytes } from "./tmux-keys";
@@ -55,6 +59,13 @@ export interface CreateNiwaApiDeps {
    * （ファイル監視での自動リロードと同じ処理）を注入する
    */
   reloadConfig: () => Promise<void>;
+  /**
+   * URLをOS既定のブラウザで開く。sendNotificationと同じくElectrobun依存（Utils.openExternal）を
+   * 避けるため実体は呼び出し元が注入する
+   */
+  openLinkExternal: (url: string) => void;
+  /** link.openの解決済みの値。ホットリロードでの変化を反映するため、呼び出し毎に評価する */
+  getLinkOpen: () => LinkOpenTarget;
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
@@ -85,6 +96,10 @@ export interface NiwaApiHandle {
   extractBellHandler(): NiwaBellHandler | null;
   /** niwa.bell.defaultと同じ既定の処理。ユーザーがハンドラを登録していない場合の処理として呼ぶ */
   runDefaultBell(event: NiwaBellEvent): void;
+  /** configファイル実行後に呼び出し、niwa.on("open-link")で登録されたハンドラを取り出す。未登録はnull */
+  extractLinkHandler(): NiwaLinkHandler | null;
+  /** niwa.link.defaultと同じ既定の処理。ユーザーがハンドラを登録していない場合の処理として呼ぶ */
+  runDefaultOpenLink(event: NiwaLinkEvent): void;
 }
 
 export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
@@ -97,6 +112,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   const handlerRegistry = new Map<string, KeybindHandler>();
   let handlerIdCounter = 0;
   let bellHandler: NiwaBellHandler | null = null;
+  let linkHandler: NiwaLinkHandler | null = null;
   // タブごとの、既定の処理で最後に通知を出した時刻
   const lastBellNotifiedAt = new Map<string, number>();
 
@@ -140,7 +156,8 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       }
     },
     on(event, handler) {
-      if (event === "bell") bellHandler = handler;
+      if (event === "bell") bellHandler = handler as NiwaBellHandler;
+      if (event === "open-link") linkHandler = handler as NiwaLinkHandler;
     },
     unbind(key, opts) {
       if (opts?.noPrefix) {
@@ -306,6 +323,14 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
         workspaceManager.clearBell(tabId);
       },
     },
+    link: {
+      default(event) {
+        defaultOpenLink(event);
+      },
+      openExternal(url) {
+        deps.openLinkExternal(url);
+      },
+    },
     shell: {
       run(command, opts) {
         const resolved = resolveShellProfileCommand(deps.getShellProfiles(), opts?.shellProfile);
@@ -351,6 +376,23 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     return bellHandler;
   }
 
+  /**
+   * リンクの既定の処理。link.openがbrowser-tabなら、クリックされたタブと同じタイルへ
+   * ブラウザタブを足す（別タイルへ出すと見ていたターミナルの場所が変わってしまうため）。
+   * mailto:等ブラウザタブで扱えないURLは設定に関わらず外部で開く
+   */
+  function defaultOpenLink(event: NiwaLinkEvent): void {
+    if (deps.getLinkOpen() === "browser-tab" && isBrowserTabUrl(event.url)) {
+      if (workspaceManager.newBrowserTab(event.tileId, event.url) !== null) return;
+      // タイルが見つからない場合（閉じた直後等）は開けないままにせず外部で開く
+    }
+    deps.openLinkExternal(event.url);
+  }
+
+  function extractLinkHandler(): NiwaLinkHandler | null {
+    return linkHandler;
+  }
+
   function extractKeybindingsConfig(): KeybindingsConfig {
     return {
       prefix: prefixBinding,
@@ -375,5 +417,7 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     runHandler,
     extractBellHandler,
     runDefaultBell: defaultBell,
+    extractLinkHandler,
+    runDefaultOpenLink: defaultOpenLink,
   };
 }
