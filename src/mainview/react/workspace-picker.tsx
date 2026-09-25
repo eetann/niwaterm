@@ -51,9 +51,10 @@ export function WorkspacePicker({
               key={item.workspaceId}
               // 同名のワークスペースがあってもcmdkの値が衝突しないようidを混ぜる
               value={`${item.label} ${item.workspaceId}`}
+              // 閉じたことを伝えると呼び出し側がonSelectを捨てるため、選択の通知を先に済ませる
               onSelect={() => {
-                onOpenChange(false);
                 onSelect(item.workspaceId);
+                onOpenChange(false);
               }}
             >
               <Folder />
