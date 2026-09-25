@@ -517,7 +517,7 @@ fi
 fpath=(${_niwaterm_comp:h} $fpath)
 ```
 
-補完が効いているかは`compinit`のdumpを見ると分かる。`grep -c niwaterm ~/.cache/zsh/zcompdump`が0なら、`compinit`の時点でfpathに入っていない。
+補完が効いているかは`compinit`のdumpを見ると分かる。`grep -c niwaterm ~/.cache/zsh/zcompdump`が0なら、`compinit`の時点でfpathに入っていない。置き場所や順序を直してもまだ0のままなら、補完ファイルが既にあるせいで上のブロックごと飛ばされ、dumpが捨てられていない。dumpと`.zwc`を一度消せば次の起動で拾われる。
 
 生成のたびにバージョンを調べて作り直す（`mise activate`のキャッシュのような）作りにする必要は無い。中身がバージョンに依らないうえ、判定のために`niwaterm --version`を呼ぶ時間が生成そのものと変わらないため。
 
