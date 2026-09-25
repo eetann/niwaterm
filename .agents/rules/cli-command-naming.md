@@ -20,6 +20,8 @@ niwaterm tile split --tile <tileId>
 
 単一のリソースIDを主語に取らない操作だけ、トップレベルの`niwaterm <command>`に置く
 （`list`はワークスペース・タイル・タブ横断の俯瞰表示。他は`ping`・`init`・`notify`のみ）。
+トップレベルにはもう1つ`complete`（シェル補完スクリプトの出力）が並ぶが、これは
+`@gunshi/plugin-completion`が生やすコマンドなのでこの規則の適用外。
 迷ったら「これは単一のリソースIDを主語に取る操作か？」で判断する。
 
 ## verb語彙はリソース間で揃える

@@ -9,7 +9,8 @@
   },
   "type": "module",
   "dependencies": {
-    "gunshi": "^0.37.1"
+    "@gunshi/plugin-completion": "0.37.3",
+    "gunshi": "^0.37.3"
   },
   "devDependencies": {
     "@types/bun": "latest"

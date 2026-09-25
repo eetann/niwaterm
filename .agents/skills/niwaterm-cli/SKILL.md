@@ -19,7 +19,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## できること（概要）
 
-コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`notify`はリソース単体に属さないためトップレベル）。
+コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`notify`/`complete`はリソース単体に属さないためトップレベル）。
 
 **`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwaterm docs show cli`の「対象IDの省略」節を参照。
 
@@ -49,6 +49,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `shell-profile list` — 利用可能なシェルプロファイルの一覧（`tab new --shell`・`tab restart --shell`・レイアウトプリセットの`shellProfile`に指定するidをここで確認する）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `notify --title <title> [--body] [--subtitle] [--silent] [--tab]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。macOSではクリックで通知元タブへ遷移する）
+- `complete <bash|zsh|fish|powershell>` — シェルの補完スクリプトを出力する。コマンド名・オプション名に加えてtabId・レイアウトプリセット名などの値も補完される。設置手順は`niwaterm docs show cli`の「シェル補完」節
 
 ## 詳しい使い方
 

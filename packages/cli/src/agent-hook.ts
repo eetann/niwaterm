@@ -1,4 +1,7 @@
-export type Agent = "claude-code" | "codex-cli";
+/** hooksを仕込める対象エージェント。`agent setup`の引数候補もここから引く */
+export const AGENTS = ["claude-code", "codex-cli"] as const;
+
+export type Agent = (typeof AGENTS)[number];
 export type AgentState = {
   agent: string;
   agent_status: string;
@@ -8,7 +11,7 @@ export type AgentState = {
 type JsonObject = Record<string, unknown>;
 
 export function isAgent(value: unknown): value is Agent {
-  return value === "claude-code" || value === "codex-cli";
+  return AGENTS.includes(value as Agent);
 }
 
 function object(value: unknown): JsonObject {

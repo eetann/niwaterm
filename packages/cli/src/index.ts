@@ -1,30 +1,23 @@
 #!/usr/bin/env bun
+import completion from "@gunshi/plugin-completion";
 import { cli, define } from "gunshi";
 import { renderUsage } from "gunshi/renderer";
 import { cliName, docsHintLine } from "./agent-hint";
+import { buildCompletionConfig, COMPLETION_SHELLS } from "./completion";
 import { failAndExit } from "./cli-error";
-import agentCommand from "./commands/agent";
-import boardCommand from "./commands/board";
-import browserCommand from "./commands/browser";
-import configCommand from "./commands/config";
-import docsCommand from "./commands/docs";
-import fontSizeCommand from "./commands/font-size";
-import initCommand from "./commands/init";
-import keybindCommand from "./commands/keybind";
-import layoutCommand from "./commands/layout";
-import listCommand from "./commands/list";
-import notifyCommand from "./commands/notify";
-import pingCommand from "./commands/ping";
-import popupCommand from "./commands/popup";
-import shellProfileCommand from "./commands/shell-profile";
-import sidebarCommand from "./commands/sidebar";
-import tabCommand from "./commands/tab";
-import tileCommand from "./commands/tile";
-import windowCommand from "./commands/window";
-import workspaceCommand from "./commands/workspace";
-import worktreeCommand from "./commands/worktree";
+import { subCommands } from "./commands";
 
 const DESCRIPTION = "niwatermターミナルアプリをCLIから操作する";
+
+/**
+ * completeコマンドは@gunshi/plugin-completionが登録するもので、gunshiのaddCommandは
+ * 同名の再登録を弾くため定義を差し替えられない。ヘルプの一覧だけ他のコマンドと同じ日本語へ揃える。
+ * プラグイン側の文言が変わればここは素通りするが、英語の説明がそのまま出るだけで動作は変わらない
+ */
+const COMPLETE_DESCRIPTION: [string, string] = [
+  "Generate shell completion script",
+  "シェルの補完スクリプトを出力する（bash / zsh / fish / powershell）",
+];
 const VERSION = "0.0.1";
 
 // `docs show cli | head`のようにパイプ先が先に閉じたとき、EPIPEで異常終了させない
@@ -37,6 +30,16 @@ if (process.argv[2] === "_hook") {
   const { runAgentHook } = await import("./agent-hook");
   await runAgentHook(process.argv[3]);
   process.exit(0);
+}
+
+// 補完スクリプトが呼ぶコマンドをPATH上の名前（niwaterm・niwaterm-dev）へ寄せる。
+// @gunshi/plugin-completionは実行中のbunバイナリとエントリの絶対パスをスクリプトへ埋め込むが、
+// それだとniwaterm-devのラッパーが渡す接続先（NIWATERM_APP_VARIANT）が落ち、
+// 開発中インスタンスを操作しているのに候補だけ普段遣いのインスタンスから引かれる。
+// bun以外の名前で起動された場合は単一実行ファイルとみなして実行ファイル名だけを埋め込む
+// 実装なので、名前を差し替えるとコマンド名だけが残る（判定が変われば絶対パスに戻るだけで壊れない）
+if (process.argv[2] === "complete" && COMPLETION_SHELLS.has(process.argv[3] ?? "")) {
+  process.execPath = cliName();
 }
 
 // gunshiのバージョン表示はctx.env.versionをそのまま出すだけで差し込む余地が無いため、
@@ -62,30 +65,11 @@ try {
     version: VERSION,
     description: DESCRIPTION,
     renderHeader: null,
+    plugins: [completion({ config: await buildCompletionConfig(process.argv.slice(2)) })],
     // ctx.env.renderUsageはサブコマンドのヘルプでも使われるため、ここだけで全ヘルプに導線が付く
-    renderUsage: async (ctx) => `${await renderUsage(ctx)}\n\n${docsHintLine()}`,
-    subCommands: {
-      agent: agentCommand,
-      ping: pingCommand,
-      init: initCommand,
-      list: listCommand,
-      notify: notifyCommand,
-      tab: tabCommand,
-      window: windowCommand,
-      workspace: workspaceCommand,
-      board: boardCommand,
-      worktree: worktreeCommand,
-      tile: tileCommand,
-      keybind: keybindCommand,
-      config: configCommand,
-      popup: popupCommand,
-      browser: browserCommand,
-      sidebar: sidebarCommand,
-      "shell-profile": shellProfileCommand,
-      layout: layoutCommand,
-      "font-size": fontSizeCommand,
-      docs: docsCommand,
-    },
+    renderUsage: async (ctx) =>
+      `${(await renderUsage(ctx)).replace(...COMPLETE_DESCRIPTION)}\n\n${docsHintLine()}`,
+    subCommands,
   });
 } catch (err) {
   // gunshi自身のバリデーションエラー（例: 必須positional未指定）はmessageが空文字列で

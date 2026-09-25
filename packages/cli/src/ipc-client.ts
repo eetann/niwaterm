@@ -246,11 +246,22 @@ function ipcFetchInit(
  */
 const IPC_TIMEOUT_MS = 10_000;
 
+/**
+ * 実際に使うタイムアウト。シェル補完のように「すぐ応答が無いなら候補ゼロで構わない」呼び出しは
+ * 10秒待つとタブキーを押した手が止まってしまうため、呼び出し側から短くできるようにしている
+ */
+let ipcTimeoutMs: number = IPC_TIMEOUT_MS;
+
+/** IPC_TIMEOUT_MSより短い上限で打ち切りたい呼び出し元（completion/）向け */
+export function setIpcTimeoutMs(ms: number): void {
+  ipcTimeoutMs = ms;
+}
+
 async function ipcFetch(
   endpoint: IpcEndpoint,
   url: string,
   init: RequestInit & { unix?: string },
-  timeoutMs: number | null = IPC_TIMEOUT_MS,
+  timeoutMs: number | null = ipcTimeoutMs,
 ): Promise<Response> {
   if (endpoint.kind === "unavailable") throw new Error(endpoint.reason);
   // 候補を順に試すため、AbortSignalはホストごとに作り直す（使い回すと2つ目に渡る時点で
@@ -540,7 +551,7 @@ async function postJson<T extends { ok: boolean }>(
   endpoint: IpcEndpoint,
   path: string,
   body: unknown,
-  timeoutMs: number | null = IPC_TIMEOUT_MS,
+  timeoutMs: number | null = ipcTimeoutMs,
 ): Promise<T | { ok: false; error: string }> {
   try {
     const res = await ipcFetch(

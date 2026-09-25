@@ -444,6 +444,50 @@ gitのワークツリーを一覧・作成・削除し、それぞれをBoardと
 
 省略できないのは、自分自身を指しても意味が無い切り替え系（`tab switch`の`--tab`/`--direction`、`board switch --board`、`workspace switch --workspace`）、誤送信を避けたい`tab send-keys --tab`、対象がブラウザタブに限られる`browser *`の`--tab`。`tab var`系の`--tab`は`NIWATERM_TAB_ID`のみを見て、フォーカス中タブへのフォールバックは行わない（シェル統合・エージェント統合のhookがniwaterm外で暴発しないようにするため）。
 
+## シェル補完
+
+```sh
+niwaterm complete zsh
+```
+
+補完スクリプトを標準出力へ書き出す。`bash` / `zsh` / `fish` / `powershell` を指定できる。設置先はシェルごとに違う。
+
+```sh
+# zsh: fpathの通ったディレクトリへ、先頭にアンダースコアを付けた名前で置く
+mkdir -p ~/.zsh/completions
+niwaterm complete zsh > ~/.zsh/completions/_niwaterm
+# ~/.zshrcのcompinitより前に fpath=(~/.zsh/completions $fpath) を書く
+```
+
+```sh
+# bash: bash-completionが読むディレクトリへ置く（bash-completion本体の導入が前提）
+mkdir -p ~/.local/share/bash-completion/completions
+niwaterm complete bash > ~/.local/share/bash-completion/completions/niwaterm
+```
+
+```sh
+# fish: 置くだけで読み込まれる
+mkdir -p ~/.config/fish/completions
+niwaterm complete fish > ~/.config/fish/completions/niwaterm.fish
+```
+
+```powershell
+# PowerShell: プロファイルへ追記する
+niwaterm complete powershell >> $PROFILE
+```
+
+補完されるのはコマンド名・オプション名だけでなく、`--tab`に渡すtabIdのような**値**も含む。候補の取得元は3種類ある。
+
+- **起動中のniwatermアプリ** — tabId・tileId・boardId・workspaceId・windowId、シェルプロファイルのid、レイアウトプリセット名、customViewのid、Boardのフェーズ。IDだけでは何を指すか分からないため、候補にはBoard名・ワークスペース名を説明として添える
+- **補完を実行したディレクトリ** — gitワークツリー・gitリモート、`--cwd`のようなパスを取る引数
+- **CLI自身** — `docs show`のドキュメント名、`--direction`のように取りうる値が決まっている引数
+
+スクリプトは補完のたびにCLIを呼び出して候補を受け取る形なので、**コマンドやオプションが増えても置き直す必要は無い**。
+
+アプリが起動していないときはアプリ由来の候補が空になるだけで、コマンド名・オプション名の補完はそのまま効く。問い合わせの待ち時間には短い上限があり、応答が無ければ候補ゼロで打ち切る。
+
+補完の対象になるコマンド名は、スクリプトを生成したときの呼び出し名になる。開発用の`niwaterm-dev`（`mise run cli:link`が張る別名）から生成すれば`niwaterm-dev`用のスクリプトが出て、候補の問い合わせ先もそちらの既定インスタンスになる。
+
 ## シェル統合
 
 `contrib/shell-integration/`配下のスクリプトをシェルの起動時にsourceすると、プロンプト表示のたびに現在のgitブランチをタブ変数`branch`へ自動反映する（`niwaterm tab var set branch <branch>`相当を内部で呼ぶ）。サイドバーのタブ行にブランチ名が表示されるようになる。zsh/bash/fish/PowerShellに対応している。
