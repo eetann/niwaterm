@@ -242,6 +242,19 @@ describe("createWindowManager", () => {
     expect(mgr.closeWindow(second)).toBe(false);
   });
 
+  test("listWindowsは名前を付けたワークスペースだけworkspaceNamesへ載せる", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWindowManager(baseOpts({ createSession: factory }));
+    const named = mgr.listWorkspaces()[0].workspaceId;
+    const unnamed = mgr.newWorkspace();
+    mgr.setWorkspaceName(named, "dev");
+
+    const entry = mgr.listWindows()[0];
+    expect(entry.workspaceIds).toEqual([named, unnamed]);
+    expect(entry.activeWorkspaceId).toBe(unnamed);
+    expect(entry.workspaceNames).toEqual({ [named]: "dev" });
+  });
+
   test("永続化対象はメインウィンドウの中身だけ", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWindowManager(baseOpts({ createSession: factory }));

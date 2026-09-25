@@ -34,6 +34,8 @@ export interface WindowListEntry {
   /** 表示順 */
   workspaceIds: WorkspaceId[];
   activeWorkspaceId: WorkspaceId;
+  /** ユーザーが付けたワークスペース名。未設定のワークスペースは含まれない */
+  workspaceNames: Record<WorkspaceId, string>;
 }
 
 /** ウィンドウそのものを操作する口。WorkspaceManagerの守備範囲外なので別インターフェースに切る */
@@ -157,13 +159,20 @@ export function createWindowManager(opts: WindowManagerOptions) {
   function listWindows(): WindowListEntry[] {
     return order.map((windowId) => {
       const entry = entries.get(windowId) as WindowEntry;
-      const snap = entry.workspaces.snapshot();
+      // snapshot()はアクティブなワークスペースの全タブ分のHTMLまで組み立てるため、
+      // 骨格しか要らない一覧ではlistWorkspaces()を使う
+      const list = entry.workspaces.listWorkspaces();
+      const workspaceNames: Record<WorkspaceId, string> = {};
+      for (const ws of list) {
+        if (ws.name !== null) workspaceNames[ws.workspaceId] = ws.name;
+      }
       return {
         windowId,
         persistent: entry.persistent,
         focused: windowId === focusedId,
-        workspaceIds: snap.workspaceIds,
-        activeWorkspaceId: snap.activeWorkspaceId,
+        workspaceIds: list.map((ws) => ws.workspaceId),
+        activeWorkspaceId: entry.workspaces.getActiveWorkspaceId(),
+        workspaceNames,
       };
     });
   }

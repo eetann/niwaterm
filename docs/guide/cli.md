@@ -41,6 +41,17 @@ niwaterm list
 
 実行しているタブが載っているウィンドウの、ワークスペース→Board→タイル→タブの階層構造を表示する（niwatermの外から実行した場合は最後にフォーカスされたウィンドウ）。ウィンドウをまたいだ俯瞰は`niwaterm window list`を使う。Boardが1つのみのワークスペースはBoard行を省略する（ADR 0006、サイドバー表示と同じ方針）。アクティブなワークスペース/Board/フォーカス中タイル/アクティブタブにはそれぞれ`(active)`/`(active)`/`(focused)`/`(active)`のサフィックスが付く。`tab send-keys`で指定するtabIdはここで確認する。
 
+名前が付いているワークスペース・Board・タブは、idの直後に`"名前"`が入る（Boardは名前未設定でも自動命名の結果を出す）。タブ名はGUIのタブバーからのリネーム（キーバインドの`rename-tab`）、またはレイアウトプリセットの`name`で付く。
+
+```
+workspace-1 "dev" (active)
+  tile-1 (focused)
+    tab-1 "editor" (active)
+    tab-2
+  tile-2
+    tab-3 "server" (active)
+```
+
 レイアウトプリセットが紐づいているBoardには`[startup: <name>]`（起動時にそのプリセットで組み直す）または`[preset: <name>]`（プリセット名は覚えているが起動時は骨格を復元する）が付く（「起動時レイアウト」節）。この表示を確認できるよう、紐づけのあるBoardはワークスペース内に1つしか無くてもBoard行を省略しない。
 
 ```sh
@@ -133,7 +144,7 @@ niwaterm window close --window <windowId>
 OSウィンドウ単位の操作コマンド。ウィンドウの中身（ワークスペース以下）はウィンドウごとに独立していて、ウィンドウをまたいだタブ・Boardの移動はできない。
 
 - `window new` — 新しいOSウィンドウを開く。成功時、新規`windowId`を表示する。`--cwd`は最初のタブの作業ディレクトリ（省略時はOS標準）
-- `window list` — 開いているウィンドウを`windowId (種別[, focused])`形式で表示し、各ウィンドウが持つワークスペースをぶら下げる。種別は`main`（メインウィンドウ）か`temporary`（一時ウィンドウ）
+- `window list` — 開いているウィンドウを`windowId (種別[, focused])`形式で表示し、各ウィンドウが持つワークスペースをぶら下げる。種別は`main`（メインウィンドウ）か`temporary`（一時ウィンドウ）。名前が付いているワークスペースは`niwaterm list`と同じく`workspaceId "名前"`形式になる
 - `window close` — 指定したウィンドウを閉じる。中のPTYはすべて終了する。最後の1つを閉じるとniwaterm自体が終了する（キーバインドの`close-window`アクション・コマンドパレットの「Close Window」からも同じことができる。そちらは確認ダイアログを挟む）
 
 ウィンドウは2種類ある（ADR 0007）。

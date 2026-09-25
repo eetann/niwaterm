@@ -374,6 +374,8 @@ export interface BoardListEntry {
   active: boolean;
   focusedTileId: TileId;
   layout: TileSummary;
+  /** ユーザー・レイアウトプリセットが付けたタブ名。未設定のタブは含まれない */
+  tabNames: Record<TabId, string>;
   /** ユーザー・CLIが明示的に付けたBoard名（`board rename`）。未設定はnull */
   name: string | null;
   /** 名前を付けていないBoardへ設定（board.naming）が自動で付けた名前。付けられなければnull */
@@ -426,6 +428,8 @@ export interface WindowListEntry {
   focused: boolean;
   workspaceIds: WorkspaceId[];
   activeWorkspaceId: WorkspaceId;
+  /** ユーザーが付けたワークスペース名。未設定のワークスペースは含まれない */
+  workspaceNames: Record<WorkspaceId, string>;
 }
 
 export type ListWindowsResult =
