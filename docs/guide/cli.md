@@ -459,6 +459,8 @@ niwaterm complete zsh > ~/.zsh/completions/_niwaterm
 # ~/.zshrcのcompinitより前に fpath=(~/.zsh/completions $fpath) を書く
 ```
 
+置き先は書き込めるディレクトリを選ぶ。すでにfpathへ入れてあるディレクトリでも、home-manager・Nix・dotfilesのシンボリックリンクで読み取り専用の実体を指していることがあり、そこへは生成できない（`read-only file system`で失敗する）。
+
 ```sh
 # bash: bash-completionが読むディレクトリへ置く（bash-completion本体の導入が前提）
 mkdir -p ~/.local/share/bash-completion/completions
@@ -493,13 +495,19 @@ niwaterm complete powershell >> $PROFILE
 zshなら、シェルの起動時に「無ければ作る」形にしておくと設置を忘れずに済む。`compinit`より前に置く。
 
 ```zsh
-_niwaterm_comp="$HOME/.zsh/completions/_niwaterm"
+# 生成物なので、dotfilesの配下ではなく書き込めるキャッシュへ置く
+_niwaterm_comp="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/completions/_niwaterm"
 if [[ ! -f $_niwaterm_comp ]] && (( $+commands[niwaterm] )); then
   mkdir -p ${_niwaterm_comp:h}
-  niwaterm complete zsh > $_niwaterm_comp
-  # compinitのdumpを使い回す構成（compinit -C）はfpathを再スキャンしないため、
-  # 新しく置いた補完ファイルが拾われるようdumpも捨てる
-  rm -f "${ZSH_CACHE_DIR:-$HOME/.cache/zsh}/zcompdump"
+  # 生成に失敗したら中途半端なファイルを残さない（compinitが読んで補完が壊れる）
+  if niwaterm complete zsh > $_niwaterm_comp.tmp; then
+    mv $_niwaterm_comp.tmp $_niwaterm_comp
+    # compinitのdumpを使い回す構成（compinit -C）はfpathを再スキャンしないため、
+    # 新しく置いた補完ファイルが拾われるようdumpも捨てる
+    rm -f "${ZSH_CACHE_DIR:-$HOME/.cache/zsh}/zcompdump"
+  else
+    rm -f $_niwaterm_comp.tmp
+  fi
 fi
 fpath=(${_niwaterm_comp:h} $fpath)
 ```
