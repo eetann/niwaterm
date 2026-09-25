@@ -310,7 +310,16 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["worktree", "directory", "cwd", "ディレクトリ", "紐づけ"],
   },
   {
+    action: "set-board-phase",
+    labelEn: "Set Board Phase...",
+    label: "Boardのフェーズを候補から選ぶ",
+    category: "Board",
+    icon: Tag,
+    keywords: ["board phase", "フェーズ", "picker"],
+  },
+  {
     action: "clear-board-phase",
+
     labelEn: "Clear Board Phase",
     label: "Boardのフェーズを解除",
     category: "Board",
@@ -564,8 +573,10 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
 ];
 
 /**
- * アクティブBoardへ作業フェーズを付ける項目。候補は設定ファイル次第で増減するため実行時に組み立てる
- * （解除はKEYBIND_ACTIONS側のclear-board-phaseが担うため、ここには含めない）
+ * アクティブBoardへ作業フェーズを付ける項目。候補は設定ファイル次第で増減するため実行時に組み立てる。
+ * フェーズ名で直接検索して1発で当てるための項目で、候補を見比べて選ぶ導線はKEYBIND_ACTIONS側の
+ * set-board-phase（ピッカー）、解除はclear-board-phaseが担う
+
  */
 export function boardPhaseActionDefs(
   phases: readonly ResolvedBoardPhase[],

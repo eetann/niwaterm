@@ -262,6 +262,10 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     expect(actionToTileCommand("clear-board-phase")).toEqual({ type: "clearBoardPhase" });
   });
 
+  test("id部分の無いset-board-phaseは候補を選ぶピッカーのコマンドへ変換される", () => {
+    expect(actionToTileCommand("set-board-phase")).toEqual({ type: "pickBoardPhase" });
+  });
+
   test("prefix -> ` でポップアップトグル", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());

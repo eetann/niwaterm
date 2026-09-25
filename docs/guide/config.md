@@ -309,7 +309,9 @@ keybindings: {
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `set-board-phase:<id>` | アクティブなBoardに作業フェーズを設定する（`<id>`は下記「Board設定」の`board.phases`のid）。設定側にしか書けないアクションなので既定キーは無い |
+| `set-board-phase` | アクティブなBoardの作業フェーズを、候補（下記「Board設定」の`board.phases`）から選ぶピッカーを開く。色付きの候補が並び、今のフェーズにはチェックが付く。↑↓のほかTab / Shift+Tabでも候補を移動でき、Enterで確定、Escapeでキャンセル。フェーズが付いているBoardでは末尾に「フェーズを解除」も並ぶ。既定キーは無いため使うには自分で割り当てる必要がある |
+| `set-board-phase:<id>` | アクティブなBoardに作業フェーズを直接設定する（`<id>`は下記「Board設定」の`board.phases`のid）。ピッカーを挟まず1打で切り替えたいとき向けで、設定側にしか書けないアクションなので既定キーは無い |
+
 | `clear-board-phase` | アクティブなBoardの作業フェーズを解除する（既定キーは無いため使うには自分で割り当てる必要がある） |
 | `clear-board-startup` | アクティブなBoardの起動時レイアウトの紐づけを解除する（CLIの`niwaterm board startup clear`と同じ。今のレイアウトはそのまま残り、次回起動時は保存した骨格を復元する既定の挙動に戻る。サイドバーのBoard行を右クリック →「起動時レイアウト」からも同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `new-workspace` | 新規ワークスペース作成 |
@@ -1055,8 +1057,10 @@ board: {
 },
 ```
 
-切り替えはサイドバーのBoard行の右クリック →「フェーズ」、コマンドパレット、CLIの
-`niwaterm board phase`（[CLIガイド](/guide/cli.md)の「Board」節）から行う。
+切り替えはサイドバーのBoard行の右クリック →「フェーズ」、コマンドパレット、キーバインド
+（上記「キーバインド」節の`set-board-phase`でピッカーを開くか、`set-board-phase:<id>`で直接指定）、
+CLIの`niwaterm board phase`（[CLIガイド](/guide/cli.md)の「Board」節）から行う。
+
 候補に無い文字列もCLIからは設定でき、その場合は文字列がそのまま既定色のバッジになる
 （決まった段階に収まらない一時的なメモ用）。値はBoard名・ワークツリーの紐づけと同じく
 アプリを閉じても保存され、次回起動時に復元される。候補から`id`を消した場合、そのidが

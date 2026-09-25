@@ -11,6 +11,7 @@ import {
   type ResolvedCustomViewConfig,
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
+  resolveBoardPhase,
   type ShellProfile,
   type TabBarMode,
   type TitleBarMode,
@@ -63,11 +64,13 @@ import {
 } from "./react/command-palette";
 import { ConfigDialog } from "./react/config-dialog";
 import { ConfirmDialog } from "./react/confirm-dialog";
+import { PhasePicker } from "./react/phase-picker";
 import { PopupToolbar } from "./react/popup-toolbar";
 import { PromptDialog } from "./react/prompt-dialog";
 import { SelectionMenu, type SelectionMenuUserItem } from "./react/selection-menu";
 import { SidebarToolbar } from "./react/sidebar-toolbar";
 import { WorkspacePicker, type WorkspacePickerItem } from "./react/workspace-picker";
+
 import { boardLabel, buildSidebarWorkspaceItems, workspaceLabel } from "./react/sidebar-props";
 import { SidebarSwitcher, type SidebarSwitcherView } from "./react/sidebar-switcher";
 import {
@@ -118,6 +121,8 @@ const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HT
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
 const configDialogRootEl = document.getElementById("config-dialog-root") as HTMLDivElement;
 const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
+const phasePickerRootEl = document.getElementById("phase-picker-root") as HTMLDivElement;
+
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
 const hintLayerEl = document.getElementById("hint-layer") as HTMLDivElement;
 const linkHighlightEl = document.getElementById("link-highlight") as HTMLDivElement;
@@ -485,6 +490,46 @@ function openWorkspacePicker(
   workspacePickerOnSelect = onSelect;
   workspacePickerOpen = true;
   renderWorkspacePicker();
+}
+
+// ---- 作業フェーズのピッカー: アクティブBoardへ付けるフェーズを候補から選ぶ ----
+const phasePickerRoot = createMemoRoot(phasePickerRootEl, "phase-picker");
+let phasePickerOpen = false;
+let phasePickerHeading = "";
+let phasePickerCurrent: ResolvedBoardPhase | null = null;
+let phasePickerOnSelect: ((phaseId: string | null) => void) | null = null;
+
+function renderPhasePicker(): void {
+  updateWebviewOverlayVisibility();
+  phasePickerRoot.renderOnEvent(
+    createElement(PhasePicker, {
+      open: phasePickerOpen,
+      heading: phasePickerHeading,
+      phases: boardPhases,
+      current: phasePickerCurrent,
+      onOpenChange: (open: boolean) => {
+        phasePickerOpen = open;
+        if (!open) {
+          phasePickerOnSelect = null;
+          imeEl.focus({ preventScroll: true });
+        }
+        renderPhasePicker();
+      },
+      onSelect: (phaseId: string | null) => phasePickerOnSelect?.(phaseId),
+    }),
+  );
+}
+
+function openPhasePicker(
+  heading: string,
+  current: ResolvedBoardPhase | null,
+  onSelect: (phaseId: string | null) => void,
+): void {
+  phasePickerHeading = heading;
+  phasePickerCurrent = current;
+  phasePickerOnSelect = onSelect;
+  phasePickerOpen = true;
+  renderPhasePicker();
 }
 
 // ---- サイドバーのユーザー定義HTML UI（customViews）----
@@ -1605,7 +1650,8 @@ function htmlOverlayOpen(): boolean {
     confirmDialogOpen ||
     promptDialogOpen ||
     configDialogOpen ||
-    workspacePickerOpen
+    workspacePickerOpen ||
+    phasePickerOpen
   );
 }
 
@@ -2172,15 +2218,38 @@ function clearSidebarBoardStartup(boardId: BoardId): void {
   sendMessage("clearBoardStartup", { boardId });
 }
 
-/** アクティブなBoardとサイドバーと同じ表示ラベル。Boardが1つも無いワークスペースならnull */
-function activeBoardWithLabel(): { boardId: BoardId; label: string } | null {
+/**
+ * アクティブなBoardと、サイドバーと同じ表示ラベル・今付いているフェーズ。
+ * Boardが1つも無いワークスペースならnull
+ */
+function activeBoardWithLabel(): {
+  boardId: BoardId;
+  label: string;
+  phase: string | null;
+} | null {
   const boardId = activeBoardId;
   if (!boardId) return null;
   const workspace = lastWorkspaces.find((w) => w.workspaceId === activeWorkspaceId);
   const index = workspace?.boards.findIndex((b) => b.boardId === boardId) ?? -1;
   const board = index >= 0 ? workspace?.boards[index] : undefined;
   if (!board) return null;
-  return { boardId, label: boardLabel(board, index) };
+  return { boardId, label: boardLabel(board, index), phase: board.phase };
+}
+
+/**
+ * キーバインド・コマンドパレットからのアクティブBoardのフェーズ変更。候補はピッカーで選ぶ
+ * （名前変更・移動先選びと同じく、サイドバーの表示状態に依存せずキーボードだけで完結させる）。
+ * 候補から消えた文字列が付いている場合もピッカーへ渡し、今の状態が読み取れる状態を保つ
+ */
+function openSetActiveBoardPhasePicker(): void {
+  const active = activeBoardWithLabel();
+  if (!active) return;
+  const { boardId } = active;
+  openPhasePicker(
+    `Board「${active.label}」のフェーズ`,
+    active.phase === null ? null : resolveBoardPhase(boardPhases, active.phase),
+    (phase) => sendMessage("setBoardPhase", { boardId, phase }),
+  );
 }
 
 /** アクティブなワークスペースとサイドバーと同じ表示ラベル。render到達前はnull */
@@ -3464,6 +3533,10 @@ function handleTileCommand(cmd: TileCommand): void {
     return;
   }
   // 作業フェーズもアクティブBoardが対象。renameBoardと同じ理由でここで処理する
+  if (cmd.type === "pickBoardPhase") {
+    openSetActiveBoardPhasePicker();
+    return;
+  }
   if (cmd.type === "setBoardPhase" || cmd.type === "clearBoardPhase") {
     if (activeBoardId) {
       sendMessage("setBoardPhase", {

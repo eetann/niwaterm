@@ -55,7 +55,9 @@ export const KEYBIND_ACTIONS = [
   "move-board-to-workspace",
   "rename-board",
   "set-board-worktree",
+  "set-board-phase",
   "clear-board-phase",
+
   "clear-board-startup",
   "new-workspace",
   "rename-workspace",
@@ -93,7 +95,11 @@ export const KEYBIND_ACTIONS = [
 /** アクション名と対象idを`:`で繋ぐ形のアクション（例: `show-sidebar-view:notes`）の接頭辞 */
 export const SHOW_SIDEBAR_VIEW_PREFIX = "show-sidebar-view:";
 
-/** アクティブBoardへフェーズを付けるアクション（例: `set-board-phase:review`）の接頭辞 */
+/**
+ * アクティブBoardへフェーズを付けるアクション（例: `set-board-phase:review`）の接頭辞。
+ * id部分を持たない`set-board-phase`は候補から選ぶピッカーを開く別のアクションで、
+ * KEYBIND_ACTIONS側に居る
+ */
 export const SET_BOARD_PHASE_PREFIX = "set-board-phase:";
 
 /**
@@ -105,7 +111,8 @@ export type ShowSidebarViewAction = `${typeof SHOW_SIDEBAR_VIEW_PREFIX}${string}
 /**
  * アクティブBoardのフェーズを指定の値へ変えるアクション。対象idはboard.phasesのid
  * （設定ファイル側で増減するためKEYBIND_ACTIONSの固定リストには入らない）。
- * 解除は固定アクションの`clear-board-phase`が担う
+ * 候補から選ぶ場合は固定アクションの`set-board-phase`、解除は`clear-board-phase`が担う
+
  */
 export type SetBoardPhaseAction = `${typeof SET_BOARD_PHASE_PREFIX}${string}`;
 

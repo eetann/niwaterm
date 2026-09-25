@@ -52,6 +52,7 @@ export type TileCommand =
   | { type: "renameBoard" }
   | { type: "setBoardWorktree" }
   | { type: "setBoardPhase"; phase: string }
+  | { type: "pickBoardPhase" }
   | { type: "clearBoardPhase" }
   | { type: "clearBoardStartup" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
@@ -193,8 +194,10 @@ function lookup<T>(map: ReadonlyMap<string, T>, canonicals: string[]): T | undef
 export function actionToTileCommand(action: KeybindAction): TileCommand {
   const sidebarViewId = parseShowSidebarViewAction(action);
   if (sidebarViewId !== null) return { type: "showSidebarView", viewId: sidebarViewId };
+  // id部分を持たない`set-board-phase`はここではnullになり、ピッカーを開くcaseへ落ちる
   const boardPhase = parseSetBoardPhaseAction(action);
   if (boardPhase !== null) return { type: "setBoardPhase", phase: boardPhase };
+
   switch (action) {
     case "split-vertical":
       return { type: "split", orientation: "vertical" };
@@ -254,6 +257,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "renameBoard" };
     case "set-board-worktree":
       return { type: "setBoardWorktree" };
+    case "set-board-phase":
+      return { type: "pickBoardPhase" };
     case "clear-board-phase":
       return { type: "clearBoardPhase" };
     case "clear-board-startup":
