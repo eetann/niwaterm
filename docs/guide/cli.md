@@ -73,6 +73,10 @@ niwaterm tab send-keys -t tab-3 C-c
 
 対応する特殊キー名: `Enter`, `Escape`, `Tab`, `Space`, `BSpace`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `Delete`, `PageUp`, `PageDown`。`C-a`〜`C-z`（英字のみ）でCtrl修飾も送れる。上記以外の文字列はリテラルとしてそのままPTYへ送信される。指定したtabIdが存在しない場合はエラーメッセージと共に終了コード1を返す。
 
+1回の呼び出しで並べたキーは連結して一度に書き込まれるため、この中での順序は保証される。一方で**別々の呼び出しで投げたキーの到着順は保証されない**。呼び出しごとにCLIのプロセス起動とIPC往復の遅延が乗り、その差はキーを送り出した間隔を超えうるため、後から投げたキーが先に届くことがある。順序が要るなら1回の呼び出しにまとめるか、前の呼び出しの終了を待ってから次を投げる。
+
+なお、TUIの中には文字列と直後の`Enter`が1回の読み取りで届くと「改行を含むペースト」と解釈して送信しないものがある（codex等）。この場合は1回にまとめるのではなく、前の呼び出しの終了を待った上で`Enter`だけを別の呼び出しで送る。
+
 ```sh
 niwaterm tile split [--tile <tileId>] [--orientation horizontal|vertical] [--cwd <dir>]
 niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view [--view <viewId>] | [--shell <shellProfileId>] [--cwd <dir>]]
