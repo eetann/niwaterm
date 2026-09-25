@@ -482,11 +482,29 @@ niwaterm complete powershell >> $PROFILE
 - **補完を実行したディレクトリ** — gitワークツリー・gitリモート、`--cwd`のようなパスを取る引数
 - **CLI自身** — `docs show`のドキュメント名、`--direction`のように取りうる値が決まっている引数
 
-スクリプトは補完のたびにCLIを呼び出して候補を受け取る形なので、**コマンドやオプションが増えても置き直す必要は無い**。
-
 アプリが起動していないときはアプリ由来の候補が空になるだけで、コマンド名・オプション名の補完はそのまま効く。問い合わせの待ち時間には短い上限があり、応答が無ければ候補ゼロで打ち切る。
 
 補完の対象になるコマンド名は、スクリプトを生成したときの呼び出し名になる。開発用の`niwaterm-dev`（`mise run cli:link`が張る別名）から生成すれば`niwaterm-dev`用のスクリプトが出て、候補の問い合わせ先もそちらの既定インスタンスになる。
+
+### 置き直しが要るとき
+
+スクリプトはコマンドの一覧を持たない（補完のたびにCLIへ問い合わせる）ので、**コマンドやオプションが増減しても中身は変わらず、置き直す必要は無い**。生成し直すのは補完スクリプト自体の作り方が変わったとき、つまり`@gunshi/plugin-completion`を更新したときだけ。
+
+zshなら、シェルの起動時に「無ければ作る」形にしておくと設置を忘れずに済む。`compinit`より前に置く。
+
+```zsh
+_niwaterm_comp="$HOME/.zsh/completions/_niwaterm"
+if [[ ! -f $_niwaterm_comp ]] && (( $+commands[niwaterm] )); then
+  mkdir -p ${_niwaterm_comp:h}
+  niwaterm complete zsh > $_niwaterm_comp
+  # compinitのdumpを使い回す構成（compinit -C）はfpathを再スキャンしないため、
+  # 新しく置いた補完ファイルが拾われるようdumpも捨てる
+  rm -f "${ZSH_CACHE_DIR:-$HOME/.cache/zsh}/zcompdump"
+fi
+fpath=(${_niwaterm_comp:h} $fpath)
+```
+
+生成のたびにバージョンを調べて作り直す（`mise activate`のキャッシュのような）作りにする必要は無い。中身がバージョンに依らないうえ、判定のために`niwaterm --version`を呼ぶ時間が生成そのものと変わらないため。
 
 ## シェル統合
 
