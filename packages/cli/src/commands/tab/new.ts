@@ -9,7 +9,6 @@ export default define({
   args: {
     tile: {
       type: "string",
-      short: "t",
       description:
         "対象のtileId（niwaterm listで確認）。省略時はこのコマンドを実行したタブのタイル（niwatermの外から実行した場合はフォーカス中のタイル）",
     },
@@ -34,7 +33,7 @@ export default define({
       type: "string",
       short: "s",
       description:
-        "指定したシェルプロファイル（idはniwaterm shell-profilesで確認）でターミナルタブを作成する（--url・--custom-viewとは同時指定不可）",
+        "指定したシェルプロファイル（idはniwaterm shell-profile listで確認）でターミナルタブを作成する（--url・--custom-viewとは同時指定不可）",
     },
     cwd: {
       type: "string",

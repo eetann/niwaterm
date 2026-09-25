@@ -1,14 +1,14 @@
 import { define } from "gunshi";
-import { failAndExit } from "../cli-error";
-import { resolveIpcEndpoint, listShellProfiles } from "../ipc-client";
+import { failAndExit } from "../../cli-error";
+import { listShellProfiles, resolveIpcEndpoint } from "../../ipc-client";
 
 export default define({
-  name: "shell-profiles",
-  description: "利用可能なシェルプロファイル（new-tab --shellで指定するid）の一覧を表示",
+  name: "list",
+  description: "利用可能なシェルプロファイル（tab new --shellで指定するid）の一覧を表示",
   run: async () => {
     const result = await listShellProfiles(resolveIpcEndpoint());
     if (!result.ok) {
-      failAndExit(`niwatermに接続できませんでした: ${result.error}`);
+      failAndExit(`shell-profile listに失敗しました: ${result.error}`);
     }
     if (result.profiles.length === 0) {
       console.log("(シェルプロファイルは設定されていません)");

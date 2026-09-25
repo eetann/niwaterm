@@ -293,7 +293,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return null;
   }
 
-  /** 種別（terminal/browser）を問わずtabIdの所在を返す。tab show用 */
+  /** 種別（terminal/browser）を問わずtabIdの所在を返す。tab focus用 */
   function locateTab(tabId: TabId): TabLocation | null {
     for (const [workspaceId, ws] of workspaces) {
       const location = ws.locateTab(tabId);
@@ -786,7 +786,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return owner.findTabsByVarInBoard(boardId, key, value);
   }
 
-  // niwa.tab.show向け（tmuxのselect-pane、CLIの`tab show`相当）。所属ワークスペース・boardへの切替・
+  // niwa.tab.show向け（tmuxのselect-pane、CLIの`tab focus`相当）。所属ワークスペース・boardへの切替・
   // タイルフォーカス・タブのアクティブ化をまとめて行う。ウィンドウ前面化はCLI版(ipc-server.tsの
   // /show-tab)のみの責務（niwa APIはniwatermウィンドウ内から呼ばれるため不要）
   function showTab(tabId: TabId): boolean {

@@ -8,7 +8,7 @@
 export interface LayoutTabConfig {
   /** タブ名（サイドバー・タブバー表示用）。省略時はデフォルトの連番ラベル */
   name?: string;
-  /** 使用するシェルプロファイルのid（`niwaterm shell-profiles`で確認）。省略時はデフォルトシェル */
+  /** 使用するシェルプロファイルのid（`niwaterm shell-profile list`で確認）。省略時はデフォルトシェル */
   shellProfile?: string;
   /** 作業ディレクトリ。省略時はホームディレクトリ */
   cwd?: string;

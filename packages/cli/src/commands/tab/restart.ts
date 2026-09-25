@@ -4,7 +4,7 @@ import { resolveIpcEndpoint, respawnTab } from "../../ipc-client";
 import { createTargetResolver } from "../../resolve-target";
 
 export default define({
-  name: "respawn",
+  name: "restart",
   description:
     "指定したタブのプロセスを強制終了し、同じtabIdのまま再起動する（tmux respawn-pane -k相当）",
   args: {
@@ -18,7 +18,7 @@ export default define({
       type: "string",
       short: "s",
       description:
-        "指定したシェルプロファイル（idはniwaterm shell-profilesで確認）で再起動する（省略時はデフォルトシェル）",
+        "指定したシェルプロファイル（idはniwaterm shell-profile listで確認）で再起動する（省略時はデフォルトシェル）",
     },
     cwd: {
       type: "string",
@@ -32,7 +32,7 @@ export default define({
   },
   run: async (ctx) => {
     const endpoint = resolveIpcEndpoint();
-    const target = createTargetResolver(endpoint, "tab respawn", { tabId: ctx.values.tab });
+    const target = createTargetResolver(endpoint, "tab restart", { tabId: ctx.values.tab });
     const result = await respawnTab(
       endpoint,
       await target.tabId(),
@@ -41,7 +41,7 @@ export default define({
       ctx.values.command,
     );
     if (!result.ok) {
-      failAndExit(`tab respawnに失敗しました: ${result.error}`);
+      failAndExit(`tab restartに失敗しました: ${result.error}`);
     }
   },
 });

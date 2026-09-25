@@ -1360,7 +1360,7 @@ function finalizeWindow(windowId: WindowId, closeNative: boolean): void {
   if (closeNative) view.browserWindow.close();
 }
 
-/** CLIの`tab show`等からウィンドウを前面に出す。windowId省略時はフォーカス中ウィンドウ */
+/** CLIの`tab focus`等からウィンドウを前面に出す。windowId省略時はフォーカス中ウィンドウ */
 function activateWindow(windowId?: WindowId | null): void {
   const view = views.get(windowId ?? windowManager.getFocusedWindowId());
   view?.browserWindow.activate();

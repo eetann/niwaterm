@@ -118,7 +118,7 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
   どちらか一方が必須。`--tile`は省略可（省略時は`--tab`のタブが属するタイル、`--direction`なら
   実行しているタブのタイル）: `niwaterm tab switch --tile tile-4 --tab tab-6` /
   `niwaterm tab switch --tile tile-4 -d next`
-- WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profiles`で確認してから
+- WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profile list`で確認してから
   `niwaterm tab new -t <tileId> -s <shellProfileId>`で作成する
 - **daily（普段遣い）のタブ内で作業している場合、`niwaterm-dev`でもdailyに繋がる**。
   タブへ注入された`NIWATERM_BRIDGE_PORT`が接続先の解決で先に使われるため、
@@ -133,7 +133,7 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 ## 目視確認・スクリーンショット
 
 PowerShell標準の.NET（`System.Drawing`）だけでWindowsデスクトップのスクリーンショットが撮れる。
-追加ツールのインストールは不要。まず`niwaterm tab show --tab <tabId>`で対象タブを前面化してから撮る:
+追加ツールのインストールは不要。まず`niwaterm tab focus --tab <tabId>`で対象タブを前面化してから撮る:
 
 ```bash
 powershell.exe -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$bmp); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$bmp.Save(\"\$env:TEMP\niwaterm-shot.png\",[System.Drawing.Imaging.ImageFormat]::Png)"

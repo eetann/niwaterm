@@ -231,7 +231,7 @@ function shellSection(
         : {
             key: "profiles",
             value: profiles.map((p) => p.id).join(", "),
-            note: "詳細は niwaterm shell-profiles",
+            note: "詳細は niwaterm shell-profile list",
           },
     ],
   };

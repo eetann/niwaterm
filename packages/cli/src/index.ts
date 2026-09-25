@@ -16,7 +16,7 @@ import listCommand from "./commands/list";
 import notifyCommand from "./commands/notify";
 import pingCommand from "./commands/ping";
 import popupCommand from "./commands/popup";
-import shellProfilesCommand from "./commands/shell-profiles";
+import shellProfileCommand from "./commands/shell-profile";
 import sidebarCommand from "./commands/sidebar";
 import tabCommand from "./commands/tab";
 import tileCommand from "./commands/tile";
@@ -81,7 +81,7 @@ try {
       popup: popupCommand,
       browser: browserCommand,
       sidebar: sidebarCommand,
-      "shell-profiles": shellProfilesCommand,
+      "shell-profile": shellProfileCommand,
       layout: layoutCommand,
       "font-size": fontSizeCommand,
       docs: docsCommand,

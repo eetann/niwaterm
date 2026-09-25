@@ -68,7 +68,7 @@ niwaterm tab new [--tile <tileId>] [--url <url> | --custom-view [--view <viewId>
 niwaterm tab switch [--tile <tileId>] --tab <tabId>
 niwaterm tab switch [--tile <tileId>] --direction next|prev
 niwaterm tab close [--tile <tileId>] [--tab <tabId>]
-niwaterm tab respawn [--tab <tabId>] [--shell <shellProfileId>] [--cwd <dir>] [--command <cmd>]
+niwaterm tab restart [--tab <tabId>] [--shell <shellProfileId>] [--cwd <dir>] [--command <cmd>]
 niwaterm tile focus [--tile <tileId>]
 niwaterm tile focus --direction up|down|left|right
 niwaterm tile resize [--tile <tileId>] --direction up|down|left|right [--amount <0より大きく1以下>]
@@ -78,10 +78,10 @@ niwaterm tile zoom [--tile <tileId>]
 レイアウト操作コマンド。いずれも対象の`tileId`/`tabId`は`niwaterm list`で確認する。`--tile`/`--tab`を省略した場合の対象は「対象IDの省略」節を参照。
 
 - `tile split` — 指定タイルを分割する（`--orientation`省略時は`vertical`）。`--cwd`省略時は分割対象タイルのアクティブタブが実際にいるディレクトリ（下記「シェル統合」参照。不明ならOS標準）を新規タブの作業ディレクトリに使う。成功時、新規に作られた`tileId`/`tabId`を表示する
-- `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customViews`設定を開くブラウザタブ（どのビューを開くかは`--view <viewId>`で選ぶ。省略時は設定の先頭。idは`niwaterm config show`で確認）、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profiles`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
+- `tab new` — 指定タイルに新規タブを作成する。`--url`指定時はそのURLを開くブラウザタブ、`--custom-view`指定時は`niwaterm.config.ts`の`customViews`設定を開くブラウザタブ（どのビューを開くかは`--view <viewId>`で選ぶ。省略時は設定の先頭。idは`niwaterm config show`で確認）、`--shell`指定時はそのシェルプロファイル（idは`niwaterm shell-profile list`で確認）でターミナルタブ、いずれも省略時はデフォルトシェルの通常のターミナルタブを作成する（`--url`・`--custom-view`・`--shell`は互いに同時指定不可）。`--cwd`で作業ディレクトリを指定できる（ターミナルタブ専用。`--shell`とは併用可、`--url`・`--custom-view`とは同時指定不可）。`--cwd`省略時は`tile split`と同様、対象タイルのアクティブタブが実際にいるディレクトリを使う。成功時、新規`tabId`を表示する
 - `tab switch` — 指定タイル内でアクティブタブを切り替える。`--tab`（直接指定）と`--direction`（タブ並び順で1つ次/前へ巡回。端では反対側へ回り込む）はどちらか一方のみ指定でき、両方省略するとエラーになる。`--tile`省略時は`--tab`のタブが属するタイル、`--direction`指定時は実行しているタブのタイル。対象タイルのタブが1枚だけの場合は失敗する
 - `tab close` — 指定タブを閉じる（tmuxの`kill-window`相当）。ワークスペース最後の1枚のタイルの最後のタブは誤操作防止のため閉じられない。引数を全て省略すると実行しているタブ自身が閉じる
-- `tab respawn` — 指定タブのプロセスを強制終了し、同じ`tabId`・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当、対象がブラウザタブの場合は失敗する）。`--shell`省略時はデフォルトシェル、`--cwd`省略時は元のタブが実際にいるディレクトリを引き継ぐ。`--command`を指定すると、シェルの代わりにそのコマンドを実行する（`popup open`の位置引数と同じ意味のワンショット実行）。GUIのキーバインドからこの操作を割り当てた場合は実行前にy/nの確認ダイアログを挟むが、CLIからの実行に確認は無い
+- `tab restart` — 指定タブのプロセスを強制終了し、同じ`tabId`・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当、対象がブラウザタブの場合は失敗する）。`--shell`省略時はデフォルトシェル、`--cwd`省略時は元のタブが実際にいるディレクトリを引き継ぐ。`--command`を指定すると、シェルの代わりにそのコマンドを実行する（`popup open`の位置引数と同じ意味のワンショット実行）。GUIのキーバインドからこの操作を割り当てた場合は実行前にy/nの確認ダイアログを挟むが、CLIからの実行に確認は無い
 - `tile focus` — タイルへフォーカスを移す。`--tile`（直接指定）と`--direction`（現在フォーカス中のタイルから見て指定方向にある最も近いタイルへ移動。該当タイルが無ければ何もしない、エラーにはならない。常にアクティブなワークスペース基準で動く）はどちらか一方のみ指定できる。どちらも省略すると実行しているタブのタイルへフォーカスを移す（背面のタブから自分を前に出す用途）
 - `tile resize` — 指定タイルを指定方向へ拡大する（tmuxの`resize-pane`相当）。`--amount`省略時は既定の1ステップ分。`--direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は失敗する
 - `tile zoom` — 指定タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠して画面全体に表示し、再度実行すると解除する。ズーム中のタイルを分割する、または他のタイルへフォーカスを移すと自動的に解除される
@@ -391,7 +391,7 @@ direct             0件 (prefix不要で即時発火するバインド)
 同じ内容はアプリ内のモーダルでも見られる（キーバインド既定: prefix `ctrl+b` → `i`、コマンドパレットの「Show Settings」）。こちらは色の項目にスウォッチが付く。
 
 ```sh
-niwaterm shell-profiles
+niwaterm shell-profile list
 ```
 
 利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`tab new --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
@@ -510,7 +510,7 @@ niwaterm browser navigate --tab <tabId> --url <url>
 niwaterm browser get-text --tab <tabId>
 niwaterm browser get-html --tab <tabId>
 niwaterm browser screenshot --tab <tabId> --out <path>
-niwaterm tab show [--tab <tabId>]
+niwaterm tab focus [--tab <tabId>]
 ```
 
 ブラウザタブをCLIから操作するコマンド（PlaywrightのAPIのような感覚での操作を想定。読み取り中心のMVPで、click/fill等の操作系は未対応）。
@@ -520,14 +520,14 @@ niwaterm tab show [--tab <tabId>]
 - `browser get-html` — 指定したブラウザタブのHTMLを取得する（`document.documentElement.outerHTML`相当）
 - `browser screenshot` — 指定したブラウザタブの現在URLをheadlessブラウザ（Bun本体がv1.3.12以降ネイティブに提供する`Bun.WebView`、macOSはniwatermのElectrobun側と同じWKWebViewベース）で別途開き直し、スクリーンショットをPNGファイルに保存する。**表示中タブそのものではなく、別インスタンスで同じURLを新規に開いた場合の見た目**になる点に注意（ログイン状態やスクロール位置、フォーム入力中の値などは反映されない）
 
-対象`tabId`がterminalタブの場合、または存在しない場合は、いずれもエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab show`で対象ワークスペースをアクティブ化してから呼び直す。
+対象`tabId`がterminalタブの場合、または存在しない場合は、いずれもエラーメッセージと共に終了コード1を返す。対象タブの所属ワークスペースが非アクティブ（他のワークスペースを表示中）な場合もエラーになる。その場合は先に`tab focus`で対象ワークスペースをアクティブ化してから呼び直す。
 
-- `tab show` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`tab switch`/`tile focus`と役割が重なって見えるが、粒度が異なる合成コマンドである:
+- `tab focus` — 指定したタブが属するワークスペース・タイルへ切り替え、そのタブをアクティブ化し、ウィンドウを前面化する。**AIが普段ヘッドレスでブラウザタブを操作しつつ、人間が確認したい時に任意でその画面を見られるようにするためのコマンド**。`tab switch`/`tile focus`と役割が重なって見えるが、粒度が異なる合成コマンドである:
   - `tab switch --tile --tab`（または`--direction`） — 同一タイル内でのアクティブタブ切替のみ（ワークスペース非依存、ウィンドウ前面化なし）
   - `tile focus --tile` — フォーカス（キー入力の宛先）を移すのみ
-  - `tab show --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
+  - `tab focus --tab` — `tabId`だけを渡せば、内部でワークスペース切替・タイルフォーカス・タブアクティブ化・ウィンドウ前面化までを代行する
 
-「表示中タブそのものの見た目を確認したい」場合は、`tab show`で実ウィンドウを前面化して直接目視するか、`browser screenshot`で同じURLのheadlessスクショを撮る。後者はDOM状態が再現されない代わりに、人間が画面の前にいなくても確認できる。使い分けの目安として、両者は互いを置き換えるものではない。
+「表示中タブそのものの見た目を確認したい」場合は、`tab focus`で実ウィンドウを前面化して直接目視するか、`browser screenshot`で同じURLのheadlessスクショを撮る。後者はDOM状態が再現されない代わりに、人間が画面の前にいなくても確認できる。使い分けの目安として、両者は互いを置き換えるものではない。
 
 ```sh
 niwaterm --help

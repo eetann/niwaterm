@@ -19,18 +19,18 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 ## できること（概要）
 
-コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`layout`/`font-size`/`shell-profiles`/`notify`/`docs`はリソース単体に属さないためトップレベル）。
+コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`notify`はリソース単体に属さないためトップレベル）。
 
 **`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwaterm docs show cli`の「対象IDの省略」節を参照。
 
 - `agent setup <codex-cli|claude-code>` — AIエージェントのhooksを追加・更新する（アプリの起動は不要）。詳細は`niwaterm docs show cli`の「エージェント統合」を参照。`_hook`はhooks専用の内部コマンドで、通常の操作では使わない
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`、`NIWATERM_CONFIG_DIR`で変更可)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）。**実行しているタブが載っているOSウィンドウのぶんだけ**表示される
-- `tab new` / `switch` / `close` / `respawn` / `show` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
+- `tab new` / `switch` / `close` / `restart` / `focus` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
 - `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `window new` / `list` / `close` — OSウィンドウの作成・一覧・クローズ。`window new`で開くのは**一時ウィンドウ**（まっさらな状態で開き、閉じても何も残らず次回起動時にも復元されない）。前回の状態を復元するメインウィンドウは起動時の1枚だけ。ウィンドウをまたいだタブ・Boardの移動はできない
 - `workspace new` / `switch` / `close` / `rename` / `move` — ワークスペースの作成・切替・削除・名前変更・表示順の並び替え（`move`は`--up`/`--down`で1つずつ移動）
-- `board new` / `switch` / `close` / `rename` / `move` / `startup` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成（`new --name <name>`で名前も付けられる）・切替・削除・名前変更・表示順の並び替え・別ワークスペースへの移動（`move`は`--up`/`--down`でワークスペース内を1つずつ移動、`--to-workspace <workspaceId>`で別ワークスペースの末尾へ移動）・起動時レイアウト設定
+- `board new` / `switch` / `close` / `rename` / `move` / `startup layout|restore|clear` — Board（1ワークスペース内の複数Tileレイアウト、tmuxのWindow相当）の作成（`new --name <name>`で名前も付けられる）・切替・削除・名前変更・表示順の並び替え・別ワークスペースへの移動（`move`は`--up`/`--down`でワークスペース内を1つずつ移動、`--to-workspace <workspaceId>`で別ワークスペースの末尾へ移動）・起動時レイアウト設定
 - `board phase set <phase>` / `clear` / `show` — そのBoardの作業フェーズ（サイドバーのバッジ）の設定・解除・表示。値は設定の`board.phases`のidか任意の文字列。`--board`省略時は実行したタブのBoardが対象なので、エージェントのhookから「今どの段階か」を出せる
 - `board worktree set <path>` / `clear` / `show` — そのBoardに紐づくワークツリーの設定・解除・表示。`worktree new`/`open`で開いたBoardには自動で付いており、`worktree open`の「既に開いているBoardか」の判定キーになる。紐づけ先が消えるとサイドバーに警告アイコンが出る。設定の`board.newTabCwd: "worktree"`と組み合わせると新しいタブがここで開く
 - `tile split` / `focus` / `resize` / `zoom` — タイルの分割・フォーカス移動・リサイズ・一時的なズーム表示切替（`focus`は`--tile`直接指定と`--direction`隣接移動のどちらか一方、`resize`はtmuxの`resize-pane`相当、`zoom`はtmuxの`resize-pane -Z`相当のトグル）
@@ -46,6 +46,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
   - **プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるので、非対話で叩くなら`--trust`を付ける**（付けないとその設定を無視して続行し、`--layout`を指定していれば終了コード1で止まる）。置き場所・作成後フック・Boardとの紐づけを含む詳細は`niwaterm docs show worktree`
 - `keybind list` — 現在有効なキーバインドの一覧（tmuxの`list-keys`相当。prefix経由のバインドと即時発火のdirectを分けて表示。設定が反映されているかの確認に使う）
 - `config show` — 現在有効な設定値の一覧（設定ファイルのトップレベルキーごとに、マージ後の実際に効いている値。ズーム中のフォントサイズもここで分かる。関数で書く設定・キーバインドの個々の割り当ては含まない）。設定が効かないときは一覧より前に出る`[読み込みエラー]`・`[無視した設定]`を見る
+- `shell-profile list` — 利用可能なシェルプロファイルの一覧（`tab new --shell`・`tab restart --shell`・レイアウトプリセットの`shellProfile`に指定するidをここで確認する）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `notify --title <title> [--body] [--subtitle] [--silent] [--tab]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。macOSではクリックで通知元タブへ遷移する）
 

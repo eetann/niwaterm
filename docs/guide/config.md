@@ -105,7 +105,7 @@ export default defineConfig({
 | `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
 | `niwa.tab.respawn(tabId, opts?)` | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false` |
 | `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
-| `niwa.tab.show(tabId)` | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab show`相当）。対象タブが存在しない場合は`false` |
+| `niwa.tab.show(tabId)` | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合は`false` |
 | `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当） |
 | `niwa.tab.var.find(key, value)` | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当） |
 | `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
@@ -945,7 +945,7 @@ Windows TerminalやWeztermのように、新規タブ作成時に起動するシ
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `id` | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm tab new --shell <id>`やRPCでの指定に使う |
-| `name` | `string` | ドロップダウン・`niwaterm shell-profiles`に表示する名前 |
+| `name` | `string` | ドロップダウン・`niwaterm shell-profile list`に表示する名前 |
 | `command` | `string` | 実行コマンド（PATHから解決される。スペース区切りで単純分割） |
 
 Windows環境では起動時に`wsl.exe --list --quiet`相当でインストール済みのWSLディストロを自動検出し、`id: "wsl-<ディストロ名>"`のプロファイルとして追加する（PowerShellは`id: "powershell"`の固定プロファイルとして常に追加される）。macOS/Linuxでは自動検出は行われず、`shell.profiles`で指定した分のみが有効。
@@ -954,7 +954,7 @@ Windows環境では起動時に`wsl.exe --list --quiet`相当でインストー�
 
 コマンドパレット（既定 prefix + `:`）にもプロファイルごとに`New Tab: <name>`という項目が並ぶため、ドロップダウンを開かずキーボードだけでも同じ操作ができる。
 
-利用可能なプロファイル一覧はCLIの`niwaterm shell-profiles`で確認できる（詳細: `docs/guide/cli.md`）。
+利用可能なプロファイル一覧はCLIの`niwaterm shell-profile list`で確認できる（詳細: `docs/guide/cli.md`）。
 
 ## ターミナル設定
 
@@ -1107,7 +1107,7 @@ layouts: {
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `name` | `string` | タブ名（サイドバー・タブバー表示用） |
-| `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profiles`で確認）。省略時はデフォルトシェル |
+| `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profile list`で確認）。省略時はデフォルトシェル |
 | `cwd` | `string` | 作業ディレクトリ。省略時は`niwaterm layout apply`を実行したディレクトリ（`--cwd`で上書き可） |
 | `command` | `string` | タブ作成後に流し込むコマンド（末尾にEnterを自動送信する）。改行を含む場合は1行ずつ実行される |
 | `delay` | `number` | `command`を送信するまでの追加の待ち時間(ms)。省略時は0。シェルが入力を受け付けられるようになるまでの待ちはniwaterm側が自動で行う（下記）ため、通常は指定不要 |

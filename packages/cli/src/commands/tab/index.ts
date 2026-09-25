@@ -1,10 +1,10 @@
 import { define } from "gunshi";
 import captureCommand from "./capture";
 import closeCommand from "./close";
+import focusCommand from "./focus";
 import newCommand from "./new";
-import respawnCommand from "./respawn";
+import restartCommand from "./restart";
 import sendKeysCommand from "./send-keys";
-import showCommand from "./show";
 import switchCommand from "./switch";
 import varCommand from "./var";
 
@@ -14,9 +14,9 @@ export default define({
   subCommands: {
     new: newCommand,
     close: closeCommand,
-    respawn: respawnCommand,
+    restart: restartCommand,
     switch: switchCommand,
-    show: showCommand,
+    focus: focusCommand,
     capture: captureCommand,
     "send-keys": sendKeysCommand,
     var: varCommand,

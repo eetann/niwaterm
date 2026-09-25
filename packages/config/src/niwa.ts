@@ -95,7 +95,7 @@ export interface NiwaTabApi {
   sendKeys(tabId: string, ...keys: string[]): void;
   /**
    * 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化を
-   * まとめて行う（tmuxのselect-pane、CLIの`niwaterm tab show`相当）。対象タブが存在しない場合はfalse
+   * まとめて行う（tmuxのselect-pane、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合はfalse
    */
   show(tabId: string): boolean;
   var: NiwaTabVarApi;
