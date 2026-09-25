@@ -2,6 +2,7 @@
 
 `packages/cli`（`niwaterm`コマンド）にサブコマンドを追加・変更する際のルール。
 対象読者はAIエージェント・人間問わず、このCLIにコマンドを生やす全員。
+コマンドの正式なリファレンスは`docs/guide/cli.md`で、ここには**命名の判断基準だけ**を置く。
 
 ## 基本形: `niwaterm <resource> <verb>`
 
@@ -9,85 +10,76 @@
 
 ```
 niwaterm tab new --tile <tileId>
-niwaterm tab close --tile <tileId> --tab <tabId>
-niwaterm workspace new
-niwaterm workspace switch --workspace <workspaceId>
+niwaterm board switch --board <boardId>
 niwaterm tile split --tile <tileId>
-niwaterm popup open
 ```
 
-新しいverbを追加する場合、まず「どのリソースに属するか」を考える。既存リソース: `tab` / `workspace` / `tile` / `popup` / `browser`。
+新しいverbを追加するとき、まず「どのリソースに属するか」を考える。既存リソースの正本は
+`packages/cli/src/commands/`のディレクトリ構成（1ディレクトリ＝1リソース）。追加前に必ず
+中身を見て、既存リソースへ寄せられないか確認する。
 
-## リソースに属さないコマンドはトップレベルに残す
+単一のリソースIDを主語に取らない操作だけ、トップレベルの`niwaterm <command>`に置く
+（`list`はワークスペース・タイル・タブ横断の俯瞰表示。他は`ping`・`init`・`notify`のみ）。
+迷ったら「これは単一のリソースIDを主語に取る操作か？」で判断する。
 
-`list`（ワークスペース・タイル・タブ横断の俯瞰表示）、`ping`、`layout`、`font-size`、`docs`は単一リソースの操作ではないため、`<resource> <verb>`に押し込めずトップレベルの`niwaterm <command>`のままにする。迷ったら「これは単一のリソースIDを主語に取る操作か？」で判断する（取るなら`<resource> <verb>`、取らないならトップレベル）。
+## verb語彙はリソース間で揃える
 
-## verb語彙はリソース間でなるべく揃える
+複数リソースで意味が対応するverbは同じ単語を使う。リソースごとに`create`/`new`/`add`のような
+同義語がバラけると、覚えるコストが増える。
 
-`new` / `close` / `switch` / `list`のような動詞は、複数リソースで意味が対応するなら同じ単語を使う（`tab new`と`workspace new`、`tab close`と`workspace close`等）。リソースごとに`create`/`new`/`add`のような同義語がバラけると、覚えるコストが増える。
+| verb | 意味 | 例 |
+| --- | --- | --- |
+| `new` | 作る | `tab new` / `window new` / `workspace new` / `board new` / `worktree new` |
+| `close` | 閉じる | `tab close` / `window close` / `workspace close` / `board close` / `popup close` |
+| `switch` | 対象へ切り替える | `tab switch` / `workspace switch` / `board switch` / `sidebar switch` |
+| `list` | 複数を並べる | `window list` / `worktree list` / `keybind list` / `tab var list` |
+| `show` | 単一の対象の内容を出す | `config show` / `docs show` / `board phase show` / `board worktree show` |
+| `set` / `clear` | 値を設定／解除する | `board phase set` / `board worktree clear` / `tab var set` |
+| `move` | 並び順・所属を変える | `board move` / `workspace move` |
 
-## サブコマンドのネストはgunshiの`subCommands`で表現する
+**複数なら`list`、単一なら`show`**。`tab var get`・`browser get-text`・`browser get-html`の`get`は
+既成事実として残しているだけなので、新設するときは`list`/`show`から選ぶ。
 
-```ts
-// commands/tab/close.ts
-export default define({
-  name: "close",
-  description: "...",
-  args: { ... },
-  run: async (ctx) => { ... },
-});
+語彙から外れてよいのは、外れる理由がある場合だけ。
 
-// commands/tab/index.ts
-export default define({
-  name: "tab",
-  description: "...",
-  subCommands: { new: newCommand, close: closeCommand, ... },
-  run: () => {
-    console.log('Run "niwaterm tab --help" for available subcommands.');
-  },
-});
-```
+- `worktree remove` — ディレクトリごと消すので`close`ではない。`worktree open`は既存を開くだけで、
+  作成を伴う`worktree new`と対になる
+- `popup open` — ポップアップはBoardごとに1つのシングルトンなので、実体を増やす`new`ではない
+- `tab restart` / `tile split` / `tile zoom` / `popup promote` / `layout apply` — そのリソースにしか無い操作
 
-3階層まではネスト可能（`tab var get`のように、リソースの中にさらに明確なサブリソースがある場合のみ）。4階層以上は複雑になりすぎるので避け、コマンド設計を見直す。
+## あえて揃えない例外を潰さない
 
-## ファイル配置
+`tab capture`と`browser get-text`はどちらも「タブの内容をテキストで取る」だが、動詞を揃えない。
+`tab capture`はtmuxの`capture-pane`に対応させる意図で残しており、その名前を期待して打つ利用者がいる。
+一貫性のためだけに改名しない。
 
-```
-packages/cli/src/commands/
-  <resource>/
-    index.ts       # define({ name: resource, subCommands: {...} })
-    <verb>.ts       # 各サブコマンドの実装
-    <sub-resource>/ # 必要な場合のみ（例: tab/var/）
-      index.ts
-      <verb>.ts
-```
+## 同名で別レイヤーを指すリソース
 
-リソースに属さないコマンドは`commands/<name>.ts`のフラット配置のまま（`list.ts`, `ping.ts`, `layout.ts`等）。
+`board worktree`（`set`/`clear`/`show`）はBoardに紐づくワークツリーの**メタ属性**を操作する。
+トップレベルの`worktree`（`new`/`open`/`list`/`remove`）はgitワークツリーの**実体**を操作する。
+verbを足すときは「ディスク上のワークツリーを触るか、Boardの属性を触るか」で置き場所を決める。
+
+## ネストは3階層まで
+
+gunshiの`subCommands`でネストする（実装は既存の`commands/tab/index.ts`を見る）。3階層にしてよいのは
+`tab var get`のように、リソース内へさらに明確なサブリソースがある場合のみ。4階層以上は複雑に
+なりすぎるので、コマンド設計のほうを見直す。
+
+ファイルは`commands/<resource>/<verb>.ts`、リソースに属さないものは`commands/<name>.ts`。
+`font-size/run.ts`・`board/startup/run.ts`のように複数verbの共通処理を置くファイルはサブコマンド
+ではない（`index.ts`の`subCommands`に載っているものだけがコマンド）。
 
 ## エラーメッセージ
 
-`failAndExit`へ渡す文字列は`"<resource> <verb>に失敗しました: ${result.error}"`の形式で、フルコマンド名を含める（`tab close`のように空白区切り）。サブコマンド単体の名前だけだと何の操作が失敗したか分かりにくいため。
+`failAndExit`へ渡す文字列は`"<resource> <verb>に失敗しました: ${result.error}"`の形式で、
+フルコマンド名を空白区切りで含める。サブコマンド単体の名前だけだと何の操作が失敗したか分かりにくいため。
 
 ## 対象IDのオプションは省略可能にする
 
 `--tile`/`--tab`/`--board`/`--workspace`のような「操作対象を指すID」は`required: true`にせず、
-`resolve-target.ts`の`createTargetResolver`で省略時のフォールバックを付ける。省略時は
-そのコマンドを実行しているタブ（niwaterm外から実行した場合はフォーカス中タイル・アクティブタブ）が
-対象になる。
-
-```ts
-run: async (ctx) => {
-  const endpoint = resolveIpcEndpoint();
-  const target = createTargetResolver(endpoint, "tab close", {
-    tileId: ctx.values.tile,
-    tabId: ctx.values.tab,
-  });
-  const result = await closeTab(endpoint, await target.tileId(), await target.tabId());
-  ...
-}
-```
-
-第2引数はエラー文言用のフルコマンド名で、`failAndExit`へ渡すものと揃える。
+`resolve-target.ts`の`createTargetResolver`で省略時のフォールバックを付ける。第2引数はエラー文言用の
+フルコマンド名で、`failAndExit`へ渡すものと揃える。省略時はそのコマンドを実行しているタブ
+（niwaterm外から実行した場合はフォーカス中タイル・アクティブタブ）が対象になる。
 
 例外として`required: true`のまま残すのは以下。
 
@@ -100,9 +92,11 @@ run: async (ctx) => {
 オプションの`description`にも省略時の対象を書き、`docs/guide/cli.md`のシグネチャは
 `[--tile <tileId>]`のように角括弧付きへ揃える。
 
-## 排他オプションの扱い
+## 排他オプションでまとめてよい条件
 
-`tile focus`の`--tile`/`--direction`のように、意味的には別コマンドになり得るが実装が単純な操作は、1つのサブコマンドに排他オプションとしてまとめてよい（無理に`tile focus-by-id`/`tile focus-by-direction`のように分けない）。判断基準: 結果の型が同じで、パラメータの片方が省略可能な形で自然に共存できるか。
+`tile focus`の`--tile`/`--direction`のように、結果の型が同じでパラメータの片方が省略可能な形で
+自然に共存できるなら、1つのサブコマンドへ排他オプションとしてまとめてよい
+（`tile focus-by-id`/`tile focus-by-direction`のようには分けない）。
 
 ## ドキュメントとの同期
 
