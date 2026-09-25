@@ -20,7 +20,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { ResolvedBoardStatus } from "@niwaterm/config";
+import type { ResolvedBoardPhase } from "@niwaterm/config";
 import { cn } from "@/lib/utils";
 import type { LayoutListEntry } from "../../bun/project-config";
 import type { BoardId } from "../../bun/workspace";
@@ -44,10 +44,10 @@ export interface SidebarApplyLayoutRequest {
 
 export interface SidebarWorkspaceListProps {
   workspaces: SidebarWorkspaceItem[];
-  /** 右クリックメニューに並べるステータスの候補（board.statuses）。未定義なら候補なしの案内を出す */
-  boardStatuses: readonly ResolvedBoardStatus[];
+  /** 右クリックメニューに並べるフェーズの候補（board.phases）。未定義なら候補なしの案内を出す */
+  boardPhases: readonly ResolvedBoardPhase[];
   /** Board行の右クリックからの作業フェーズの切り替え。nullは解除 */
-  onSetBoardStatus: (boardId: BoardId, status: string | null) => void;
+  onSetBoardPhase: (boardId: BoardId, phase: string | null) => void;
   onSelectWorkspaceHeader: (workspaceId: WorkspaceId) => void;
   onSelectBoard: (workspaceId: WorkspaceId, boardId: BoardId) => void;
   onSelectPopup: (workspaceId: WorkspaceId) => void;
@@ -144,8 +144,8 @@ function saveCollapsedIds(storageKey: string, collapsed: Set<string>): void {
 
 export function SidebarWorkspaceList({
   workspaces,
-  boardStatuses,
-  onSetBoardStatus,
+  boardPhases,
+  onSetBoardPhase,
   onSelectWorkspaceHeader,
   onSelectBoard,
   onSelectPopup,
@@ -441,38 +441,38 @@ export function SidebarWorkspaceList({
   }
 
   /**
-   * 作業フェーズのサブメニュー。設定（board.statuses）の候補を並べ、今の値にチェックを付ける。
+   * 作業フェーズのサブメニュー。設定（board.phases）の候補を並べ、今の値にチェックを付ける。
    * 候補に無い文字列（CLIで直接設定したもの）が付いている場合は、その値も一時的な項目として
    * 末尾に足す（チェックの付いた項目がどこにも無いと、今の状態が読み取れなくなるため）
    */
-  function renderBoardStatusMenu(board: SidebarBoardItem) {
-    const current = board.status;
-    const isCustom = current !== null && !boardStatuses.some((s) => s.id === current.value);
+  function renderBoardPhaseMenu(board: SidebarBoardItem) {
+    const current = board.phase;
+    const isCustom = current !== null && !boardPhases.some((s) => s.id === current.value);
     return (
       <ContextMenuSub>
-        <ContextMenuSubTrigger>ステータス</ContextMenuSubTrigger>
+        <ContextMenuSubTrigger>フェーズ</ContextMenuSubTrigger>
         <ContextMenuSubContent className="max-w-72">
-          {boardStatuses.length === 0 && !isCustom && (
-            <ContextMenuItem disabled>設定のboard.statusesで候補を定義できます</ContextMenuItem>
+          {boardPhases.length === 0 && !isCustom && (
+            <ContextMenuItem disabled>設定のboard.phasesで候補を定義できます</ContextMenuItem>
           )}
-          {boardStatuses.map((status) => (
+          {boardPhases.map((phase) => (
             <ContextMenuCheckboxItem
-              key={status.id}
-              checked={current?.value === status.id}
-              onSelect={() => onSetBoardStatus(board.boardId, status.id)}
+              key={phase.id}
+              checked={current?.value === phase.id}
+              onSelect={() => onSetBoardPhase(board.boardId, phase.id)}
             >
               <span
                 aria-hidden="true"
                 className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: status.color ?? "var(--ui-accent)" }}
+                style={{ backgroundColor: phase.color ?? "var(--ui-accent)" }}
               />
-              <span className="min-w-0 flex-1 truncate">{status.label}</span>
+              <span className="min-w-0 flex-1 truncate">{phase.label}</span>
             </ContextMenuCheckboxItem>
           ))}
           {isCustom && current && (
             <ContextMenuCheckboxItem
               checked
-              onSelect={() => onSetBoardStatus(board.boardId, current.value)}
+              onSelect={() => onSetBoardPhase(board.boardId, current.value)}
             >
               <span className="min-w-0 flex-1 truncate">{current.label}</span>
             </ContextMenuCheckboxItem>
@@ -480,8 +480,8 @@ export function SidebarWorkspaceList({
           {current && (
             <>
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => onSetBoardStatus(board.boardId, null)}>
-                ステータスを解除
+              <ContextMenuItem onSelect={() => onSetBoardPhase(board.boardId, null)}>
+                フェーズを解除
               </ContextMenuItem>
             </>
           )}
@@ -509,7 +509,7 @@ export function SidebarWorkspaceList({
         </div>
       );
     }
-    const hasStatusLine = board.status !== null || board.branch !== null || board.agent !== null;
+    const hasStatusLine = board.phase !== null || board.branch !== null || board.agent !== null;
     const dotClass =
       board.agent?.status === "working"
         ? "bg-blue-500 shadow-[0_0_4px] shadow-blue-500"
@@ -521,7 +521,7 @@ export function SidebarWorkspaceList({
         ? dropTarget.position
         : null;
     const titleParts: string[] = [];
-    if (board.status) titleParts.push(board.status.label);
+    if (board.phase) titleParts.push(board.phase.label);
     if (board.bell) titleParts.push("ベル");
     if (board.zoomed) titleParts.push("ズーム中");
     if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
@@ -593,16 +593,16 @@ export function SidebarWorkspaceList({
               <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
                 <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
                 <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
-                  {board.status && (
+                  {board.phase && (
                     <div className="flex">
                       <span
                         className="max-w-full truncate rounded px-1 font-sans font-semibold"
                         style={{
-                          backgroundColor: board.status.color ?? "var(--ui-accent)",
+                          backgroundColor: board.phase.color ?? "var(--ui-accent)",
                           color: "var(--ui-badge-fg)",
                         }}
                       >
-                        {board.status.label}
+                        {board.phase.label}
                       </span>
                     </div>
                   )}
@@ -645,7 +645,7 @@ export function SidebarWorkspaceList({
           <ContextMenuItem onSelect={() => onSetBoardWorktree(board.boardId)}>
             ワークツリーを設定
           </ContextMenuItem>
-          {renderBoardStatusMenu(board)}
+          {renderBoardPhaseMenu(board)}
           {renderStartupLayoutMenu(board)}
           <ContextMenuItem
             variant="destructive"

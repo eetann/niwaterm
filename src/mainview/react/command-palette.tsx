@@ -1,6 +1,6 @@
 import { FolderOpen, LayoutDashboard, Terminal } from "lucide-react";
 import { useMemo } from "react";
-import type { KeybindAction, ResolvedBoardStatus, ShellProfile } from "@niwaterm/config";
+import type { KeybindAction, ResolvedBoardPhase, ShellProfile } from "@niwaterm/config";
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,7 +13,7 @@ import {
 import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
 import {
-  boardStatusActionDefs,
+  boardPhaseActionDefs,
   COMMAND_PALETTE_ACTIONS,
   type CommandPaletteActionDef,
   type CommandPaletteCategory,
@@ -47,8 +47,8 @@ export interface CommandPaletteProps {
   onSelectShellProfile: (shellProfileId: string) => void;
   /** サイドバーに出せるビュー。customViewが1つも無ければ切り替え先が無いので空で渡る */
   sidebarViews: SidebarSwitcherView[];
-  /** Boardへ付けられるステータスの候補（board.statuses）。未定義なら項目が並ばない */
-  boardStatuses: readonly ResolvedBoardStatus[];
+  /** Boardへ付けられるフェーズの候補（board.phases）。未定義なら項目が並ばない */
+  boardPhases: readonly ResolvedBoardPhase[];
   /** 切り替え先のBoard。アクティブなBoard自身は選んでも何も起きないので呼び出し側で除いて渡す */
   boards: readonly CommandPaletteBoardItem[];
   onSelectBoard: (boardId: BoardId) => void;
@@ -84,14 +84,14 @@ function groupByCategory(
   defs: readonly CommandPaletteActionDef[],
   shellProfiles: readonly ShellProfile[],
   sidebarViews: readonly SidebarSwitcherView[],
-  boardStatuses: readonly ResolvedBoardStatus[],
+  boardPhases: readonly ResolvedBoardPhase[],
   boards: readonly CommandPaletteBoardItem[],
   workspaces: readonly CommandPaletteWorkspaceItem[],
 ): Map<CommandPaletteCategory, PaletteItem[]> {
   const map = new Map<CommandPaletteCategory, PaletteItem[]>();
   for (const def of [
     ...defs,
-    ...boardStatusActionDefs(boardStatuses),
+    ...boardPhaseActionDefs(boardPhases),
     ...sidebarViewActionDefs(sidebarViews),
   ]) {
     const list = map.get(def.category) ?? [];
@@ -123,7 +123,7 @@ export function CommandPalette({
   shellProfiles,
   onSelectShellProfile,
   sidebarViews,
-  boardStatuses,
+  boardPhases,
   boards,
   onSelectBoard,
   workspaces,
@@ -137,11 +137,11 @@ export function CommandPalette({
         COMMAND_PALETTE_ACTIONS,
         shellProfiles,
         sidebarViews,
-        boardStatuses,
+        boardPhases,
         boards,
         workspaces,
       ),
-    [shellProfiles, sidebarViews, boardStatuses, boards, workspaces],
+    [shellProfiles, sidebarViews, boardPhases, boards, workspaces],
   );
 
   return (

@@ -194,7 +194,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         if (persistedBoard.startup !== undefined) initialBoard.startup = persistedBoard.startup;
         if (persistedBoard.worktreePath !== undefined)
           initialBoard.worktreePath = persistedBoard.worktreePath;
-        if (persistedBoard.status !== undefined) initialBoard.status = persistedBoard.status;
+        if (persistedBoard.phase !== undefined) initialBoard.phase = persistedBoard.phase;
         // 起動時にプリセットで組み直すBoardは骨格を復元しない。単一タブの
         // まっさらな状態で作り、bun/index.tsが設定読み込み後にapplyLayoutPresetで組み立てる。
         // 骨格を復元してから畳むと前回セッションのタブ名・vars・cwdがプリセット適用後も
@@ -438,12 +438,12 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
   }
 
   /** nullまたは空文字列を渡すとステータスを解除する */
-  function setBoardStatus(boardId: BoardId, status: string | null): boolean {
-    return findOwnerByBoardId(boardId)?.setBoardStatus(boardId, status) ?? false;
+  function setBoardPhase(boardId: BoardId, phase: string | null): boolean {
+    return findOwnerByBoardId(boardId)?.setBoardPhase(boardId, phase) ?? false;
   }
 
-  function getBoardStatus(boardId: BoardId): string | null {
-    return findOwnerByBoardId(boardId)?.getBoardStatus(boardId) ?? null;
+  function getBoardPhase(boardId: BoardId): string | null {
+    return findOwnerByBoardId(boardId)?.getBoardPhase(boardId) ?? null;
   }
 
   function getBoardFocusedCwd(boardId: BoardId): string | undefined {
@@ -842,7 +842,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           if (b.autoName !== undefined) board.autoName = b.autoName;
           if (b.startup !== undefined) board.startup = b.startup;
           if (b.worktreePath !== undefined) board.worktreePath = b.worktreePath;
-          if (b.status !== undefined) board.status = b.status;
+          if (b.phase !== undefined) board.phase = b.phase;
           return board;
         });
         const name = workspaceNames.get(id);
@@ -883,8 +883,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     moveBoardBy,
     moveBoardToWorkspace,
     setBoardName,
-    setBoardStatus,
-    getBoardStatus,
+    setBoardPhase,
+    getBoardPhase,
     setBoardStartup,
     getBoardStartup,
     setBoardWorktreePath,

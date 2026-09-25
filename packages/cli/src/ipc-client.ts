@@ -373,8 +373,8 @@ export interface BoardListEntry {
   worktreePath: string | null;
   /** 紐づけ先のディレクトリが見つからないか。紐づけの無いBoardは常にfalse */
   worktreeMissing: boolean;
-  /** ユーザーが付けた作業フェーズ（`board status`）。未設定はnull */
-  status: string | null;
+  /** ユーザーが付けた作業フェーズ（`board phase set`）。未設定はnull */
+  phase: string | null;
 }
 
 export interface WorkspaceListEntry {
@@ -1052,25 +1052,25 @@ export function setBoardWorktree(
   return postJson<BoardWorktreeResult>(endpoint, "/board-worktree", body);
 }
 
-export type BoardStatusMode = "set" | "clear" | "show";
+export type BoardPhaseMode = "set" | "clear" | "show";
 
-export type BoardStatusResult =
-  | { ok: true; boardId: string; status: string | null }
+export type BoardPhaseResult =
+  | { ok: true; boardId: string; phase: string | null }
   | { ok: false; error: string };
 
 /**
  * Boardに付ける作業フェーズの設定・解除・参照。boardId省略時はアクティブBoardが対象。
- * statusはmode: "set"のみ必須で、設定のboard.statusesのidでも任意の文字列でもよい
+ * phaseはmode: "set"のみ必須で、設定のboard.phasesのidでも任意の文字列でもよい
  */
-export function setBoardStatus(
+export function setBoardPhase(
   endpoint: IpcEndpoint,
-  mode: BoardStatusMode,
-  opts: { boardId?: string; status?: string } = {},
-): Promise<BoardStatusResult> {
-  const body: { mode: BoardStatusMode; boardId?: string; status?: string } = { mode };
+  mode: BoardPhaseMode,
+  opts: { boardId?: string; phase?: string } = {},
+): Promise<BoardPhaseResult> {
+  const body: { mode: BoardPhaseMode; boardId?: string; phase?: string } = { mode };
   if (opts.boardId !== undefined) body.boardId = opts.boardId;
-  if (opts.status !== undefined) body.status = opts.status;
-  return postJson<BoardStatusResult>(endpoint, "/board-status", body);
+  if (opts.phase !== undefined) body.phase = opts.phase;
+  return postJson<BoardPhaseResult>(endpoint, "/board-phase", body);
 }
 
 export type OpenPopupResult =

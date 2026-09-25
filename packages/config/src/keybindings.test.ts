@@ -240,10 +240,10 @@ const UNASSIGNED_BINDING_ACTIONS = [
   // set-board-worktreeも既定キーを持たない（一度紐づければ張り替える機会は少なく、
   // サイドバーの右クリック・コマンドパレット・CLIから行える操作のため）
   "set-board-worktree",
-  // clear-board-statusも既定キーを持たない（ステータスの付け外しはサイドバーの右クリック・
-  // コマンドパレット・CLIから行える操作で、付ける側のset-board-status:<id>が設定側にしか
+  // clear-board-phaseも既定キーを持たない（フェーズの付け外しはサイドバーの右クリック・
+  // コマンドパレット・CLIから行える操作で、付ける側のset-board-phase:<id>が設定側にしか
   // 書けない以上、解除だけに既定キーを割いても対にならないため）
-  "clear-board-status",
+  "clear-board-phase",
   // clear-board-startupも既定キーを持たない（起動時レイアウトの付け外しはサイドバーの右クリック・
   // コマンドパレット・CLIから行える操作で、付ける側のプリセット選択がキーで完結しないため）
   "clear-board-startup",

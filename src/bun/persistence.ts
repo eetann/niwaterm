@@ -132,10 +132,10 @@ export interface PersistedBoard {
    */
   worktreePath?: string;
   /**
-   * ユーザーが付けた作業フェーズ（board.statusesのidか任意の文字列）。未設定は省略する。
+   * ユーザーが付けた作業フェーズ（board.phasesのidか任意の文字列）。未設定は省略する。
    * agent_status等のタブ変数と違い、アプリを閉じても作業の段階は変わらないので復元する
    */
-  status?: string;
+  phase?: string;
 }
 
 export interface PersistedWorkspace {
@@ -297,7 +297,7 @@ function isPersistedBoard(value: unknown): value is PersistedBoard {
   if (v["autoName"] !== undefined && typeof v["autoName"] !== "string") return false;
   if (v["startup"] !== undefined && !isPersistedBoardStartup(v["startup"])) return false;
   if (v["worktreePath"] !== undefined && typeof v["worktreePath"] !== "string") return false;
-  if (v["status"] !== undefined && typeof v["status"] !== "string") return false;
+  if (v["phase"] !== undefined && typeof v["phase"] !== "string") return false;
   return isPersistedTileNode(v["layout"]);
 }
 

@@ -14,9 +14,9 @@ import {
   type CompiledKeybindings,
   isCustomBindingRef,
   type KeybindAction,
-  parseSetBoardStatusAction,
+  parseSetBoardPhaseAction,
   parseShowSidebarViewAction,
-  type SetBoardStatusAction,
+  type SetBoardPhaseAction,
   type ShowSidebarViewAction,
 } from "@niwaterm/config";
 
@@ -51,8 +51,8 @@ export type TileCommand =
   | { type: "moveBoardToWorkspace" }
   | { type: "renameBoard" }
   | { type: "setBoardWorktree" }
-  | { type: "setBoardStatus"; status: string }
-  | { type: "clearBoardStatus" }
+  | { type: "setBoardPhase"; phase: string }
+  | { type: "clearBoardPhase" }
   | { type: "clearBoardStartup" }
   | { type: "switchWorkspace"; delta: 1 | -1 }
   | { type: "moveWorkspace"; delta: 1 | -1 }
@@ -193,8 +193,8 @@ function lookup<T>(map: ReadonlyMap<string, T>, canonicals: string[]): T | undef
 export function actionToTileCommand(action: KeybindAction): TileCommand {
   const sidebarViewId = parseShowSidebarViewAction(action);
   if (sidebarViewId !== null) return { type: "showSidebarView", viewId: sidebarViewId };
-  const boardStatus = parseSetBoardStatusAction(action);
-  if (boardStatus !== null) return { type: "setBoardStatus", status: boardStatus };
+  const boardPhase = parseSetBoardPhaseAction(action);
+  if (boardPhase !== null) return { type: "setBoardPhase", phase: boardPhase };
   switch (action) {
     case "split-vertical":
       return { type: "split", orientation: "vertical" };
@@ -254,8 +254,8 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "renameBoard" };
     case "set-board-worktree":
       return { type: "setBoardWorktree" };
-    case "clear-board-status":
-      return { type: "clearBoardStatus" };
+    case "clear-board-phase":
+      return { type: "clearBoardPhase" };
     case "clear-board-startup":
       return { type: "clearBoardStartup" };
     case "new-workspace":
@@ -322,9 +322,9 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "quitApp" };
     default: {
       // KEYBIND_ACTIONSへ足したアクションのcase書き忘れをコンパイル時に弾く。
-      // 対象id付きのアクション（show-sidebar-view:<id>・set-board-status:<id>）は先に
+      // 対象id付きのアクション（show-sidebar-view:<id>・set-board-phase:<id>）は先に
       // 処理済みで、ここに残る型もそれだけになる
-      const exhaustive: ShowSidebarViewAction | SetBoardStatusAction = action;
+      const exhaustive: ShowSidebarViewAction | SetBoardPhaseAction = action;
       throw new Error(`unknown keybind action: ${String(exhaustive)}`);
     }
   }

@@ -54,7 +54,7 @@ export interface DetachedBoard {
   autoName?: string;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
-  status?: string;
+  phase?: string;
 }
 
 export interface WorkspaceRenderState {
@@ -93,8 +93,8 @@ export interface BoardListEntry {
   startup: PersistedBoardStartup | null;
   /** 対応するgitワークツリーの絶対パス。worktreeコマンド由来でないBoardはnull */
   worktreePath: string | null;
-  /** ユーザーが付けた作業フェーズ。board.statusesのidか任意の文字列。未設定はnull */
-  status: string | null;
+  /** ユーザーが付けた作業フェーズ。board.phasesのidか任意の文字列。未設定はnull */
+  phase: string | null;
 }
 
 /** newBoardの任意指定。cwdだけは呼び出し側で必須になりがちなので引数のまま分けている */
@@ -124,7 +124,7 @@ export interface InitialBoard {
   restoredMeta?: RestoredTreeMeta;
   startup?: PersistedBoardStartup;
   worktreePath?: string;
-  status?: string;
+  phase?: string;
 }
 
 export interface WorkspaceOptions {
@@ -178,7 +178,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   // Boardが対応するgitワークツリーの絶対パス。boardNamesと同じく永続化対象になる
   const boardWorktreePaths = new Map<BoardId, string>();
   // ユーザーが付けた作業フェーズ。boardNamesと同じく永続化対象になる
-  const boardStatuses = new Map<BoardId, string>();
+  const boardPhases = new Map<BoardId, string>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
@@ -224,7 +224,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardAutoNames.delete(id);
     boardStartups.delete(id);
     boardWorktreePaths.delete(id);
-    boardStatuses.delete(id);
+    boardPhases.delete(id);
   }
 
   /**
@@ -267,7 +267,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       if (initialBoard.startup !== undefined) boardStartups.set(id, initialBoard.startup);
       if (initialBoard.worktreePath !== undefined)
         boardWorktreePaths.set(id, initialBoard.worktreePath);
-      if (initialBoard.status !== undefined) boardStatuses.set(id, initialBoard.status);
+      if (initialBoard.phase !== undefined) boardPhases.set(id, initialBoard.phase);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
     activeBoardId = order.length === 0 ? null : order[clampedIndex];
@@ -404,7 +404,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const autoName = boardAutoNames.get(boardId);
     const startup = boardStartups.get(boardId);
     const worktreePath = boardWorktreePaths.get(boardId);
-    const status = boardStatuses.get(boardId);
+    const phase = boardPhases.get(boardId);
     forgetBoardMeta(boardId);
     if (order.length === 0) {
       // ポップアップを閉じる分のonDirtyだけは出る（開いていた場合のみ）
@@ -419,7 +419,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       ...(autoName !== undefined ? { autoName } : {}),
       ...(startup !== undefined ? { startup } : {}),
       ...(worktreePath !== undefined ? { worktreePath } : {}),
-      ...(status !== undefined ? { status } : {}),
+      ...(phase !== undefined ? { phase } : {}),
     };
   }
 
@@ -443,7 +443,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     adoptAutoName(boardId, detached.autoName);
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
     if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
-    if (detached.status !== undefined) boardStatuses.set(boardId, detached.status);
+    if (detached.phase !== undefined) boardPhases.set(boardId, detached.phase);
     if (activeBoardId === null) activeBoardId = boardId;
   }
 
@@ -595,19 +595,19 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   /** nullまたは空文字列（trim後）を渡すとステータスを解除する */
-  function setBoardStatus(boardId: BoardId, status: string | null): boolean {
+  function setBoardPhase(boardId: BoardId, phase: string | null): boolean {
     if (!boards.has(boardId)) return false;
-    if (status === null || status.trim() === "") {
-      boardStatuses.delete(boardId);
+    if (phase === null || phase.trim() === "") {
+      boardPhases.delete(boardId);
     } else {
-      boardStatuses.set(boardId, status.trim());
+      boardPhases.set(boardId, phase.trim());
     }
     opts.onDirty();
     return true;
   }
 
-  function getBoardStatus(boardId: BoardId): string | null {
-    return boardStatuses.get(boardId) ?? null;
+  function getBoardPhase(boardId: BoardId): string | null {
+    return boardPhases.get(boardId) ?? null;
   }
 
   /** そのBoardで新しいタブを開くときのcwd。undefinedなら呼び出し側の既定（cwdの引き継ぎ）に任せる */
@@ -896,7 +896,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         zoomedTileId: board.getZoomedTileId(),
         startup: boardStartups.get(id) ?? null,
         worktreePath: boardWorktreePaths.get(id) ?? null,
-        status: boardStatuses.get(id) ?? null,
+        phase: boardPhases.get(id) ?? null,
       };
     });
   }
@@ -1003,7 +1003,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     autoName?: string;
     startup?: PersistedBoardStartup;
     worktreePath?: string;
-    status?: string;
+    phase?: string;
   }[] {
     return order.map((id) => {
       const board = boards.get(id) as Board;
@@ -1016,7 +1016,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       const autoName = boardAutoNames.get(id);
       const startup = boardStartups.get(id);
       const worktreePath = boardWorktreePaths.get(id);
-      const status = boardStatuses.get(id);
+      const phase = boardPhases.get(id);
       const entry: {
         boardId: BoardId;
         layout: PersistedTileNode;
@@ -1024,13 +1024,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
         autoName?: string;
         startup?: PersistedBoardStartup;
         worktreePath?: string;
-        status?: string;
+        phase?: string;
       } = { boardId: id, layout };
       if (name !== undefined) entry.name = name;
       if (autoName !== undefined) entry.autoName = autoName;
       if (startup !== undefined) entry.startup = startup;
       if (worktreePath !== undefined) entry.worktreePath = worktreePath;
-      if (status !== undefined) entry.status = status;
+      if (phase !== undefined) entry.phase = phase;
       return entry;
     });
   }
@@ -1072,8 +1072,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getBoardStartup,
     setBoardWorktreePath,
     getBoardWorktreePath,
-    setBoardStatus,
-    getBoardStatus,
+    setBoardPhase,
+    getBoardPhase,
     getBoardFocusedShell,
     getBoardFocusedCwd,
     splitTile,

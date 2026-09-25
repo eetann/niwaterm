@@ -309,8 +309,8 @@ keybindings: {
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
 | `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `set-board-status:<id>` | アクティブなBoardに作業フェーズを設定する（`<id>`は下記「Board設定」の`board.statuses`のid）。設定側にしか書けないアクションなので既定キーは無い |
-| `clear-board-status` | アクティブなBoardの作業フェーズを解除する（既定キーは無いため使うには自分で割り当てる必要がある） |
+| `set-board-phase:<id>` | アクティブなBoardに作業フェーズを設定する（`<id>`は下記「Board設定」の`board.phases`のid）。設定側にしか書けないアクションなので既定キーは無い |
+| `clear-board-phase` | アクティブなBoardの作業フェーズを解除する（既定キーは無いため使うには自分で割り当てる必要がある） |
 | `clear-board-startup` | アクティブなBoardの起動時レイアウトの紐づけを解除する（CLIの`niwaterm board startup clear`と同じ。今のレイアウトはそのまま残り、次回起動時は保存した骨格を復元する既定の挙動に戻る。サイドバーのBoard行を右クリック →「起動時レイアウト」からも同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `new-workspace` | 新規ワークスペース作成 |
 | `rename-workspace` | アクティブなワークスペースの名前を入力ダイアログで変更する（`rename-board`と同じ操作感で、空のまま確定すると既定の連番ラベルへ戻る。サイドバーの見出しをダブルクリック・右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
@@ -992,7 +992,7 @@ workspace: {
 
 ## Board設定
 
-`board`は、新しいタブを開くときのcwdの決め方、名前を付けていないBoardに自動で付く名前、Boardへ付けられるステータスの候補を指定するオブジェクト。
+`board`は、新しいタブを開くときのcwdの決め方、名前を付けていないBoardに自動で付く名前、Boardへ付けられる作業フェーズの候補を指定するオブジェクト。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
@@ -1031,21 +1031,21 @@ cwdの出どころは2つある。`niwaterm board new --cwd`や`worktree open`�
 
 設定を書き換えると既に開いているBoardにも反映される（明示的に付けた名前はそのまま残る）。
 
-### ステータス（`board.statuses`）
+### 作業フェーズ（`board.phases`）
 
-`statuses`は、Boardへ付けられる作業フェーズの候補。サイドバーのBoard行にバッジとして出るので、
+`phases`は、Boardへ付けられる作業フェーズの候補。サイドバーのBoard行にバッジとして出るので、
 「このワークツリーは今どの段階か」を一覧のまま把握できる。**未指定なら候補なし**で、
 サイドバーの右クリックメニューは候補を定義する旨の案内だけを出す。
 
 | フィールド | 型 | 意味 |
 |---|---|---|
-| `id` | `string` | CLI（`niwaterm board status <id>`）・キーバインド（`set-board-status:<id>`）から指す識別子。英数字と`_` `-` `.` `:`のみ、1〜64文字 |
+| `id` | `string` | CLI（`niwaterm board phase set <id>`）・キーバインド（`set-board-phase:<id>`）から指す識別子。英数字と`_` `-` `.` `:`のみ、1〜64文字 |
 | `label` | `string` | バッジ・メニューに出す表示名（省略時は`id`をそのまま表示） |
 | `color` | `string` | バッジの地の色（CSSカラー）。省略時は`appearance.ui.accent`と同じ色 |
 
 ```ts
 board: {
-  statuses: [
+  phases: [
     { id: "plan", label: "プラン作成", color: "#89b4fa" },
     { id: "plan-review", label: "プラン人間レビュー", color: "#f9e2af" },
     { id: "implement", label: "実装", color: "#a6e3a1" },
@@ -1055,8 +1055,8 @@ board: {
 },
 ```
 
-切り替えはサイドバーのBoard行の右クリック →「ステータス」、コマンドパレット、CLIの
-`niwaterm board status`（[CLIガイド](/guide/cli.md)の「Board」節）から行う。
+切り替えはサイドバーのBoard行の右クリック →「フェーズ」、コマンドパレット、CLIの
+`niwaterm board phase`（[CLIガイド](/guide/cli.md)の「Board」節）から行う。
 候補に無い文字列もCLIからは設定でき、その場合は文字列がそのまま既定色のバッジになる
 （決まった段階に収まらない一時的なメモ用）。値はBoard名・ワークツリーの紐づけと同じく
 アプリを閉じても保存され、次回起動時に復元される。候補から`id`を消した場合、そのidが

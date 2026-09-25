@@ -59,8 +59,8 @@ import {
 } from "lucide-react";
 import {
   type KeybindAction,
-  type ResolvedBoardStatus,
-  SET_BOARD_STATUS_PREFIX,
+  type ResolvedBoardPhase,
+  SET_BOARD_PHASE_PREFIX,
   SHOW_SIDEBAR_VIEW_PREFIX,
 } from "@niwaterm/config";
 
@@ -310,12 +310,12 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
     keywords: ["worktree", "directory", "cwd", "ディレクトリ", "紐づけ"],
   },
   {
-    action: "clear-board-status",
-    labelEn: "Clear Board Status",
-    label: "Boardのステータスを解除",
+    action: "clear-board-phase",
+    labelEn: "Clear Board Phase",
+    label: "Boardのフェーズを解除",
     category: "Board",
     icon: Tag,
-    keywords: ["board status", "ステータス", "clear"],
+    keywords: ["board phase", "フェーズ", "clear"],
   },
   {
     action: "clear-board-startup",
@@ -565,18 +565,18 @@ export const COMMAND_PALETTE_ACTIONS: readonly CommandPaletteActionDef[] = [
 
 /**
  * アクティブBoardへ作業フェーズを付ける項目。候補は設定ファイル次第で増減するため実行時に組み立てる
- * （解除はKEYBIND_ACTIONS側のclear-board-statusが担うため、ここには含めない）
+ * （解除はKEYBIND_ACTIONS側のclear-board-phaseが担うため、ここには含めない）
  */
-export function boardStatusActionDefs(
-  statuses: readonly ResolvedBoardStatus[],
+export function boardPhaseActionDefs(
+  phases: readonly ResolvedBoardPhase[],
 ): CommandPaletteActionDef[] {
-  return statuses.map((status) => ({
-    action: `${SET_BOARD_STATUS_PREFIX}${status.id}`,
-    labelEn: `Set Board Status: ${status.label}`,
-    label: `Boardのステータスを${status.label}にする`,
+  return phases.map((phase) => ({
+    action: `${SET_BOARD_PHASE_PREFIX}${phase.id}`,
+    labelEn: `Set Board Phase: ${phase.label}`,
+    label: `Boardのフェーズを${phase.label}にする`,
     category: "Board",
     icon: Tag,
-    keywords: ["board status", "ステータス", status.id],
+    keywords: ["board phase", "フェーズ", phase.id],
   }));
 }
 

@@ -7,7 +7,7 @@ import {
   defaultMouseConfig,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
-  type ResolvedBoardStatus,
+  type ResolvedBoardPhase,
   type ResolvedCustomViewConfig,
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
@@ -317,7 +317,7 @@ function renderCommandPalette(): void {
         sendMessage("newTab", { tileId: focusedTileId, shellProfileId });
       },
       sidebarViews: commandPaletteSidebarViews(),
-      boardStatuses,
+      boardPhases,
       boards: commandPaletteBoards(),
       onSelectBoard: switchToBoard,
       workspaces: commandPaletteWorkspaces(),
@@ -496,10 +496,10 @@ interface CustomViewPanel {
 }
 /** bun側で解決されたcustomView一覧（configメッセージで受信）。設定に並べた順 */
 let customViews: ResolvedCustomViewConfig[] = [];
-/** Boardへ付けられるステータスの候補（configメッセージで受信）。設定に並べた順 */
-let boardStatuses: ResolvedBoardStatus[] = [];
-// ステータスの候補が変わったことをrenderSidebarのキャッシュキーへ伝える連番（shellProfilesVersionと同じ役割）
-let boardStatusesVersion = 0;
+/** Boardへ付けられるフェーズの候補（configメッセージで受信）。設定に並べた順 */
+let boardPhases: ResolvedBoardPhase[] = [];
+// フェーズの候補が変わったことをrenderSidebarのキャッシュキーへ伝える連番（shellProfilesVersionと同じ役割）
+let boardPhasesVersion = 0;
 const customViewPanelById = new Map<string, CustomViewPanel>();
 /** customViewのHTMLへ渡す配色。ターミナルと同じ値を使い、HTML側がサイドバーへ馴染ませられるようにする */
 let customViewTheme: CustomViewTheme = {
@@ -830,7 +830,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link,
         customViews: views,
         shellProfiles: profiles,
-        boardStatuses: statuses,
+        boardPhases: phases,
         configSummary,
       }: {
         keybindings: KeybindingsConfig;
@@ -839,7 +839,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
-        boardStatuses: ResolvedBoardStatus[];
+        boardPhases: ResolvedBoardPhase[];
         configSummary: ConfigSummary;
       }) => {
         hostRpcReplyReceived = true;
@@ -852,9 +852,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         applyCustomViews(views);
         shellProfiles = profiles;
         shellProfilesVersion++;
-        boardStatuses = statuses;
-        // ステータスのラベル・配色は設定由来なので、renderSidebarのキャッシュキーにも効かせる
-        boardStatusesVersion++;
+        boardPhases = phases;
+        // フェーズのラベル・配色は設定由来なので、renderSidebarのキャッシュキーにも効かせる
+        boardPhasesVersion++;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
         // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
@@ -1965,12 +1965,12 @@ function renderSidebar(
 ): void {
   // renderTileTabBarと同じ理由で、内容が変わらないrenderは省く。
   // buildSidebarWorkspaceItemsは引数だけで決まる純関数なので、入力側をキーにすれば足りる
-  const key = `${boardStatusesVersion}\u0000${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
+  const key = `${boardPhasesVersion}\u0000${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
   sidebarWorkspaceListRoot.renderIfChanged(key, () =>
     createElement(SidebarWorkspaceList, {
-      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId, boardStatuses),
-      boardStatuses,
-      onSetBoardStatus: setSidebarBoardStatus,
+      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId, boardPhases),
+      boardPhases,
+      onSetBoardPhase: setSidebarBoardPhase,
       onSelectWorkspaceHeader: activateSidebarWorkspace,
       onSelectBoard: activateSidebarBoard,
       onSelectPopup: activateSidebarPopup,
@@ -1992,8 +1992,8 @@ function renderSidebar(
 }
 
 /** サイドバーの右クリックからの作業フェーズの切り替え。nullは解除 */
-function setSidebarBoardStatus(boardId: BoardId, status: string | null): void {
-  sendMessage("setBoardStatus", { boardId, status });
+function setSidebarBoardPhase(boardId: BoardId, phase: string | null): void {
+  sendMessage("setBoardPhase", { boardId, phase });
   imeEl.focus({ preventScroll: true });
 }
 
@@ -3464,11 +3464,11 @@ function handleTileCommand(cmd: TileCommand): void {
     return;
   }
   // 作業フェーズもアクティブBoardが対象。renameBoardと同じ理由でここで処理する
-  if (cmd.type === "setBoardStatus" || cmd.type === "clearBoardStatus") {
+  if (cmd.type === "setBoardPhase" || cmd.type === "clearBoardPhase") {
     if (activeBoardId) {
-      sendMessage("setBoardStatus", {
+      sendMessage("setBoardPhase", {
         boardId: activeBoardId,
-        status: cmd.type === "setBoardStatus" ? cmd.status : null,
+        phase: cmd.type === "setBoardPhase" ? cmd.phase : null,
       });
     }
     return;

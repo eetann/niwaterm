@@ -274,11 +274,11 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
               ? { note: "cwdをOSC 7で報告するシェルでのみ追従する" }
               : {}),
           },
-          input.board.statuses.length === 0
-            ? { key: "statuses", value: "(なし)" }
+          input.board.phases.length === 0
+            ? { key: "phases", value: "(なし)" }
             : {
-                key: "statuses",
-                value: input.board.statuses.map((status) => status.id).join(", "),
+                key: "phases",
+                value: input.board.phases.map((phase) => phase.id).join(", "),
               },
         ],
       },

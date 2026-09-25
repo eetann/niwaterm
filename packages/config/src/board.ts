@@ -1,5 +1,5 @@
 // Board設定。新しいタブを開くときのcwdの決め方、Board名の自動命名の方式、Boardに付けられる
-// ステータスの候補をniwaterm.config.tsから変更できるようにする。
+// フェーズの候補をniwaterm.config.tsから変更できるようにする。
 // browser.tsと同様、全フィールドoptionalの型を「ユーザーの部分上書き」に使う。
 //
 // workspace.defaultCwdとは別物。あちらは「新規ワークスペースの最初のタブ」だけに効く初期値で、
@@ -35,12 +35,12 @@ export function isBoardNaming(value: unknown): value is BoardNaming {
   return typeof value === "string" && (BOARD_NAMINGS as readonly string[]).includes(value);
 }
 
-/** ステータスのidに許す文字。キーバインドの`set-board-status:<id>`へそのまま埋め込むため空白を除く */
-const STATUS_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
+/** フェーズのidに許す文字。キーバインドの`set-board-phase:<id>`へそのまま埋め込むため空白を除く */
+const PHASE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
 
-/** サイドバーの右クリックメニュー・コマンドパレットに並べるステータスの候補 */
-export interface BoardStatusPreset {
-  /** CLI（`niwaterm board status <id>`）・キーバインドから指す識別子 */
+/** サイドバーの右クリックメニュー・コマンドパレットに並べるフェーズの候補 */
+export interface BoardPhasePreset {
+  /** CLI（`niwaterm board phase set <id>`）・キーバインドから指す識別子 */
   id: string;
   /** サイドバーのバッジ・メニューに出す表示名。省略時はidをそのまま出す */
   label?: string;
@@ -48,8 +48,8 @@ export interface BoardStatusPreset {
   color?: string;
 }
 
-/** labelの省略をidで埋めた解決済みのステータス候補 */
-export interface ResolvedBoardStatus {
+/** labelの省略をidで埋めた解決済みのフェーズ候補 */
+export interface ResolvedBoardPhase {
   id: string;
   label: string;
   /** 未指定はnull（表示側の既定色にフォールバックする） */
@@ -68,28 +68,28 @@ export interface BoardConfig {
    */
   naming?: BoardNaming;
   /**
-   * Boardへ付けられるステータスの候補。サイドバーの右クリックメニュー・コマンドパレットの
+   * Boardへ付けられるフェーズの候補。サイドバーの右クリックメニュー・コマンドパレットの
    * 選択肢になる。ここに無い文字列もCLIからは設定でき、その場合は文字列がそのまま既定色で出る。
    */
-  statuses?: BoardStatusPreset[];
+  phases?: BoardPhasePreset[];
 }
 
 export interface ResolvedBoardConfig {
   newTabCwd: NewTabCwdMode;
   naming: BoardNaming;
-  statuses: ResolvedBoardStatus[];
+  phases: ResolvedBoardPhase[];
 }
 
 export const defaultBoardConfig: ResolvedBoardConfig = {
   newTabCwd: "inherit",
   naming: "directory",
-  statuses: [],
+  phases: [],
 };
 
-function isBoardStatusPreset(value: unknown): value is BoardStatusPreset {
+function isBoardPhasePreset(value: unknown): value is BoardPhasePreset {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  if (typeof v["id"] !== "string" || !STATUS_ID_PATTERN.test(v["id"])) return false;
+  if (typeof v["id"] !== "string" || !PHASE_ID_PATTERN.test(v["id"])) return false;
   if (v["label"] !== undefined && (typeof v["label"] !== "string" || v["label"] === "")) {
     return false;
   }
@@ -97,17 +97,17 @@ function isBoardStatusPreset(value: unknown): value is BoardStatusPreset {
 }
 
 /**
- * ユーザー設定のステータス候補を、表示側がそのまま使える形へ均す。
+ * ユーザー設定のフェーズ候補を、表示側がそのまま使える形へ均す。
  * 不正な要素は黙って落とす（1件の書き間違いで候補が全滅すると、設定ファイルを直すまで
  * サイドバーから切り替えられなくなるため）。idの重複は先勝ちで、CLI・キーバインドの
  * `<id>`指定が一意に解決できる状態を保つ
  */
-export function normalizeBoardStatuses(value: unknown): ResolvedBoardStatus[] {
+export function normalizeBoardPhases(value: unknown): ResolvedBoardPhase[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
-  const result: ResolvedBoardStatus[] = [];
+  const result: ResolvedBoardPhase[] = [];
   for (const entry of value) {
-    if (!isBoardStatusPreset(entry) || seen.has(entry.id)) continue;
+    if (!isBoardPhasePreset(entry) || seen.has(entry.id)) continue;
     seen.add(entry.id);
     result.push({ id: entry.id, label: entry.label ?? entry.id, color: entry.color ?? null });
   }
@@ -118,9 +118,9 @@ export function normalizeBoardStatuses(value: unknown): ResolvedBoardStatus[] {
  * Boardに設定された文字列の表示情報。候補に無い文字列（CLIから直接設定したもの）は
  * 文字列そのものをラベルとして既定色で出す
  */
-export function resolveBoardStatus(
-  statuses: readonly ResolvedBoardStatus[],
+export function resolveBoardPhase(
+  phases: readonly ResolvedBoardPhase[],
   value: string,
-): ResolvedBoardStatus {
-  return statuses.find((status) => status.id === value) ?? { id: value, label: value, color: null };
+): ResolvedBoardPhase {
+  return phases.find((phase) => phase.id === value) ?? { id: value, label: value, color: null };
 }

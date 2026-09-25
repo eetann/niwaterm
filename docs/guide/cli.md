@@ -169,7 +169,9 @@ niwaterm board switch --board <boardId>
 niwaterm board close [--board <boardId>]
 niwaterm board rename [--board <boardId>] <name>
 niwaterm board move [--board <boardId>] --up | --down | --to-workspace <workspaceId>
-niwaterm board status [<status>] [--board <boardId>] [--clear]
+niwaterm board phase set <phase> [--board <boardId>]
+niwaterm board phase clear [--board <boardId>]
+niwaterm board phase show [--board <boardId>]
 niwaterm board startup layout|restore|clear [--board <boardId>] [--preset <name>] [--cwd <dir>] [--trust]
 niwaterm board worktree set <path> [--board <boardId>]
 niwaterm board worktree clear [--board <boardId>]
@@ -185,7 +187,7 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 - `board move` — Boardを動かす。`--up`/`--down`/`--to-workspace`のいずれか1つが必須
   - `--up` / `--down` — 所属ワークスペース内での表示順（サイドバーの並び）を1つ上・1つ下へ移動する。中身（タイル・タブ）とアクティブなBoardは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.board.move(boardId, index)`を使う）
   - `--to-workspace <workspaceId>` — Boardを別のワークスペースへ移す（tmuxの`move-window`相当）。レイアウト・タブ・実行中のプロセスはそのまま移り、移動先ワークスペースの末尾に付く。アクティブなBoardは移動元・移動先とも変わらない。移動元がこれでBoard 0個になっても、そのワークスペースは残る（開いているポップアップだけは閉じる）
-- `board status` — そのBoardの作業フェーズ（サイドバーのBoard行に出るバッジ）を設定・解除・表示する。`<status>`は`niwaterm.config.ts`の`board.statuses`で定義したid（未定義の任意の文字列も渡せて、その場合は文字列がそのまま既定色のバッジになる）。`<status>`省略時は現在の値を1行で表示し（未設定なら空行）、`--clear`で解除する。`--board`の省略時の扱いは`board close`と同じなので、エージェントのhookからそのタブのBoardへ付けられる。候補の定義とサイドバー・キーバインドからの切り替えは`docs/guide/config.md`「Board設定」節を参照
+- `board phase` — そのBoardの作業フェーズ（サイドバーのBoard行に出るバッジ）を設定・解除・表示する。`set`に渡す`<phase>`は`niwaterm.config.ts`の`board.phases`で定義したid（未定義の任意の文字列も渡せて、その場合は文字列がそのまま既定色のバッジになる）。`show`は現在の値を1行で表示し（未設定なら空行）、`clear`で解除する。`--board`の省略時の扱いは`board close`と同じなので、エージェントのhookからそのタブのBoardへ付けられる。候補の定義とサイドバー・キーバインドからの切り替えは`docs/guide/config.md`「Board設定」節を参照
 - `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
 - `board worktree` — そのBoardに紐づくワークツリーを設定・解除・表示する（`--board`省略時の扱いは`board close`と同じ）。`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照
 

@@ -332,9 +332,9 @@ export function createWindowManager(opts: WindowManagerOptions) {
       byBoard(boardId)?.setBoardWorktreePath(boardId, worktreePath) ?? false,
     getBoardWorktreePath: (boardId: BoardId) =>
       byBoard(boardId)?.getBoardWorktreePath(boardId) ?? null,
-    setBoardStatus: (boardId: BoardId, status: string | null) =>
-      byBoard(boardId)?.setBoardStatus(boardId, status) ?? false,
-    getBoardStatus: (boardId: BoardId) => byBoard(boardId)?.getBoardStatus(boardId) ?? null,
+    setBoardPhase: (boardId: BoardId, phase: string | null) =>
+      byBoard(boardId)?.setBoardPhase(boardId, phase) ?? false,
+    getBoardPhase: (boardId: BoardId) => byBoard(boardId)?.getBoardPhase(boardId) ?? null,
     getBoardFocusedCwd: (boardId: BoardId) => byBoard(boardId)?.getBoardFocusedCwd(boardId),
     getBoardFocusedShell: (boardId: BoardId) => byBoard(boardId)?.getBoardFocusedShell(boardId),
     findBoard: (boardId: BoardId) => byBoard(boardId)?.findBoard(boardId),

@@ -14,15 +14,15 @@ export {
 export {
   type BoardConfig,
   type BoardNaming,
-  type BoardStatusPreset,
+  type BoardPhasePreset,
   defaultBoardConfig,
   isBoardNaming,
   isNewTabCwdMode,
   type NewTabCwdMode,
-  normalizeBoardStatuses,
+  normalizeBoardPhases,
   type ResolvedBoardConfig,
-  type ResolvedBoardStatus,
-  resolveBoardStatus,
+  type ResolvedBoardPhase,
+  resolveBoardPhase,
 } from "./board";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export {
@@ -102,13 +102,13 @@ export {
   type ParsedSecondKey,
   parseKeyBindingString,
   parseSecondKeyString,
-  parseSetBoardStatusAction,
+  parseSetBoardPhaseAction,
   parseShowSidebarViewAction,
   platformDefaultKeybindings,
   resolveBindingEntry,
   type SecondKeyString,
-  SET_BOARD_STATUS_PREFIX,
-  type SetBoardStatusAction,
+  SET_BOARD_PHASE_PREFIX,
+  type SetBoardPhaseAction,
   SHOW_SIDEBAR_VIEW_PREFIX,
   type ShowSidebarViewAction,
 } from "./keybindings";

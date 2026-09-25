@@ -3581,30 +3581,30 @@ describe("GET /layouts, POST /apply-layout", () => {
     expect(res.status).toBe(400);
   });
 
-  test("POST /board-status: mode:setでステータスを設定し、boardId省略時はアクティブBoardが対象", async () => {
+  test("POST /board-phase: mode:setでフェーズを設定し、boardId省略時はアクティブBoardが対象", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
     const boardId = mgr.snapshot().workspace.activeBoardId;
 
-    const res = await fetch("http://localhost/board-status", {
+    const res = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "set", status: "review" }),
+      body: JSON.stringify({ mode: "set", phase: "review" }),
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, boardId, status: "review" });
-    expect(mgr.getBoardStatus(boardId)).toBe("review");
+    expect(await res.json()).toEqual({ ok: true, boardId, phase: "review" });
+    expect(mgr.getBoardPhase(boardId)).toBe("review");
   });
 
-  test("POST /board-status: mode:clearでステータスを解除する", async () => {
+  test("POST /board-phase: mode:clearでフェーズを解除する", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
     const boardId = mgr.snapshot().workspace.activeBoardId;
-    mgr.setBoardStatus(boardId, "review");
+    mgr.setBoardPhase(boardId, "review");
 
-    const res = await fetch("http://localhost/board-status", {
+    const res = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3612,32 +3612,32 @@ describe("GET /layouts, POST /apply-layout", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, boardId, status: null });
-    expect(mgr.getBoardStatus(boardId)).toBeNull();
+    expect(await res.json()).toEqual({ ok: true, boardId, phase: null });
+    expect(mgr.getBoardPhase(boardId)).toBeNull();
   });
 
-  test("POST /board-status: mode:showは値を変えずに現在値を返す", async () => {
+  test("POST /board-phase: mode:showは値を変えずに現在値を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
     const boardId = mgr.snapshot().workspace.activeBoardId;
-    mgr.setBoardStatus(boardId, "implement");
+    mgr.setBoardPhase(boardId, "implement");
 
-    const res = await fetch("http://localhost/board-status", {
+    const res = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ mode: "show", boardId }),
     });
 
-    expect(await res.json()).toEqual({ ok: true, boardId, status: "implement" });
-    expect(mgr.getBoardStatus(boardId)).toBe("implement");
+    expect(await res.json()).toEqual({ ok: true, boardId, phase: "implement" });
+    expect(mgr.getBoardPhase(boardId)).toBe("implement");
   });
 
-  test("POST /board-status: mode:setでstatus省略・空白のみは400を返す", async () => {
+  test("POST /board-phase: mode:setでphase省略・空白のみは400を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
 
-    const omitted = await fetch("http://localhost/board-status", {
+    const omitted = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3645,20 +3645,20 @@ describe("GET /layouts, POST /apply-layout", () => {
     });
     expect(omitted.status).toBe(400);
 
-    const blank = await fetch("http://localhost/board-status", {
+    const blank = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode: "set", status: "   " }),
+      body: JSON.stringify({ mode: "set", phase: "   " }),
     });
     expect(blank.status).toBe(400);
   });
 
-  test("POST /board-status: 存在しないboardIdは404を返す", async () => {
+  test("POST /board-phase: 存在しないboardIdは404を返す", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);
 
-    const res = await fetch("http://localhost/board-status", {
+    const res = await fetch("http://localhost/board-phase", {
       unix: socketPath,
       method: "POST",
       headers: { "content-type": "application/json" },

@@ -34,8 +34,8 @@ function printBoard(board: BoardListEntry, depth: number): void {
   const startupSuffix = board.startup
     ? ` [${board.startup.restoreMode === "layout" ? "startup" : "preset"}: ${board.startup.preset}]`
     : "";
-  const statusSuffix = board.status ? ` [status: ${board.status}]` : "";
-  console.log(`${indent}${board.boardId}${nameSuffix}${suffix}${startupSuffix}${statusSuffix}`);
+  const phaseSuffix = board.phase ? ` [phase: ${board.phase}]` : "";
+  console.log(`${indent}${board.boardId}${nameSuffix}${suffix}${startupSuffix}${phaseSuffix}`);
   printTile(board.layout, board.focusedTileId, depth + 1);
 }
 
@@ -46,7 +46,7 @@ function printWorkspace(entry: WorkspaceListEntry): void {
   // Board 1つのみ（大半のケース）はBoard行を省略し、直接タイル階層を表示する
   // （サイドバーの表示方針・ADR 0006と揃える）。ただしレイアウトプリセットが紐づいている
   // Boardは、board startupの対象を確認できるようBoard行を残す
-  if (entry.boards.length === 1 && !entry.boards[0].startup && !entry.boards[0].status) {
+  if (entry.boards.length === 1 && !entry.boards[0].startup && !entry.boards[0].phase) {
     printTile(entry.boards[0].layout, entry.boards[0].focusedTileId, 1);
     return;
   }

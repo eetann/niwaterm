@@ -1,4 +1,4 @@
-import { type ResolvedBoardStatus, resolveBoardStatus } from "@niwaterm/config";
+import { type ResolvedBoardPhase, resolveBoardPhase } from "@niwaterm/config";
 import type { BoardRestoreMode } from "../../bun/persistence";
 import { findNode, listLeaves, type TabId } from "../../bun/tile-layout";
 import type { BoardId } from "../../bun/workspace";
@@ -42,12 +42,12 @@ export interface SidebarBoardItem {
   /** 紐づけ先のディレクトリが見つからないか（紐づけが無いBoardは常にfalse） */
   worktreeMissing: boolean;
   /** ユーザーが付けた作業フェーズ。未設定はnull */
-  status: SidebarBoardStatusItem | null;
+  phase: SidebarBoardPhaseItem | null;
 }
 
 /** Board行に出す作業フェーズのバッジ。候補に無い文字列はlabel=値そのもの・color=nullで出る */
-export interface SidebarBoardStatusItem {
-  /** Boardに保存されている値（board.statusesのidか任意の文字列） */
+export interface SidebarBoardPhaseItem {
+  /** Boardに保存されている値（board.phasesのidか任意の文字列） */
   value: string;
   label: string;
   /** 候補で指定された配色。未指定はnull（表示側の既定色） */
@@ -204,11 +204,11 @@ export function workspaceLabel(workspace: WorkspaceListEntry, index: number): st
  * Boardに保存された文字列を表示用のバッジ情報へ変換する。設定から候補が消えても
  * （あるいは最初からCLIで任意の文字列を入れても）、値そのものをラベルとして出す
  */
-function toStatusItem(
-  boardStatuses: readonly ResolvedBoardStatus[],
+function toPhaseItem(
+  boardPhases: readonly ResolvedBoardPhase[],
   value: string,
-): SidebarBoardStatusItem {
-  const resolved = resolveBoardStatus(boardStatuses, value);
+): SidebarBoardPhaseItem {
+  const resolved = resolveBoardPhase(boardPhases, value);
   return { value, label: resolved.label, color: resolved.color };
 }
 
@@ -225,7 +225,7 @@ function toStatusItem(
 export function buildSidebarWorkspaceItems(
   workspaces: WorkspaceListEntry[],
   currentActiveWorkspaceId: WorkspaceId | null,
-  boardStatuses: readonly ResolvedBoardStatus[] = [],
+  boardPhases: readonly ResolvedBoardPhase[] = [],
 ): SidebarWorkspaceItem[] {
   return workspaces.map((entry, workspaceIndex) => ({
     workspaceId: entry.workspaceId,
@@ -262,7 +262,7 @@ export function buildSidebarWorkspaceItems(
           : null,
         worktreePath: board.worktreePath,
         worktreeMissing: board.worktreeMissing,
-        status: board.status === null ? null : toStatusItem(boardStatuses, board.status),
+        phase: board.phase === null ? null : toPhaseItem(boardPhases, board.phase),
       };
     }),
   }));

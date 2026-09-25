@@ -474,27 +474,27 @@ function parseBoardWorktreeBody(body: unknown): BoardWorktreeRequestBody | null 
   return result;
 }
 
-/** `niwaterm board status`。boardId省略時はアクティブBoardへ向ける */
-interface BoardStatusRequestBody {
+/** `niwaterm board phase`。boardId省略時はアクティブBoardへ向ける */
+interface BoardPhaseRequestBody {
   boardId?: string;
   mode: "set" | "clear" | "show";
-  /** mode: "set"のみ必須。board.statusesのidか任意の文字列 */
-  status?: string;
+  /** mode: "set"のみ必須。board.phasesのidか任意の文字列 */
+  phase?: string;
 }
 
-function parseBoardStatusBody(body: unknown): BoardStatusRequestBody | null {
-  const b = body as { boardId?: unknown; mode?: unknown; status?: unknown };
+function parseBoardPhaseBody(body: unknown): BoardPhaseRequestBody | null {
+  const b = body as { boardId?: unknown; mode?: unknown; phase?: unknown };
   if (b.mode !== "set" && b.mode !== "clear" && b.mode !== "show") return null;
-  const result: BoardStatusRequestBody = { mode: b.mode };
+  const result: BoardPhaseRequestBody = { mode: b.mode };
   if (b.boardId !== undefined) {
     if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
     result.boardId = b.boardId;
   }
-  if (b.status !== undefined) {
-    if (typeof b.status !== "string" || b.status.trim().length === 0) return null;
-    result.status = b.status;
+  if (b.phase !== undefined) {
+    if (typeof b.phase !== "string" || b.phase.trim().length === 0) return null;
+    result.phase = b.phase;
   }
-  if (b.mode === "set" && result.status === undefined) return null;
+  if (b.mode === "set" && result.phase === undefined) return null;
   return result;
 }
 
@@ -1136,15 +1136,15 @@ function buildApp(
     });
   });
 
-  app.post("/board-status", async (c) => {
+  app.post("/board-phase", async (c) => {
     const body = await readJsonBody(c);
     if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
-    const parsed = parseBoardStatusBody(body);
+    const parsed = parseBoardPhaseBody(body);
     if (!parsed) {
       return c.json(
         {
           ok: false,
-          error: 'expected { mode: "set"|"clear"|"show", boardId?: string, status?: string }',
+          error: 'expected { mode: "set"|"clear"|"show", boardId?: string, phase?: string }',
         },
         400,
       );
@@ -1154,11 +1154,11 @@ function buildApp(
       return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
     }
     if (parsed.mode === "set") {
-      workspaceManager.setBoardStatus(boardId, parsed.status as string);
+      workspaceManager.setBoardPhase(boardId, parsed.phase as string);
     } else if (parsed.mode === "clear") {
-      workspaceManager.setBoardStatus(boardId, null);
+      workspaceManager.setBoardPhase(boardId, null);
     }
-    return c.json({ ok: true, boardId, status: workspaceManager.getBoardStatus(boardId) });
+    return c.json({ ok: true, boardId, phase: workspaceManager.getBoardPhase(boardId) });
   });
 
   app.post("/board-startup", async (c) => {

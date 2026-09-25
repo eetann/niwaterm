@@ -38,7 +38,7 @@ import {
   type NiwaLinkHandler,
   type NiwaNotifyOptions,
   type NiwatermConfig,
-  normalizeBoardStatuses,
+  normalizeBoardPhases,
   parseKeyBindingString,
   parseSecondKeyString,
   platformDefaultKeybindings,
@@ -592,7 +592,7 @@ export function resolveBoard(
       isBoardNaming,
     ),
     // 要素単位で落とす正規化なのでresolveFieldは通さない（不正な1件だけを捨てる）
-    statuses: normalizeBoardStatuses(user?.statuses),
+    phases: normalizeBoardPhases(user?.phases),
   };
 }
 

@@ -254,12 +254,12 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
-  test("set-board-status:<id> は対象id付きのステータス設定コマンドへ変換される", () => {
-    expect(actionToTileCommand("set-board-status:review")).toEqual({
-      type: "setBoardStatus",
-      status: "review",
+  test("set-board-phase:<id> は対象id付きのフェーズ設定コマンドへ変換される", () => {
+    expect(actionToTileCommand("set-board-phase:review")).toEqual({
+      type: "setBoardPhase",
+      phase: "review",
     });
-    expect(actionToTileCommand("clear-board-status")).toEqual({ type: "clearBoardStatus" });
+    expect(actionToTileCommand("clear-board-phase")).toEqual({ type: "clearBoardPhase" });
   });
 
   test("prefix -> ` でポップアップトグル", () => {
