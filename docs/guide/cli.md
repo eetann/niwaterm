@@ -492,25 +492,32 @@ niwaterm complete powershell >> $PROFILE
 
 スクリプトはコマンドの一覧を持たない（補完のたびにCLIへ問い合わせる）ので、**コマンドやオプションが増減しても中身は変わらず、置き直す必要は無い**。生成し直すのは補完スクリプト自体の作り方が変わったとき、つまり`@gunshi/plugin-completion`を更新したときだけ。
 
-zshなら、シェルの起動時に「無ければ作る」形にしておくと設置を忘れずに済む。`compinit`より前に置く。
+zshなら、シェルの起動時に「無ければ作る」形にしておくと設置を忘れずに済む。**置く位置は`compinit`を呼ぶ前**——既存の`fpath=(...)`を並べている場所の隣がよい。`compinit`はそれを呼んだ時点のfpathしか見ないため、後ろに置くと補完はいつまでも登録されない（`niwaterm boa`でタブキーを押しても何も起きない、という形で出る）。
 
 ```zsh
 # 生成物なので、dotfilesの配下ではなく書き込めるキャッシュへ置く
 _niwaterm_comp="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/completions/_niwaterm"
 if [[ ! -f $_niwaterm_comp ]] && (( $+commands[niwaterm] )); then
   mkdir -p ${_niwaterm_comp:h}
-  # 生成に失敗したら中途半端なファイルを残さない（compinitが読んで補完が壊れる）
-  if niwaterm complete zsh > $_niwaterm_comp.tmp; then
-    mv $_niwaterm_comp.tmp $_niwaterm_comp
+  # 一時ファイルはプロセスごとに分ける。niwatermは起動時に複数のタブのシェルを
+  # 同時に立ち上げるため、固定名だと先にmvした1つ以外が"cannot stat"で落ちる。
+  # 生成に失敗したときに中途半端なファイルを残さない意味もある
+  # （compinitがそれを読むと補完が壊れる）
+  _niwaterm_tmp="$_niwaterm_comp.$$"
+  if niwaterm complete zsh > $_niwaterm_tmp; then
+    mv $_niwaterm_tmp $_niwaterm_comp
     # compinitのdumpを使い回す構成（compinit -C）はfpathを再スキャンしないため、
     # 新しく置いた補完ファイルが拾われるようdumpも捨てる
     rm -f "${ZSH_CACHE_DIR:-$HOME/.cache/zsh}/zcompdump"
   else
-    rm -f $_niwaterm_comp.tmp
+    rm -f $_niwaterm_tmp
   fi
+  unset _niwaterm_tmp
 fi
 fpath=(${_niwaterm_comp:h} $fpath)
 ```
+
+補完が効いているかは`compinit`のdumpを見ると分かる。`grep -c niwaterm ~/.cache/zsh/zcompdump`が0なら、`compinit`の時点でfpathに入っていない。
 
 生成のたびにバージョンを調べて作り直す（`mise activate`のキャッシュのような）作りにする必要は無い。中身がバージョンに依らないうえ、判定のために`niwaterm --version`を呼ぶ時間が生成そのものと変わらないため。
 
