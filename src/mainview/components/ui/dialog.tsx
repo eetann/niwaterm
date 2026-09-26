@@ -82,11 +82,15 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+// wrap-anywhere（shadcn既定から追加）: 見出し・本文にはパスやワークスペース名といった
+// 空白を含まない長い文字列が入る。既定のoverflow-wrap: normalだとそこで改行できず、
+// DialogContentのgridカラムが最小内容幅まで広がってダイアログの枠からテキストとボタンが
+// はみ出す。break-wordではなくanywhereなのは、こちらだけが最小内容幅の計算にも効くため
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn("text-lg leading-none font-semibold wrap-anywhere", className)}
       {...props}
     />
   );
@@ -99,7 +103,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-sm wrap-anywhere text-muted-foreground", className)}
       {...props}
     />
   );
