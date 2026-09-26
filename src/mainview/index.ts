@@ -5,12 +5,14 @@ import {
   defaultAppearance,
   defaultKeybindings,
   defaultMouseConfig,
+  defaultSidebarConfig,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
   type ResolvedBoardPhase,
   type ResolvedCustomViewConfig,
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
+  type ResolvedSidebarBoardStatusItem,
   resolveBoardPhase,
   type ShellProfile,
   type TabBarMode,
@@ -543,8 +545,11 @@ interface CustomViewPanel {
 let customViews: ResolvedCustomViewConfig[] = [];
 /** Boardへ付けられるフェーズの候補（configメッセージで受信）。設定に並べた順 */
 let boardPhases: ResolvedBoardPhase[] = [];
-// フェーズの候補が変わったことをrenderSidebarのキャッシュキーへ伝える連番（shellProfilesVersionと同じ役割）
-let boardPhasesVersion = 0;
+/** Board行のステータスラインに並べる項目（configメッセージで受信）。設定に並べた順 */
+let boardStatusItems: ResolvedSidebarBoardStatusItem[] = defaultSidebarConfig.boardStatus;
+// サイドバー関連の設定が変わったことをrenderSidebarのキャッシュキーへ伝える連番
+// （shellProfilesVersionと同じ役割）
+let sidebarConfigVersion = 0;
 const customViewPanelById = new Map<string, CustomViewPanel>();
 /** customViewのHTMLへ渡す配色。ターミナルと同じ値を使い、HTML側がサイドバーへ馴染ませられるようにする */
 let customViewTheme: CustomViewTheme = {
@@ -876,6 +881,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customViews: views,
         shellProfiles: profiles,
         boardPhases: phases,
+        boardStatus,
         configSummary,
       }: {
         keybindings: KeybindingsConfig;
@@ -885,6 +891,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customViews: ResolvedCustomViewConfig[];
         shellProfiles: ShellProfile[];
         boardPhases: ResolvedBoardPhase[];
+        boardStatus: ResolvedSidebarBoardStatusItem[];
         configSummary: ConfigSummary;
       }) => {
         hostRpcReplyReceived = true;
@@ -898,8 +905,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         shellProfiles = profiles;
         shellProfilesVersion++;
         boardPhases = phases;
-        // フェーズのラベル・配色は設定由来なので、renderSidebarのキャッシュキーにも効かせる
-        boardPhasesVersion++;
+        boardStatusItems = boardStatus;
+        // フェーズのラベル・配色とステータスラインの構成は設定由来なので、
+        // renderSidebarのキャッシュキーにも効かせる
+        sidebarConfigVersion++;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
         // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
@@ -2011,10 +2020,15 @@ function renderSidebar(
 ): void {
   // renderTileTabBarと同じ理由で、内容が変わらないrenderは省く。
   // buildSidebarWorkspaceItemsは引数だけで決まる純関数なので、入力側をキーにすれば足りる
-  const key = `${boardPhasesVersion}\u0000${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
+  const key = `${sidebarConfigVersion}\u0000${currentActiveWorkspaceId}\u0000${JSON.stringify(workspaces)}`;
   sidebarWorkspaceListRoot.renderIfChanged(key, () =>
     createElement(SidebarWorkspaceList, {
-      workspaces: buildSidebarWorkspaceItems(workspaces, currentActiveWorkspaceId, boardPhases),
+      workspaces: buildSidebarWorkspaceItems(
+        workspaces,
+        currentActiveWorkspaceId,
+        boardPhases,
+        boardStatusItems,
+      ),
       boardPhases,
       onSetBoardPhase: setSidebarBoardPhase,
       onSelectWorkspaceHeader: activateSidebarWorkspace,

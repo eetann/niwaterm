@@ -22,10 +22,12 @@ import type {
   ResolvedCustomViewConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
+  ResolvedSidebarBoardStatusItem,
+  ResolvedSidebarConfig,
   ResolvedTerminalConfig,
   ShellProfile,
 } from "@niwaterm/config";
-import { defaultBoardConfig, scaleLineHeight } from "@niwaterm/config";
+import { defaultBoardConfig, defaultSidebarConfig, scaleLineHeight } from "@niwaterm/config";
 import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
 import { isBuiltinLayoutName } from "./builtin-layouts";
@@ -275,6 +277,8 @@ export type NiwaRPC = {
         shellProfiles: ShellProfile[];
         /** Boardへ付けられるフェーズの候補（board.phases）。サイドバーのメニュー・コマンドパレットに並ぶ */
         boardPhases: ResolvedBoardPhase[];
+        /** サイドバーのBoard行のステータスラインに並べる項目（sidebar.boardStatus）。設定した順 */
+        boardStatus: ResolvedSidebarBoardStatusItem[];
         /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
         configSummary: ConfigSummary;
       };
@@ -389,6 +393,7 @@ function sendConfig(windowId?: WindowId) {
       customViews,
       shellProfiles,
       boardPhases: boardConfig.phases,
+      boardStatus: sidebarConfig.boardStatus,
       configSummary: currentConfigSummary(),
     });
   }
@@ -589,6 +594,7 @@ let browser: ResolvedBrowserConfig;
 // 復元したBoardの自動名は設定の読み込みより前に決まる（windowManagerの生成時）ため、
 // 未読込の間も方式を引けるよう既定値で初期化しておく
 let boardConfig: ResolvedBoardConfig = defaultBoardConfig;
+let sidebarConfig: ResolvedSidebarConfig = defaultSidebarConfig;
 let terminalConfig: ResolvedTerminalConfig;
 let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
@@ -762,6 +768,7 @@ function currentConfigSummary(): ConfigSummary {
     mouse,
     workspaceDefaultCwd,
     board: boardConfig,
+    sidebar: sidebarConfig,
     terminal: terminalConfig,
     link: linkConfig,
   });
@@ -803,6 +810,7 @@ async function refreshConfig(): Promise<void> {
     appearance,
     browser,
     board: boardConfig,
+    sidebar: sidebarConfig,
     terminal: terminalConfig,
     customViews,
     customViewHandlers,

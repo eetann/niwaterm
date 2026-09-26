@@ -1,12 +1,20 @@
 import { describe, expect, test } from "bun:test";
+import { normalizeSidebarBoardStatus } from "@niwaterm/config";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
 import type { BoardStatusEntry, WorkspaceListEntry } from "../../bun/workspace-manager";
 import {
   agentStatusBadgeClass,
   agentStatusBadgeLabel,
   buildSidebarWorkspaceItems,
+  type SidebarBoardItem,
   sidebarDropIndex,
 } from "./sidebar-props";
+
+/** ステータスラインのうち、指定した出どころのテキスト行の値。出ていなければnull */
+function statusTextOf(board: SidebarBoardItem | undefined, id: string): string | null {
+  const line = board?.statusItems.find((item) => item.id === id);
+  return line?.kind === "text" ? line.value : null;
+}
 
 function leaf(id: string, tabIds: string[], activeTabId: string): TileLeaf {
   return { kind: "leaf", id, tabIds, activeTabId };
@@ -88,7 +96,7 @@ describe("buildSidebarWorkspaceItems", () => {
             boardId: "board-1",
             label: "Board 1",
             active: false,
-            branch: null,
+            statusItems: [],
             agent: null,
             zoomed: false,
             bell: false,
@@ -109,7 +117,7 @@ describe("buildSidebarWorkspaceItems", () => {
             boardId: "board-2",
             label: "Board 1",
             active: true,
-            branch: null,
+            statusItems: [],
             agent: null,
             zoomed: false,
             bell: false,
@@ -193,7 +201,7 @@ describe("buildSidebarWorkspaceItems", () => {
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
     expect(items[0]?.boards[0]?.label).toBe("Board 1");
-    expect(items[0]?.boards[0]?.branch).toBe("main");
+    expect(statusTextOf(items[0]?.boards[0], "builtin:branch")).toBe("main");
   });
 
   test("フォーカス中タイルではない他タイルの変数はBoardの状態に反映されない", () => {
@@ -215,7 +223,7 @@ describe("buildSidebarWorkspaceItems", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.boards[0]?.branch).toBe("feature/focused");
+    expect(statusTextOf(items[0]?.boards[0], "builtin:branch")).toBe("feature/focused");
   });
 
   test("フェーズ未設定時はphase:null", () => {
@@ -660,8 +668,115 @@ describe("Board内の全タブからのagent集約", () => {
 
     const items = buildSidebarWorkspaceItems(workspaces, "ws-1");
 
-    expect(items[0]?.boards[0]?.branch).toBe("main");
+    expect(statusTextOf(items[0]?.boards[0], "builtin:branch")).toBe("main");
     expect(items[0]?.boards[0]?.agent?.agent).toBe("claude-code");
+  });
+});
+
+describe("buildSidebarWorkspaceItems: ステータスライン（sidebar.boardStatus）", () => {
+  const phases = [{ id: "review", label: "レビュー", color: "#f9e2af" }];
+
+  function boardWith(vars: Record<string, string>, phase?: string) {
+    return workspace("ws-1", [
+      board("board-1", leaf("tile-1", ["tab-1"], "tab-1"), {
+        tabVars: { "tab-1": vars },
+        phase: phase ?? null,
+      }),
+    ]);
+  }
+
+  function statusItemsOf(vars: Record<string, string>, boardStatus: unknown, phase?: string) {
+    const items = buildSidebarWorkspaceItems(
+      [boardWith(vars, phase)],
+      "ws-1",
+      phases,
+      normalizeSidebarBoardStatus(boardStatus),
+    );
+    return items[0]?.boards[0]?.statusItems ?? [];
+  }
+
+  test("設定に並べた順で出る", () => {
+    const items = statusItemsOf(
+      { branch: "main", agent: "claude-code", agent_status_text: "実装中" },
+      ["builtin:agent", "builtin:branch", "builtin:phase"],
+      "review",
+    );
+
+    expect(items.map((item) => item.id)).toEqual([
+      "builtin:agent",
+      "builtin:branch",
+      "builtin:phase",
+    ]);
+  });
+
+  test("設定から外した項目は出ない", () => {
+    const items = statusItemsOf(
+      { branch: "main", agent: "claude-code", agent_status_text: "実装中" },
+      ["builtin:agent"],
+      "review",
+    );
+
+    expect(items.map((item) => item.id)).toEqual(["builtin:agent"]);
+  });
+
+  test("空配列ならステータスラインを1行も作らない", () => {
+    expect(statusItemsOf({ branch: "main" }, [])).toEqual([]);
+  });
+
+  test("builtin:branchの既定の接頭辞はon", () => {
+    expect(statusItemsOf({ branch: "main" }, ["builtin:branch"])).toEqual([
+      { kind: "text", id: "builtin:branch", value: "main", prefix: "on", color: null },
+    ]);
+  });
+
+  test("接頭辞・文字色の指定はビルトインにも効く", () => {
+    expect(
+      statusItemsOf({ branch: "main" }, [
+        { source: "builtin:branch", prefix: "", color: "#a6e3a1" },
+      ]),
+    ).toEqual([
+      { kind: "text", id: "builtin:branch", value: "main", prefix: "", color: "#a6e3a1" },
+    ]);
+  });
+
+  test("tab-varは代表タブの変数をそのまま出す", () => {
+    expect(
+      statusItemsOf({ ticket: "PROJ-123" }, [{ source: "tab-var:ticket", prefix: "#" }]),
+    ).toEqual([
+      { kind: "text", id: "tab-var:ticket", value: "PROJ-123", prefix: "#", color: null },
+    ]);
+  });
+
+  test("値が空の項目は行を作らずに詰める", () => {
+    const items = statusItemsOf({ branch: "main", ticket: "" }, [
+      "tab-var:ticket",
+      "builtin:branch",
+      "tab-var:unset",
+    ]);
+
+    expect(items.map((item) => item.id)).toEqual(["builtin:branch"]);
+  });
+
+  test("statusTextが無いエージェントは行を作らない（ドットの色だけで示す）", () => {
+    const items = statusItemsOf({ agent: "claude-code", agent_status: "working" }, [
+      "builtin:agent",
+    ]);
+
+    expect(items).toEqual([]);
+  });
+
+  test("フェーズ未設定なら行を作らない", () => {
+    expect(statusItemsOf({}, ["builtin:phase"])).toEqual([]);
+  });
+
+  test("builtin:phaseは候補で解決したバッジ情報を持つ", () => {
+    expect(statusItemsOf({}, ["builtin:phase"], "review")).toEqual([
+      {
+        kind: "phase",
+        id: "builtin:phase",
+        phase: { value: "review", label: "レビュー", color: "#f9e2af" },
+      },
+    ]);
   });
 });
 

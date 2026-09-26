@@ -64,6 +64,19 @@ export {
   type SelectionMenuItem,
 } from "./mouse";
 export type { NiwatermProjectConfig } from "./project";
+export {
+  defaultSidebarConfig,
+  formatSidebarBoardStatusSource,
+  normalizeSidebarBoardStatus,
+  parseSidebarBoardStatusSource,
+  type ResolvedSidebarBoardStatusItem,
+  type ResolvedSidebarConfig,
+  type SidebarBoardStatusBuiltin,
+  type SidebarBoardStatusItem,
+  type SidebarBoardStatusItemConfig,
+  type SidebarBoardStatusSource,
+  type SidebarConfig,
+} from "./sidebar";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export {
   defaultTerminalConfig,

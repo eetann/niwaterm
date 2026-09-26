@@ -39,6 +39,7 @@ import {
   type NiwaNotifyOptions,
   type NiwatermConfig,
   normalizeBoardPhases,
+  normalizeSidebarBoardStatus,
   parseKeyBindingString,
   parseSecondKeyString,
   platformDefaultKeybindings,
@@ -50,6 +51,7 @@ import {
   type ResolvedLinkConfig,
   type ResolvedLinkRule,
   type ResolvedMouseConfig,
+  type ResolvedSidebarConfig,
   toResolvedLinkRule,
   type ResolvedTerminalConfig,
   type ResolvedUiColors,
@@ -597,6 +599,16 @@ export function resolveBoard(
 }
 
 /**
+ * サイドバーのBoard行に出すステータスライン項目を解決する。
+ */
+export function resolveSidebar(userConfig: NiwatermConfig | null): ResolvedSidebarConfig {
+  return {
+    // 要素単位で落とす正規化なのでresolveFieldは通さない（board.phasesと同じ）
+    boardStatus: normalizeSidebarBoardStatus(userConfig?.sidebar?.boardStatus),
+  };
+}
+
+/**
  * defaultTerminalConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
  */
 export function resolveTerminal(
@@ -993,6 +1005,8 @@ export async function loadAndResolveConfig(
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
+  /** サイドバーのBoard行に出すステータスラインの構成 */
+  sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
   link: ResolvedLinkConfig;
   /** ユーザー定義HTML UI（サイドバーのビュー・タブ）の一覧。設定に並べた順 */
@@ -1055,6 +1069,7 @@ export async function loadAndResolveConfig(
     appearance: resolveAppearance(userConfig, diag),
     browser: resolveBrowser(userConfig, diag),
     board: resolveBoard(userConfig, diag),
+    sidebar: resolveSidebar(userConfig),
     terminal: resolveTerminal(userConfig, diag),
     link,
     customViews: customViews.views,

@@ -16,10 +16,12 @@ import type {
   ResolvedCustomViewConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
+  ResolvedSidebarConfig,
   ResolvedTerminalConfig,
   ResolvedUiColors,
   ShellProfile,
 } from "@niwaterm/config";
+import { formatSidebarBoardStatusSource } from "@niwaterm/config";
 import type { ConfigDiagnostic } from "./config-diagnostics";
 import { buildKeybindList } from "./keybind-list";
 
@@ -78,6 +80,7 @@ export interface ConfigSummaryInput {
   link: ResolvedLinkConfig;
   workspaceDefaultCwd: string | undefined;
   board: ResolvedBoardConfig;
+  sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
 }
 
@@ -279,6 +282,23 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
             : {
                 key: "phases",
                 value: input.board.phases.map((phase) => phase.id).join(", "),
+              },
+        ],
+      },
+      {
+        name: "sidebar",
+        entries: [
+          input.sidebar.boardStatus.length === 0
+            ? {
+                key: "boardStatus",
+                value: "(なし)",
+                note: "Board行にステータスラインを出さない",
+              }
+            : {
+                key: "boardStatus",
+                value: input.sidebar.boardStatus
+                  .map((item) => formatSidebarBoardStatusSource(item.source))
+                  .join(", "),
               },
         ],
       },

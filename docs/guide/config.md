@@ -1067,6 +1067,53 @@ CLIの`niwaterm board phase`（[CLIガイド](/guide/cli.md)の「Board」節）
 アプリを閉じても保存され、次回起動時に復元される。候補から`id`を消した場合、そのidが
 付いたままのBoardはidを文字どおりのラベルとして表示する。
 
+## サイドバー設定
+
+`sidebar`は、サイドバーのワークスペース一覧の見た目を指定するオブジェクト。今のところ持っているのは、Board行のステータスライン（Board名の下に出る行）の構成だけ。
+
+### Board行のステータスライン（`sidebar.boardStatus`）
+
+`boardStatus`は、ステータスラインへ並べる項目の配列。**並べた順にそのまま上から出て、書かなかった項目は出ない**。未指定時は`["builtin:phase", "builtin:branch", "builtin:agent"]`と同じ（フェーズのバッジ・`on <branch>`・エージェントの状態テキスト）。空配列`[]`にするとステータスラインごと消え、Board行はBoard名だけの1行になる。
+
+| 値 | 出るもの |
+|---|---|
+| `"builtin:phase"` | 作業フェーズのバッジ（上記「作業フェーズ」節） |
+| `"builtin:branch"` | タブ変数`branch`（既定では`on main`のように接頭辞付きで出る） |
+| `"builtin:agent"` | エージェントの状態テキスト（タブ変数`agent_status_text`） |
+| `"tab-var:<name>"` | 任意のタブ変数の値をそのまま1行 |
+
+出す値が無い項目は行を作らずに詰める。フェーズを付けていないBoard・変数が空のBoardで空行が空くことはない。
+
+文字列の代わりにオブジェクトを書くと、値の前に出すラベルと文字色を指定できる。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `source` | `string` | 上の表の値 |
+| `prefix` | `string` | 値の前に出す短いラベル。空文字列を指定するとビルトインの既定ラベル（`builtin:branch`の`on`、`builtin:agent`の`❯`）を消せる |
+| `color` | `string` | 値の文字色（CSSカラー） |
+
+```ts
+sidebar: {
+  boardStatus: [
+    "builtin:agent",
+    { source: "builtin:branch", prefix: "" },
+    { source: "tab-var:ticket", prefix: "#", color: "#f9e2af" },
+  ],
+},
+```
+
+`builtin:phase`だけはバッジとして出るため`prefix`・`color`が効かない（バッジの配色は`board.phases`の`color`で指定する）。
+
+### 値の入れ方
+
+`tab-var:<name>`と`builtin:branch`が読むのはBoard専用の変数ではなく**タブ変数**で、`niwaterm tab var set <key> <value>`（[CLIガイド](/guide/cli.md)の「タブ」節）で書き込む。Board行に出るのはフォーカス中タイルのアクティブタブ（代表タブ）の値なので、Board内でタブを切り替えると表示も切り替わる。
+
+ブランチ名（`branch`）とエージェント状態（`agent`・`agent_status`・`agent_status_text`）は`contrib/shell-integration/`・`contrib/agent-integration/`のスクリプトが自動で書き込む。自前の値を出したい場合も、シェルのフックやエージェントのhookから同じように`tab var set`で入れる。
+
+エージェント状態だけはBoard内の全タブから「応答待ち > 作業中」の順で1つ選ぶ（フォーカスしていないタイルで止まっているエージェントを取りこぼさないため）。
+
+なお、この設定が効くのはステータスラインだけ。**Board名の左のドット（エージェントの状態色）・ベル・ズーム・起動時レイアウト・ワークツリー欠損のアイコンは対象外**で、常に出る。
+
 ## レイアウト
 
 `layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`にはビルトインのプリセット（`empty`。`docs/guide/cli.md`「ビルトインのプリセット」節）だけが並ぶ。ビルトインと同名のプリセットをここで定義すると、そちらが優先されてビルトイン側は隠れる。

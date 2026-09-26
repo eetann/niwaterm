@@ -10,6 +10,7 @@ import {
   defaultLinkConfig,
   defaultLinkRules,
   defaultMouseConfig,
+  defaultSidebarConfig,
   defaultTerminalConfig,
   defaultUiColors,
   platformDefaultKeybindings,
@@ -32,6 +33,7 @@ import {
   restoreConfigDirInMessage,
   resolveShell,
   resolveShellProfiles,
+  resolveSidebar,
   resolveTerminal,
   resolveWorkspaceDefaultCwd,
 } from "./config";
@@ -732,6 +734,27 @@ describe("resolveBoard", () => {
     } finally {
       logSpy.mockRestore();
     }
+  });
+});
+
+describe("resolveSidebar", () => {
+  test("nullを渡すと既定の3項目（フェーズ・ブランチ・エージェント状態）が返る", () => {
+    expect(resolveSidebar(null)).toEqual(defaultSidebarConfig);
+  });
+
+  test("並べた項目がその順で返る", () => {
+    const resolved = resolveSidebar({
+      sidebar: { boardStatus: ["tab-var:ticket", { source: "builtin:branch", prefix: "" }] },
+    });
+
+    expect(resolved.boardStatus).toEqual([
+      { source: { kind: "tab-var", name: "ticket" }, prefix: null, color: null },
+      { source: { kind: "builtin", id: "branch" }, prefix: "", color: null },
+    ]);
+  });
+
+  test("空配列はステータスラインを出さない指定として通る", () => {
+    expect(resolveSidebar({ sidebar: { boardStatus: [] } }).boardStatus).toEqual([]);
   });
 });
 

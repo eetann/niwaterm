@@ -8,6 +8,7 @@ import type { LinkConfig } from "./link";
 import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
+import type { SidebarConfig } from "./sidebar";
 import type { TerminalConfig } from "./terminal";
 import type { WorkspaceConfig } from "./workspace";
 import type { WorktreeConfig } from "./worktree";
@@ -97,6 +98,12 @@ export interface NiwatermConfig {
    * 例: { newTabCwd: "worktree" }
    */
   board?: BoardConfig;
+  /**
+   * サイドバーの表示設定。ワークスペース一覧のBoard行に出すステータスライン（Board名の下の行）へ
+   * 並べる項目と順番を指定する。未指定ならフェーズ・ブランチ・エージェント状態の3つが出る。
+   * 例: { boardStatus: ["builtin:branch", { source: "tab-var:ticket", prefix: "#" }] }
+   */
+  sidebar?: SidebarConfig;
   /**
    * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）と、
    * 作成後の開き方の既定値（worktree.open）を指定する。

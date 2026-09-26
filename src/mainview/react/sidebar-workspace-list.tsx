@@ -27,6 +27,7 @@ import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
 import {
   type SidebarBoardItem,
+  type SidebarBoardStatusLine,
   type SidebarDropPosition,
   sidebarDropIndex,
   type SidebarPopupItem,
@@ -491,6 +492,66 @@ export function SidebarWorkspaceList({
   }
 
   /**
+   * ステータスラインの1行。並び・取捨選択・接頭辞・文字色は設定（sidebar.boardStatus）で決まり、
+   * ここは渡された1行を描くだけ。色の指定が無い行はTailwindのクラスで既定色を当てる
+   */
+  function renderBoardStatusLine(line: SidebarBoardStatusLine) {
+    if (line.kind === "phase") {
+      return (
+        <div key={line.id} className="flex">
+          <span
+            className="max-w-full truncate rounded px-1 font-sans font-semibold"
+            style={{
+              backgroundColor: line.phase.color ?? "var(--ui-accent)",
+              color: "var(--ui-badge-fg)",
+            }}
+          >
+            {line.phase.label}
+          </span>
+        </div>
+      );
+    }
+    if (line.kind === "agent") {
+      const blocked = line.agent.status === "blocked";
+      return (
+        <div key={line.id} className="flex gap-1.5">
+          {line.prefix === null ? (
+            blocked ? (
+              <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-amber-500" />
+            ) : (
+              <span className="text-sky-400">❯</span>
+            )
+          ) : (
+            <span className={cn("shrink-0", blocked ? "text-amber-500" : "text-sky-400")}>
+              {line.prefix}
+            </span>
+          )}
+          <span
+            className={cn(
+              "line-clamp-2",
+              line.color === null && (blocked ? "text-amber-400/90" : "text-muted-foreground"),
+            )}
+            style={line.color === null ? undefined : { color: line.color }}
+          >
+            {line.agent.statusText}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div key={line.id} className="flex items-center gap-1.5 text-muted-foreground">
+        {line.prefix !== null && <span className="shrink-0 text-blue-400/80">{line.prefix}</span>}
+        <span
+          className="min-w-0 truncate"
+          style={line.color === null ? undefined : { color: line.color }}
+        >
+          {line.value}
+        </span>
+      </div>
+    );
+  }
+
+  /**
    * Board行はTile/Tabを表示しない1行が既定（ADR 0006後の再設計）。ブランチ・エージェント状態が
    * 何も無ければ展開せず1行のまま終わる。何かあれば縦線ガイド付きでステータスラインを展開する
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
@@ -509,7 +570,7 @@ export function SidebarWorkspaceList({
         </div>
       );
     }
-    const hasStatusLine = board.phase !== null || board.branch !== null || board.agent !== null;
+    const hasStatusLine = board.statusItems.length > 0;
     const dotClass =
       board.agent?.status === "working"
         ? "bg-blue-500 shadow-[0_0_4px] shadow-blue-500"
@@ -593,44 +654,7 @@ export function SidebarWorkspaceList({
               <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
                 <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
                 <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
-                  {board.phase && (
-                    <div className="flex">
-                      <span
-                        className="max-w-full truncate rounded px-1 font-sans font-semibold"
-                        style={{
-                          backgroundColor: board.phase.color ?? "var(--ui-accent)",
-                          color: "var(--ui-badge-fg)",
-                        }}
-                      >
-                        {board.phase.label}
-                      </span>
-                    </div>
-                  )}
-                  {board.branch && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <span className="text-blue-400/80">on</span>
-                      <span className="min-w-0 truncate">{board.branch}</span>
-                    </div>
-                  )}
-                  {board.agent?.statusText && (
-                    <div className="flex gap-1.5">
-                      {board.agent.status === "blocked" ? (
-                        <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-amber-500" />
-                      ) : (
-                        <span className="text-sky-400">❯</span>
-                      )}
-                      <span
-                        className={cn(
-                          "line-clamp-2",
-                          board.agent.status === "blocked"
-                            ? "text-amber-400/90"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {board.agent.statusText}
-                      </span>
-                    </div>
-                  )}
+                  {board.statusItems.map((line) => renderBoardStatusLine(line))}
                 </div>
               </div>
             )}

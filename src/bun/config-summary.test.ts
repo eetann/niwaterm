@@ -4,6 +4,7 @@ import {
   defaultBoardConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
+  defaultSidebarConfig,
   defaultTerminalConfig,
   defaultUiColors,
 } from "@niwaterm/config";
@@ -32,6 +33,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     },
     workspaceDefaultCwd: undefined,
     board: defaultBoardConfig,
+    sidebar: defaultSidebarConfig,
     terminal: defaultTerminalConfig,
     ...overrides,
   };
@@ -66,6 +68,7 @@ describe("buildConfigSummary", () => {
       "layouts",
       "browser",
       "board",
+      "sidebar",
       "terminal",
       "workspace",
       "mouse",

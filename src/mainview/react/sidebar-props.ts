@@ -1,4 +1,10 @@
-import { type ResolvedBoardPhase, resolveBoardPhase } from "@niwaterm/config";
+import {
+  defaultSidebarConfig,
+  formatSidebarBoardStatusSource,
+  type ResolvedBoardPhase,
+  type ResolvedSidebarBoardStatusItem,
+  resolveBoardPhase,
+} from "@niwaterm/config";
 import type { BoardRestoreMode } from "../../bun/persistence";
 import { findNode, listLeaves, type TabId } from "../../bun/tile-layout";
 import type { BoardId } from "../../bun/workspace";
@@ -29,7 +35,8 @@ export interface SidebarBoardItem {
   boardId: BoardId;
   label: string;
   active: boolean;
-  branch: string | null;
+  /** ステータスライン（Board名の下の行）に出す行。sidebar.boardStatusに並べた順 */
+  statusItems: SidebarBoardStatusLine[];
   agent: SidebarBoardAgentInfo | null;
   /** フォーカス中タイルがズーム表示中か（toggle-zoom）。Board内のどのタイルかは問わず、見た目上は1行のBoardが対象 */
   zoomed: boolean;
@@ -53,6 +60,25 @@ export interface SidebarBoardPhaseItem {
   /** 候補で指定された配色。未指定はnull（表示側の既定色） */
   color: string | null;
 }
+
+/** 値の前に出すラベルと文字色。設定（sidebar.boardStatus）の要素ごとの指定 */
+interface SidebarBoardStatusLineStyle {
+  /** 出どころの文字列表現（`builtin:branch`・`tab-var:ticket`）。Reactのkeyに使う */
+  id: string;
+  /** 未指定はnull（ビルトインの既定ラベルか、ラベル無し） */
+  prefix: string | null;
+  /** 未指定はnull（表示側の既定色） */
+  color: string | null;
+}
+
+/**
+ * Board行のステータスラインに出す1行。sidebar.boardStatusに並べた順で入る。
+ * 出す値が無い項目（フェーズ未設定・タブ変数が空）は行自体が作られない
+ */
+export type SidebarBoardStatusLine =
+  | { kind: "phase"; id: string; phase: SidebarBoardPhaseItem }
+  | (SidebarBoardStatusLineStyle & { kind: "agent"; agent: SidebarBoardAgentInfo })
+  | (SidebarBoardStatusLineStyle & { kind: "text"; value: string });
 
 export interface SidebarPopupItem {
   tabId: TabId;
@@ -212,6 +238,51 @@ function toPhaseItem(
   return { value, label: resolved.label, color: resolved.color };
 }
 
+/** ビルトインのbranchが読むタブ変数名。シェル統合（contrib/shell-integration）が書き込む */
+const BRANCH_TAB_VAR = "branch";
+
+/**
+ * Board行のステータスラインに出す行を、設定（sidebar.boardStatus）の並び順で組み立てる。
+ * 値が無い項目は行を作らずに詰める（設定に並べてあっても、そのBoardで出すものが無ければ
+ * 空行が空くだけのため）
+ */
+function buildBoardStatusLines(
+  items: readonly ResolvedSidebarBoardStatusItem[],
+  vars: Record<string, string> | undefined,
+  agent: SidebarBoardAgentInfo | null,
+  phase: SidebarBoardPhaseItem | null,
+): SidebarBoardStatusLine[] {
+  const lines: SidebarBoardStatusLine[] = [];
+  for (const item of items) {
+    const id = formatSidebarBoardStatusSource(item.source);
+    if (item.source.kind === "tab-var") {
+      const value = vars?.[item.source.name] || "";
+      if (value) lines.push({ kind: "text", id, value, prefix: item.prefix, color: item.color });
+      continue;
+    }
+    switch (item.source.id) {
+      case "phase":
+        if (phase) lines.push({ kind: "phase", id, phase });
+        break;
+      case "branch": {
+        const value = vars?.[BRANCH_TAB_VAR] || "";
+        // 既定の接頭辞は"on"（`on main`と読ませる。starshipのgitブランチ表記と同じ形）
+        if (value) {
+          lines.push({ kind: "text", id, value, prefix: item.prefix ?? "on", color: item.color });
+        }
+        break;
+      }
+      case "agent":
+        // statusTextが無いエージェントはBoard名の左のドットの色だけで示す
+        if (agent?.statusText) {
+          lines.push({ kind: "agent", id, agent, prefix: item.prefix, color: item.color });
+        }
+        break;
+    }
+  }
+  return lines;
+}
+
 /**
  * サイドバーへ渡すワークスペース一覧を、ラベル整形とactive判定まで済ませた形で組み立てる（DOM非依存）。
  * サイドバーは全ワークスペースをフラットに列挙する（アクティブワークスペースのみのタイル木とは別）。
@@ -226,6 +297,7 @@ export function buildSidebarWorkspaceItems(
   workspaces: WorkspaceListEntry[],
   currentActiveWorkspaceId: WorkspaceId | null,
   boardPhases: readonly ResolvedBoardPhase[] = [],
+  boardStatus: readonly ResolvedSidebarBoardStatusItem[] = defaultSidebarConfig.boardStatus,
 ): SidebarWorkspaceItem[] {
   return workspaces.map((entry, workspaceIndex) => ({
     workspaceId: entry.workspaceId,
@@ -241,15 +313,15 @@ export function buildSidebarWorkspaceItems(
     boards: entry.boards.map((board, boardIndex) => {
       const representativeTabId = findRepresentativeTabId(board);
       const vars = representativeTabId ? board.tabVars[representativeTabId] : undefined;
-      // branchは「今そのBoardで見ているタブ」の値が自然なので代表タブのみを見る。
+      // タブ変数（ブランチ等）は「今そのBoardで見ているタブ」の値が自然なので代表タブのみを見る。
       // エージェント状態はBoard内の全タブから拾う（findBoardAgentのコメント参照）
-      const branch = vars?.["branch"] || null;
       const agent = findBoardAgent(board, representativeTabId);
+      const phase = board.phase === null ? null : toPhaseItem(boardPhases, board.phase);
       return {
         boardId: board.boardId,
         label: boardLabel(board, boardIndex),
         active: entry.workspaceId === currentActiveWorkspaceId && board.active,
-        branch,
+        statusItems: buildBoardStatusLines(boardStatus, vars, agent, phase),
         agent,
         zoomed: board.zoomedTileId !== null,
         bell: hasUnreadBell(board),
@@ -262,7 +334,7 @@ export function buildSidebarWorkspaceItems(
           : null,
         worktreePath: board.worktreePath,
         worktreeMissing: board.worktreeMissing,
-        phase: board.phase === null ? null : toPhaseItem(boardPhases, board.phase),
+        phase,
       };
     }),
   }));
