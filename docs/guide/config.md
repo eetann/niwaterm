@@ -125,7 +125,7 @@ export default defineConfig({
 **非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
 
 ```ts
-niwa.keybind("c", async () => {
+niwa.keybind("t", async () => {
   const created = niwa.tab.create();
   if (!created) return;
   await niwa.sleep(300);
@@ -267,7 +267,8 @@ keybindings: {
 | `w` | close-tile |
 | `up` / `down` / `left` / `right` | focus-up / focus-down / focus-left / focus-right |
 | `z` | toggle-zoom |
-| `c` | new-tab |
+| `c` | new-board |
+| `t` | new-tab |
 | `shift+t` | new-browser-tab |
 | `u` | focus-url-bar |
 | `n` / `p` | next-tab / prev-tab |
@@ -297,14 +298,14 @@ keybindings: {
 | `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
 | `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照） |
 | `toggle-zoom` | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除。タブを右クリックして「ズーム表示」／「ズームを解除」を選んでも同じことができる） |
-| `new-tab` | 新規タブ作成 |
+| `new-tab` | 新規タブ作成（既定は prefix + `t`。ブラウザタブの`shift+t`と対になる） |
 | `new-browser-tab` | 新規ブラウザタブ作成（既定は prefix + `shift+t`。表示URLは`browser.defaultUrl`を参照）。開いた直後はURL欄にフォーカスが入り全選択されるので、URLを打ってEnterするだけで遷移できる（Escapeで元のURLへ戻す） |
 | `new-custom-view-tab` | `customViews`の先頭のビューを開くタブを作成（`customViews`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある。ビューを選んで開くにはCLIの`niwaterm tab new --custom-view --view <id>`を使う） |
 | `focus-url-bar` | 表示中のブラウザタブのURL欄へフォーカスし、全選択して打ち替えられる状態にする（既定は prefix + `u`。ブラウザのCmd+L相当だが、`l`をhjklのタイル移動に充てる設定と衝突しないようURLの頭文字にしている。Enterで遷移、Escapeで元のURLへ戻してターミナルへフォーカスを返す。ターミナルタブでは何もしない） |
 | `next-tab` / `prev-tab` | タブ切替 |
 | `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
 | `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
-| `new-board` | アクティブなワークスペースにBoardを追加する（tmuxの`new-window`相当。CLIの`niwaterm board new`と同じ）。サイドバーのワークスペース見出しを右クリックしても同じことができる。既定キーは無いため使うには自分で割り当てる必要がある |
+| `new-board` | アクティブなワークスペースにBoardを追加する（既定は prefix + `c`。tmuxの`new-window`相当で、キーも`bind-key c`を踏襲する。CLIの`niwaterm board new`と同じ）。サイドバーのワークスペース見出しを右クリックしても同じことができる |
 | `close-board` | アクティブなBoardを中のタブごと削除する（CLIの`niwaterm board close`と同じ。実行前にy/nの確認ダイアログを挟む。ワークスペースが1つだけのときの最後の1つは閉じられない。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |

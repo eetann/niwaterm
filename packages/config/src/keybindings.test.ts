@@ -251,10 +251,8 @@ const UNASSIGNED_BINDING_ACTIONS = [
   "clear-board-startup",
   // prev-sidebar-viewも既定キーを持たない（customViewが1つだけならnext-sidebar-viewの往復で足りるため）
   "prev-sidebar-view",
-  // new-board/close-boardも既定キーを持たない（2打目キーのshift+bはnext-sidebar-viewに埋まっており、
-  // Boardの頭文字で揃う空きキーが無いため。新規作成系のshift+頭文字の並び（shift+t/shift+n/shift+w）に
-  // 加えられないなら、他の空きキーを当てるよりユーザーの好みに委ねる）
-  "new-board",
+  // close-boardは既定キーを持たない（Boardを中のタブごと消す破壊的操作で、tmuxにもbind-key &（確認付きの
+  // kill-window）に相当するキーしか無いため。ユーザーの好みに委ねる）
   "close-board",
   // rename-workspace/close-workspaceも既定キーを持たない（ワークスペース側の2打目キーは
   // shift+n（新規）・]/[（切替）で埋まっており、rename-board（,）に対応する空きも無いため）
@@ -277,10 +275,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の35個のアクションに1つずつ割り当てられている", () => {
+  test("UNASSIGNED_BINDING_ACTIONS以外の36個のアクションに1つずつ割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(35);
-    expect(new Set(actions).size).toBe(35);
+    expect(actions.length).toBe(36);
+    expect(new Set(actions).size).toBe(36);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
       expect(actions).toContain(action);
@@ -289,6 +287,14 @@ describe("defaultKeybindings", () => {
 
   test("new-custom-view-tabはcustomView未設定時に無意味なため既定キーを持たない（ユーザー設定での割り当てを想定）", () => {
     expect(Object.values(defaultKeybindings.bindings ?? {})).not.toContain("new-custom-view-tab");
+  });
+
+  test("new-boardはprefix + c（tmuxのbind-key c new-windowを踏襲する）", () => {
+    expect(defaultKeybindings.bindings?.["c"]).toBe("new-board");
+  });
+
+  test("new-tabはprefix + t（new-browser-tabのshift+tと対で覚えられる）", () => {
+    expect(defaultKeybindings.bindings?.["t"]).toBe("new-tab");
   });
 
   test("rename-boardはprefix + ,（tmuxのbind-key , rename-windowを踏襲する）", () => {
@@ -402,17 +408,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings35件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings36件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(35);
+    expect(compiled.bindings.size).toBe(36);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings35件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings36件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(35);
+    expect(compiled.bindings.size).toBe(36);
     expect(compiled.direct.size).toBe(2);
   });
 

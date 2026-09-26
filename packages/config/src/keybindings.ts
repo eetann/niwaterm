@@ -162,7 +162,10 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   right: "focus-right",
   // tmux標準のbind-key z resize-pane -Zを踏襲する
   z: "toggle-zoom",
-  c: "new-tab",
+  // tmuxのbind-key c new-window相当（Boardはtmuxのwindowに対応する）
+  c: "new-board",
+  // Tabの頭文字。shift+tのブラウザタブと対で覚えられる
+  t: "new-tab",
   "shift+t": "new-browser-tab",
   // ブラウザのCmd+L相当だが、lはhjklでのタイル移動に充てるユーザーが多いため避け、
   // URLの頭文字を取る

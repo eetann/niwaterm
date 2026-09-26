@@ -91,10 +91,19 @@ describe("createKeybindResolver（デフォルトキーバインド・prefix方�
     });
   });
 
-  test("prefix -> c で新規タブ作成", () => {
+  test("prefix -> c で新規Board作成", () => {
     const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
     resolver.handleKeydown(prefix());
     expect(resolver.handleKeydown(key("c"))).toEqual({
+      kind: "command",
+      command: { type: "newBoard" },
+    });
+  });
+
+  test("prefix -> t で新規タブ作成", () => {
+    const resolver = createKeybindResolver(compileKeybindings(defaultKeybindings));
+    resolver.handleKeydown(prefix());
+    expect(resolver.handleKeydown(key("t"))).toEqual({
       kind: "command",
       command: { type: "newTab" },
     });
