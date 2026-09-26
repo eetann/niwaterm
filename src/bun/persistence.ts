@@ -4,7 +4,8 @@
 // tabIds/tileIdの実体は保存せず新規採番するため、木構造の走査順（leafの並び・tabsの並び）で
 // 永続化データと新規採番後のidを対応付ける。
 
-import { mkdir } from "node:fs/promises";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { mkdir, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { appSupportDir } from "./app-paths";
 import type { FlexDirection, TabId, TileId, TileNode } from "./tile-layout";
@@ -364,21 +365,102 @@ function migrateV2ToV3(v2: {
   };
 }
 
-/** ファイルが無い・JSONとして壊れている・スキーマ不一致（v2/v3以外）のいずれでも例外を投げずnullを返す */
-export async function loadPersistedState(path: string): Promise<PersistedState | null> {
+// ---- 読み書き ----
+
+/** workspaces.jsonの1世代前の控え。本体が読めなくなった際の復元元になる */
+export function backupFilePathOf(path: string): string {
+  return `${path}.bak`;
+}
+
+/**
+ * 書き込み中の一時ファイル。本体へは必ずrenameで差し替えるため、書き込み途中で
+ * プロセスが終了しても本体が尻切れのJSONにならない。
+ * pidを挟むのは、同じアプリを二重起動した際に双方が同じ一時ファイルへ書いて内容を混ぜないため
+ */
+function tempFilePathOf(path: string, kind: "async" | "sync"): string {
+  return `${path}.${process.pid}.${kind}.tmp`;
+}
+
+function serialize(state: PersistedState): string {
+  return JSON.stringify(state, null, 2);
+}
+
+/** 1ファイルの読み取り結果。「無い」と「読めない」を呼び出し側で区別するため分ける */
+type ReadFileResult =
+  | { kind: "ok"; state: PersistedState }
+  | { kind: "missing" }
+  | { kind: "broken"; reason: string };
+
+async function readPersistedFile(path: string): Promise<ReadFileResult> {
   try {
     const file = Bun.file(path);
-    if (!(await file.exists())) return null;
+    if (!(await file.exists())) return { kind: "missing" };
     const data: unknown = await file.json();
-    if (isPersistedState(data)) return data;
-    if (isPersistedStateV2(data)) return migrateV2ToV3(data);
-    return null;
-  } catch {
-    return null;
+    if (isPersistedState(data)) return { kind: "ok", state: data };
+    if (isPersistedStateV2(data)) return { kind: "ok", state: migrateV2ToV3(data) };
+    return { kind: "broken", reason: `${path}: スキーマが一致しません` };
+  } catch (err) {
+    return { kind: "broken", reason: `${path}: ${String(err)}` };
   }
 }
 
+/**
+ * 起動時の復元結果。
+ * "restored": 復元できた（fromBackupがtrueなら本体ではなく控えから拾った）。
+ * "none": まだ一度も保存されていない（初回起動）。
+ * "unreadable": 保存はあるが読めない（尻切れ・スキーマ不一致・I/Oエラー）。
+ *
+ * "none"と"unreadable"を分けるのは、後者で真っ白な状態から保存を続けると、読めなかっただけの
+ * ファイルを上書きして復旧不能にするため。呼び出し側は"unreadable"の間は保存を止める
+ */
+export type LoadPersistedStateResult =
+  | { kind: "restored"; state: PersistedState; fromBackup: boolean }
+  | { kind: "none" }
+  | { kind: "unreadable"; reason: string };
+
+/** 例外は投げない。本体が読めなければ1世代前の控え（backupFilePathOf）へフォールバックする */
+export async function loadPersistedState(path: string): Promise<LoadPersistedStateResult> {
+  const primary = await readPersistedFile(path);
+  if (primary.kind === "ok") {
+    return { kind: "restored", state: primary.state, fromBackup: false };
+  }
+  const backup = await readPersistedFile(backupFilePathOf(path));
+  if (backup.kind === "ok") {
+    return { kind: "restored", state: backup.state, fromBackup: true };
+  }
+  if (primary.kind === "broken") return { kind: "unreadable", reason: primary.reason };
+  if (backup.kind === "broken") return { kind: "unreadable", reason: backup.reason };
+  return { kind: "none" };
+}
+
+/**
+ * 本体を1世代前の控えへ退避してから、一時ファイルを本体へ差し替える。
+ * renameは同一ディレクトリ内なので、本体は常に「前回の内容」か「今回の内容」のどちらかになる
+ */
 export async function savePersistedState(path: string, state: PersistedState): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  await Bun.write(path, JSON.stringify(state, null, 2));
+  const tempPath = tempFilePathOf(path, "async");
+  await Bun.write(tempPath, serialize(state));
+  try {
+    await rename(path, backupFilePathOf(path));
+  } catch {
+    // 初回起動では退避する本体がまだ無い
+  }
+  await rename(tempPath, path);
+}
+
+/**
+ * savePersistedStateの同期版。アプリ終了時（before-quit・メインウィンドウのclose）に使う。
+ * 非同期の書き込みはプロセスの終了に間に合わず、最後の変更がそのまま落ちるため
+ */
+export function savePersistedStateSync(path: string, state: PersistedState): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tempPath = tempFilePathOf(path, "sync");
+  writeFileSync(tempPath, serialize(state));
+  try {
+    renameSync(path, backupFilePathOf(path));
+  } catch {
+    // 初回起動では退避する本体がまだ無い
+  }
+  renameSync(tempPath, path);
 }

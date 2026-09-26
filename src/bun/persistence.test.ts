@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  backupFilePathOf,
   buildTreeFromPersisted,
   loadPersistedState,
   persistedFilePath,
@@ -11,9 +12,19 @@ import {
   type PersistedTileNode,
   type PersistTreeContext,
   savePersistedState,
+  savePersistedStateSync,
   toPersistedTileNode,
 } from "./persistence";
 import type { TileNode } from "./tile-layout";
+
+/**
+ * 「復元できたか」だけを見るテスト用ヘルパー。復元できなかった理由（none/unreadable）の
+ * 区別は専用のテストで確かめる
+ */
+async function restoredState(path: string): Promise<PersistedState | null> {
+  const result = await loadPersistedState(path);
+  return result.kind === "restored" ? result.state : null;
+}
 
 describe("toPersistedTileNode", () => {
   test("leafはtabs配列とactiveTabIndexに変換される", () => {
@@ -320,7 +331,7 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await savePersistedState(path, state);
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
   test("version 2の旧形式ファイルは単一Boardのworkspaceとしてマイグレーションされる（ADR 0006）", async () => {
@@ -346,7 +357,7 @@ describe("loadPersistedState / savePersistedState", () => {
       }),
     );
 
-    expect(await loadPersistedState(path)).toEqual({
+    expect(await restoredState(path)).toEqual({
       version: 3,
       activeWorkspaceIndex: 0,
       workspaces: [
@@ -371,17 +382,17 @@ describe("loadPersistedState / savePersistedState", () => {
     });
   });
 
-  test("ファイルが存在しない場合はnullを返す", async () => {
-    expect(await loadPersistedState(join(dir, "not-found.json"))).toBeNull();
+  test("ファイルが存在しない場合は復元しない", async () => {
+    expect(await restoredState(join(dir, "not-found.json"))).toBeNull();
   });
 
-  test("壊れたJSONの場合はnullを返す", async () => {
+  test("壊れたJSONの場合は復元しない", async () => {
     const path = join(dir, "broken.json");
     await writeFile(path, "{ this is not valid json");
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("versionが一致しない場合はnullを返す（旧v1ファイルは新スキーマで拒否される）", async () => {
+  test("versionが一致しない場合は復元しない（旧v1ファイルは新スキーマで拒否される）", async () => {
     const path = join(dir, "wrong-version.json");
     await writeFile(
       path,
@@ -391,16 +402,16 @@ describe("loadPersistedState / savePersistedState", () => {
         activeWorkspaceIndex: 0,
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("スキーマが不正な場合はnullを返す", async () => {
+  test("スキーマが不正な場合は復元しない", async () => {
     const path = join(dir, "invalid-schema.json");
     await writeFile(path, JSON.stringify({ version: 2, workspaces: "not-an-array" }));
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("browserタブでurlが欠落している場合はnullを返す", async () => {
+  test("browserタブでurlが欠落している場合は復元しない", async () => {
     const path = join(dir, "invalid-browser-tab.json");
     await writeFile(
       path,
@@ -410,7 +421,7 @@ describe("loadPersistedState / savePersistedState", () => {
         workspaces: [{ layout: { kind: "leaf", tabs: [{ kind: "browser" }], activeTabIndex: 0 } }],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
   test("Boardのstartup（起動時レイアウト）がラウンドトリップする", async () => {
@@ -436,7 +447,7 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await savePersistedState(path, state);
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
   test("BoardのworktreePathがラウンドトリップする", async () => {
@@ -459,10 +470,10 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await savePersistedState(path, state);
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
-  test("worktreePathが文字列でない場合はnullを返す", async () => {
+  test("worktreePathが文字列でない場合は復元しない", async () => {
     const path = join(dir, "invalid-worktree-path.json");
     await writeFile(
       path,
@@ -482,10 +493,10 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("startupのrestoreModeが未知の値の場合はnullを返す", async () => {
+  test("startupのrestoreModeが未知の値の場合は復元しない", async () => {
     const path = join(dir, "invalid-startup-mode.json");
     await writeFile(
       path,
@@ -505,10 +516,10 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("startupのpresetが空文字列の場合はnullを返す", async () => {
+  test("startupのpresetが空文字列の場合は復元しない", async () => {
     const path = join(dir, "invalid-startup-preset.json");
     await writeFile(
       path,
@@ -528,7 +539,7 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
   test("startupのprojectRoot（プリセットの解決元）がラウンドトリップする", async () => {
@@ -557,7 +568,7 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await writeFile(path, JSON.stringify(state));
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
   test("startupのcwd（紐づけ時の実行ディレクトリ）がラウンドトリップする", async () => {
@@ -586,7 +597,7 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await writeFile(path, JSON.stringify(state));
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
   test("startupのtabCwd（タブを開く基準ディレクトリ）がラウンドトリップする", async () => {
@@ -616,10 +627,10 @@ describe("loadPersistedState / savePersistedState", () => {
       ],
     };
     await writeFile(path, JSON.stringify(state));
-    expect(await loadPersistedState(path)).toEqual(state);
+    expect(await restoredState(path)).toEqual(state);
   });
 
-  test("startupのtabCwdが空文字列の場合はnullを返す", async () => {
+  test("startupのtabCwdが空文字列の場合は復元しない", async () => {
     const path = join(dir, "invalid-startup-tab-cwd.json");
     await writeFile(
       path,
@@ -639,10 +650,10 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("startupのcwdが空文字列の場合はnullを返す", async () => {
+  test("startupのcwdが空文字列の場合は復元しない", async () => {
     const path = join(dir, "invalid-startup-cwd.json");
     await writeFile(
       path,
@@ -662,10 +673,10 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("startupのprojectRootが空文字列の場合はnullを返す", async () => {
+  test("startupのprojectRootが空文字列の場合は復元しない", async () => {
     const path = join(dir, "invalid-startup-project-root.json");
     await writeFile(
       path,
@@ -685,10 +696,10 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 
-  test("varsの値が文字列でない場合はnullを返す", async () => {
+  test("varsの値が文字列でない場合は復元しない", async () => {
     const path = join(dir, "invalid-vars.json");
     await writeFile(
       path,
@@ -706,7 +717,7 @@ describe("loadPersistedState / savePersistedState", () => {
         ],
       }),
     );
-    expect(await loadPersistedState(path)).toBeNull();
+    expect(await restoredState(path)).toBeNull();
   });
 });
 
@@ -719,5 +730,100 @@ describe("persistedFilePath", () => {
         ? /Roaming\\niwaterm-wip\\workspaces\.json$/
         : /Library\/Application Support\/niwaterm-wip\/workspaces\.json$/,
     );
+  });
+});
+
+describe("読み込み失敗の扱いとバックアップ", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-persistence-backup-test-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** ワークスペース名だけを変えた最小の状態。世代の違いを名前で見分ける */
+  function sampleState(name: string): PersistedState {
+    return {
+      version: 3,
+      activeWorkspaceIndex: 0,
+      workspaces: [
+        {
+          name,
+          activeBoardIndex: 0,
+          boards: [{ layout: { kind: "leaf", tabs: [{ kind: "terminal" }], activeTabIndex: 0 } }],
+        },
+      ],
+    };
+  }
+
+  test("本体もバックアップも無ければnone（初回起動）", async () => {
+    expect(await loadPersistedState(join(dir, "workspaces.json"))).toEqual({ kind: "none" });
+  });
+
+  test("本体が読めずバックアップも無ければunreadable（保存を止めるための合図）", async () => {
+    const path = join(dir, "workspaces.json");
+    await writeFile(path, '{"version": 3, "workspa');
+    const result = await loadPersistedState(path);
+    expect(result.kind).toBe("unreadable");
+    expect(result.kind === "unreadable" && result.reason).toContain(path);
+  });
+
+  test("本体が読めなければバックアップから復元する", async () => {
+    const path = join(dir, "workspaces.json");
+    await writeFile(backupFilePathOf(path), JSON.stringify(sampleState("前の世代")));
+    await writeFile(path, "{ 途中で切れたJSON");
+
+    expect(await loadPersistedState(path)).toEqual({
+      kind: "restored",
+      state: sampleState("前の世代"),
+      fromBackup: true,
+    });
+  });
+
+  test("本体が無くてもバックアップがあれば復元する", async () => {
+    const path = join(dir, "workspaces.json");
+    await writeFile(backupFilePathOf(path), JSON.stringify(sampleState("前の世代")));
+
+    const result = await loadPersistedState(path);
+    expect(result.kind === "restored" && result.fromBackup).toBe(true);
+  });
+
+  test("保存すると直前の内容がバックアップへ退避される", async () => {
+    const path = join(dir, "nested", "workspaces.json");
+    await savePersistedState(path, sampleState("1世代目"));
+    await savePersistedState(path, sampleState("2世代目"));
+
+    expect(await restoredState(path)).toEqual(sampleState("2世代目"));
+    expect(await restoredState(backupFilePathOf(path))).toEqual(sampleState("1世代目"));
+  });
+
+  test("保存後に一時ファイルが残らない", async () => {
+    const path = join(dir, "workspaces.json");
+    await savePersistedState(path, sampleState("1世代目"));
+    await savePersistedState(path, sampleState("2世代目"));
+    savePersistedStateSync(path, sampleState("3世代目"));
+
+    expect((await readdir(dir)).sort()).toEqual(["workspaces.json", "workspaces.json.bak"]);
+  });
+
+  test("savePersistedStateSyncも同じ形で書き出す", async () => {
+    const path = join(dir, "nested", "workspaces.json");
+    savePersistedStateSync(path, sampleState("1世代目"));
+    savePersistedStateSync(path, sampleState("2世代目"));
+
+    expect(await restoredState(path)).toEqual(sampleState("2世代目"));
+    expect(await restoredState(backupFilePathOf(path))).toEqual(sampleState("1世代目"));
+  });
+
+  test("非同期・同期の書き出しは互いのバックアップを引き継ぐ", async () => {
+    const path = join(dir, "workspaces.json");
+    await savePersistedState(path, sampleState("1世代目"));
+    savePersistedStateSync(path, sampleState("2世代目"));
+
+    expect(await restoredState(path)).toEqual(sampleState("2世代目"));
+    expect(await restoredState(backupFilePathOf(path))).toEqual(sampleState("1世代目"));
   });
 });

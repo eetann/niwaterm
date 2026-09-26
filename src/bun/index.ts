@@ -50,7 +50,14 @@ import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { isAllowedLinkUrl } from "./open-link";
 import { resolveBoardNewTabCwd, resolveWorktreeInputPath } from "./board-worktree";
-import { loadPersistedState, persistedFilePath, savePersistedState } from "./persistence";
+import {
+  backupFilePathOf,
+  loadPersistedState,
+  type PersistedState,
+  persistedFilePath,
+  savePersistedState,
+  savePersistedStateSync,
+} from "./persistence";
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
@@ -469,27 +476,71 @@ function resetFontSizeZoom(): number {
 const windowFramePath = windowStateFilePath();
 
 /**
- * workspaces.jsonへ今すぐ書き出す。書き出すのはメインウィンドウの中身だけで、
- * メインウィンドウが閉じた後（一時ウィンドウだけが残っている状態）は何もしない。
+ * 起動時に前回の状態を読めなかった理由。nullなら保存してよい。
+ * 読めなかっただけのworkspaces.jsonを真っ白な状態で上書きすると復旧不能になるため、
+ * 読めなかった起動ではそのまま保存を止める（次の起動でファイルを直せば復元できる）
+ */
+let persistBlockedReason: string | null = null;
+
+/**
+ * workspaces.jsonへ書き出す内容。書き出すのはメインウィンドウの中身だけで、
+ * 起動時に前回の状態を読めなかった場合と、
+ * メインウィンドウが閉じた後（一時ウィンドウだけが残っている状態）はnullを返す。
  * 一時ウィンドウの中身で前回の状態を上書きしないため
  */
+function persistableState(): PersistedState | null {
+  if (persistBlockedReason !== null) return null;
+  return windowManager.persistentState();
+}
+
+// 書き込みの直列化に使う。キューで待っている間に新しい保存が積まれた古い内容は捨てる
+// （同じパスへの書き込みが重なると、内容が混ざった中途半端なファイルが残るため）
+let persistQueue: Promise<void> = Promise.resolve();
+let persistSeq = 0;
+
+/** workspaces.jsonへ今すぐ書き出す（非同期）。直前の書き込みが終わるまで待ってから書く */
 function savePersistedStateNow(): void {
-  const state = windowManager.persistentState();
+  const state = persistableState();
   if (state === null) return;
-  savePersistedState(persistedFilePath(), state).catch((err: unknown) => {
-    console.log(`[bun] failed to save persisted state: ${String(err)}`);
-  });
+  const seq = ++persistSeq;
+  persistQueue = persistQueue
+    .then(async () => {
+      if (seq !== persistSeq) return;
+      await savePersistedState(persistedFilePath(), state);
+    })
+    .catch((err: unknown) => {
+      console.log(`[bun] failed to save persisted state: ${String(err)}`);
+    });
 }
 
 // レイアウト骨格の永続化は500msでコアレス（連続ドラッグ等での書き込み過多を防ぐ）
-let persistScheduled = false;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
 function schedulePersist() {
-  if (persistScheduled) return;
-  persistScheduled = true;
-  setTimeout(() => {
-    persistScheduled = false;
+  if (persistTimer !== null) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
     savePersistedStateNow();
   }, 500);
+}
+
+/**
+ * アプリ・メインウィンドウが閉じる直前の書き出し。非同期の書き込みはプロセスの終了に
+ * 間に合わないため同期で書く。persistSeqを進めるのは、キューで待っている古い内容の
+ * 書き込みがこの後に実行されて新しい内容を巻き戻さないようにするため
+ */
+function savePersistedStateOnExit(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  const state = persistableState();
+  if (state === null) return;
+  persistSeq++;
+  try {
+    savePersistedStateSync(persistedFilePath(), state);
+  } catch (err) {
+    console.log(`[bun] failed to save persisted state on exit: ${String(err)}`);
+  }
 }
 
 function onDirty(windowId: WindowId) {
@@ -558,7 +609,12 @@ let runDefaultOpenLink: (event: NiwaLinkEvent) => void;
 // wsl.exeを呼び直さない（アプリ再起動で反映されれば十分という判断）
 const detectedShellProfiles = await detectShellProfiles();
 
-const restoreFrom = await loadPersistedState(persistedFilePath());
+const persisted = await loadPersistedState(persistedFilePath());
+const restoreFrom = persisted.kind === "restored" ? persisted.state : null;
+if (persisted.kind === "unreadable") {
+  persistBlockedReason = persisted.reason;
+  console.log(`[bun] failed to load persisted state, saving is disabled: ${persisted.reason}`);
+}
 
 // ElectrobunのUtils.showNotificationはWindows実機で機能せず（windows-notification.ts参照）、
 // macOSではクリックされた通知を識別できない（mac-notification.ts参照）ため、両OSとも自前実装に
@@ -568,6 +624,24 @@ const sendNotification: (opts: NiwaNotifyOptions) => void =
   process.platform === "win32"
     ? sendWindowsNotification
     : (macNotifier?.send ?? Utils.showNotification);
+
+// 復元が普段どおりに進まなかったことはユーザーに気づいてもらう必要がある。
+// バックアップから拾った場合は直前の変更が落ちている可能性があり、読めなかった場合は
+// この起動のあいだレイアウトが保存されない
+if (persisted.kind === "restored" && persisted.fromBackup) {
+  console.log(
+    `[bun] restored persisted state from backup: ${backupFilePathOf(persistedFilePath())}`,
+  );
+  sendNotification({
+    title: "前回の状態をバックアップから復元しました",
+    body: `${persistedFilePath()}が読めなかったため、1世代前の控えから復元しました`,
+  });
+} else if (persisted.kind === "unreadable") {
+  sendNotification({
+    title: "前回の状態を復元できません",
+    body: `上書きを防ぐため、この起動ではレイアウトを保存しません: ${persisted.reason}`,
+  });
+}
 
 // Boardに紐づくワークツリーが消えていないかの監視。renderのたびに同期statを打つわけにいかないため
 // キャッシュ越しに引く（dir-existence.ts）
@@ -1356,7 +1430,7 @@ function finalizeWindow(windowId: WindowId, closeNative: boolean): void {
   // window-manager側から畳まれた場合、この時点で既にpersistent判定はfalseになっており
   // 中身も空なので保存は走らない（空のワークスペースで上書きしないための順序）
   saveWindowFrameNow(view);
-  if (windowManager.isPersistent(windowId)) savePersistedStateNow();
+  if (windowManager.isPersistent(windowId)) savePersistedStateOnExit();
   if (closeNative) view.browserWindow.close();
 }
 
@@ -1463,7 +1537,7 @@ Electrobun.events.on("before-quit", () => {
   for (const view of views.values()) {
     saveWindowFrameNow(view);
   }
-  savePersistedStateNow();
+  savePersistedStateOnExit();
   cleanup();
 });
 
