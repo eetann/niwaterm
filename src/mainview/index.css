@@ -542,13 +542,21 @@ body {
   background: rgba(0, 0, 0, 0.5);
 }
 #popup:not([hidden]) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* 中身は絶対配置の#popup-box1つだけ。中央寄せはそちらのleft/top+transformが担う */
+  display: block;
 }
 #popup-box {
   display: flex;
   flex-direction: column;
+  /*
+   * 枠のドラッグで位置が決まっていない間の既定位置。inset:0とmargin:autoで中央へ置く。
+   * translate(-50%,-50%)を使わないのは、端数ピクセルのtransformでターミナルの文字が
+   * にじむのを避けるため。位置が決まるとindex.ts側がleft/top/right/bottom/marginを
+   * インラインで上書きし、掴んだ辺を起点にした絶対配置へ切り替わる
+   */
+  position: absolute;
+  inset: 0;
+  margin: auto;
   width: 80%;
   height: 80%;
   padding: 0 4px 4px;
@@ -566,12 +574,81 @@ body {
  */
 #popup-toolbar {
   display: flex;
+  /* 空き領域（ボタンより左）が枠の移動ハンドルを兼ねる */
+  cursor: move;
   justify-content: flex-end;
   flex: 0 0 auto;
   margin: 0 -4px 4px;
   padding: 2px 4px;
   background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--ui-border);
+}
+
+/*
+ * 枠をドラッグしてリサイズするための掴み代。#popup-boxがoverflow:hiddenなので枠の内側へ置く
+ * （外へ出すと描画もヒットテストもクリップされて効かない）。
+ * z-indexは#popup-content（auto）・.copied-badge(3)より上、ツールバーのボタン列(z-10)より下。
+ * 左右下は#popup-boxのpaddingにほぼ収まり、上辺はツールバーに重なる（OSのウィンドウと同じ）
+ */
+.popup-resize-handle {
+  position: absolute;
+  z-index: 4;
+}
+.popup-resize-handle[data-dir="n"] {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.popup-resize-handle[data-dir="s"] {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+.popup-resize-handle[data-dir="w"] {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.popup-resize-handle[data-dir="e"] {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+.popup-resize-handle[data-dir="nw"] {
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+}
+.popup-resize-handle[data-dir="ne"] {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+.popup-resize-handle[data-dir="sw"] {
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+.popup-resize-handle[data-dir="se"] {
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
 }
 
 /*

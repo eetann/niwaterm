@@ -26,6 +26,7 @@ import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
 import type { ConfigSummary } from "../bun/config-summary";
 import type { LayoutListEntry } from "../bun/project-config";
+import type { PopupRenderState } from "../bun/popup";
 import type { TabRenderState } from "../bun/workspace";
 import {
   findNode,
@@ -94,6 +95,13 @@ import {
   shadeAlphaPercent,
 } from "./cell-glyph";
 import { cellAt, type TermCell } from "./term-cells";
+import {
+  clampPopupGeometry,
+  type PopupDragMode,
+  type PopupGeometry,
+  resolvePopupDrag,
+  toPercentGeometry,
+} from "../shared/popup-geometry";
 import { isWideChar } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -117,6 +125,7 @@ const popupCursorEl = popupBoxEl.querySelector(".cursor") as HTMLDivElement;
 const popupCopyOverlayEl = popupBoxEl.querySelector(".copy-overlay") as HTMLDivElement;
 const popupCopiedBadgeEl = popupBoxEl.querySelector(".copied-badge") as HTMLDivElement;
 const popupToolbarEl = popupBoxEl.querySelector("#popup-toolbar") as HTMLDivElement;
+const popupResizeHandleEls = popupBoxEl.querySelectorAll<HTMLDivElement>(".popup-resize-handle");
 const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivElement;
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
@@ -587,6 +596,14 @@ let boardIds: BoardId[] = [];
 let currentPopupTabId: TabId | null = null;
 let popupVisible = false;
 let popupResizeObserver: ResizeObserver | null = null;
+// ポップアップ枠のドラッグ中（移動・リサイズ）。renderが来てもインラインstyleを上書きせず、
+// PTYへもresizeを送らないためのガード
+let draggingPopup = false;
+// ドラッグ中にpopupが閉じる・昇格する・別ワークスペースへ移るといった割り込みが起きたときの中断口
+let cancelPopupDrag: (() => void) | null = null;
+// ドラッグ確定直後、bun側がまだ古いジオメトリのrenderを返す可能性があるため、
+// bunが確定値に追いつくまでローカルの値を維持する（pendingSplitRatioと同じ仕組み）
+let pendingPopupGeometry: PopupGeometry | null = null;
 // ドラッグ中のsplitId。reconcile時にflexスタイルを上書きしないようにするためのガード
 let draggingSplitId: TileId | null = null;
 // ドラッグ確定直後、bun側のtreeがまだ古いratioのままのrenderが届く可能性があるため、
@@ -1718,6 +1735,12 @@ function setupPopupContent(tabId: TabId): void {
   popupResizeObserver = new ResizeObserver(() => {
     invalidateTermOffsets();
     if (!popupVisible || !currentPopupTabId) return;
+    // ドラッグ中はPTYへ送らず、pointerupで確定サイズを1回だけ送る。
+    // タイル側（ensureTerminalTabContent）と違いpendingPopupGeometryはガードに含めない。
+    // タイルはbunの古いratioでflexが巻き戻るためpendingの間も抑制が要るが、popupは
+    // pending中もapplyPopupStateがpendingの値を書き続けるのでDOMが巻き戻らない。
+    // 含めると、確定メッセージが届かなかった場合にresize送信が永久に止まる副作用だけが残る
+    if (draggingPopup) return;
     sendResize(currentPopupTabId);
   });
   popupResizeObserver.observe(popupTermEl);
@@ -1725,6 +1748,7 @@ function setupPopupContent(tabId: TabId): void {
 
 function teardownPopupContent(): void {
   if (!currentPopupTabId) return;
+  pendingPopupGeometry = null;
   popupResizeObserver?.disconnect();
   popupResizeObserver = null;
   // 昇格（promote）時はrenderLayout()が先に走り、同じtabIdへ新しい.term/.cursorを
@@ -1754,12 +1778,52 @@ function teardownPopupContent(): void {
 }
 
 /**
+ * ポップアップ枠の位置・サイズをインラインstyleへ反映する。
+ * 位置を与えるときは、CSS側の中央寄せ（inset:0 + margin:auto）を必ず同時に解除する。
+ * right/bottomが0のまま残ると過剰制約になり、autoマージンが再び中央へ寄せ戻してしまうため、
+ * 5項目を常にまとめて書く
+ */
+function applyPopupBoxStyle(g: { x?: number; y?: number; width?: number; height?: number }): void {
+  // 未指定時は空文字列に戻しCSS側の既定値（中央・80%）を使う
+  popupBoxEl.style.width = g.width !== undefined ? `${g.width}%` : "";
+  popupBoxEl.style.height = g.height !== undefined ? `${g.height}%` : "";
+  const positioned = g.x !== undefined && g.y !== undefined;
+  popupBoxEl.style.left = positioned ? `${g.x}%` : "";
+  popupBoxEl.style.top = positioned ? `${g.y}%` : "";
+  popupBoxEl.style.right = positioned ? "auto" : "";
+  popupBoxEl.style.bottom = positioned ? "auto" : "";
+  popupBoxEl.style.margin = positioned ? "0" : "";
+}
+
+/**
+ * bun側が確定値に追いついたかの判定。送信前にwebview側もclampPopupGeometryを通しているため
+ * bun側のクランプは恒等変換になり値はそのまま戻るが、JSONの往復を考えて微小な誤差は許容する
+ */
+function popupGeometryReached(state: PopupRenderState, pending: PopupGeometry): boolean {
+  const near = (a: number | undefined, b: number): boolean =>
+    a !== undefined && Math.abs(a - b) < 1e-6;
+  return (
+    near(state.x, pending.x) &&
+    near(state.y, pending.y) &&
+    near(state.width, pending.width) &&
+    near(state.height, pending.height)
+  );
+}
+
+/**
  * bunから届いたポップアップのメタ情報をDOM側へ反映する。HTML本体はp.workspace.tabs経由の
  * 既存のterminalタブ更新ループが（termElByTabIdへ登録済みなら）自動的に流し込むためここでは扱わない
  */
-function applyPopupState(
-  popup: { tabId: TabId; visible: boolean; width?: number; height?: number } | null,
-): void {
+function applyPopupState(popup: PopupRenderState | null): void {
+  // ドラッグ中に閉じる・昇格する・別ワークスペースへ移る・最小化されると、掴んでいる枠自体が
+  // 消えるか無効になる。styleの適用より前に中断しないと、draggingPopupガードで下の適用が
+  // 丸ごとスキップされてローカルの値が残り続ける
+  if (draggingPopup && (!popup || popup.tabId !== currentPopupTabId || !popup.visible)) {
+    cancelPopupDrag?.();
+  }
+  // 別のポップアップへ入れ替わったら、前のポップアップ宛ての確定待ちは捨てる
+  if (!popup || popup.tabId !== currentPopupTabId) pendingPopupGeometry = null;
+
   if (!popup) {
     popupVisible = false;
     popupEl.hidden = true;
@@ -1773,11 +1837,16 @@ function applyPopupState(
   const becameVisible = popup.visible && !popupVisible;
   popupVisible = popup.visible;
   popupEl.hidden = !popup.visible;
-  // 未指定時は空文字列に戻しCSS側の既定値（80%）を使う
-  popupBoxEl.style.width = popup.width !== undefined ? `${popup.width}%` : "";
-  popupBoxEl.style.height = popup.height !== undefined ? `${popup.height}%` : "";
-  // 再表示直後は確定サイズを送り直す（非表示中はResizeObserverが動いてもスキップしているため。setTabVisibleと同じ理由）
-  if (popup.visible) sendResize(popup.tabId);
+  // ドラッグ中はローカルで直接styleを書いているので、bun由来の（まだ古い）値で上書きしない
+  if (!draggingPopup) {
+    if (pendingPopupGeometry && popupGeometryReached(popup, pendingPopupGeometry)) {
+      pendingPopupGeometry = null;
+    }
+    applyPopupBoxStyle(pendingPopupGeometry ?? popup);
+  }
+  // 再表示直後は確定サイズを送り直す（非表示中はResizeObserverが動いてもスキップしているため。setTabVisibleと同じ理由）。
+  // ドラッグ中は送らず、pointerupで確定サイズを1回だけ送る
+  if (popup.visible && !draggingPopup) sendResize(popup.tabId);
   // 開く・再表示のタイミングでキー入力の受け口(imeEl)へ明示的にフォーカスを移す。
   // これが無いと、開いた直後は一度マウスでクリックするまでキー入力が届かない
   // （これが無いとフォーカスはpopupEl.mousedownリスナー経由でしか移らない）
@@ -3261,6 +3330,101 @@ function attachDividerDrag(dividerEl: HTMLDivElement, splitId: TileId): void {
   });
 }
 
+// ---- ポップアップ枠のドラッグ（移動・8方向リサイズ）----
+// ツールバー（高さ28px）と下の余白を引いても数行残る高さ、ボタン3つ（24px×3）が
+// 潰れない幅を下限にする
+const MIN_POPUP_WIDTH_PX = 120;
+const MIN_POPUP_HEIGHT_PX = 80;
+
+function attachPopupDrag(handleEl: HTMLElement, mode: PopupDragMode): void {
+  handleEl.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    // 2本目のポインタ（マルチタッチ・別ボタン）は無視する
+    if (draggingPopup) return;
+    if (!currentPopupTabId || !popupVisible) return;
+    // ツールバーはReactのルートコンテナ自身であり、popup-toolbar.tsxのstopPropagationは
+    // 同じ要素へ張ったこのリスナーを止められない。ボタンの上でドラッグを始めると
+    // setPointerCaptureがclickを奪ってボタンが効かなくなるため、
+    // ハンドル要素そのものを押したときだけ受け付ける
+    if (mode === "move" && e.target !== handleEl) return;
+    // 既定動作でフォーカスがbodyへ移るのを防ぎ、imeElのフォーカスを維持する（dividerと同じ）
+    e.preventDefault();
+    handleEl.setPointerCapture(e.pointerId);
+
+    const containerRect = popupEl.getBoundingClientRect();
+    const boxRect = popupBoxEl.getBoundingClientRect();
+    const container = { width: containerRect.width, height: containerRect.height };
+    // 全要素がborder-boxなので、実測rectをそのままパーセントへ戻せば元の指定値に一致する
+    // （移動だけのドラッグで枠の寸法が変わらない）
+    const start = {
+      left: boxRect.left - containerRect.left,
+      top: boxRect.top - containerRect.top,
+      width: boxRect.width,
+      height: boxRect.height,
+    };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let latest = clampPopupGeometry(toPercentGeometry(start, container));
+    draggingPopup = true;
+
+    const geometryFromEvent = (ev: PointerEvent): PopupGeometry =>
+      clampPopupGeometry(
+        toPercentGeometry(
+          resolvePopupDrag({
+            mode,
+            start,
+            dx: ev.clientX - startX,
+            dy: ev.clientY - startY,
+            container,
+            min: { width: MIN_POPUP_WIDTH_PX, height: MIN_POPUP_HEIGHT_PX },
+          }),
+          container,
+        ),
+      );
+
+    const finish = (commit: boolean): void => {
+      handleEl.removeEventListener("pointermove", onMove);
+      handleEl.removeEventListener("pointerup", onUp);
+      handleEl.removeEventListener("pointercancel", onUp);
+      if (handleEl.hasPointerCapture(e.pointerId)) handleEl.releasePointerCapture(e.pointerId);
+      cancelPopupDrag = null;
+      draggingPopup = false;
+      if (!commit || !currentPopupTabId) return;
+      pendingPopupGeometry = latest;
+      sendMessage("setPopupGeometry", latest);
+      imeEl.focus({ preventScroll: true });
+      // ドラッグ中はResizeObserver経由のresize送信を抑制していたため、確定サイズで送り直す
+      sendResize(currentPopupTabId);
+    };
+
+    const onMove = (ev: PointerEvent): void => {
+      latest = geometryFromEvent(ev);
+      // ドラッグ中はローカルDOMだけ更新し、RPCはpointerupまで送らない
+      applyPopupBoxStyle(latest);
+    };
+
+    const onUp = (ev: PointerEvent): void => {
+      if (ev.type === "pointerup") latest = geometryFromEvent(ev);
+      finish(true);
+    };
+
+    cancelPopupDrag = () => finish(false);
+    handleEl.addEventListener("pointermove", onMove);
+    handleEl.addEventListener("pointerup", onUp);
+    // OS都合でジェスチャが打ち切られてもdraggingPopupを立てっぱなしにしない
+    // （残るとポップアップのresize送信とstyle反映が両方とも止まる）
+    handleEl.addEventListener("pointercancel", onUp);
+  });
+}
+
+function attachPopupDrags(): void {
+  for (const el of popupResizeHandleEls) {
+    attachPopupDrag(el, el.dataset["dir"] as PopupDragMode);
+  }
+  // ツールバーの空き領域（ボタンより左）が枠の移動ハンドルを兼ねる
+  attachPopupDrag(popupToolbarEl, "move");
+}
+
 /** サイドバーと#screen間のdivider。タイル分割と異なりbunのtreeに属さないローカルUI状態
  * のため、resizeSplitのようなRPC送信はせずlocalStorageへ直接保存する */
 function attachSidebarDividerDrag(): void {
@@ -4260,6 +4424,7 @@ syncScrollbarMode();
 applyAppearance(defaultAppearance);
 applySidebarWidth(sidebarWidth);
 attachSidebarDividerDrag();
+attachPopupDrags();
 applySidebarVisibility();
 measureCell();
 renderCommandPalette();
