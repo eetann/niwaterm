@@ -6,6 +6,7 @@ import Electrobun, {
   Screen,
   Utils,
 } from "electrobun/bun";
+import type { PopupGeometry } from "../shared/popup-geometry";
 import { APP_VARIANT } from "./app-variant.generated";
 import type {
   KeybindingsConfig,
@@ -164,6 +165,8 @@ export type NiwaRPC = {
       openPopup: {};
       closePopup: {};
       togglePopupVisibility: {};
+      /** popup枠のドラッグ（移動・リサイズ）の確定値。単位はウィンドウに対するパーセント */
+      setPopupGeometry: PopupGeometry;
       promotePopup: {};
       zoomFontSize: { delta: number };
       resetFontSizeZoom: {};
@@ -1118,6 +1121,9 @@ function createWindowRpc(windowId: WindowId) {
         },
         togglePopupVisibility: () => {
           windowManager.togglePopupVisibility(windowId);
+        },
+        setPopupGeometry: (g: PopupGeometry) => {
+          windowManager.setPopupGeometry(g, windowId);
         },
         promotePopup: () => {
           windowManager.promotePopup(windowId);

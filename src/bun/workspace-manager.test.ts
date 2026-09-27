@@ -2054,6 +2054,8 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
       visible: true,
       width: undefined,
       height: undefined,
+      x: undefined,
+      y: undefined,
     });
     expect(mgr.openPopup()).toBeNull();
   });
@@ -2135,6 +2137,126 @@ describe("openPopup / closePopup / togglePopupVisibility / promotePopup", () => 
     expect(mgr.snapshot().workspace.popup?.visible).toBe(false);
     expect(mgr.togglePopupVisibility()).toBe(true);
     expect(mgr.snapshot().workspace.popup?.visible).toBe(true);
+  });
+
+  test("setPopupGeometryの値がsnapshotへ反映される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+
+    expect(mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 })).toBe(true);
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40,
+    });
+  });
+
+  test("setPopupGeometryは範囲外の値をクランプして保存する", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+
+    // 幅が100超・xが負・y+heightが100超のいずれも画面内へ収める
+    mgr.setPopupGeometry({ x: -10, y: 90, width: 150, height: 40 });
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({
+      x: 0,
+      y: 60,
+      width: 100,
+      height: 40,
+    });
+  });
+
+  test("setPopupGeometryは非有限値を拒否し、状態を変えない", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+    mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 });
+
+    expect(mgr.setPopupGeometry({ x: Number.NaN, y: 0, width: 50, height: 40 })).toBe(false);
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({ x: 10, y: 20 });
+  });
+
+  test("setPopupGeometryはpopupが開いていなければfalseを返す", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+
+    expect(mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 })).toBe(false);
+  });
+
+  test("togglePopupVisibilityで隠して出してもジオメトリは維持される", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+    mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 });
+
+    mgr.togglePopupVisibility();
+    mgr.togglePopupVisibility();
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({
+      visible: true,
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40,
+    });
+  });
+
+  test("closePopup後に開き直すとジオメトリは既定（未指定）へ戻る", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+    mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 });
+    mgr.closePopup();
+
+    const reopened = mgr.openPopup() as string;
+    mgr.handleResize(reopened, 80, 24, 8, 16);
+
+    expect(mgr.snapshot().workspace.popup).toEqual({
+      tabId: reopened,
+      visible: true,
+      width: undefined,
+      height: undefined,
+      x: undefined,
+      y: undefined,
+    });
+  });
+
+  test("promotePopup後に開き直してもジオメトリは既定（未指定）へ戻る", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup() as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+    mgr.setPopupGeometry({ x: 10, y: 20, width: 50, height: 40 });
+    mgr.promotePopup();
+
+    const reopened = mgr.openPopup() as string;
+    mgr.handleResize(reopened, 80, 24, 8, 16);
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({ x: undefined, y: undefined });
+  });
+
+  test("openPopupでサイズを指定してもx/yは未指定（中央のまま）", () => {
+    const { factory } = createFakeSessionFactory();
+    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const tabId = mgr.openPopup({ width: 50, height: 50 }) as string;
+    mgr.handleResize(tabId, 80, 24, 8, 16);
+
+    expect(mgr.snapshot().workspace.popup).toMatchObject({
+      width: 50,
+      height: 50,
+      x: undefined,
+      y: undefined,
+    });
   });
 
   test("promotePopupはpopup無しでnullを返す", () => {

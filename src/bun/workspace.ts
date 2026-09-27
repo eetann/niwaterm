@@ -17,6 +17,7 @@ import {
   type GetTabVarResult,
 } from "./board";
 import { directoryName, isSequentialName, nextSequentialName } from "./board-naming";
+import type { PopupGeometry } from "../shared/popup-geometry";
 import { createPopup, type OpenPopupOptions, type Popup, type PopupRenderState } from "./popup";
 
 export type { BoardId, BoardRenderState, TabRenderState } from "./board";
@@ -69,8 +70,9 @@ export interface WorkspaceRenderState {
   /**
    * Tile木構造・Boardとは独立したポップアップ画面（ADR 0005）。Boardをまたいでも同じものを使える
    * （ADR 0006）。中身のPTY描画状態はboard.tabsに同居させている（popupのtabIdをキーに引ける）ため、
-   * ここではメタ情報のみ持つ。width/heightは表示サイズの指定（1〜100のパーセント）。
-   * 未指定はCSS側の既定値（80%）に従う
+   * ここではメタ情報のみ持つ。width/heightは表示サイズ、x/yは左上角の表示位置
+   * （いずれもウィンドウに対する0〜100のパーセント）。未指定はCSS側の既定値
+   * （中央・80%）に従う
    */
   popup: PopupRenderState | null;
 }
@@ -675,6 +677,10 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return popup.toggleVisibility();
   }
 
+  function setPopupGeometry(g: PopupGeometry): boolean {
+    return popup.setGeometry(g);
+  }
+
   /**
    * 開いているポップアップの中身を、実行時点でアクティブなBoardのフォーカス中タイルへ
    * 通常タブとして編入する（タブへ昇格。ADR 0005）。PTYセッションは作り直さない
@@ -1084,6 +1090,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     closePopup,
     waitForPopupClose,
     togglePopupVisibility,
+    setPopupGeometry,
     promotePopup,
     switchTab,
     cycleTab,

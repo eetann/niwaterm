@@ -5,6 +5,8 @@
 import { readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { PopupGeometry } from "../shared/popup-geometry";
+import { clampPopupGeometry } from "../shared/popup-geometry";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { APP_VARIANT } from "./app-variant.generated";
@@ -21,6 +23,9 @@ export interface PopupRenderState {
   visible: boolean;
   width?: number;
   height?: number;
+  /** ウィンドウ左上を原点とする表示位置（0〜100のパーセント）。未指定は中央 */
+  x?: number;
+  y?: number;
 }
 
 export interface OpenPopupOptions {
@@ -79,6 +84,9 @@ export function createPopup(opts: PopupOptions) {
   let visible = false;
   let width: number | undefined;
   let height: number | undefined;
+  // 枠のドラッグで決まった表示位置。未指定のままならCSS側の中央寄せが効く
+  let x: number | undefined;
+  let y: number | undefined;
   let cols = 0;
   let rows = 0;
   let shell: string | undefined;
@@ -101,6 +109,8 @@ export function createPopup(opts: PopupOptions) {
     visible = false;
     width = undefined;
     height = undefined;
+    x = undefined;
+    y = undefined;
     shell = undefined;
     vars.clear();
     pendingOpts = null;
@@ -251,6 +261,25 @@ export function createPopup(opts: PopupOptions) {
     return promoted;
   }
 
+  /**
+   * 枠のドラッグ（移動・リサイズ）の確定値を受け取る。西辺・北辺のリサイズは反対側の辺を
+   * 固定するため位置とサイズが同時に変わるので、まとめて1つで受ける。
+   * 単位はウィンドウに対するパーセントで、x + width <= 100 を保証しておけば
+   * ウィンドウがリサイズされても枠が画面外へ出ない。
+   * 最小サイズ（px）の下限はウィンドウ実寸を知っているwebview側の責務
+   */
+  function setGeometry(g: PopupGeometry): boolean {
+    if (!tabId) return false;
+    if (![g.x, g.y, g.width, g.height].every((v) => Number.isFinite(v))) return false;
+    const clamped = clampPopupGeometry(g);
+    x = clamped.x;
+    y = clamped.y;
+    width = clamped.width;
+    height = clamped.height;
+    opts.onDirty();
+    return true;
+  }
+
   function hasTab(id: TabId): boolean {
     return tabId === id;
   }
@@ -331,7 +360,7 @@ export function createPopup(opts: PopupOptions) {
   }
 
   function snapshot(): PopupRenderState | null {
-    return tabId ? { tabId, visible, width, height } : null;
+    return tabId ? { tabId, visible, width, height, x, y } : null;
   }
 
   /** サイドバー一覧用の軽量な参照。非アクティブなWorkspaceでもポップアップの有無・表示状態を把握できるようにする */
@@ -356,6 +385,7 @@ export function createPopup(opts: PopupOptions) {
     close,
     waitForClose,
     toggleVisibility,
+    setGeometry,
     takeForPromotion,
     hasTab,
     handleInput,

@@ -6,6 +6,7 @@ import {
   type PersistedBoardStartup,
   type PersistedState,
 } from "./persistence";
+import type { PopupGeometry } from "../shared/popup-geometry";
 import type { BoardId } from "./board";
 import type { CopyModeKey } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
@@ -524,6 +525,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return workspaces.get(activeId)?.togglePopupVisibility() ?? null;
   }
 
+  function setPopupGeometry(g: PopupGeometry): boolean {
+    return workspaces.get(activeId)?.setPopupGeometry(g) ?? false;
+  }
+
   // ポップアップの昇格も同様に「現在アクティブなワークスペース」固定でルーティングする
   // （openPopup/closePopup/togglePopupVisibilityと同じ例外パターン。昇格先は各ワークスペースが
   // 保持するfocusedTileId固定のため、tileId引数を取らない。ADR 0005）
@@ -903,6 +908,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     closePopup,
     waitForPopupClose,
     togglePopupVisibility,
+    setPopupGeometry,
     promotePopup,
     switchTab,
     cycleTab,

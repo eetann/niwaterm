@@ -14,6 +14,7 @@ import type { MouseEventInput } from "./ghostty";
 import type { PersistedBoardStartup, PersistedState } from "./persistence";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import type { BoardId } from "./board";
+import type { PopupGeometry } from "../shared/popup-geometry";
 import type { OpenPopupOptions } from "./workspace";
 import {
   createWorkspaceManager,
@@ -362,6 +363,8 @@ export function createWindowManager(opts: WindowManagerOptions) {
     closePopup: (windowId?: WindowId) => managerOf(windowId).closePopup(),
     waitForPopupClose: (windowId?: WindowId) => managerOf(windowId).waitForPopupClose(),
     togglePopupVisibility: (windowId?: WindowId) => managerOf(windowId).togglePopupVisibility(),
+    setPopupGeometry: (g: PopupGeometry, windowId?: WindowId) =>
+      managerOf(windowId).setPopupGeometry(g),
     promotePopup: (windowId?: WindowId) => managerOf(windowId).promotePopup(),
     switchTab: (tileId: TileId, tabId: TabId) => byTile(tileId)?.switchTab(tileId, tabId) ?? false,
     cycleTab: (tileId: TileId, delta: 1 | -1) => byTile(tileId)?.cycleTab(tileId, delta) ?? false,
