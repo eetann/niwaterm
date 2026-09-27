@@ -3812,6 +3812,7 @@ function recoverImeFocus(): void {
   const state = {
     active: document.activeElement,
     hasSelection: selection != null && !selection.isCollapsed,
+    selectionDragging,
     documentFocused: document.hasFocus(),
   };
   if (!shouldRecoverImeFocus(state)) return;

@@ -12,7 +12,7 @@ function element(insideHolder: boolean): FocusHolderCandidate {
   };
 }
 
-const focused = { hasSelection: false, documentFocused: true };
+const focused = { hasSelection: false, selectionDragging: false, documentFocused: true };
 
 describe("shouldRecoverImeFocus", () => {
   test("フォーカスがどこにも無ければ戻す", () => {
@@ -28,14 +28,18 @@ describe("shouldRecoverImeFocus", () => {
   });
 
   test("選択が残っている間は戻さない", () => {
-    expect(
-      shouldRecoverImeFocus({ active: element(false), hasSelection: true, documentFocused: true }),
-    ).toBe(false);
+    expect(shouldRecoverImeFocus({ active: element(false), ...focused, hasSelection: true })).toBe(
+      false,
+    );
+  });
+
+  test("ドラッグ選択中はまだ選択が空でも戻さない", () => {
+    expect(shouldRecoverImeFocus({ active: null, ...focused, selectionDragging: true })).toBe(
+      false,
+    );
   });
 
   test("webviewがキーボードフォーカスを持っていない間は戻さない", () => {
-    expect(
-      shouldRecoverImeFocus({ active: null, hasSelection: false, documentFocused: false }),
-    ).toBe(false);
+    expect(shouldRecoverImeFocus({ active: null, ...focused, documentFocused: false })).toBe(false);
   });
 });
