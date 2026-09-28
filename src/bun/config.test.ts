@@ -25,6 +25,7 @@ import {
   resolveBoard,
   resolveBrowser,
   resolveCustomViews,
+  resolveHoverButtons,
   resolveKeybindings,
   resolveLayouts,
   resolveLink,
@@ -1080,6 +1081,90 @@ describe("resolveLayouts", () => {
     } finally {
       logSpy.mockRestore();
     }
+  });
+});
+
+describe("resolveHoverButtons", () => {
+  const items = () => [{ label: "lazygit", run: () => {} }];
+
+  test("未指定・nullなら空（機能オフ）を返す", () => {
+    expect(resolveHoverButtons(null)).toEqual([]);
+    expect(resolveHoverButtons({})).toEqual([]);
+  });
+
+  test("id省略時はpositionがidになり、重複はサフィックスで一意にする", () => {
+    const groups = resolveHoverButtons({
+      hoverButtons: [
+        { position: "right", items },
+        { position: "right", items },
+        { position: "top-left", items },
+      ],
+    });
+    expect(groups.map((group) => group.id)).toEqual(["right", "right-2", "top-left"]);
+  });
+
+  test("positionが不正な要素だけ落として警告する", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const groups = resolveHoverButtons(
+        {
+          hoverButtons: [
+            { position: "middle" as never, items },
+            { position: "left", items },
+          ],
+        },
+        diag,
+      );
+      expect(groups.map((group) => group.position)).toEqual(["left"]);
+      expect(diag.list()).toEqual([
+        {
+          level: "warn",
+          scope: "hoverButtons[0].position",
+          message: expect.stringContaining("この要素だけ無視します"),
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  test("itemsが関数でない要素だけ落として警告する", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const groups = resolveHoverButtons(
+        { hoverButtons: [{ position: "left", items: "nope" as never }] },
+        diag,
+      );
+      expect(groups).toEqual([]);
+      expect(diag.list()[0]?.scope).toBe("hoverButtons[0].items");
+    } finally {
+      restore();
+    }
+  });
+
+  test("showが関数でなければ全タブへ出す扱いにしてボタン自体は残す", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const groups = resolveHoverButtons(
+        { hoverButtons: [{ position: "left", show: true as never, items }] },
+        diag,
+      );
+      expect(groups).toHaveLength(1);
+      expect(groups[0]?.show).toBeUndefined();
+      expect(diag.list()[0]?.scope).toBe("hoverButtons[0].show");
+    } finally {
+      restore();
+    }
+  });
+
+  test("cssは未指定なら空文字列になる", () => {
+    const groups = resolveHoverButtons({
+      hoverButtons: [
+        { position: "left", items },
+        { position: "right", css: ".toc {}", items },
+      ],
+    });
+    expect(groups.map((group) => group.css)).toEqual(["", ".toc {}"]);
   });
 });
 

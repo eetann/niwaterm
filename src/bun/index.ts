@@ -20,7 +20,10 @@ import type {
   ResolvedBoardConfig,
   ResolvedBoardPhase,
   ResolvedBrowserConfig,
+  HoverButtonContext,
+  HoverButtonPosition,
   ResolvedCustomViewConfig,
+  ResolvedHoverButtonConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
   ResolvedSidebarBoardStatusItem,
@@ -47,7 +50,13 @@ import { watchConfigFile } from "./config-watcher";
 import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-view-handlers";
 import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
-import { createIpcServer, ipcSocketPath, type IpcServer } from "./ipc-server";
+import type { HoverButtonEntry, HoverButtonsHandle } from "./hover-buttons";
+import {
+  createIpcServer,
+  type HoverButtonListEntry,
+  ipcSocketPath,
+  type IpcServer,
+} from "./ipc-server";
 import { applyBuiltinLayout, applyLayoutPreset, type ApplyLayoutResult } from "./layout-apply";
 import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
@@ -128,6 +137,15 @@ export type NiwaRPC = {
       selectionMenuItems: {
         params: { tabId: TabId; text: string };
         response: { items: SelectionMenuEntry[] };
+      };
+      /**
+       * ホバーボタン（hoverButtons）の枠を開いた時に並べる項目。項目のrunはbun側に残るため、
+       * webviewへはidと表示内容だけを返す。ホバーのたびに問い合わせるのは、
+       * 項目がタブの今の状況（AIエージェントの会話ログ等）から毎回組み立てられるため
+       */
+      hoverButtonItems: {
+        params: { tabId: TabId; buttonId: string };
+        response: { items: HoverButtonEntry[] };
       };
     };
     messages: {
@@ -236,6 +254,8 @@ export type NiwaRPC = {
       runKeybindHandler: { handlerId: string };
       /** 右クリックメニューで選ばれたユーザー定義項目。idはselectionMenuItemsで返したもの */
       runSelectionMenuItem: { id: string };
+      /** ホバーボタンで押された項目。idはhoverButtonItemsで返したもの */
+      runHoverButtonItem: { tabId: TabId; buttonId: string; id: string };
       /**
        * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customViews[].handlers）。
        * 関数の実体はbun側にあるため、webviewはビューのidと名前・payloadだけを送ってくる
@@ -277,6 +297,8 @@ export type NiwaRPC = {
         /** ターミナル出力の中のURL判定ルールと、開くのに押しておく修飾キー（openはbun側で使う） */
         link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
+        /** タブの端に出るホバーボタンの定義。どのタブへ帯を張るかはhoverButtonTabsで別に配る */
+        hoverButtons: ResolvedHoverButtonConfig[];
         shellProfiles: ShellProfile[];
         /** Boardへ付けられるフェーズの候補（board.phases）。サイドバーのメニュー・コマンドパレットに並ぶ */
         boardPhases: ResolvedBoardPhase[];
@@ -285,6 +307,16 @@ export type NiwaRPC = {
         /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
         configSummary: ConfigSummary;
       };
+      /**
+       * ホバーボタンの帯を張るタブ。tabId → 有効なボタンidで、1つも無いタブは含まれない。
+       * showの評価はタブの状況が変わった時だけ走るため、内容が前回と変わったときにしか送らない
+       */
+      hoverButtonTabs: { byTabId: Record<TabId, string[]> };
+      /**
+       * ホバーボタンを強制的に出したままにする（CLIの`tab hover reveal`）。positionがnullなら解除。
+       * 出ている間はマウスの出入りでは引っ込まない
+       */
+      revealHoverButton: { tabId: TabId; position: HoverButtonPosition | null };
       copied: { chars: number; lines: number };
       /**
        * サイドバーに出すビューの指定（CLIの`niwaterm sidebar switch`から）。viewIdは
@@ -311,6 +343,8 @@ interface WindowView {
   renderScheduled: boolean;
   /** 前回webviewへ送ったパレットCSS（dropUnchangedPaletteCss参照） */
   lastPaletteCssByTabId: Map<TabId, string>;
+  /** 前回webviewへ送ったホバーボタンの帯の割り当て（sendHoverButtonTabs参照）。未送信は空文字列 */
+  lastHoverButtonTabs: string;
   /** 保存対象のウィンドウ枠。一時ウィンドウでは保存しないので参照されない */
   frame: WindowFrame;
   frameSaveScheduled: boolean;
@@ -356,6 +390,7 @@ function render(windowId: WindowId) {
   const snap = windowManager.snapshotOf(windowId);
   if (!snap) return;
   dropUnchangedPaletteCss(view, snap);
+  sendHoverButtonTabs(view, snap);
   view.browserWindow.setTitle(
     snap.workspaceIds.length === 1
       ? APP_VARIANT
@@ -382,6 +417,44 @@ function dropUnchangedPaletteCss(view: WindowView, snap: AppRenderState): void {
   }
 }
 
+/**
+ * ホバーボタンの帯を張るタブをwebviewへ配る。帯はターミナルのクリック・選択・マウスレポートを
+ * 奪うため、ユーザーのshowがtrueを返したタブにだけ張る。showの評価は描画のたびに全タブぶん
+ * 問われることになるので、hoverButtonsHandle側でタブの状況が変わった時だけ呼び直させ、
+ * ここでは結果が前回と変わったときだけ送る。
+ * ブラウザタブ・customViewタブを外すのは、OOPIFがHTMLより手前に描かれて重ねても見えず、
+ * マウスイベントも奪われてホバーを拾えないため
+ * （docs/known-issues/electrobun-hidden-webview-still-eats-mouse-events.md）
+ */
+function sendHoverButtonTabs(view: WindowView, snap: AppRenderState): void {
+  const board = snap.workspace.boards.find((entry) => entry.active);
+  const tabs = snap.workspace.board?.tabs ?? {};
+  const contexts: HoverButtonContext[] = [];
+  for (const [tabId, vars] of Object.entries(board?.tabVars ?? {})) {
+    if (tabs[tabId]?.kind !== "terminal") continue;
+    contexts.push({ tabId, cwd: vars["cwd"], vars, tabName: board?.tabNames[tabId] });
+  }
+  const byTabId = hoverButtonsHandle.activeIdsByTab(contexts);
+  const serialized = JSON.stringify(byTabId);
+  if (view.lastHoverButtonTabs === serialized) return;
+  view.lastHoverButtonTabs = serialized;
+  rpcSendOf(view.windowId)?.hoverButtonTabs({ byTabId });
+}
+
+/**
+ * ホバーボタンのshow・itemsへ渡すタブの状況を組み立てる。cwdはOSC7報告をそのまま
+ * タブ変数の"cwd"へ入れているので、varsから引けばよい（selectionMenuと同じ引き方）
+ */
+function hoverButtonContextOf(tabId: TabId): HoverButtonContext {
+  const vars = windowManager.listTabVars(tabId) ?? {};
+  return {
+    tabId,
+    cwd: vars["cwd"],
+    vars,
+    tabName: windowManager.getTabName(tabId) ?? undefined,
+  };
+}
+
 /** 設定はアプリ全体で共通なので、windowId省略時は全ウィンドウへ送る */
 function sendConfig(windowId?: WindowId) {
   const targets = windowId !== undefined ? [windowId] : [...views.keys()];
@@ -394,6 +467,7 @@ function sendConfig(windowId?: WindowId) {
       mouse,
       link: linkConfig,
       customViews,
+      hoverButtons,
       shellProfiles,
       boardPhases: boardConfig.phases,
       boardStatus: sidebarConfig.boardStatus,
@@ -428,6 +502,34 @@ function findCustomView(viewId?: string): ResolvedCustomViewConfig | null {
  */
 function sendSidebarView(viewId: string, windowId: WindowId | null): void {
   rpcSendOf(windowId ?? windowManager.getFocusedWindowId())?.setSidebarView({ viewId });
+}
+
+/**
+ * そのタブで今出せるホバーボタンと、並ぶ項目を返す（CLIの`niwaterm tab hover list`から）。
+ * 項目の組み立てはホバー時と同じ経路を通すので、CLIで見えるものと画面に出るものが一致する
+ */
+async function listHoverButtons(tabId: TabId): Promise<HoverButtonListEntry[]> {
+  const ctx = hoverButtonContextOf(tabId);
+  const activeIds = new Set(hoverButtonsHandle.activeIdsByTab([ctx])[tabId] ?? []);
+  const entries: HoverButtonListEntry[] = [];
+  for (const button of hoverButtons) {
+    if (!activeIds.has(button.id)) continue;
+    entries.push({
+      id: button.id,
+      position: button.position,
+      items: await hoverButtonsHandle.build(ctx, button.id),
+    });
+  }
+  return entries;
+}
+
+/**
+ * ホバーボタンを強制的に出す／しまう（CLIの`niwaterm tab hover reveal`・`hide`から）。
+ * ホバーは合成入力では当てにくく、実機での目視・スクリーンショット確認の足場が要るため
+ */
+function revealHoverButton(tabId: TabId, position: HoverButtonPosition | null): void {
+  const windowId = windowManager.windowIdOfTab(tabId) ?? windowManager.getFocusedWindowId();
+  rpcSendOf(windowId)?.revealHoverButton({ tabId, position });
 }
 
 /**
@@ -601,6 +703,8 @@ let sidebarConfig: ResolvedSidebarConfig = defaultSidebarConfig;
 let terminalConfig: ResolvedTerminalConfig;
 let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
+let hoverButtons: ResolvedHoverButtonConfig[];
+let hoverButtonsHandle: HoverButtonsHandle;
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
@@ -817,6 +921,8 @@ async function refreshConfig(): Promise<void> {
     terminal: terminalConfig,
     customViews,
     customViewHandlers,
+    hoverButtons,
+    hoverButtonsHandle,
     defaultShell,
     shellProfiles,
     layouts,
@@ -963,6 +1069,8 @@ try {
     currentConfigSummary,
     ipcWindowOps,
     sendSidebarView,
+    listHoverButtons,
+    revealHoverButton,
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -1022,6 +1130,9 @@ function createWindowRpc(windowId: WindowId) {
             }),
           };
         },
+        hoverButtonItems: async ({ tabId, buttonId }: { tabId: TabId; buttonId: string }) => ({
+          items: await hoverButtonsHandle.build(hoverButtonContextOf(tabId), buttonId),
+        }),
       },
       messages: {
         log: ({ msg }: { msg: string }) => {
@@ -1313,6 +1424,17 @@ function createWindowRpc(windowId: WindowId) {
         runSelectionMenuItem: ({ id }: { id: string }) => {
           void selectionMenu.run(id);
         },
+        runHoverButtonItem: ({
+          tabId,
+          buttonId,
+          id,
+        }: {
+          tabId: TabId;
+          buttonId: string;
+          id: string;
+        }) => {
+          void hoverButtonsHandle.run(tabId, buttonId, id);
+        },
         customViewCall: ({
           callId,
           viewId,
@@ -1506,6 +1628,7 @@ function createWindowView(windowId: WindowId, frame: WindowFrame): WindowView {
     webviewFocused: false,
     renderScheduled: false,
     lastPaletteCssByTabId: new Map(),
+    lastHoverButtonTabs: "",
     frame,
     frameSaveScheduled: false,
     closed: false,

@@ -436,6 +436,18 @@ niwaterm tab var find --board <boardId> <key> <value>
 
 `tab var set/get/list`の`--tab`は省略可能で、その場合`NIWATERM_TAB_ID`環境変数を使う。niwaterm内で起動したシェルにはこの環境変数が自動設定されているため、そのタブ自身の変数を読み書きする分にはタブIDを調べる必要がない（別タブの変数を操作する場合は`--tab`を明示する）。シェル統合スクリプト（下記「シェル統合」参照）はこれを利用してブランチ名等を`tab var set`する。`--tab`省略かつ`NIWATERM_TAB_ID`も無い（niwaterm外のシェルから実行した等）場合はエラーメッセージと共に終了コード1を返す。
 
+```sh
+niwaterm tab hover list [--tab <tabId>]
+niwaterm tab hover reveal --position <position> [--tab <tabId>]
+niwaterm tab hover hide [--tab <tabId>]
+```
+
+タブの端に出るホバーボタン（設定の`hoverButtons`。詳細は[設定ガイド](/guide/config.md)参照）を確認・強制表示する。`list`はそのタブで今出せる枠と、その枠に並ぶ項目を`<position>\t<id>`とインデント付きの項目名で表示する。項目は画面に出すときと同じ経路で組み立てるため、`items`が返すものをそのまま確認できる。
+
+`reveal`はマウスを寄せた状態と同じ表示を、マウスの出入りに関係なく出したままにする。`hide`で解除する（項目を押した場合・設定をリロードした場合も解除される）。ホバーは合成入力では当てにくいため、実機での目視・スクリーンショット確認にはこちらを使う。`--position`はタブの表示領域の端8方向（`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right`）から選ぶ。その位置に出せる枠が無い場合はエラーメッセージと共に終了コード1を返す。
+
+`--tab`省略時はそのコマンドを実行しているタブ（niwaterm外から実行した場合はフォーカス中タイルのアクティブタブ）が対象になる。
+
 ### ワークツリー
 
 ```sh

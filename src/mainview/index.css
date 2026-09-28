@@ -459,6 +459,87 @@ body {
   pointer-events: auto;
 }
 
+/*
+ * タブの表示領域の端へマウスを寄せた間だけ出るボタン（設定のhoverButtons）。
+ * 呼び出しの帯はDOM要素にせずmousemoveの座標で判定する（hover-buttons.ts参照）ので、
+ * ここにあるのは出てきたパネルだけ。位置はdata-positionで決める。
+ * 地は--chrome-bgを不透明のまま塗る: 下にターミナルの文字がいるので、
+ * ウィンドウ透過中（--term-bg-opacity < 100%）と同じ塗り方では文字が透けてしまう
+ */
+.hover-panel {
+  --hover-panel-inset: 4px;
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  max-width: calc(100% - var(--hover-panel-inset) * 2);
+  max-height: calc(100% - var(--hover-panel-inset) * 2);
+  overflow: auto;
+  background-color: var(--chrome-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--term-fg);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.hover-panel[data-position^="top"] {
+  top: var(--hover-panel-inset);
+}
+.hover-panel[data-position^="bottom"] {
+  bottom: var(--hover-panel-inset);
+}
+.hover-panel[data-position$="-left"] {
+  left: var(--hover-panel-inset);
+}
+.hover-panel[data-position$="-right"] {
+  right: var(--hover-panel-inset);
+}
+
+/* 辺の中央。translateでの中央寄せはにじむ（popupと同じ理由）のでmargin: autoで寄せる */
+.hover-panel[data-position="top"],
+.hover-panel[data-position="bottom"] {
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin-inline: auto;
+}
+.hover-panel[data-position="left"],
+.hover-panel[data-position="right"] {
+  top: 0;
+  bottom: 0;
+  height: max-content;
+  margin-block: auto;
+  flex-direction: column;
+}
+.hover-panel[data-position="left"] {
+  left: var(--hover-panel-inset);
+}
+.hover-panel[data-position="right"] {
+  right: var(--hover-panel-inset);
+}
+
+/*
+ * オーバーレイ表示のタブバーと上辺のホバーボタンは同じ帯で呼び出されるため両方が同時に出る。
+ * 重ならないようパネルをバー1本分(29px)だけ下げる
+ */
+.tile.tab-bar-overlay .hover-panel[data-position^="top"] {
+  top: calc(var(--hover-panel-inset) + 29px);
+}
+
+.hover-item {
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hover-item:hover {
+  background: color-mix(in srgb, var(--ui-accent) 25%, transparent);
+}
+
 .tile-content {
   position: relative;
   flex: 1;

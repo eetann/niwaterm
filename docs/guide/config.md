@@ -919,6 +919,95 @@ window.addEventListener("niwaterm:theme", applyTheme);
 
 そのまま使える例が`contrib/custom-views/`にある（gitワークツリーの一覧・絞り込み・作成）。
 
+## タブのホバーボタン（hoverButtons）
+
+タブの表示領域の端へマウスを寄せた間だけ、そのタブ専用のボタンを出せる。`hoverButtons`は「1つの位置に置く枠」の配列で、枠を開いた時に並べる項目を`items`が組み立てる。項目が1つならただのボタン、複数なら目次のように並ぶ。
+
+```ts
+hoverButtons: [
+  {
+    position: "bottom-right",
+    items: (tab, niwa) => [
+      { label: "git", run: () => niwa.popup.open({ command: "lazygit", cwd: tab.cwd }) },
+    ],
+  },
+],
+```
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `id` | `string` | CLI（`niwaterm tab hover reveal`）から指すためのid。省略時は`position`（重複時は`right-2`のような連番付き） |
+| `position` | `string` | 置く位置。`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right` |
+| `show` | `function` | そのタブに出すかの判定。省略時は全てのターミナルタブに出る |
+| `items` | `function` | ホバーした時に並べる項目を組み立てる |
+| `css` | `string` | `items`の`html`から参照するCSS |
+
+基準は**タブの表示領域**（タイルの内側）で、ウィンドウ全体ではない。タイルを分割していれば、それぞれのタイルの端に出る。同じ位置に複数の枠を置いた場合は設定に並べた順に繋がって出る。上下の辺に置いた枠は横並び、左右の辺に置いた枠は縦並びになる。
+
+### 出すタブを絞る（show）
+
+`show`はタブ変数・cwdでタブを絞る同期の関数。タブの状況が変わったときに評価されるので、非同期処理や重い処理は書かない（重い処理は`items`側に置く）。
+
+```ts
+{
+  position: "right",
+  // エージェント統合のhookが書き込むタブ変数を見て、Claudeを動かしているタブにだけ出す
+  show: (tab) => tab.vars["agent_status"] !== undefined,
+  items: () => [...],
+},
+```
+
+`show`・`items`の第1引数には、そのタブの状況が渡る。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `tabId` | `string` | そのタブのid |
+| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
+| `vars` | `Record<string, string>` | そのタブのタブ変数（`niwaterm tab var set`・シェル統合・エージェント統合のhookが書き込む）。`cwd`もこの中の`"cwd"`に入っている |
+| `tabName` | `string \| undefined` | サイドバーから設定したタブ名。未設定は`undefined` |
+
+`show`を使わずタブを絞りたい場合は、`niwaterm tab var set`で目印の変数を立てて`show`から読むのが手軽（シェルのフック・エージェントのhookから叩ける）。
+
+### 項目を組み立てる（items）
+
+`items`はホバーのたびに呼ばれるので、ファイルの読み直し・コマンド実行を伴う動的な項目も書ける。第2引数は[キーバインドの関数ハンドラ](#キーバインド)と同じ`niwa`。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `label` | `string` | 表示するテキスト |
+| `html` | `string` | `label`の代わりに差し込むHTML |
+| `tooltip` | `string` | マウスを載せた時に出る説明。省略時は`label` |
+| `run` | `function` | 押した時の処理。非同期でもよい |
+
+`html`を使うと、文字ではなく印だけを並べるような見た目も作れる。クリックの拾い方・並べ方はniwaterm側が持つので、`a`要素や`button`要素にする必要はない。
+
+```ts
+{
+  id: "toc",
+  position: "right",
+  css: `.toc-tick { width: 14px; height: 2px; background: currentColor; opacity: 0.5 }`,
+  items: async (tab) => {
+    const prompts = await readPrompts(tab.cwd);
+    return prompts.map((prompt) => ({
+      html: '<span class="toc-tick"></span>',
+      tooltip: prompt.text,
+      run: () => jumpTo(prompt),
+    }));
+  },
+},
+```
+
+`html`はniwaterm本体のwebviewへそのまま入る。コマンド出力・ファイルの中身のような外から来た文字列を埋め込むときは、自分でエスケープすること。`css`はwebviewの`<style>`へそのまま入るので、class名に`id`を含める等でniwaterm本体や他のボタンと衝突しないようにする。
+
+関数が例外を投げた場合・配列以外を返した場合・`label`も`html`も持たない項目は、警告付きで無視される。
+
+### 制約
+
+- **ターミナルタブにだけ出る**。ブラウザタブ・customViewタブはネイティブのオーバーレイがHTMLより手前に描かれるため、重ねても見えずマウスも拾えない
+- **ポップアップには出ない**（ポップアップは独自のツールバーを持つため）
+- `appearance.tabBar`が`"auto"`のタイルでは、上辺の呼び出し帯がオーバーレイ表示のタブバーと同じ場所にある。上辺に置いた枠はタブバーと同時に出て、タブバーの下へ並ぶ
+- 画面右上に出るバッジ（`COPIED`・`SCROLLBACK`）と`top-right`の枠は重なる
+
 ## シェル設定
 
 `shell`は新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイルを指定するオブジェクト。**未指定なら機能オフ**で、OS標準シェル（macOS/Linux: `/bin/zsh -il`、Windows: `powershell.exe -NoLogo`）が使われる。

@@ -8,13 +8,14 @@ import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { Hono, type Context } from "hono";
 import type {
+  HoverButtonPosition,
   KeybindingsConfig,
   LayoutsConfig,
   NiwaNotifyOptions,
   ResolvedCustomViewConfig,
   ShellProfile,
 } from "@niwaterm/config";
-import { WORKSPACES_VIEW_ID } from "@niwaterm/config";
+import { isHoverButtonPosition, WORKSPACES_VIEW_ID } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
@@ -25,7 +26,7 @@ import { buildKeybindList } from "./keybind-list";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
-import type { SplitOrientation } from "./tile-layout";
+import type { SplitOrientation, TabId } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WindowId, WindowOps } from "./window-manager";
 import type { WorkspaceManager } from "./workspace-manager";
@@ -744,6 +745,23 @@ function parseFontSizeAction(body: unknown): FontSizeAction | null {
   return action === "increase" || action === "decrease" || action === "reset" ? action : null;
 }
 
+/** `niwaterm tab hover list`が返す1件。項目はそのタブで今並ぶもの */
+export interface HoverButtonListEntry {
+  id: string;
+  position: HoverButtonPosition;
+  items: { id: string; label: string; html: string; tooltip: string }[];
+}
+
+function parseRevealHoverButtonBody(
+  body: unknown,
+): { tabId: string; position: HoverButtonPosition | null } | null {
+  const b = body as { tabId?: unknown; position?: unknown } | undefined;
+  if (typeof b?.tabId !== "string" || b.tabId.length === 0) return null;
+  if (b.position === null) return { tabId: b.tabId, position: null };
+  if (!isHoverButtonPosition(b.position)) return null;
+  return { tabId: b.tabId, position: b.position };
+}
+
 function buildApp(
   workspaceManager: WorkspaceManager,
   getCustomViews: () => ResolvedCustomViewConfig[],
@@ -760,6 +778,8 @@ function buildApp(
   getConfigSummary: () => ConfigSummary,
   windowOps: WindowOps,
   setSidebarView: (viewId: string, windowId: WindowId | null) => void,
+  listHoverButtons: (tabId: TabId) => Promise<HoverButtonListEntry[]>,
+  revealHoverButton: (tabId: TabId, position: HoverButtonPosition | null) => void,
 ) {
   const app = new Hono();
 
@@ -1203,6 +1223,43 @@ function buildApp(
     const text = workspaceManager.getTabText(tabId);
     if (text === null) return c.json({ ok: false, error: `tab not found: ${tabId}` }, 404);
     return c.json({ ok: true, text });
+  });
+
+  app.get("/list-hover-buttons", async (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    if (!workspaceManager.hasTab(tabId)) {
+      return c.json({ ok: false, error: `tab not found: ${tabId}` }, 404);
+    }
+    return c.json({ ok: true, buttons: await listHoverButtons(tabId) });
+  });
+
+  // positionをnullにすると解除。ホバーは合成入力で当てにくいため、実機での目視・
+  // スクリーンショット確認はこの強制表示を使う
+  app.post("/reveal-hover-button", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseRevealHoverButtonBody(body);
+    if (!parsed) {
+      return c.json(
+        { ok: false, error: "expected { tabId: string, position: string | null }" },
+        400,
+      );
+    }
+    if (!workspaceManager.hasTab(parsed.tabId)) {
+      return c.json({ ok: false, error: `tab not found: ${parsed.tabId}` }, 404);
+    }
+    if (parsed.position !== null) {
+      const buttons = await listHoverButtons(parsed.tabId);
+      if (!buttons.some((button) => button.position === parsed.position)) {
+        return c.json(
+          { ok: false, error: `no hover button at ${parsed.position} for this tab` },
+          404,
+        );
+      }
+    }
+    revealHoverButton(parsed.tabId, parsed.position);
+    return c.json({ ok: true });
   });
 
   app.post("/send-keys", async (c) => {
@@ -1810,6 +1867,8 @@ export async function createIpcServer(
   }),
   windowOps: WindowOps = singleWindowOps(workspaceManager),
   setSidebarView: (viewId: string, windowId: WindowId | null) => void = () => {},
+  listHoverButtons: (tabId: TabId) => Promise<HoverButtonListEntry[]> = async () => [],
+  revealHoverButton: (tabId: TabId, position: HoverButtonPosition | null) => void = () => {},
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1835,6 +1894,8 @@ export async function createIpcServer(
     getConfigSummary,
     windowOps,
     setSidebarView,
+    listHoverButtons,
+    revealHoverButton,
   );
   const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];

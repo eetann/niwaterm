@@ -10,6 +10,8 @@ import {
   type ResolvedAppearanceConfig,
   type ResolvedBoardPhase,
   type ResolvedCustomViewConfig,
+  type HoverButtonPosition,
+  type ResolvedHoverButtonConfig,
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
   type ResolvedSidebarBoardStatusItem,
@@ -52,6 +54,7 @@ import {
 } from "./custom-view-bridge";
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
+import { createHoverButtons } from "./hover-buttons";
 import { shouldRecoverImeFocus } from "./ime-focus";
 import { keyToBytes } from "./key-to-bytes";
 import { compileLinkRules, type CompiledLinkRule, findLinkAt, type LinkSpan } from "./link-detect";
@@ -896,6 +899,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         mouse,
         link,
         customViews: views,
+        hoverButtons: hoverButtonConfigs,
         shellProfiles: profiles,
         boardPhases: phases,
         boardStatus,
@@ -906,6 +910,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         mouse: ResolvedMouseConfig;
         link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
+        hoverButtons: ResolvedHoverButtonConfig[];
         shellProfiles: ShellProfile[];
         boardPhases: ResolvedBoardPhase[];
         boardStatus: ResolvedSidebarBoardStatusItem[];
@@ -919,6 +924,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         linkConfig = link;
         compiledLinkRules = compileLinkRules(link.rules);
         applyCustomViews(views);
+        hoverButtons.setConfig(hoverButtonConfigs);
         shellProfiles = profiles;
         shellProfilesVersion++;
         boardPhases = phases;
@@ -936,6 +942,18 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         // 開いたままのモーダルも最新値へ追従させる
         lastConfigSummary = configSummary;
         renderConfigDialog();
+      },
+      hoverButtonTabs: ({ byTabId }: { byTabId: Record<TabId, string[]> }) => {
+        hoverButtons.setActiveButtons(byTabId);
+      },
+      revealHoverButton: ({
+        tabId,
+        position,
+      }: {
+        tabId: TabId;
+        position: HoverButtonPosition | null;
+      }) => {
+        hoverButtons.pin(tabId, position);
       },
       copied: ({ chars, lines }: { chars: number; lines: number }) => {
         showCopiedBadge(chars, lines);
@@ -1462,6 +1480,8 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
   const termEl = tabContentEl.querySelector(".term") as HTMLDivElement;
   const cursorEl = tabContentEl.querySelector(".cursor") as HTMLDivElement;
   const copyOverlayEl = tabContentEl.querySelector(".copy-overlay") as HTMLDivElement;
+  // ホバーボタンがマウス位置からタブを引くのに使う（.tab-contentはタイル間を移動しうるので要素に持たせる）
+  tabContentEl.dataset["tabId"] = tabId;
   tabContentElByTabId.set(tabId, tabContentEl);
   termElByTabId.set(tabId, termEl);
   cursorElByTabId.set(tabId, cursorEl);
@@ -1960,6 +1980,9 @@ function updateTabBarOverlay(tileId: TileId): void {
     activeTabId !== undefined &&
     !browserElByTabId.has(activeTabId);
   barEl.classList.toggle("overlay", overlay);
+  // 上辺のホバーボタンをバーの下へずらすための印（index.css参照）。
+  // 重ね置きのバーと上辺の呼び出し帯は同じ場所にあり、両方が同時に出る
+  tileElByTileId.get(tileId)?.classList.toggle("tab-bar-overlay", overlay);
   syncTabBarReveal();
 }
 
@@ -4184,6 +4207,36 @@ document.addEventListener("contextmenu", (e) => {
   const hit = findTerminalAt(e.target);
   if (!hit || !isMouseTracking(hit.tabId)) return;
   e.preventDefault();
+});
+
+// ---- タブの端に出るホバーボタン（設定のhoverButtons）----
+// 帯の判定・パネルの組み立てはhover-buttons.tsが持ち、ここはRPCとの繋ぎ込みだけを行う。
+// 項目の組み立てはbun側（ユーザーの関数）で走るため、枠を開くたびにRPCで問い合わせる
+
+const hoverButtons = createHoverButtons({
+  fetchItems: async (tabId, buttonId) => {
+    try {
+      return (await rpc.request.hoverButtonItems({ tabId, buttonId })).items;
+    } catch (err) {
+      sendMessage("log", { msg: `[warn] hoverButtonItems failed: ${String(err)}` });
+      return [];
+    }
+  },
+  runItem: (tabId, buttonId, id) => {
+    sendMessage("runHoverButtonItem", { tabId, buttonId, id });
+  },
+  refocusTerminal: () => {
+    imeEl.focus({ preventScroll: true });
+  },
+});
+
+document.addEventListener("mousemove", (e) => {
+  hoverButtons.handleMouseMove(e);
+});
+
+// ウィンドウの外へ抜けるとmousemoveが来なくなり、出したままのパネルが残る
+document.documentElement.addEventListener("mouseleave", () => {
+  hoverButtons.hide();
 });
 
 // ---- ターミナル出力の中のリンク ----

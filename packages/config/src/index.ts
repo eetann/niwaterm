@@ -33,6 +33,16 @@ export {
   WORKSPACES_VIEW_ID,
 } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
+export {
+  HOVER_BUTTON_POSITIONS,
+  type HoverButtonConfig,
+  type HoverButtonContext,
+  type HoverButtonItem,
+  type HoverButtonItemsFn,
+  type HoverButtonPosition,
+  isHoverButtonPosition,
+  type ResolvedHoverButtonConfig,
+} from "./hover-button";
 export type {
   LayoutNodeConfig,
   LayoutPreset,

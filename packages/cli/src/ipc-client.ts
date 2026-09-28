@@ -1440,6 +1440,52 @@ export async function listTabVars(endpoint: IpcEndpoint, tabId: TabId): Promise<
   }
 }
 
+/** ホバーボタン（設定のhoverButtons）1件と、そのタブで今並ぶ項目 */
+export interface HoverButtonEntry {
+  id: string;
+  position: string;
+  items: { id: string; label: string; html: string; tooltip: string }[];
+}
+
+export type ListHoverButtonsResult =
+  | { ok: true; buttons: HoverButtonEntry[] }
+  | { ok: false; error: string };
+
+export async function listHoverButtons(
+  endpoint: IpcEndpoint,
+  tabId: TabId,
+): Promise<ListHoverButtonsResult> {
+  try {
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, `/list-hover-buttons?tabId=${encodeURIComponent(tabId)}`),
+      ipcFetchInit(endpoint),
+    );
+    const body = (await res.json().catch(() => null)) as {
+      buttons?: unknown;
+      error?: unknown;
+    } | null;
+    if (res.ok && Array.isArray(body?.buttons)) {
+      return { ok: true, buttons: body.buttons as HoverButtonEntry[] };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
+export type RevealHoverButtonResult = { ok: true } | { ok: false; error: string };
+
+/** positionをnullにすると強制表示を解除する */
+export async function revealHoverButton(
+  endpoint: IpcEndpoint,
+  tabId: TabId,
+  position: string | null,
+): Promise<RevealHoverButtonResult> {
+  return postJson<{ ok: true }>(endpoint, "/reveal-hover-button", { tabId, position });
+}
+
 export type FindTabsByVarResult = { ok: true; tabIds: TabId[] } | { ok: false; error: string };
 
 /**

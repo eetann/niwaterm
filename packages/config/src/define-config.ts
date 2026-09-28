@@ -2,6 +2,7 @@ import type { AppearanceConfig } from "./appearance";
 import type { BoardConfig } from "./board";
 import type { BrowserConfig } from "./browser";
 import type { CustomViewConfig } from "./custom-view";
+import type { HoverButtonConfig } from "./hover-button";
 import type { KeybindingsConfig } from "./keybindings";
 import type { LayoutsConfig } from "./layout";
 import type { LinkConfig } from "./link";
@@ -50,6 +51,14 @@ export interface NiwatermConfig {
    * 例: [{ name: "Notes", path: "./notes.html" }]
    */
   customViews?: CustomViewConfig[];
+  /**
+   * タブの表示領域の端へマウスを寄せた間だけ出るボタンの設定。位置（8方向）ごとに、
+   * ホバーした時に並べる項目をitemsで組み立てる。項目1つならただのボタン、複数なら
+   * 目次のように並ぶ。showを書けばそのタブに出すかどうかを絞れる（タブ変数・cwdで判定できる）。
+   * 空配列・未指定なら機能自体がオフになる。
+   * 例: [{ position: "bottom-right", items: (ctx, niwa) => [{ label: "git", run: () => niwa.popup.open({ command: "lazygit" }) }] }]
+   */
+  hoverButtons?: HoverButtonConfig[];
   /**
    * シェル設定。新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイル（PowerShell・SSH先等）を変更できる。
    * defaultの未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。

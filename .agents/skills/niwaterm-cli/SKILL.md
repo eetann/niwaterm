@@ -27,6 +27,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`、`NIWATERM_CONFIG_DIR`で変更可)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）。**実行しているタブが載っているOSウィンドウのぶんだけ**表示される
 - `tab new` / `switch` / `close` / `restart` / `focus` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
+- `tab hover list` / `reveal` / `hide` — タブの端に出るホバーボタン（設定の`hoverButtons`）の確認と強制表示。ホバーは合成入力では当てにくいので、実機での目視・スクリーンショット確認は`reveal`を使う
 - `tab var get` / `set` / `list` / `find` — タブごとのkey-value変数（タブ間の連携に使える。`find`は`key=value`が一致するタブを1つのBoard内（既定は`NIWATERM_TAB_ID`のタブが属するBoard、`--board`で明示可）から検索する）
 - `window new` / `list` / `close` — OSウィンドウの作成・一覧・クローズ。`window new`で開くのは**一時ウィンドウ**（まっさらな状態で開き、閉じても何も残らず次回起動時にも復元されない）。前回の状態を復元するメインウィンドウは起動時の1枚だけ。ウィンドウをまたいだタブ・Boardの移動はできない
 - `workspace new` / `switch` / `close` / `rename` / `move` — ワークスペースの作成・切替・削除・名前変更・表示順の並び替え（`move`は`--up`/`--down`で1つずつ移動）

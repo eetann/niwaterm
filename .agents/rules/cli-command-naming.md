@@ -48,6 +48,8 @@ niwaterm tile split --tile <tileId>
   作成を伴う`worktree new`と対になる
 - `popup open` — ポップアップはBoardごとに1つのシングルトンなので、実体を増やす`new`ではない
 - `tab restart` / `tile split` / `tile zoom` / `popup promote` / `layout apply` — そのリソースにしか無い操作
+- `tab hover reveal` / `hide` — ホバーボタンを画面に出したままにする／しまう操作。`show`は
+  「単一の対象の内容を出す」（標準出力へ書く）で埋まっており、画面表示の意味では使えない
 
 ## あえて揃えない例外を潰さない
 

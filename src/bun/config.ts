@@ -20,6 +20,11 @@ import {
   defaultUiColors,
   type CustomViewConfig,
   type CustomViewHandlers,
+  HOVER_BUTTON_POSITIONS,
+  type HoverButtonConfig,
+  type HoverButtonContext,
+  type HoverButtonItemsFn,
+  isHoverButtonPosition,
   isBoardNaming,
   isKeybindAction,
   isLinkModifier,
@@ -48,6 +53,7 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  type ResolvedHoverButtonConfig,
   type ResolvedLinkConfig,
   type ResolvedLinkRule,
   type ResolvedMouseConfig,
@@ -72,6 +78,11 @@ import {
   type CustomViewHandlersById,
   type CustomViewHandlersHandle,
 } from "./custom-view-handlers";
+import {
+  createHoverButtons,
+  type HoverButtonGroup,
+  type HoverButtonsHandle,
+} from "./hover-buttons";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
@@ -108,6 +119,9 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   }
   if ("customViews" in v) {
     if (!Array.isArray(v["customViews"])) return false;
+  }
+  if ("hoverButtons" in v) {
+    if (!Array.isArray(v["hoverButtons"])) return false;
   }
   if ("shell" in v) {
     const sh = v["shell"];
@@ -844,6 +858,70 @@ export function resolveCustomViews(
   return { views, handlersById };
 }
 
+/** position不正の警告に並べる候補。HOVER_BUTTON_POSITIONSをそのまま文字列化したもの */
+const HOVER_BUTTON_POSITION_HINT = HOVER_BUTTON_POSITIONS.join(" / ");
+
+/**
+ * ホバーボタンを解決する。position不正・itemsが関数でない要素は警告して飛ばす。
+ * idは明示指定 > positionからの連番の順で決め、重複はサフィックスで一意にする
+ * （idはCLIからボタンを指す唯一の手がかりなので、重複したまま残すとどちらを指すか決まらなくなる）。
+ * showが関数でない場合はその要素だけ「常に出す」へ落とす（ボタン自体は残す。
+ * 条件の書き損じでボタンが消えると、設定のどこが悪いのか画面から分からなくなるため）
+ */
+export function resolveHoverButtons(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): HoverButtonGroup[] {
+  const list = userConfig?.hoverButtons;
+  if (!Array.isArray(list)) return [];
+
+  const groups: HoverButtonGroup[] = [];
+  const usedIds = new Set<string>();
+  for (const [index, user] of list.entries()) {
+    const scope = `hoverButtons[${index}]`;
+    if (typeof user !== "object" || user === null) {
+      diag.warn(scope, `オブジェクトではないためこの要素だけ無視します: ${describeValue(user)}`);
+      continue;
+    }
+    const entry = user as HoverButtonConfig;
+    if (!isHoverButtonPosition(entry.position)) {
+      diag.warn(
+        `${scope}.position`,
+        `${HOVER_BUTTON_POSITION_HINT}のいずれかでないためこの要素だけ無視します: ${describeValue(entry.position)}`,
+      );
+      continue;
+    }
+    if (typeof entry.items !== "function") {
+      diag.warn(
+        `${scope}.items`,
+        `関数ではないためこの要素だけ無視します: ${describeValue(entry.items)}`,
+      );
+      continue;
+    }
+    let show: ((ctx: HoverButtonContext) => boolean) | undefined;
+    if (entry.show !== undefined) {
+      if (typeof entry.show === "function") show = entry.show;
+      else {
+        diag.warn(
+          `${scope}.show`,
+          `関数ではないため全てのターミナルタブへ出します: ${describeValue(entry.show)}`,
+        );
+      }
+    }
+    const preferredId = isNonEmptyString(entry.id) ? slugifyViewId(entry.id) : "";
+    const id = uniqueViewId(preferredId === "" ? entry.position : preferredId, usedIds);
+    usedIds.add(id);
+    groups.push({
+      id,
+      position: entry.position,
+      css: isNonEmptyString(entry.css) ? entry.css : "",
+      show,
+      items: entry.items as HoverButtonItemsFn,
+    });
+  }
+  return groups;
+}
+
 /**
  * 新規タブ作成時に使うデフォルトシェルを解決する。未指定・不正値はundefined
  * （pty.ts側のOS標準シェルにフォールバックする。appearance/browserと異なりOS共通の
@@ -1013,6 +1091,10 @@ export async function loadAndResolveConfig(
   customViews: ResolvedCustomViewConfig[];
   /** customViewのhandlersの実行（HTML側のniwaterm.callの実体） */
   customViewHandlers: CustomViewHandlersHandle;
+  /** タブの端に出るホバーボタンの定義（関数を除いたもの）。設定に並べた順 */
+  hoverButtons: ResolvedHoverButtonConfig[];
+  /** ホバーボタンの帯を張る判定と、項目の組み立て・実行 */
+  hoverButtonsHandle: HoverButtonsHandle;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
@@ -1062,6 +1144,10 @@ export async function loadAndResolveConfig(
   // 登録内容の取り出しはその後でなければならない
   const keybindings = resolveKeybindings(userConfig, niwaApi, diag);
   const customViews = resolveCustomViews(userConfig, diag);
+  const hoverButtonsHandle = createHoverButtons(
+    resolveHoverButtons(userConfig, diag),
+    niwaApi.niwa,
+  );
   return {
     userConfigLoaded: userConfig !== null,
     loadError,
@@ -1074,6 +1160,8 @@ export async function loadAndResolveConfig(
     link,
     customViews: customViews.views,
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
+    hoverButtons: hoverButtonsHandle.resolved(),
+    hoverButtonsHandle,
     defaultShell,
     shellProfiles,
     layouts: resolveLayouts(userConfig, diag),
