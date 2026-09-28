@@ -365,7 +365,9 @@ body {
   display: flex;
   flex-direction: column;
   /*
-   * 枠線（.focused/.zoomedのoutline）はoutline-offset: -1pxでタイルの内周へ引かれるため、
+   * タイルごとに角丸の枠で囲い、隣のタイルとは.dividerの隙間で区切る。タイルを地の色で塗る
+   * カード型にしないのは、半透明時に#screenの地と二重に塗られてタイルだけ不透明に寄るため。
+   * 枠線はoutline-offset: -1pxでタイルの内周へ引かれるため、
    * 余白が無いと中身と同じピクセルを奪い合う。position指定のある子孫（.tab-content配下の
    * ターミナル描画）は親のoutlineより後に描かれるので、そのままだと枠が部分的に欠ける。
    * ブラウザタブのwebviewはネイティブのオーバーレイでCSSのスタッキングが効かないため、
@@ -376,6 +378,8 @@ body {
    */
   padding: var(--tile-inset);
   border-radius: var(--tile-radius);
+  outline: 1px solid var(--ui-border);
+  outline-offset: -1px;
 }
 .tile.focused {
   outline: 1px solid var(--ui-accent);
@@ -604,14 +608,12 @@ body {
 }
 
 /*
- * #sidebar-dividerはbody直下なので1枚だけだが、タイル間の仕切りは#screenの上に乗るため
- * 半透明時だけそこが少し不透明に寄る。陰影に置き換えると地の色との関係が単純な重ねでは
- * 表せず既定の色がずれるので、4pxの線であることを踏まえて色の正確さを優先する
+ * タイル間の隙間。線は各タイルの枠が受け持つので何も塗らない（塗るとタイルの角丸の外側まで
+ * 四角く埋まってしまう）。ここはリサイズのドラッグを受けるためだけにある
  */
 .divider {
   position: relative;
   flex: 0 0 4px;
-  background-color: color-mix(in srgb, var(--ui-border) var(--term-bg-opacity), transparent);
 }
 .split[data-direction="row"] > .divider {
   cursor: col-resize;

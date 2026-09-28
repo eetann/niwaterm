@@ -29,7 +29,7 @@ export function isTitleBarMode(value: unknown): value is TitleBarMode {
  * 部品ごとではなく役割ごとに色を持ち、同じ役割の部品は同じ色を共有する。
  */
 export interface UiColorsConfig {
-  /** サイドバー・タブバー・ポップアップの境界線と、タイル間の分割線 */
+  /** サイドバー・タブバー・ポップアップの境界線と、フォーカスしていないタイルの枠 */
   border?: string;
   /** フォーカス中タイルの枠・タブD&Dのドロップ先・選択ハイライト・情報メッセージの地 */
   accent?: string;
@@ -90,7 +90,7 @@ export interface AppearanceConfig {
    */
   titleBar?: TitleBarMode;
   /**
-   * タイルの角の丸み（px）。フォーカス中・ズーム中の枠もこの丸みで引かれる。0で角張った四角になる。
+   * タイルの角の丸み（px）。各タイルの枠（フォーカス中・ズーム中の枠を含む）がこの丸みで引かれる。0で角張った四角になる。
    * 大きくするほどタイルの内側の余白も広がり、そのぶんターミナルの表示領域が狭まる
    */
   tileBorderRadius?: number;
