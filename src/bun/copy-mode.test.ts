@@ -49,6 +49,10 @@ describe("cellStarts", () => {
     expect(cellStarts("あb", 6)).toEqual([0, 2]);
   });
 
+  test("結合用濁点は直前の文字と同じセルなので開始桁を増やさない", () => {
+    expect(cellStarts("テ\u3099ィb", 10)).toEqual([0, 2, 4]);
+  });
+
   test("行末の空白は含めない（中身が無い行でも0桁だけは残す）", () => {
     expect(cellStarts("ab   ", 10)).toEqual([0, 1]);
     expect(cellStarts("    ", 10)).toEqual([0]);

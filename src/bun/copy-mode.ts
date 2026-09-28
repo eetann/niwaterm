@@ -10,7 +10,7 @@
 // 列は「グリッドの桁」であって文字数ではない（全角文字は2桁を占める）。行テキストと桁の
 // 対応付けはcellStarts()に集約する。
 
-import { isWideChar } from "../shared/wide-char";
+import { charWidth, splitCells } from "../shared/wide-char";
 
 export type CopyModeSelectionMode = "none" | "char" | "line";
 
@@ -134,10 +134,10 @@ export function createCopyModeState(cursor: CopyModePoint): CopyModeState {
 export function cellStarts(line: string, cols: number): number[] {
   const starts: number[] = [];
   let col = 0;
-  for (const ch of trimmedLine(line)) {
+  for (const cell of splitCells(trimmedLine(line))) {
     if (col >= cols) break;
     starts.push(col);
-    col += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
+    col += cell.width;
   }
   if (starts.length === 0) starts.push(0);
   return starts;
@@ -180,9 +180,9 @@ function charClass(ch: string): CharClass {
 function cellsOf(line: string): Array<{ ch: string; col: number }> {
   const cells: Array<{ ch: string; col: number }> = [];
   let col = 0;
-  for (const ch of line) {
-    cells.push({ ch, col });
-    col += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
+  for (const cell of splitCells(line)) {
+    cells.push({ ch: cell.text, col });
+    col += cell.width;
   }
   return cells;
 }
@@ -407,7 +407,7 @@ function columnMap(line: string): number[] {
   for (const ch of line) {
     for (let k = 0; k < ch.length; k++) map[index + k] = col;
     index += ch.length;
-    col += isWideChar(ch.codePointAt(0) ?? 0) ? 2 : 1;
+    col += charWidth(ch);
   }
   map[line.length] = col;
   return map;

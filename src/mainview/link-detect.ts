@@ -6,7 +6,7 @@
 // 位置の情報だけをこちらで持ちオーバーレイとして重ねる（copy-overlayと同じ発想）。
 
 import type { ResolvedLinkRule } from "@niwaterm/config";
-import { isWideChar } from "../shared/wide-char";
+import { charWidth } from "../shared/wide-char";
 
 export interface CompiledLinkRule {
   /** gフラグ付きの正規表現。execを繰り返して行内の全マッチを列挙する */
@@ -54,7 +54,7 @@ function columnByIndex(line: string): number[] {
     // 添字が欠けると以降の参照がundefinedになるため埋める）
     for (let k = 0; k < char.length; k++) cols[index + k] = col;
     index += char.length;
-    col += isWideChar(char.codePointAt(0) ?? 0) ? 2 : 1;
+    col += charWidth(char);
   }
   cols[line.length] = col;
   return cols;

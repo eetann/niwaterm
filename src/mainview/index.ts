@@ -106,7 +106,7 @@ import {
   resolvePopupDrag,
   toPercentGeometry,
 } from "../shared/popup-geometry";
-import { isWideChar } from "../shared/wide-char";
+import { isWideChar, splitCells } from "../shared/wide-char";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
@@ -1181,7 +1181,8 @@ function fixGlyphs(root: HTMLElement) {
       frag.appendChild(span);
       shadeRun = "";
     };
-    for (const ch of node.data) {
+    // 結合文字（濁点等）は基底文字と同じspanへ入れる。別に分けると.wideの2セル幅の外へはみ出す
+    for (const { text: ch } of splitCells(node.data)) {
       const cp = ch.codePointAt(0) ?? 0;
       const alpha = shadeAlphaPercent(cp);
       if (alpha !== null) {

@@ -4,7 +4,7 @@
 // 含まれない。カーソルを「そのセルに乗っている文字」に合わせて描くために、テキストを
 // 桁として数え直す係。
 
-import { isWideChar } from "../shared/wide-char";
+import { splitCells } from "../shared/wide-char";
 
 /** 桁・行で指したセルに乗っている文字と、そのセルの実際の位置 */
 export interface TermCell {
@@ -30,10 +30,8 @@ export function cellAt(screenText: string, x: number, y: number): TermCell | nul
   const end = screenText.indexOf("\n", start);
   const line = screenText.slice(start, end < 0 ? screenText.length : end);
   let col = 0;
-  for (const char of line) {
-    const wide = isWideChar(char.codePointAt(0) ?? 0);
-    const width = wide ? 2 : 1;
-    if (x < col + width) return { char, col, wide };
+  for (const { text: char, width } of splitCells(line)) {
+    if (x < col + width) return { char, col, wide: width === 2 };
     col += width;
   }
   return null;

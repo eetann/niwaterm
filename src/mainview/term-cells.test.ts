@@ -43,4 +43,11 @@ describe("cellAt", () => {
     expect(cellAt("a🐧b", 1, 0)).toEqual({ char: "🐧", col: 1, wide: true });
     expect(cellAt("a🐧b", 3, 0)).toEqual({ char: "b", col: 3, wide: false });
   });
+
+  test("結合用濁点は基底文字と同じセルに含め、桁を進めない", () => {
+    const line = "テ\u3099ィx";
+    expect(cellAt(line, 1, 0)).toEqual({ char: "テ\u3099", col: 0, wide: true });
+    expect(cellAt(line, 2, 0)).toEqual({ char: "ィ", col: 2, wide: true });
+    expect(cellAt(line, 4, 0)).toEqual({ char: "x", col: 4, wide: false });
+  });
 });

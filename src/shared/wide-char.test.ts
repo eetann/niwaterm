@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isWideChar } from "./wide-char";
+import { charWidth, isWideChar, splitCells } from "./wide-char";
 
 describe("isWideChar", () => {
   test.each([
@@ -13,6 +13,9 @@ describe("isWideChar", () => {
     [0x303e, true, "CJK部首記号 上端"],
     [0x303f, false, "ひらがなブロック直前の隙間"],
     [0x3041, true, "ひらがな等ブロック 下端"],
+    [0x3099, false, "結合用濁点（幅0）"],
+    [0x309a, false, "結合用半濁点（幅0）"],
+    [0x309b, true, "濁点（単体のスペーシング文字）"],
     [0x33ff, true, "ひらがな等ブロック 上端"],
     [0x3400, true, "CJK拡張A 下端"],
     [0x4dbf, true, "CJK拡張A 上端"],
@@ -48,5 +51,44 @@ describe("isWideChar", () => {
     [0x3fffe, false, "上端超え"],
   ])("isWideChar(0x%s) -> %p (%s)", (cp, expected) => {
     expect(isWideChar(cp)).toBe(expected);
+  });
+});
+
+describe("charWidth", () => {
+  test.each([
+    ["a", 1],
+    ["あ", 2],
+    ["゙", 0],
+    ["́", 0],
+    ["️", 0],
+  ])("charWidth(%p) -> %p", (ch, expected) => {
+    expect(charWidth(ch)).toBe(expected);
+  });
+});
+
+describe("splitCells", () => {
+  test("NFDの濁点は基底文字と同じセルにまとめる", () => {
+    expect(splitCells("ディスプレイ")).toEqual([
+      { text: "デ", width: 2 },
+      { text: "ィ", width: 2 },
+      { text: "ス", width: 2 },
+      { text: "プ", width: 2 },
+      { text: "レ", width: 2 },
+      { text: "イ", width: 2 },
+    ]);
+  });
+
+  test("半角の基底文字に付く結合文字も幅を増やさない", () => {
+    expect(splitCells("éx")).toEqual([
+      { text: "é", width: 1 },
+      { text: "x", width: 1 },
+    ]);
+  });
+
+  test("先頭の結合文字は単体で幅1のセルにする", () => {
+    expect(splitCells("゙a")).toEqual([
+      { text: "゙", width: 1 },
+      { text: "a", width: 1 },
+    ]);
   });
 });
