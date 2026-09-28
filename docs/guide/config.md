@@ -493,6 +493,7 @@ niwa.on("bell", (event) => {
 | `ansiColors` | `readonly string[]` | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる |
 | `tabBar` | `"auto"` / `"always"` | タブが1つだけのタイルでのタブバーの出し方（既定`"auto"`）。下記「タブバーの出し方」参照 |
 | `titleBar` | `"default"` / `"hidden"` | ネイティブのタイトルバーを出すか隠すか（既定`"default"`）。下記「タイトルバーを隠す」参照 |
+| `tileBorderRadius` | `number` | タイルの角の丸み（px、既定`6`）。フォーカス中・ズーム中の枠もこの丸みで引かれる。`0`で角張った四角になる。丸みを大きくすると、角に中身が食い込まないようタイル内側の余白も広がる |
 | `ui` | `UiColorsConfig` | ターミナル本体以外のUI（枠線・分割線・バッジ等）の配色。下記「UIの配色（`appearance.ui`）」参照 |
 
 ```ts

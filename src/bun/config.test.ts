@@ -648,6 +648,22 @@ describe("resolveAppearance", () => {
     }
   });
 
+  test("tileBorderRadiusは0以上の数値だけ受け付ける", () => {
+    expect(resolveAppearance({ appearance: { tileBorderRadius: 0 } }).tileBorderRadius).toBe(0);
+    expect(resolveAppearance({ appearance: { tileBorderRadius: 10 } }).tileBorderRadius).toBe(10);
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      for (const bad of [-1, Number.NaN, "6px"]) {
+        expect(
+          resolveAppearance({ appearance: { tileBorderRadius: bad as never } }).tileBorderRadius,
+        ).toBe(defaultAppearance.tileBorderRadius);
+      }
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test('tabBarは"auto"/"always"だけ受け付ける', () => {
     expect(resolveAppearance({ appearance: { tabBar: "always" } }).tabBar).toBe("always");
     const logSpy = spyOn(console, "log").mockImplementation(() => {});

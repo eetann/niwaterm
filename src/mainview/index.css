@@ -55,6 +55,10 @@
   --ui-badge-fg: #1e1e2e;
   --ui-scrollbar: #45475a;
 
+  /* appearance.tileBorderRadiusと、そこから決まるタイルの内側の余白（tile-corner.ts） */
+  --tile-radius: 6px;
+  --tile-inset: 3px;
+
   /*
    * クロームの地。サイドバー・オーバーレイ表示のタブバーなど、ターミナルの地より
    * 一段沈ませたい面で使う。--term-bgへ黒を薄く重ねて作るので、背景色を変えても
@@ -367,9 +371,11 @@ body {
    * ブラウザタブのwebviewはネイティブのオーバーレイでCSSのスタッキングが効かないため、
    * 中身を物理的に内側へ寄せるこの方法でしか枠を守れない。
    * 枠にborderを使わずoutlineのままにしているのも対で、borderだとフォーカスのたびに
-   * 内寸が変わってcols/rowsが振り直される
+   * 内寸が変わってcols/rowsが振り直される。
+   * 角丸にするとwebviewの四角い角が弧からはみ出すため、余白は丸みに応じて広げる（--tile-inset）
    */
-  padding: 2px;
+  padding: var(--tile-inset);
+  border-radius: var(--tile-radius);
 }
 .tile.focused {
   outline: 1px solid var(--ui-accent);
@@ -428,6 +434,9 @@ body {
 .tab-bar {
   display: flex;
   flex: 0 0 auto;
+  /* 枠の弧と平行に見えるよう、タイルの丸みから余白ぶんを引いた丸みを上の角に付ける */
+  border-radius: max(0px, var(--tile-radius) - var(--tile-inset))
+    max(0px, var(--tile-radius) - var(--tile-inset)) 0 0;
   background-color: rgba(0, 0, 0, 0.2);
   overflow-x: auto;
 }
@@ -444,9 +453,9 @@ body {
  */
 .tab-bar.overlay {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
+  top: var(--tile-inset);
+  left: var(--tile-inset);
+  right: var(--tile-inset);
   z-index: 4;
   opacity: 0;
   pointer-events: none;

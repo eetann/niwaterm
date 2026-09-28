@@ -85,6 +85,7 @@ import {
 } from "./react/sidebar-workspace-list";
 import { TAB_DRAG_MIME, TileTabBar, type TabDragPayload } from "./react/tile-tab-bar";
 import { isLightBackground } from "./theme-mode";
+import { tileContentInset } from "./tile-corner";
 import { syncScrollbarMode } from "./scrollbar-mode";
 import { resolveTileDropZone, splitForDropZone, type TileDropZone } from "./tile-drop-zone";
 import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
@@ -795,6 +796,9 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--ui-danger", config.ui.danger);
   root.setProperty("--ui-badge-fg", config.ui.badgeForeground);
   root.setProperty("--ui-scrollbar", config.ui.scrollbar);
+  root.setProperty("--tile-radius", `${config.tileBorderRadius}px`);
+  // 余白が変わるとタイル内寸も変わる。下のsendResizeが実寸を送り直す
+  root.setProperty("--tile-inset", `${tileContentInset(config.tileBorderRadius)}px`);
   applyThemeMode(config.background);
   applyAnsiPalette(config.ansiColors);
   applyTitleBarMode(config.titleBar);
@@ -2054,8 +2058,8 @@ function syncTabBarReveal(): void {
 /**
  * オーバーレイのタブバーを呼び出すタイル上端からの距離(px)。バー1本分(29px)ではなく極細にする:
  * 出たバーはマウスを受け取る側に回るため、帯をバーと同じ高さにするとターミナル1行目の
- * クリック・選択・マウスレポートがバーに吸われてしまう。タイル自身のpadding(2px)も
- * この帯に含まれるので、ターミナルから借りるのは実質2px
+ * クリック・選択・マウスレポートがバーに吸われてしまう。タイル自身のpadding（--tile-inset）も
+ * この帯に含まれる
  */
 const TAB_BAR_REVEAL_EDGE_PX = 4;
 

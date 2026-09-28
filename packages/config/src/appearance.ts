@@ -90,6 +90,11 @@ export interface AppearanceConfig {
    */
   titleBar?: TitleBarMode;
   /**
+   * タイルの角の丸み（px）。フォーカス中・ズーム中の枠もこの丸みで引かれる。0で角張った四角になる。
+   * 大きくするほどタイルの内側の余白も広がり、そのぶんターミナルの表示領域が狭まる
+   */
+  tileBorderRadius?: number;
+  /**
    * ターミナル本体以外のUIの配色。未指定のフィールドはdefaultUiColorsの値のまま有効。
    * サイドバー・ダイアログ・コマンドパレットの地と文字色はここではなく
    * foreground/backgroundから派生するため、全体の明るさを変えるときはその2つを先に変える
@@ -130,6 +135,7 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   ],
   tabBar: "auto",
   titleBar: "default",
+  tileBorderRadius: 6,
   ui: defaultUiColors,
 };
 

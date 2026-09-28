@@ -428,6 +428,10 @@ function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && value > 0;
 }
 
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
 function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
@@ -560,6 +564,14 @@ export function resolveAppearance(
       user?.titleBar,
       defaultAppearance.titleBar,
       isTitleBarMode,
+    ),
+    tileBorderRadius: resolveField(
+      diag,
+      "appearance",
+      "tileBorderRadius",
+      user?.tileBorderRadius,
+      defaultAppearance.tileBorderRadius,
+      isNonNegativeNumber,
     ),
     ui: resolveUiColors(user?.ui, diag),
   };

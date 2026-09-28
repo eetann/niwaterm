@@ -166,6 +166,7 @@ function appearanceSection(
       },
       { key: "tabBar", value: appearance.tabBar },
       { key: "titleBar", value: appearance.titleBar },
+      { key: "tileBorderRadius", value: `${appearance.tileBorderRadius}px` },
       ...uiColorEntries(appearance.ui),
     ],
   };
