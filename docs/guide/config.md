@@ -1068,7 +1068,7 @@ css: `
 
 関数が例外を投げた場合・配列以外を返した場合・`label`も`html`も持たない項目は、警告付きで無視される。
 
-そのまま使える例が`contrib/agent-integration/claude-code/prompt-jump/`にある（Claude Codeのプロンプトを線の目次として並べ、クリックしたプロンプトへClaude Code側の表示を移す）。
+そのまま使える例として、`@niwaterm/config`の`claudePromptJump()`がある（Claude Codeのプロンプトを線の目次として並べ、クリックしたプロンプトへClaude Code側の表示を移す）。`hoverButtons: [claudePromptJump()]`と並べるだけで使え、Claude Code側に入れるmodと導入手順は`contrib/agent-integration/claude-code/prompt-jump/`にある。
 
 ### 制約
 

@@ -19,7 +19,7 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 
 | 置くもの | 置き場所 | 役割 |
 | --- | --- | --- |
-| `hover-buttons.ts` | niwatermの設定 | transcriptを読んで目次を並べ、クリックでタブ変数`agent_jump`へプロンプトのuuidを書き、キーを送る |
+| `claudePromptJump`（`@niwaterm/config`） | niwatermの設定 | transcriptを読んで目次を並べ、クリックでタブ変数`agent_jump`へプロンプトのuuidを書き、キーを送る |
 | `mod/` | Claude Codeのプラグイン | そのキーを受けてタブ変数を読み、`$.ui.scroll`でtranscriptの表示を移す |
 
 プロンプト行の`requestId`はtranscript（jsonl）のuuidと同じ値なので、
@@ -78,31 +78,14 @@ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ~/.config/claude-mods/ni
 
 ### 2. 目次（niwaterm側）
 
-```sh
-mkdir -p ~/.config/niwaterm/hover-buttons
-cp contrib/agent-integration/claude-code/prompt-jump/hover-buttons.ts \
-  ~/.config/niwaterm/hover-buttons/claude-prompt-jump.ts
-```
-
+目次は`@niwaterm/config`に入っているので、ファイルを置く必要はない。
 `~/.config/niwaterm/niwaterm.config.ts`へ追記する。
 
 ```ts
-import { defineConfig } from "@niwaterm/config";
-import {
-  claudePromptCss,
-  claudePromptItems,
-  claudePromptShow,
-} from "./hover-buttons/claude-prompt-jump.ts";
+import { claudePromptJump, defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
-  hoverButtons: [
-    {
-      position: "right",
-      show: claudePromptShow,
-      items: claudePromptItems,
-      css: claudePromptCss,
-    },
-  ],
+  hoverButtons: [claudePromptJump()],
 });
 ```
 
@@ -110,15 +93,22 @@ export default defineConfig({
 
 ## 変えたくなりそうなところ
 
-| 場所 | 既定 | 変える理由 |
+`claudePromptJump()`へオプションを渡して変える。`position`・`handle`・`show`などホバーボタンの
+フィールドもそのまま上書きでき、`css`は目次の既定のスタイルの後ろへ足される。
+
+| オプション | 既定 | 変える理由 |
 |---|---|---|
-| `hover-buttons.ts`の`CLI` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
-| `hover-buttons.ts`の`JUMP_KEY`とmodの`action` | `C-]`／`app:openArtifact` | 下記の衝突を避けたいとき。**必ず両方揃える** |
-| `hover-buttons.ts`の`ITEM_STYLE` | `"text"` | 本文を出さず印だけ並べたいなら`"mark"` |
-| `hover-buttons.ts`の`LABEL_CHARS` | `20` | 項目に出す本文の量を増やす・減らす |
-| `hover-buttons.ts`の`LENGTH_STEPS`・`LEVEL_OPACITY` | 12/48/160/400文字・5段階 | 濃さの段階の切れ目と濃さそのものを変える |
-| `hover-buttons.ts`の`TOOLTIP_CHARS` | `140` | ツールチップで読める量を増やす・減らす |
-| `claudePromptShow` | `agent`が`claude-code`のタブだけ | 他のエージェントのタブにも出したい |
+| `cli` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
+| `jumpKey`とmodの`action` | `C-]`／`app:openArtifact` | 下記の衝突を避けたいとき。**必ず両方揃える** |
+| `itemStyle` | `"text"` | 本文を出さず印だけ並べたいなら`"mark"` |
+| `labelChars` | `20` | 項目に出す本文の量を増やす・減らす |
+| `tooltipChars` | `140` | ツールチップで読める量を増やす・減らす |
+| `show` | `agent`が`claude-code`のタブだけ | 他のエージェントのタブにも出したい |
+| `position` | `"bottom-right"` | 目次を出す場所を変えたい |
+
+```ts
+hoverButtons: [claudePromptJump({ position: "right", handle: { shape: "round" } })],
+```
 
 `action`はClaude Codeが持つキーバインドのアクション名でなければならず、
 **engine自身がそのアクションを処理できる状態だとそちらが優先される**。既定の
@@ -126,7 +116,7 @@ export default defineConfig({
 そこでジャンプできなくなったら別のアクションに変える。modの`action`は
 `~/.claude/settings.json`の`pluginConfigs`からも変えられる。
 
-目次を出す辺は`position`で変えられる（`right`・`left`・`top`等の8方向。どこに置いても目次は縦に並ぶ）。
+目次を出す場所は`position`で変えられる（`right`・`left`・`top`等の8方向。どこに置いても目次は縦に並ぶ）。
 取っ手の見た目は`handle`で変えられ、`handle: false`にすると取っ手を出さず端へマウスを寄せた間だけ出す。
 
 ## うまく動かないとき

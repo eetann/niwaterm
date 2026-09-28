@@ -32,6 +32,7 @@ export {
   type ResolvedCustomViewConfig,
   WORKSPACES_VIEW_ID,
 } from "./custom-view";
+export { claudePromptJump, type ClaudePromptJumpOptions } from "./claude-prompt-jump";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export {
   DEFAULT_HOVER_BUTTON_POSITION,
