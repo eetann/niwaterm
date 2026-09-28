@@ -664,6 +664,27 @@ describe("resolveAppearance", () => {
     }
   });
 
+  test("tileGap・inactiveTileDim・tileShadowは不正値なら既定値を使う", () => {
+    const resolved = resolveAppearance({
+      appearance: { tileGap: 0, inactiveTileDim: 0, tileShadow: "none" },
+    });
+    expect(resolved.tileGap).toBe(0);
+    expect(resolved.inactiveTileDim).toBe(0);
+    expect(resolved.tileShadow).toBe("none");
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const fallback = resolveAppearance({
+        appearance: { tileGap: -2, inactiveTileDim: 1.5, tileShadow: "" },
+      });
+      expect(fallback.tileGap).toBe(defaultAppearance.tileGap);
+      expect(fallback.inactiveTileDim).toBe(defaultAppearance.inactiveTileDim);
+      expect(fallback.tileShadow).toBe(defaultAppearance.tileShadow);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test('tabBarは"auto"/"always"だけ受け付ける', () => {
     expect(resolveAppearance({ appearance: { tabBar: "always" } }).tabBar).toBe("always");
     const logSpy = spyOn(console, "log").mockImplementation(() => {});

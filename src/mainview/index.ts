@@ -799,6 +799,9 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--tile-radius", `${config.tileBorderRadius}px`);
   // 余白が変わるとタイル内寸も変わる。下のsendResizeが実寸を送り直す
   root.setProperty("--tile-inset", `${tileContentInset(config.tileBorderRadius)}px`);
+  root.setProperty("--tile-gap", `${config.tileGap}px`);
+  root.setProperty("--tile-inactive-dim", String(config.inactiveTileDim));
+  root.setProperty("--tile-shadow", config.tileShadow);
   applyThemeMode(config.background);
   applyAnsiPalette(config.ansiColors);
   applyTitleBarMode(config.titleBar);

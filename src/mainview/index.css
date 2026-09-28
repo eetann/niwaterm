@@ -58,6 +58,10 @@
   /* appearance.tileBorderRadiusと、そこから決まるタイルの内側の余白（tile-corner.ts） */
   --tile-radius: 6px;
   --tile-inset: 3px;
+  /* appearance.tileGap・inactiveTileDim・tileShadow */
+  --tile-gap: 6px;
+  --tile-inactive-dim: 0.2;
+  --tile-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 
   /*
    * クロームの地。サイドバー・オーバーレイ表示のタブバーなど、ターミナルの地より
@@ -298,7 +302,7 @@ body {
   flex: 1;
   min-width: 0;
   height: 100%;
-  padding: 4px;
+  padding: var(--tile-gap);
   cursor: text;
   background-color: color-mix(in srgb, var(--term-bg) var(--term-bg-opacity), transparent);
 }
@@ -380,6 +384,24 @@ body {
   border-radius: var(--tile-radius);
   outline: 1px solid var(--ui-border);
   outline-offset: -1px;
+  /*
+   * タイル自身は地を塗らないので、影は枠の外側へ落ちる。隣のタイルへはみ出した分は
+   * position指定のある中身（ターミナル描画）より先に描かれるため、文字の上には乗らない
+   */
+  box-shadow: var(--tile-shadow);
+}
+/*
+ * フォーカスしていないタイルの減光。z-index 3で、ターミナル描画・選択オーバーレイ・
+ * スクロールバックのバッジ（z-index 2以下）は暗くし、ホバーで出てくるタブバーとボタン
+ * （z-index 4）は暗くしない。ドロップ先のハイライト中は見分けにくくなるので外す
+ */
+.tile:not(.focused):not(.drag-over)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: rgba(0, 0, 0, var(--tile-inactive-dim));
+  pointer-events: none;
 }
 .tile.focused {
   outline: 1px solid var(--ui-accent);
@@ -613,7 +635,7 @@ body {
  */
 .divider {
   position: relative;
-  flex: 0 0 4px;
+  flex: 0 0 var(--tile-gap);
 }
 .split[data-direction="row"] > .divider {
   cursor: col-resize;

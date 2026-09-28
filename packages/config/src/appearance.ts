@@ -94,6 +94,15 @@ export interface AppearanceConfig {
    * 大きくするほどタイルの内側の余白も広がり、そのぶんターミナルの表示領域が狭まる
    */
   tileBorderRadius?: number;
+  /** タイル同士の間と、タイルと画面の端の間の隙間（px） */
+  tileGap?: number;
+  /**
+   * フォーカスしていないタイルを暗くする度合い（0〜1）。タイルへ重ねる黒の不透明度で、0で暗くしない。
+   * ブラウザタブのwebviewはネイティブのオーバーレイでHTMLより手前に描かれるため暗くならない
+   */
+  inactiveTileDim?: number;
+  /** タイルに付ける影。CSSのbox-shadow値で、"none"で影を付けない */
+  tileShadow?: string;
   /**
    * ターミナル本体以外のUIの配色。未指定のフィールドはdefaultUiColorsの値のまま有効。
    * サイドバー・ダイアログ・コマンドパレットの地と文字色はここではなく
@@ -136,6 +145,9 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   tabBar: "auto",
   titleBar: "default",
   tileBorderRadius: 6,
+  tileGap: 6,
+  inactiveTileDim: 0.2,
+  tileShadow: "0 1px 4px rgba(0, 0, 0, 0.4)",
   ui: defaultUiColors,
 };
 

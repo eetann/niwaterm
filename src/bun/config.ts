@@ -573,6 +573,30 @@ export function resolveAppearance(
       defaultAppearance.tileBorderRadius,
       isNonNegativeNumber,
     ),
+    tileGap: resolveField(
+      diag,
+      "appearance",
+      "tileGap",
+      user?.tileGap,
+      defaultAppearance.tileGap,
+      isNonNegativeNumber,
+    ),
+    inactiveTileDim: resolveField(
+      diag,
+      "appearance",
+      "inactiveTileDim",
+      user?.inactiveTileDim,
+      defaultAppearance.inactiveTileDim,
+      isOpacity,
+    ),
+    tileShadow: resolveField(
+      diag,
+      "appearance",
+      "tileShadow",
+      user?.tileShadow,
+      defaultAppearance.tileShadow,
+      isNonEmptyString,
+    ),
     ui: resolveUiColors(user?.ui, diag),
   };
 }
