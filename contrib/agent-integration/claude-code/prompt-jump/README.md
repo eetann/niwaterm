@@ -10,14 +10,14 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 
 目次はniwatermのUIで、ターミナルの上に重ねて描く。Claude Codeの画面には何も出ない。
 
-## なぜ2つの部品に分かれているのか
+## なぜniwaterm側とClaude Code側に分かれるのか
 
 **niwaterm側から画面の位置を触る余地が無い。** Claude Codeはalternate screenで動くため、
 会話はniwatermのスクロールバックに1行も残らない
 （[docs/known-issues/claude-code-history-not-in-scrollback.md](../../../../docs/known-issues/claude-code-history-not-in-scrollback.md)）。
 表示を動かせるのはClaude Code自身だけなので、こちら側は「どこへ飛びたいか」を渡す役に徹する。
 
-| 部品 | 置き場所 | 役割 |
+| 置くもの | 置き場所 | 役割 |
 | --- | --- | --- |
 | `hover-buttons.ts` | niwatermの設定 | transcriptを読んで目次を並べ、クリックでタブ変数`agent_jump`へプロンプトのuuidを書き、キーを送る |
 | `mod/` | Claude Codeのプラグイン | そのキーを受けてタブ変数を読み、`$.ui.scroll`でtranscriptの表示を移す |
@@ -33,8 +33,8 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 ## 前提
 
 **Claude Code 2.1.260以降**と、function hooks（早期アクセス）を有効にする環境変数。
-このAPIは更新の度に変わりうるので、Claude Codeを上げてジャンプが効かなくなったら
-`mod/hooks/register.tsx`を疑う。
+このAPIは更新の度に変わりうるので、Claude Codeを上げてジャンプが動かなくなったら
+まず`mod/hooks/register.tsx`を見る。
 
 [エージェント統合](../)も入れておく。hooksがtranscriptの在り処をタブ変数`agent_transcript`へ
 書き込み、それを頼りに目次を作る。入れていないタブには目次の帯を張らない。
@@ -42,6 +42,9 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 ```sh
 niwaterm agent setup claude-code
 ```
+
+**エージェント統合を既に入れてある場合も、このコマンドを実行し直す。** transcriptの在り処を
+書き込むhookは後から足したもので、`~/.claude/settings.json`へコピー済みの設定は追いつかない。
 
 ## 導入
 
@@ -69,7 +72,7 @@ cp -r contrib/agent-integration/claude-code/prompt-jump/mod ~/.config/claude-mod
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ~/.config/claude-mods/niwaterm-prompt-jump
 ```
 
-`claude plugin validate <mod>`で、読み込まれる形になっているか確かめられる。これを一度走らせると
+`claude plugin validate <mod>`で、読み込まれる形になっているか確かめられる。これを一度実行すると
 `mod/.claude-plugin/types/`へ動かしているビルドの型定義が出るので、`mod/tsconfig.json`だけで
 エディタの型が付く（生成物はClaude Code側のgitignoreで無視される）。
 
@@ -120,17 +123,17 @@ export default defineConfig({
 `action`はClaude Codeが持つキーバインドのアクション名でなければならず、
 **engine自身がそのアクションを処理できる状態だとそちらが優先される**。既定の
 `app:openArtifact`（ctrl+]）はartifactが開ける場面でだけengineが取るので、
-そこで効かなくなったら別のアクションに変える。modの`action`は
+そこでジャンプできなくなったら別のアクションに変える。modの`action`は
 `~/.claude/settings.json`の`pluginConfigs`からも変えられる。
 
 目次を出す辺は`position`で変えられる（`right`・`left`・`top`等の8方向）。
 
-## 効かないとき
+## うまく動かないとき
 
 | 症状 | 見るところ |
 |---|---|
 | 目次が出ない | `niwaterm tab var list`に`agent`と`agent_transcript`があるか。エージェント統合を入れる前から動いているセッションでは、次にプロンプトを打った時点で埋まる |
-| 目次は出るがクリックで動かない | Claude Code側でmodが読めているか（`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`・`CLAUDE_CODE_PLUGIN_DIRS`）。キーが別のアクションに取られていないか |
+| 目次は出るがクリックで動かない | `claude plugin details niwaterm-prompt-jump`でmodが読めているかを見る。出てこなければ`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`と`CLAUDE_CODE_PLUGIN_DIRS`の設定を見直す。読めているならキーが別のアクションに取られていないか |
 | `niwaterm: ...`というトーストが出る | modは動いていて、ジャンプ先が読めない・engineに断られた。文面がそのまま理由 |
 
 ## CLIから直接読む
