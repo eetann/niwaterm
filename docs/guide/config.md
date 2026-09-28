@@ -494,9 +494,9 @@ niwa.on("bell", (event) => {
 | `tabBar` | `"auto"` / `"always"` | タブが1つだけのタイルでのタブバーの出し方（既定`"auto"`）。下記「タブバーの出し方」参照 |
 | `titleBar` | `"default"` / `"hidden"` | ネイティブのタイトルバーを出すか隠すか（既定`"default"`）。下記「タイトルバーを隠す」参照 |
 | `tileBorderRadius` | `number` | タイルの角の丸み（px、既定`6`）。各タイルの枠（フォーカス中・ズーム中の枠を含む）がこの丸みで引かれる。`0`で角張った四角になる。丸みを大きくすると、角に中身が食い込まないようタイル内側の余白も広がる |
-| `tileGap` | `number` | タイル同士の間と、タイルと画面の端の間の隙間（px、既定`6`） |
-| `inactiveTileDim` | `number` | フォーカスしていないタイルを暗くする度合い（0〜1、既定`0.2`）。`0`で暗くしない |
-| `tileShadow` | `string` | タイルに付ける影。CSSの`box-shadow`値（既定`"0 1px 4px rgba(0, 0, 0, 0.4)"`）。`"none"`で影を付けない |
+| `tileGap` | `number` | タイル同士の間と、タイルと画面の端の間の隙間（px、既定`4`） |
+| `inactiveTileDim` | `number` | フォーカスしていないタイルを暗くする度合い（0〜1、既定`0`＝暗くしない） |
+| `tileShadow` | `string` | タイルに付ける影。CSSの`box-shadow`値（既定`"none"`＝影なし） |
 | `ui` | `UiColorsConfig` | ターミナル本体以外のUI（枠線・バッジ等）の配色。下記「UIの配色（`appearance.ui`）」参照 |
 
 ```ts
@@ -564,16 +564,17 @@ appearance: {
 
 ### タイルの見た目
 
-各タイルは角丸の枠で囲まれ、隙間と影を挟んで並ぶ。フォーカスしていないタイルは少し暗く表示する。
+各タイルは角丸の枠で囲まれ、隙間を挟んで並ぶ。既定では影を付けず、フォーカスしていないタイルも暗くしない。
+隙間を広げて影を付け、フォーカスしていないタイルを暗くすると、タイルがカードのように並んだ見た目になる。
 
 ```ts
 appearance: {
   ...defaultAppearance,
-  // 角張った枠・狭い隙間・影なし・減光なしにする（カード型にする前の見た目に近い）
-  tileBorderRadius: 0,
-  tileGap: 4,
-  tileShadow: "none",
-  inactiveTileDim: 0,
+  tileGap: 6,
+  tileShadow: "0 1px 4px rgba(0, 0, 0, 0.4)",
+  inactiveTileDim: 0.2,
+  // 角張った枠にするなら0
+  // tileBorderRadius: 0,
 },
 ```
 

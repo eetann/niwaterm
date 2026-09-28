@@ -145,9 +145,9 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   tabBar: "auto",
   titleBar: "default",
   tileBorderRadius: 6,
-  tileGap: 6,
-  inactiveTileDim: 0.2,
-  tileShadow: "0 1px 4px rgba(0, 0, 0, 0.4)",
+  tileGap: 4,
+  inactiveTileDim: 0,
+  tileShadow: "none",
   ui: defaultUiColors,
 };
 

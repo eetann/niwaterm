@@ -59,9 +59,9 @@
   --tile-radius: 6px;
   --tile-inset: 3px;
   /* appearance.tileGap・inactiveTileDim・tileShadow */
-  --tile-gap: 6px;
-  --tile-inactive-dim: 0.2;
-  --tile-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  --tile-gap: 4px;
+  --tile-inactive-dim: 0;
+  --tile-shadow: none;
 
   /*
    * クロームの地。サイドバー・オーバーレイ表示のタブバーなど、ターミナルの地より
