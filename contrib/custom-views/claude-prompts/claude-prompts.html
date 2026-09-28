@@ -169,6 +169,8 @@
 
       let prompts = [];
       let index = 0;
+      /** 今表示しているプロンプトの識別子。目次からの選択に追従したかの判定に使う */
+      let shownKey = null;
 
       /*
        * window.niwatermはniwaterm本体がdom-ready後に注入するため、読み込み直後には
@@ -262,6 +264,7 @@
           );
           if (!result.ready) {
             prompts = [];
+            shownKey = null;
             positionEl.textContent = "";
             tabEl.textContent = "";
             tocEl.replaceChildren();
@@ -271,6 +274,7 @@
           }
           prompts = result.prompts;
           index = result.index;
+          shownKey = `${result.tabId}#${index}`;
           positionEl.textContent = `${index} / ${prompts.length}`;
           tabEl.textContent = result.tabId;
           prevEl.disabled = index <= 1;
@@ -294,12 +298,28 @@
         else if (e.key === "ArrowRight" && index < prompts.length) load(index + 1);
       });
 
+      /**
+       * 目次のクリックはniwaterm本体側で起きるため、このHTMLはイベントとして受け取れない。
+       * ビューアを開いたままでも選び直しに追従できるよう、選択だけを定期的に見に行く
+       * （transcriptを読まない軽いハンドラなので、この間隔で問い合わせても負荷にならない）
+       */
+      async function followSelection() {
+        if (document.hidden) return;
+        try {
+          const selection = await niwaterm.call("selection");
+          if (!selection) return;
+          if (`${selection.tabId}#${selection.index}` === shownKey) return;
+          await load(selection.index);
+        } catch {
+          // 一時的な失敗で定期チェックを止めない（次の周期で拾い直す）
+        }
+      }
+
       window.addEventListener("niwaterm:theme", applyTheme);
-      // サイドバーへ切り替わるたびに開き直されるわけではないので、表示が戻った時点でも読み直す
-      window.addEventListener("focus", () => load(index || undefined));
       whenReady().then(() => {
         applyTheme();
         load();
+        setInterval(followSelection, 1200);
       });
     </script>
   </body>

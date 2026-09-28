@@ -116,6 +116,12 @@ export const claudePromptCss = `
 /** HTML側の niwaterm.call から呼ばれるハンドラ */
 export const claudePromptHandlers: CustomViewHandlers = {
   /**
+   * 今選ばれているプロンプト。目次のクリックはniwaterm本体側で起きるためHTMLからは
+   * 変化を拾えず、ビューアを開いたままでも追従できるようHTMLがこれを定期的に見に行く。
+   * transcriptを読まない軽い応答にしてあるのはそのため
+   */
+  selection: () => (selected ? { tabId: selected.tabId, index: selected.index } : null),
+  /**
    * 目次と、選ばれているプロンプトのやりとりを返す。
    * payload.indexを渡せばそのプロンプトへ移る（ビューア内の前後移動・目次クリック用）
    */

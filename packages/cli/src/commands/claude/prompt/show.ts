@@ -79,7 +79,10 @@ export default define({
       includeSidechain: ctx.values.sidechain,
     });
     if (ctx.values.json) {
-      console.log(JSON.stringify({ prompt, blocks }));
+      // console.log・Bun.writeはどちらもパイプ相手だと壊れる（docs/known-issues/
+      // bun-cli-stdout-breaks-over-pipe-for-large-output.md）。ここはcustomViewが
+      // niwa.shell.run（パイプ）で受けるため、書き方を変えてはいけない
+      process.stdout.write(`${JSON.stringify({ prompt, blocks })}\n`);
       return;
     }
     for (const block of blocks) {

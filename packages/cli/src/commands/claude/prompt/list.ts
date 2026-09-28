@@ -35,7 +35,9 @@ export default define({
     });
     const prompts = listPrompts(rows);
     if (ctx.values.json) {
-      console.log(JSON.stringify(prompts));
+      // 長いセッションでは一覧だけで数十KBになる。console.logはパイプ相手だと途中で切れる
+      // （docs/known-issues/bun-cli-stdout-breaks-over-pipe-for-large-output.md）
+      process.stdout.write(`${JSON.stringify(prompts)}\n`);
       return;
     }
     if (prompts.length === 0) {
