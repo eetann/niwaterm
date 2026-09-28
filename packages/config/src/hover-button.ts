@@ -95,6 +95,11 @@ export interface HoverButtonConfig {
    * niwaterm本体やほかのボタンのスタイルと衝突しないようclass名にidを含める等で避けること
    */
   css?: string;
+  /**
+   * 呼び出しの帯の太さ(px)。この幅まで端へ寄ればこの枠が出る。
+   * 省略時はDEFAULT_HOVER_TRIGGER_PX。2〜200の範囲へ丸める
+   */
+  trigger?: number;
 }
 
 /**
@@ -106,4 +111,17 @@ export interface ResolvedHoverButtonConfig {
   position: HoverButtonPosition;
   /** 未指定は空文字列（webview側が<style>を作らない合図） */
   css: string;
+  /** 呼び出しの帯の太さ(px)。webview側の当たり判定がこの値を使う */
+  trigger: number;
 }
+
+/**
+ * 呼び出しの帯の太さ(px)の既定値。マウスを端へ突き当てて止められない辺
+ * （タイル境界）でも狙えるだけの幅を取る。帯はDOM要素ではないため、
+ * 出ていない間のクリック・選択・マウスレポートは奪わない
+ */
+export const DEFAULT_HOVER_TRIGGER_PX = 24;
+
+/** 帯の太さとして受け付ける範囲。広すぎる帯は画面の大半で枠が出てしまう */
+export const HOVER_TRIGGER_MIN_PX = 2;
+export const HOVER_TRIGGER_MAX_PX = 200;

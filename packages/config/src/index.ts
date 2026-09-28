@@ -34,7 +34,10 @@ export {
 } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export {
+  DEFAULT_HOVER_TRIGGER_PX,
   HOVER_BUTTON_POSITIONS,
+  HOVER_TRIGGER_MAX_PX,
+  HOVER_TRIGGER_MIN_PX,
   type HoverButtonConfig,
   type HoverButtonContext,
   type HoverButtonItem,

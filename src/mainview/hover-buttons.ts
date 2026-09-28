@@ -20,13 +20,6 @@ export interface HoverButtonItemView {
   tooltip: string;
 }
 
-/**
- * 呼び出しの帯の太さ(px)。タブバーの呼び出し帯(4px)より太いのは、左右の辺が
- * ウィンドウ端ではなくタイル境界にあり、マウスを端へ突き当てて止められないため。
- * 帯は表示のきっかけを作るだけでクリック・選択は奪わないので、狙いやすさを優先する
- */
-export const HOVER_TRIGGER_PX = 12;
-
 /** 上下の辺を左端・中央・右端の3つへ分ける比率 */
 const EDGE_SEGMENT_RATIO = 1 / 3;
 
@@ -40,7 +33,7 @@ const SIDE_EDGE_MARGIN_RATIO = 1 / 4;
 const HIDE_DELAY_MS = 180;
 
 /**
- * タブの表示領域内のローカル座標から、どの位置の帯に入っているかを求める。
+ * タブの表示領域内のローカル座標から、太さtriggerPxの帯のどれに入っているかを求める。
  * 四隅は上下の辺が持つ（位置の語彙がtop-left/bottom-rightのように上下側で名前を持つため）。
  * 左右の辺は縦方向の中央半分でだけ反応させ、角の判定と食い合わないようにする
  */
@@ -48,11 +41,12 @@ export function hoverPositionAt(
   x: number,
   y: number,
   size: { width: number; height: number },
+  triggerPx: number,
 ): HoverButtonPosition | null {
   if (size.width <= 0 || size.height <= 0) return null;
   if (x < 0 || x > size.width || y < 0 || y > size.height) return null;
-  const inTop = y <= HOVER_TRIGGER_PX;
-  const inBottom = y >= size.height - HOVER_TRIGGER_PX;
+  const inTop = y <= triggerPx;
+  const inBottom = y >= size.height - triggerPx;
   if (inTop || inBottom) {
     const side = inTop ? "top" : "bottom";
     const ratio = x / size.width;
@@ -63,8 +57,8 @@ export function hoverPositionAt(
   const inVerticalMiddle =
     y > size.height * SIDE_EDGE_MARGIN_RATIO && y < size.height * (1 - SIDE_EDGE_MARGIN_RATIO);
   if (!inVerticalMiddle) return null;
-  if (x <= HOVER_TRIGGER_PX) return "left";
-  if (x >= size.width - HOVER_TRIGGER_PX) return "right";
+  if (x <= triggerPx) return "left";
+  if (x >= size.width - triggerPx) return "right";
   return null;
 }
 
@@ -149,6 +143,27 @@ export function createHoverButtons(opts: HoverButtonsOptions): HoverButtons {
     hideTimer = setTimeout(hide, HIDE_DELAY_MS);
   }
 
+  /**
+   * そのタブで有効な枠のうち、今マウスが帯に入っているものの位置。帯の太さは枠ごとに
+   * 違いうるので、太い枠から順に見る（細い枠の帯は太い枠の帯に含まれる）
+   */
+  function hoverPositionFor(
+    tabId: string,
+    x: number,
+    y: number,
+    size: { width: number; height: number },
+  ): HoverButtonPosition | null {
+    const active = activeByTabId[tabId];
+    if (active === undefined) return null;
+    const candidates = buttons
+      .filter((button) => active.includes(button.id))
+      .sort((a, b) => b.trigger - a.trigger);
+    for (const button of candidates) {
+      if (hoverPositionAt(x, y, size, button.trigger) === button.position) return button.position;
+    }
+    return null;
+  }
+
   /** そのタブでその位置に出すボタン。設定に並べた順を保つ */
   function buttonsAt(tabId: string, position: HoverButtonPosition): string[] {
     const active = activeByTabId[tabId];
@@ -218,7 +233,7 @@ export function createHoverButtons(opts: HoverButtonsOptions): HoverButtons {
     }
     // getBoundingClientRectはレイアウトを強制するため、帯を張るタブの上でだけ読む
     const rect = tabContentEl.getBoundingClientRect();
-    const position = hoverPositionAt(e.clientX - rect.left, e.clientY - rect.top, rect);
+    const position = hoverPositionFor(tabId, e.clientX - rect.left, e.clientY - rect.top, rect);
     if (position === null) {
       scheduleHide();
       return;

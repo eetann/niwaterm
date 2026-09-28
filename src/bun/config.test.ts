@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  DEFAULT_HOVER_TRIGGER_PX,
+  HOVER_TRIGGER_MAX_PX,
   defaultAppearance,
   defaultBoardConfig,
   defaultBrowserConfig,
@@ -1101,6 +1103,35 @@ describe("resolveHoverButtons", () => {
       ],
     });
     expect(groups.map((group) => group.id)).toEqual(["right", "right-2", "top-left"]);
+  });
+
+  test("triggerは省略時に既定値、範囲外なら丸めて警告する", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const groups = resolveHoverButtons(
+        {
+          hoverButtons: [
+            { position: "right", items },
+            { position: "left", items, trigger: 40 },
+            { position: "top", items, trigger: 1000 },
+            { position: "bottom", items, trigger: "wide" as never },
+          ],
+        },
+        diag,
+      );
+      expect(groups.map((group) => group.trigger)).toEqual([
+        DEFAULT_HOVER_TRIGGER_PX,
+        40,
+        HOVER_TRIGGER_MAX_PX,
+        DEFAULT_HOVER_TRIGGER_PX,
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "hoverButtons[2].trigger",
+        "hoverButtons[3].trigger",
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test("positionが不正な要素だけ落として警告する", () => {

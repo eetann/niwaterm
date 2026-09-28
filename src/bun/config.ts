@@ -53,6 +53,9 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  DEFAULT_HOVER_TRIGGER_PX,
+  HOVER_TRIGGER_MAX_PX,
+  HOVER_TRIGGER_MIN_PX,
   type ResolvedHoverButtonConfig,
   type ResolvedLinkConfig,
   type ResolvedLinkRule,
@@ -868,6 +871,26 @@ const HOVER_BUTTON_POSITION_HINT = HOVER_BUTTON_POSITIONS.join(" / ");
  * showが関数でない場合はその要素だけ「常に出す」へ落とす（ボタン自体は残す。
  * 条件の書き損じでボタンが消えると、設定のどこが悪いのか画面から分からなくなるため）
  */
+/** 呼び出しの帯の太さ。数値でなければ既定値、範囲外なら丸めて、どちらも警告する */
+function resolveHoverTrigger(value: unknown, scope: string, diag: ConfigDiagnostics): number {
+  if (value === undefined) return DEFAULT_HOVER_TRIGGER_PX;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    diag.warn(
+      scope,
+      `数値ではないため${DEFAULT_HOVER_TRIGGER_PX}pxを使います: ${describeValue(value)}`,
+    );
+    return DEFAULT_HOVER_TRIGGER_PX;
+  }
+  const clamped = Math.round(Math.min(HOVER_TRIGGER_MAX_PX, Math.max(HOVER_TRIGGER_MIN_PX, value)));
+  if (clamped !== value) {
+    diag.warn(
+      scope,
+      `${HOVER_TRIGGER_MIN_PX}〜${HOVER_TRIGGER_MAX_PX}の整数へ丸めます: ${describeValue(value)} -> ${clamped}`,
+    );
+  }
+  return clamped;
+}
+
 export function resolveHoverButtons(
   userConfig: NiwatermConfig | null,
   diag: ConfigDiagnostics = createConfigDiagnostics(),
@@ -915,6 +938,7 @@ export function resolveHoverButtons(
       id,
       position: entry.position,
       css: isNonEmptyString(entry.css) ? entry.css : "",
+      trigger: resolveHoverTrigger(entry.trigger, `${scope}.trigger`, diag),
       show,
       items: entry.items as HoverButtonItemsFn,
     });

@@ -19,8 +19,8 @@ const JUMP_VAR = "agent_jump";
  */
 const JUMP_KEY = "C-]";
 
-/** 項目の見た目。"text"は棒に本文の頭を添える、"bar"は棒だけにする */
-const ITEM_STYLE: "text" | "bar" = "text";
+/** 項目の見た目。"text"は印に本文の頭を添える、"mark"は印だけにする */
+const ITEM_STYLE: "text" | "mark" = "text";
 
 /** "text"のときに項目へ出す本文の文字数 */
 const LABEL_CHARS = 20;
@@ -28,12 +28,19 @@ const LABEL_CHARS = 20;
 /** 目次の項目に出すツールチップの文字数。長いプロンプトはここで切る */
 const TOOLTIP_CHARS = 140;
 
-/** 棒の長さ(px)の下限と上限 */
-const BAR_MIN_PX = 6;
-const BAR_MAX_PX = 44;
+/**
+ * 印の段階を分ける境目となるプロンプトの文字数。GitHubの草と同じで、量そのものではなく
+ * 「どのくらいの段階か」だけを見せる
+ */
+const LENGTH_STEPS = [5, 15, 35, 80];
 
-/** 棒が上限の長さになるプロンプトの文字数 */
-const BAR_FULL_CHARS = 240;
+/**
+ * 段階ごとの印の高さ(px)と濃さ。どちらもLENGTH_STEPSより1つ多い。
+ * 濃さだけだと段階を見分けにくいので、高さも一緒に変える（幅は変えない。
+ * 変えると本文の開始位置が揃わなくなる）
+ */
+const LEVEL_HEIGHT_PX = [3, 6, 9, 12, 14];
+const LEVEL_OPACITY = [0.4, 0.55, 0.7, 0.85, 1];
 
 interface ClaudePrompt {
   index: number;
@@ -76,20 +83,18 @@ function clip(text: string, chars: number): string {
   return glyphs.length > chars ? `${glyphs.slice(0, chars).join("")}…` : text;
 }
 
-/**
- * プロンプトの長さを棒の長さへ写す。`ok`のような一言と長文を見分けられるように、
- * 短いほうの差が潰れない平方根で割り当てる（線形だと長文側に寄って短文が全部同じになる）
- */
-function barWidth(text: string): number {
-  const ratio = Math.min(1, Math.sqrt([...text].length / BAR_FULL_CHARS));
-  return Math.round(BAR_MIN_PX + (BAR_MAX_PX - BAR_MIN_PX) * ratio);
+/** プロンプトの長さが何段階目か */
+function lengthLevel(text: string): number {
+  return LENGTH_STEPS.filter((step) => [...text].length >= step).length;
 }
 
 function itemHtml(prompt: ClaudePrompt): string {
   const flat = oneLine(prompt.text);
-  const bar = `<span class="claude-prompt-jump-bar" style="width: ${barWidth(flat)}px"></span>`;
-  if (ITEM_STYLE === "bar") return bar;
-  return `${bar}<span class="claude-prompt-jump-text">${escapeHtml(clip(flat, LABEL_CHARS))}</span>`;
+  const level = lengthLevel(flat);
+  const style = `height: ${LEVEL_HEIGHT_PX[level] ?? 14}px; opacity: ${LEVEL_OPACITY[level] ?? 1}`;
+  const mark = `<span class="claude-prompt-jump-mark" style="${style}"></span>`;
+  if (ITEM_STYLE === "mark") return mark;
+  return `${mark}<span class="claude-prompt-jump-text">${escapeHtml(clip(flat, LABEL_CHARS))}</span>`;
 }
 
 /**
@@ -100,7 +105,7 @@ export function claudePromptShow(ctx: HoverButtonContext): boolean {
   return ctx.vars.agent === "claude-code" && Boolean(ctx.vars.agent_transcript);
 }
 
-/** 目次の項目。1プロンプト＝1行で、棒の長さがそのプロンプトの長さを表す */
+/** 目次の項目。1プロンプト＝1行で、印の大きさと濃さがそのプロンプトの長さを表す */
 export async function claudePromptItems(
   ctx: HoverButtonContext,
   niwa: Niwa,
@@ -122,12 +127,11 @@ export async function claudePromptItems(
 
 /** itemsのhtmlから参照するCSS。class名にidを含めてniwaterm本体と衝突させない */
 export const claudePromptCss = `
-.claude-prompt-jump-bar {
+.claude-prompt-jump-mark {
   flex: none;
-  height: 2px;
-  border-radius: 1px;
+  width: 10px;
+  border-radius: 2px;
   background: currentColor;
-  opacity: 0.5;
 }
 .claude-prompt-jump-text {
   margin-left: 6px;

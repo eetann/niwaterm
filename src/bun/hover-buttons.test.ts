@@ -19,6 +19,7 @@ function group(overrides: Partial<HoverButtonGroup> = {}): HoverButtonGroup {
     id: "git",
     position: "bottom-right",
     css: "",
+    trigger: 24,
     show: undefined,
     items: () => [{ label: "lazygit", run: () => {} }],
     ...overrides,
