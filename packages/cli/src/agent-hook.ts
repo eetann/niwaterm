@@ -8,6 +8,13 @@ export type AgentState = {
   agent_status_text: string;
 };
 
+/**
+ * エージェントのtranscript（会話記録のファイル）の在り処を置くタブ変数。
+ * 画面に残らないやりとりを後から辿る唯一の手がかりになる
+ * （docs/known-issues/claude-code-history-not-in-scrollback.md）
+ */
+export const TRANSCRIPT_VAR = "agent_transcript";
+
 type JsonObject = Record<string, unknown>;
 
 export function isAgent(value: unknown): value is Agent {
@@ -86,6 +93,24 @@ export function agentState(agent: Agent, input: unknown): AgentState | null {
   };
 }
 
+/**
+ * そのhookで書き込むtranscriptのパス。nullは「触らない」。
+ * どのhookの入力にもパスは入っているが、値は変わらないので、セッションの始まりと
+ * プロンプト送信（＝一覧が増える瞬間）だけ更新してIPCの往復を増やさない
+ */
+export function agentTranscript(input: unknown): string | null {
+  const payload = object(input);
+  switch (payload.hook_event_name) {
+    case "SessionStart":
+    case "UserPromptSubmit":
+      return text(payload.transcript_path) || null;
+    case "SessionEnd":
+      return "";
+    default:
+      return null;
+  }
+}
+
 /** hookは入力不正・接続失敗でもエージェントへ出力や失敗を返さない。 */
 export async function runAgentHook(agent: unknown): Promise<void> {
   const tabId = process.env["NIWATERM_TAB_ID"];
@@ -93,12 +118,22 @@ export async function runAgentHook(agent: unknown): Promise<void> {
   // stdinやIPCが停止しても、承認ダイアログや終了処理を待たせ続けない。
   const deadline = setTimeout(() => process.exit(0), 2000);
   try {
-    const state = agentState(agent, JSON.parse(await Bun.stdin.text()));
+    const input = JSON.parse(await Bun.stdin.text());
+    const state = agentState(agent, input);
     if (!state) return;
     const { resolveIpcEndpoint, setTabVar } = await import("./ipc-client");
     const endpoint = resolveIpcEndpoint();
-    for (const key of ["agent", "agent_status_text", "agent_status"] as const) {
-      const result = await setTabVar(endpoint, tabId, key, state[key]);
+    const transcript = agentTranscript(input);
+    // agent_statusは最後に書く。サイドバーの表示を動かすのはこのキーなので、
+    // 表示が変わった時点では他のキーが出揃っている
+    const entries: [string, string][] = [
+      ["agent", state.agent],
+      ["agent_status_text", state.agent_status_text],
+      ...(transcript === null ? [] : ([[TRANSCRIPT_VAR, transcript]] as [string, string][])),
+      ["agent_status", state.agent_status],
+    ];
+    for (const [key, value] of entries) {
+      const result = await setTabVar(endpoint, tabId, key, value);
       if (!result.ok) break;
     }
   } catch {

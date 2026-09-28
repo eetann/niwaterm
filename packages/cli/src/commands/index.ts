@@ -1,6 +1,7 @@
 import agentCommand from "./agent";
 import boardCommand from "./board";
 import browserCommand from "./browser";
+import claudeCommand from "./claude";
 import configCommand from "./config";
 import docsCommand from "./docs";
 import fontSizeCommand from "./font-size";
@@ -40,6 +41,7 @@ export const subCommands = {
   config: configCommand,
   popup: popupCommand,
   browser: browserCommand,
+  claude: claudeCommand,
   sidebar: sidebarCommand,
   "shell-profile": shellProfileCommand,
   layout: layoutCommand,

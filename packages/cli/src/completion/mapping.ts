@@ -35,6 +35,7 @@ const ARG_SOURCES: Record<string, SourceKind> = {
   path: "directory",
   out: "filePath",
   config: "filePath",
+  transcript: "filePath",
 };
 
 /**

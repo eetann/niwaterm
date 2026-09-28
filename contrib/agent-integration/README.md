@@ -45,6 +45,7 @@ hook本体はCLIの更新で反映される。購読イベントやCLI名を更�
 | `agent` | `codex-cli` / `claude-code`など | エージェントの種別。空文字列はエージェントなし |
 | `agent_status` | `idle` / `working` / `blocked` | 状態。未設定・未知の値は`idle`扱い |
 | `agent_status_text` | 任意の文字列 | 要約。各イベントで更新し、内容がなければクリアする |
+| `agent_transcript` | 会話記録ファイルの絶対パス | エージェントが書いている会話記録（Claude Codeならjsonl）。セッション開始とプロンプト送信で更新する。パスを渡さないエージェントでは書き込まない |
 
 `agent`が空のタブは状態表示の対象外。通常のセッション終了時に3キーともクリアする。
 `agent_status`が`working`のタブでは、そのタブのターミナルが出したBELをniwatermが捨てる

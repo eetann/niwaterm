@@ -30,6 +30,9 @@ const FREE_INPUT_ARGS = new Set([
   "popup open height",
   "popup open command",
   "browser navigate url",
+  "claude prompt list label",
+  "claude prompt show prompt",
+  "claude prompt show max-result",
 ]);
 
 describe("argSource", () => {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentState } from "./agent-hook";
+import { agentState, agentTranscript } from "./agent-hook";
 import { mergeAgentHooks, setupAgent } from "./agent-setup";
 import codexHooks from "../../../contrib/agent-integration/codex-cli/hooks.json";
 import claudeHooks from "../../../contrib/agent-integration/claude-code/hooks.json";
@@ -167,6 +167,49 @@ describe("agent hooks", () => {
         { tabId: "test-only-tab", key: "agent", value: "codex-cli" },
         { tabId: "test-only-tab", key: "agent_status_text", value: "完了" },
         { tabId: "test-only-tab", key: "agent_status", value: "idle" },
+      ]);
+    } finally {
+      await stub.stop();
+    }
+  });
+  test("transcriptはセッション開始とプロンプト送信で更新し、終了でクリアする", () => {
+    const path = "/home/me/.claude/projects/proj/session.jsonl";
+    for (const event of ["SessionStart", "UserPromptSubmit"]) {
+      expect(agentTranscript({ hook_event_name: event, transcript_path: path })).toBe(path);
+    }
+    expect(agentTranscript({ hook_event_name: "SessionEnd", transcript_path: path })).toBe("");
+    // 値は変わらないので、状態だけが動くhookでは書き直さない
+    for (const event of ["PreToolUse", "PostToolUse", "Stop", "Notification"]) {
+      expect(agentTranscript({ hook_event_name: event, transcript_path: path })).toBeNull();
+    }
+    // パスを渡さないエージェント（Codex等）では触らない
+    expect(agentTranscript({ hook_event_name: "SessionStart" })).toBeNull();
+    expect(agentTranscript({ hook_event_name: "SessionStart", transcript_path: 1 })).toBeNull();
+    expect(agentTranscript("invalid")).toBeNull();
+  });
+  test("実際のCLIからtranscriptをagent_statusより先に書き込む", async () => {
+    const requests: unknown[] = [];
+    const stub = await startIpcStub(requests);
+    try {
+      expect(
+        await invoke(
+          ["_hook", "claude-code"],
+          JSON.stringify({
+            hook_event_name: "UserPromptSubmit",
+            transcript_path: "/home/me/.claude/projects/proj/session.jsonl",
+          }),
+          { NIWATERM_TAB_ID: "test-only-tab", ...stub.env },
+        ),
+      ).toEqual({ code: 0, stdout: "", stderr: "" });
+      expect(requests).toEqual([
+        { tabId: "test-only-tab", key: "agent", value: "claude-code" },
+        { tabId: "test-only-tab", key: "agent_status_text", value: "" },
+        {
+          tabId: "test-only-tab",
+          key: "agent_transcript",
+          value: "/home/me/.claude/projects/proj/session.jsonl",
+        },
+        { tabId: "test-only-tab", key: "agent_status", value: "working" },
       ]);
     } finally {
       await stub.stop();
