@@ -1,0 +1,146 @@
+# プロンプトの目次とジャンプ
+
+Claude Codeのタブの端に「線だけの目次」を出し、クリックしたプロンプトへClaude Codeの表示を移す。
+
+- タブの右端へマウスを寄せると、そのセッションで打ったプロンプトが1本1本の線として並ぶ
+- 線にマウスを載せるとプロンプトの冒頭がツールチップで出る
+- クリックすると、そのプロンプトが画面の先頭に来る位置までClaude Codeの表示が移動する
+
+目次はniwatermのUIで、ターミナルの上に重ねて描く。Claude Codeの画面には何も出ない。
+
+## なぜ2つの部品に分かれているのか
+
+**niwaterm側から画面の位置を触る余地が無い。** Claude Codeはalternate screenで動くため、
+会話はniwatermのスクロールバックに1行も残らない
+（[docs/known-issues/claude-code-history-not-in-scrollback.md](../../../../docs/known-issues/claude-code-history-not-in-scrollback.md)）。
+表示を動かせるのはClaude Code自身だけなので、こちら側は「どこへ飛びたいか」を渡す役に徹する。
+
+| 部品 | 置き場所 | 役割 |
+| --- | --- | --- |
+| `hover-buttons.ts` | niwatermの設定 | transcriptを読んで目次を並べ、クリックでタブ変数`agent_jump`へプロンプトのuuidを書き、キーを送る |
+| `mod/` | Claude Codeのプラグイン | そのキーを受けてタブ変数を読み、`$.ui.scroll`でtranscriptの表示を移す |
+
+プロンプト行の`requestId`はtranscript（jsonl）のuuidと同じ値なので、
+`niwaterm claude prompt list`が見せている一覧の値をそのまま渡せる。画面の文字を
+読み合わせる必要はない。
+
+**キーを送るのは、transcriptの行を動かすのが「人の操作に応えている間」に限られるため**
+（タイマーや通知から呼ぶとengineが`deny: "not person-initiated"`で弾く）。modはキーを
+受け取るためのButtonを`display: "none"`で置いているだけなので、画面には出ない。
+
+## 前提
+
+**Claude Code 2.1.260以降**と、function hooks（早期アクセス）を有効にする環境変数。
+このAPIは更新の度に変わりうるので、Claude Codeを上げてジャンプが効かなくなったら
+`mod/hooks/register.tsx`を疑う。
+
+[エージェント統合](../)も入れておく。hooksがtranscriptの在り処をタブ変数`agent_transcript`へ
+書き込み、それを頼りに目次を作る。入れていないタブには目次の帯を張らない。
+
+```sh
+niwaterm agent setup claude-code
+```
+
+## 導入
+
+### 1. mod（Claude Code側）
+
+`mod/`をどこかへ置き、`~/.claude/settings.json`から読ませる。
+
+```sh
+mkdir -p ~/.config/claude-mods
+cp -r contrib/agent-integration/claude-code/prompt-jump/mod ~/.config/claude-mods/niwaterm-prompt-jump
+```
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
+    "CLAUDE_CODE_PLUGIN_DIRS": "/home/<user>/.config/claude-mods/niwaterm-prompt-jump"
+  }
+}
+```
+
+その場で試すだけなら、環境変数と`--plugin-dir`を直接渡してもよい。
+
+```sh
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ~/.config/claude-mods/niwaterm-prompt-jump
+```
+
+`claude plugin validate <mod>`で、読み込まれる形になっているか確かめられる。これを一度走らせると
+`mod/.claude-plugin/types/`へ動かしているビルドの型定義が出るので、`mod/tsconfig.json`だけで
+エディタの型が付く（生成物はClaude Code側のgitignoreで無視される）。
+
+### 2. 目次（niwaterm側）
+
+```sh
+mkdir -p ~/.config/niwaterm/hover-buttons
+cp contrib/agent-integration/claude-code/prompt-jump/hover-buttons.ts \
+  ~/.config/niwaterm/hover-buttons/claude-prompt-jump.ts
+```
+
+`~/.config/niwaterm/niwaterm.config.ts`へ追記する。
+
+```ts
+import { defineConfig } from "@niwaterm/config";
+import {
+  claudePromptCss,
+  claudePromptItems,
+  claudePromptShow,
+} from "./hover-buttons/claude-prompt-jump.ts";
+
+export default defineConfig({
+  hoverButtons: [
+    {
+      position: "right",
+      show: claudePromptShow,
+      items: claudePromptItems,
+      css: claudePromptCss,
+    },
+  ],
+});
+```
+
+保存するとホットリロードで反映される。Claude Codeは入れ直した後に起動し直す。
+
+## 変えたくなりそうなところ
+
+| 場所 | 既定 | 変える理由 |
+|---|---|---|
+| `hover-buttons.ts`の`CLI` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
+| `hover-buttons.ts`の`JUMP_KEY`とmodの`action` | `C-]`／`app:openArtifact` | 下記の衝突を避けたいとき。**必ず両方揃える** |
+| `hover-buttons.ts`の`TOOLTIP_CHARS` | `140` | ツールチップで読める量を増やす・減らす |
+| `claudePromptShow` | `agent`が`claude-code`のタブだけ | 他のエージェントのタブにも出したい |
+| `claudePromptItems`の`html` | 線1本 | 番号や文字を出したいなら`label`を書く形に変える |
+
+`action`はClaude Codeが持つキーバインドのアクション名でなければならず、
+**engine自身がそのアクションを処理できる状態だとそちらが優先される**。既定の
+`app:openArtifact`（ctrl+]）はartifactが開ける場面でだけengineが取るので、
+そこで効かなくなったら別のアクションに変える。modの`action`は
+`~/.claude/settings.json`の`pluginConfigs`からも変えられる。
+
+目次を出す辺は`position`で変えられる（`right`・`left`・`top`等の8方向）。
+
+## 効かないとき
+
+| 症状 | 見るところ |
+|---|---|
+| 目次が出ない | `niwaterm tab var list`に`agent`と`agent_transcript`があるか。エージェント統合を入れる前から動いているセッションでは、次にプロンプトを打った時点で埋まる |
+| 目次は出るがクリックで動かない | Claude Code側でmodが読めているか（`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`・`CLAUDE_CODE_PLUGIN_DIRS`）。キーが別のアクションに取られていないか |
+| `niwaterm: ...`というトーストが出る | modは動いていて、ジャンプ先が読めない・engineに断られた。文面がそのまま理由 |
+
+## CLIから直接読む
+
+目次を使わず、同じtranscriptをターミナルから読むこともできる。
+
+```sh
+niwaterm claude prompt list            # そのタブで打ったプロンプトの一覧
+niwaterm claude prompt show --prompt 3 # 3番目のプロンプトからのやりとり
+```
+
+詳細は[docs/guide/cli.md](../../../../docs/guide/cli.md)の「Claude Codeのセッション参照」節を参照。
+
+## 削除
+
+`hoverButtons`からこの要素を消し、`CLAUDE_CODE_PLUGIN_DIRS`からmodを外す。
+`hoverButtons`は配列ごと消すとホバーボタンの機能自体がオフになる。

@@ -1,7 +1,7 @@
 ---
 type: Known Issue
 title: "Claude Codeの会話履歴はスクロールバックに残らない"
-description: Claude Codeは起動直後にalternate screenへ入り毎フレーム画面全体を書き直すため、会話履歴はniwaterm側のスクロールバックに1行も入らない。セルの位置を覚えて後から飛ぶ機能は作れず、hookからOSCを注入する道も塞がっているので、過去のやりとりを辿るにはtranscript（jsonl）を読む
+description: Claude Codeは起動直後にalternate screenへ入り毎フレーム画面全体を書き直すため、会話履歴はniwaterm側のスクロールバックに1行も入らない。セルの位置を覚えて後から飛ぶ機能は作れず、過去のやりとりを辿るにはtranscript（jsonl）を読む。表示を動かせるのはClaude Code自身だけなので、ジャンプはfunction hooksのmod経由で頼む
 ---
 
 # Claude Codeの会話履歴はスクロールバックに残らない
@@ -26,14 +26,13 @@ alternate screenにはスクロールバックが無く、Claude Codeは毎フ�
 - マウスホイールもClaude Code自身が受け取る（`ESC [ ? 1000 h`〜`ESC [ ? 1006 h` で
   マウスレポートを有効化している）ため、niwaterm側のスクロールは働かない
 
-シェル統合のようにOSC 133のマークを送り込んで位置を教える回避策も使えない。
-**hookのプロセスは制御端末を持たないため、`/dev/tty` へ書き込めない**
-（`/dev/tty: No such device or address`）。エージェント側からniwatermの画面へ
-エスケープシーケンスを差し込む経路は無いものとして扱う。
+遡る手段が無いわけではなく、**Claude Codeが自前のスクロールを持っている**
+（ホイールのほか`PageUp` / `PageDown`、`ctrl+Home`で先頭、`ctrl+End`で末尾）。
+つまり表示を動かせるのはClaude Code自身だけで、niwatermから位置を触る余地が無い。
 
-## 対処
+## 過去のやりとりを読む
 
-画面上の位置ではなく**transcript（jsonl）を読む**。Claude Codeのhookは入力JSONで
+画面ではなく**transcript（jsonl）を読む**。Claude Codeのhookは入力JSONで
 `transcript_path` を絶対パスで渡してくるため、パスを組み立てる必要が無い。
 1つのプロンプトに属する行は同じ `promptId` で束ねられているので、プロンプト単位で
 そのターン全体を切り出せる。
@@ -41,6 +40,23 @@ alternate screenにはスクロールバックが無く、Claude Codeは毎フ�
 [エージェント統合](/guide/cli.md)のhooksがこのパスをタブ変数へ書き込み、
 `niwaterm claude prompt list` / `show` がそれを読む。画面から消えた
 （コンテキスト圧縮で失われた）やりとりも辿れるので、スクロールで遡るより射程が広い。
+
+## 表示を動かしてもらう
+
+**設定ファイルのhooks（hooks.json）からは画面に触れない。** hookのプロセスは制御端末を
+持たないため`/dev/tty`へ書き込めず（`No such device or address`）、hookの出力で扱えるのは
+通知・ウィンドウタイトル・ベルまで。
+
+代わりに**function hooksのmod**から`$.ui.scroll`で頼む。transcriptの行は
+`{ requestId }`で指定でき、この`requestId`はjsonlのuuidと同じ値なので、
+`niwaterm claude prompt list`が出すuuidをそのまま渡せる。ただし
+**人の操作に応えている間しか動かせない**（タイマーや通知から呼ぶと
+`deny: "not person-initiated"`）。niwatermからはジャンプ先をタブ変数へ置いてキーを送り、
+mod側のButtonの押下として受け取る形にしてある。実装例は
+`contrib/agent-integration/claude-code/prompt-jump/`。
+
+function hooksは早期アクセス扱いで、有効化に`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`が要り、
+APIも更新の度に変わりうる。
 
 alternate screenを使うTUIはClaude Codeに限らないため、「そのタブの履歴を遡る」系の機能を
 考えるときは、まず相手がalternate screenに入るかどうかを確かめる。

@@ -19,7 +19,9 @@ const SPECIAL_KEYS: Record<string, string> = {
   PageDown: "\x1b[6~",
 };
 
-const CTRL_KEY_RE = /^C-([A-Za-z])$/;
+// 英字のほか`[`・`]`・`\`・`^`・`_`も受け付ける。いずれもASCIIコードを0x1fで
+// マスクすると対応する制御バイトになる（`C-]`なら0x1d）
+const CTRL_KEY_RE = /^C-([A-Za-z[\]\\^_])$/;
 
 /** 特殊キー名（Enter/C-c等）ならバイト列へ変換し、それ以外はリテラル文字列としてそのまま返す */
 export function tmuxKeyToBytes(token: string): string {
@@ -27,9 +29,8 @@ export function tmuxKeyToBytes(token: string): string {
   if (special !== undefined) return special;
   const ctrlMatch = token.match(CTRL_KEY_RE);
   if (ctrlMatch) {
-    const letter = ctrlMatch[1] as string;
-    const code = letter.toUpperCase().charCodeAt(0);
-    return String.fromCharCode(code & 0x1f);
+    const key = ctrlMatch[1] as string;
+    return String.fromCharCode(key.toUpperCase().charCodeAt(0) & 0x1f);
   }
   return token;
 }

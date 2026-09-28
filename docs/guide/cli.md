@@ -637,10 +637,11 @@ niwaterm claude prompt show [--prompt <index|uuid>] [--tab <tabId>] [--transcrip
 
 transcriptの場所は、[エージェント統合](#エージェント統合)のhooksがタブ変数`agent_transcript`へ
 書き込んだものを使う。hooksを入れていないタブでは`--transcript`でjsonlのパスを直接渡す。
-`--json`はcustomViewやAIエージェントからパースする用で、`list`はプロンプトの配列、
+`--json`は設定ファイルやAIエージェントからパースする用で、`list`はプロンプトの配列、
 `show`は`{prompt, blocks}`を出す。
 
-サイドバーに目次付きのビューアとして出す例が`contrib/custom-views/claude-prompts/`にある。
+タブの端に目次を出して、クリックしたプロンプトへClaude Code側の表示を移す例が
+`contrib/agent-integration/claude-code/prompt-jump/`にある。
 
 ```sh
 niwaterm browser navigate --tab <tabId> --url <url>

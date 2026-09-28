@@ -29,7 +29,11 @@ describe("tmuxKeyToBytes", () => {
     ["C-a", "\x01"],
     ["C-c", "\x03"],
     ["C-z", "\x1a"],
-  ])("Ctrl+英字 %s は制御バイトに変換される", (input, expected) => {
+    ["C-]", "\x1d"],
+    ["C-[", "\x1b"],
+    ["C-\\", "\x1c"],
+    ["C-_", "\x1f"],
+  ])("Ctrl+英字・記号 %s は制御バイトに変換される", (input, expected) => {
     expect(tmuxKeyToBytes(input)).toBe(expected);
   });
 

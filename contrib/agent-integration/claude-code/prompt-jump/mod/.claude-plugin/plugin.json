@@ -1,0 +1,19 @@
+{
+  "name": "niwaterm-prompt-jump",
+  "version": "0.1.0",
+  "description": "niwatermの目次から選んだプロンプトへ、transcriptの表示を移す",
+  "userConfig": {
+    "cli": {
+      "type": "string",
+      "title": "niwaterm CLIのコマンド名",
+      "default": "niwaterm",
+      "description": "ジャンプ先を読むniwaterm CLIのコマンド名（devビルドならniwaterm-dev）"
+    },
+    "action": {
+      "type": "string",
+      "title": "ジャンプに使うキーバインドのアクション",
+      "default": "app:openArtifact",
+      "description": "このアクションに割り当てられたキーでジャンプする。niwaterm側のJUMP_KEYと揃える"
+    }
+  }
+}

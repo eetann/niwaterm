@@ -7,7 +7,6 @@
 | 例 | 内容 |
 |---|---|
 | [worktrees](worktrees/) | gitワークツリーの一覧・絞り込み・作成 |
-| [claude-prompts](claude-prompts/) | Claude Codeのプロンプト目次（`hoverButtons`）と会話ビューア |
 
 ## 仕組み
 

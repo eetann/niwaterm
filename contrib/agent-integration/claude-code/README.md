@@ -32,8 +32,8 @@ wipでは`niwaterm-dev agent setup claude-code`を使う。
 Claude Codeはalternate screenで動き会話がniwatermのスクロールバックへ残らないため、
 このパスが過去のやりとりを辿る唯一の手がかりになる
 （[docs/known-issues/claude-code-history-not-in-scrollback.md](../../../docs/known-issues/claude-code-history-not-in-scrollback.md)）。
-読み出しは`niwaterm claude prompt list` / `show`、サイドバーへ目次付きで出す例は
-[contrib/custom-views/claude-prompts/](../../custom-views/claude-prompts/)。
+読み出しは`niwaterm claude prompt list` / `show`。タブの端に目次を出して、選んだ
+プロンプトへClaude Codeの表示を移す例は[prompt-jump/](prompt-jump/)。
 
 権限確認への回答後は`PostToolUse` / `PostToolUseFailure`で`working`へ戻す。
 `PermissionRequest`は使わず、`Notification`から確認待ちを通知する。
