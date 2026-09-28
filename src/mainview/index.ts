@@ -98,6 +98,7 @@ import {
   shadeAlphaPercent,
 } from "./cell-glyph";
 import { cellAt, type TermCell } from "./term-cells";
+import { remapSelection, type TextSelectionOffsets } from "./term-selection";
 import {
   clampPopupGeometry,
   type PopupDragMode,
@@ -1235,11 +1236,60 @@ const pendingTermHtmlByTabId = new Map<TabId, string>();
 const SELECTION_DRAG_MAX_MS = 2000;
 
 function setTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
+  const saved = saveTermSelection(termEl);
   termEl.innerHTML = html;
   fixGlyphs(termEl);
+  if (saved) restoreTermSelection(termEl, saved);
   termLinesByTabId.delete(tabId);
   // 表示が変わればホバー中のリンクの位置もずれるので、下線を出しているときだけ取り直す
   if (linkModifierDown) refreshLinkHover();
+}
+
+interface SavedTermSelection {
+  text: string;
+  offsets: TextSelectionOffsets;
+}
+
+/** 両端が.termの中にある選択を、画面テキスト上の位置として控える */
+function saveTermSelection(termEl: HTMLElement): SavedTermSelection | null {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return null;
+  const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+  if (!anchorNode || !focusNode) return null;
+  if (!termEl.contains(anchorNode) || !termEl.contains(focusNode)) return null;
+  const textOffset = (node: Node, offset: number) => {
+    const range = document.createRange();
+    range.setStart(termEl, 0);
+    range.setEnd(node, offset);
+    return range.toString().length;
+  };
+  return {
+    text: termEl.textContent ?? "",
+    offsets: {
+      anchor: textOffset(anchorNode, anchorOffset),
+      focus: textOffset(focusNode, focusOffset),
+    },
+  };
+}
+
+/** 画面テキスト上の位置を、それを含むテキストノードと節内の位置へ戻す */
+function textBoundaryAt(termEl: HTMLElement, offset: number): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(termEl, NodeFilter.SHOW_TEXT);
+  let consumed = 0;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = (node as Text).length;
+    if (offset <= consumed + length) return { node, offset: offset - consumed };
+    consumed += length;
+  }
+  return { node: termEl, offset: termEl.childNodes.length };
+}
+
+function restoreTermSelection(termEl: HTMLElement, saved: SavedTermSelection): void {
+  const moved = remapSelection(saved.text, termEl.textContent ?? "", saved.offsets);
+  if (!moved) return;
+  const anchor = textBoundaryAt(termEl, moved.anchor);
+  const focus = textBoundaryAt(termEl, moved.focus);
+  window.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
 }
 
 // ---- パレット（インデックス指定色）----
