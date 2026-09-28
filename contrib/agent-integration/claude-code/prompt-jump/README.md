@@ -1,9 +1,11 @@
 # プロンプトの目次とジャンプ
 
-Claude Codeのタブの端に「線だけの目次」を出し、クリックしたプロンプトへClaude Codeの表示を移す。
+Claude Codeのタブの端にプロンプトの目次を出し、クリックしたプロンプトへClaude Codeの表示を移す。
 
-- タブの右端へマウスを寄せると、そのセッションで打ったプロンプトが1本1本の線として並ぶ
-- 線にマウスを載せるとプロンプトの冒頭がツールチップで出る
+- タブの右端へマウスを寄せると、そのセッションで打ったプロンプトが縦に並ぶ
+- 1項目は「棒＋本文の頭」で、**棒の長さがそのプロンプトの長さ**を表す。`ok`のような一言と
+  長い指示を見分けられるので、目当ての場所を思い出しやすい
+- マウスを載せるとプロンプトの冒頭がツールチップで出る
 - クリックすると、そのプロンプトが画面の先頭に来る位置までClaude Codeの表示が移動する
 
 目次はniwatermのUIで、ターミナルの上に重ねて描く。Claude Codeの画面には何も出ない。
@@ -109,9 +111,11 @@ export default defineConfig({
 |---|---|---|
 | `hover-buttons.ts`の`CLI` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
 | `hover-buttons.ts`の`JUMP_KEY`とmodの`action` | `C-]`／`app:openArtifact` | 下記の衝突を避けたいとき。**必ず両方揃える** |
+| `hover-buttons.ts`の`ITEM_STYLE` | `"text"` | 本文を出さず棒だけ並べたいなら`"bar"` |
+| `hover-buttons.ts`の`LABEL_CHARS` | `20` | 項目に出す本文の量を増やす・減らす |
+| `hover-buttons.ts`の`BAR_MIN_PX`・`BAR_MAX_PX`・`BAR_FULL_CHARS` | `6`・`44`・`240` | 棒の長さの範囲と、上限の長さになる文字数を変える |
 | `hover-buttons.ts`の`TOOLTIP_CHARS` | `140` | ツールチップで読める量を増やす・減らす |
 | `claudePromptShow` | `agent`が`claude-code`のタブだけ | 他のエージェントのタブにも出したい |
-| `claudePromptItems`の`html` | 線1本 | 番号や文字を出したいなら`label`を書く形に変える |
 
 `action`はClaude Codeが持つキーバインドのアクション名でなければならず、
 **engine自身がそのアクションを処理できる状態だとそちらが優先される**。既定の

@@ -21,13 +21,17 @@ export interface HoverButtonItemView {
 }
 
 /**
- * 呼び出しの帯の太さ(px)。タブバーの呼び出し帯(4px)より気持ち太いのは、左右の辺が
- * ウィンドウ端ではなくタイル境界にあり、行き過ぎても隣のタイルへ抜けてしまうため
+ * 呼び出しの帯の太さ(px)。タブバーの呼び出し帯(4px)より太いのは、左右の辺が
+ * ウィンドウ端ではなくタイル境界にあり、マウスを端へ突き当てて止められないため。
+ * 帯は表示のきっかけを作るだけでクリック・選択は奪わないので、狙いやすさを優先する
  */
-export const HOVER_TRIGGER_PX = 6;
+export const HOVER_TRIGGER_PX = 12;
 
-/** 上下の辺を左端・中央・右端の3つへ分ける比率と、左右の辺で反応させる縦方向の範囲 */
+/** 上下の辺を左端・中央・右端の3つへ分ける比率 */
 const EDGE_SEGMENT_RATIO = 1 / 3;
+
+/** 左右の辺が反応しない上下の余白の比率。四隅を持つ上下の辺と食い合わないために空ける */
+const SIDE_EDGE_MARGIN_RATIO = 1 / 4;
 
 /**
  * マウスを離してからパネルをしまうまでの猶予(ms)。帯とパネルの間には隙間があり、
@@ -38,7 +42,7 @@ const HIDE_DELAY_MS = 180;
 /**
  * タブの表示領域内のローカル座標から、どの位置の帯に入っているかを求める。
  * 四隅は上下の辺が持つ（位置の語彙がtop-left/bottom-rightのように上下側で名前を持つため）。
- * 左右の辺は縦方向の中央3分の1でだけ反応させ、角の判定と食い合わないようにする
+ * 左右の辺は縦方向の中央半分でだけ反応させ、角の判定と食い合わないようにする
  */
 export function hoverPositionAt(
   x: number,
@@ -57,7 +61,7 @@ export function hoverPositionAt(
     return side;
   }
   const inVerticalMiddle =
-    y > size.height * EDGE_SEGMENT_RATIO && y < size.height * (1 - EDGE_SEGMENT_RATIO);
+    y > size.height * SIDE_EDGE_MARGIN_RATIO && y < size.height * (1 - SIDE_EDGE_MARGIN_RATIO);
   if (!inVerticalMiddle) return null;
   if (x <= HOVER_TRIGGER_PX) return "left";
   if (x >= size.width - HOVER_TRIGGER_PX) return "right";

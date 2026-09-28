@@ -16,9 +16,11 @@ describe("hoverPositionAt", () => {
     expect(hoverPositionAt(290, 300, size)).toBe("bottom-right");
   });
 
-  test("左右の辺は縦方向の中央3分の1でだけ反応する", () => {
+  test("左右の辺は縦方向の中央半分でだけ反応する", () => {
     expect(hoverPositionAt(0, 150, size)).toBe("left");
     expect(hoverPositionAt(300, 150, size)).toBe("right");
+    expect(hoverPositionAt(0, 80, size)).toBe("left");
+    expect(hoverPositionAt(300, 220, size)).toBe("right");
     expect(hoverPositionAt(0, 50, size)).toBeNull();
     expect(hoverPositionAt(300, 250, size)).toBeNull();
   });

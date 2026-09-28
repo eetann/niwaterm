@@ -528,10 +528,16 @@ body {
   top: calc(var(--hover-panel-inset) + 29px);
 }
 
+/*
+ * 押せる範囲は中身より一回り大きく取る。項目が細い印1本（目次の線のような`html`）でも
+ * 狙える大きさにするため、余白とあわせて最小の縦横を持たせる
+ */
 .hover-item {
   display: flex;
   align-items: center;
-  padding: 2px 6px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
