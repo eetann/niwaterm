@@ -53,7 +53,9 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  DEFAULT_HOVER_BUTTON_POSITION,
   DEFAULT_HOVER_HANDLE_ICON,
+  DEFAULT_HOVER_HANDLE_SHAPE,
   DEFAULT_HOVER_TRIGGER_PX,
   HOVER_BUTTON_HANDLE_SHAPES,
   HOVER_BUTTON_HANDLE_STYLES,
@@ -916,7 +918,7 @@ function resolveHoverHandle(
   if (value === false) return null;
   const handle: ResolvedHoverButtonHandle = {
     style: "edge",
-    shape: "round",
+    shape: DEFAULT_HOVER_HANDLE_SHAPE,
     icon: DEFAULT_HOVER_HANDLE_ICON,
   };
   if (value === undefined) return handle;
@@ -946,7 +948,7 @@ function resolveHoverHandle(
     } else {
       diag.warn(
         `${scope}.shape`,
-        `${HOVER_BUTTON_HANDLE_SHAPES.join(" / ")}のいずれかでないため"round"を使います: ${describeValue(shape)}`,
+        `${HOVER_BUTTON_HANDLE_SHAPES.join(" / ")}のいずれかでないため"${DEFAULT_HOVER_HANDLE_SHAPE}"を使います: ${describeValue(shape)}`,
       );
     }
   }
@@ -1005,10 +1007,11 @@ export function resolveHoverButtons(
       continue;
     }
     const entry = user as HoverButtonConfig;
-    if (!isHoverButtonPosition(entry.position)) {
+    const position = entry.position ?? DEFAULT_HOVER_BUTTON_POSITION;
+    if (!isHoverButtonPosition(position)) {
       diag.warn(
         `${scope}.position`,
-        `${HOVER_BUTTON_POSITION_HINT}のいずれかでないためこの要素だけ無視します: ${describeValue(entry.position)}`,
+        `${HOVER_BUTTON_POSITION_HINT}のいずれかでないためこの要素だけ無視します: ${describeValue(position)}`,
       );
       continue;
     }
@@ -1030,11 +1033,11 @@ export function resolveHoverButtons(
       }
     }
     const preferredId = isNonEmptyString(entry.id) ? slugifyViewId(entry.id) : "";
-    const id = uniqueViewId(preferredId === "" ? entry.position : preferredId, usedIds);
+    const id = uniqueViewId(preferredId === "" ? position : preferredId, usedIds);
     usedIds.add(id);
     groups.push({
       id,
-      position: entry.position,
+      position,
       css: isNonEmptyString(entry.css) ? entry.css : "",
       handle: resolveHoverHandle(entry.handle, `${scope}.handle`, diag),
       trigger: resolveHoverTrigger(entry.trigger, `${scope}.trigger`, diag),

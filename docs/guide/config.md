@@ -962,7 +962,7 @@ hoverButtons: [
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `id` | `string` | CLI（`niwaterm tab hover reveal`）から指すためのid。省略時は`position`（重複時は`right-2`のような連番付き） |
-| `position` | `string` | 置く位置。`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right` |
+| `position` | `string` | 置く位置。`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right`（省略時） |
 | `show` | `function` | そのタブに出すかの判定。省略時は全てのターミナルタブに出る |
 | `items` | `function` | 枠を開いた時に並べる項目を組み立てる |
 | `css` | `string` | `items`の`html`・取っ手の見た目を変えるCSS |
@@ -978,7 +978,7 @@ hoverButtons: [
 | フィールド | 型 | 意味 |
 |---|---|---|
 | `style` | `string` | `"edge"`（端に貼り付く形。省略時） / `"floating"`（端から少し離れて浮く丸いアイコンボタン） |
-| `shape` | `string` | `"edge"`の形。`"round"`（省略時） / `"rect"` / `"diamond"` |
+| `shape` | `string` | `"edge"`の形。`"round"` / `"rect"` / `"diamond"`（省略時） |
 | `icon` | `string` | `"floating"`のボタンに差し込むHTML。省略時は`☰` |
 
 `"edge"`の形は置いた位置に合わせて切り取られる。

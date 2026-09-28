@@ -34,7 +34,9 @@ export {
 } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export {
+  DEFAULT_HOVER_BUTTON_POSITION,
   DEFAULT_HOVER_HANDLE_ICON,
+  DEFAULT_HOVER_HANDLE_SHAPE,
   DEFAULT_HOVER_TRIGGER_PX,
   HOVER_BUTTON_HANDLE_SHAPES,
   HOVER_BUTTON_HANDLE_STYLES,

@@ -100,7 +100,7 @@ export const HOVER_BUTTON_HANDLE_SHAPES: readonly HoverButtonHandleShape[] = [
 export interface HoverButtonHandleConfig {
   /** 省略時は"edge" */
   style?: HoverButtonHandleStyle;
-  /** "edge"のときの形。省略時は"round" */
+  /** "edge"のときの形。省略時はDEFAULT_HOVER_HANDLE_SHAPE */
   shape?: HoverButtonHandleShape;
   /**
    * "floating"のときにボタンの中へ差し込むHTML。省略時はDEFAULT_HOVER_HANDLE_ICON。
@@ -115,7 +115,8 @@ export interface HoverButtonConfig {
    * 省略時はpositionと出現順から導出する（resolveHoverButtons参照）
    */
   id?: string;
-  position: HoverButtonPosition;
+  /** 置く位置。省略時はDEFAULT_HOVER_BUTTON_POSITION */
+  position?: HoverButtonPosition;
   /**
    * このタブに取っ手（呼び出しの帯）を出すか。省略時は全てのターミナルタブへ出す。
    * タブ変数・cwdが変わるたびに評価されるため、非同期処理を伴わない軽い判定だけを書くこと
@@ -131,7 +132,7 @@ export interface HoverButtonConfig {
   /**
    * 常に出しておく取っ手。押すと枠が開き、もう一度押す・枠の外を押す・Escで閉じる。
    * falseなら取っ手を出さず、端の見えない帯へマウスを寄せた間だけ枠を出す。
-   * 省略時は{ style: "edge", shape: "round" }
+   * 省略時は{ style: "edge", shape: DEFAULT_HOVER_HANDLE_SHAPE }
    */
   handle?: HoverButtonHandleConfig | false;
   /**
@@ -161,6 +162,15 @@ export interface ResolvedHoverButtonConfig {
   /** 呼び出しの帯の太さ(px)。handleがnullのときだけwebview側の当たり判定がこの値を使う */
   trigger: number;
 }
+
+/**
+ * positionを省略したときの位置。右下はプロンプトの入力位置・左上の出力の読み始めから遠く、
+ * 取っ手が常に出ていても文字を隠しにくい
+ */
+export const DEFAULT_HOVER_BUTTON_POSITION: HoverButtonPosition = "bottom-right";
+
+/** "edge"の取っ手のshapeを省略したときの形。角に置くと1/4のひし形で、最も場所を取らない */
+export const DEFAULT_HOVER_HANDLE_SHAPE: HoverButtonHandleShape = "diamond";
 
 /** "floating"の取っ手にiconを指定しなかったときの中身 */
 export const DEFAULT_HOVER_HANDLE_ICON = "☰";
