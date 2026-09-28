@@ -495,21 +495,23 @@ body {
 }
 
 /*
- * タブの表示領域の端へマウスを寄せた間だけ出るボタン（設定のhoverButtons）。
- * 呼び出しの帯はDOM要素にせずmousemoveの座標で判定する（hover-buttons.ts参照）ので、
- * ここにあるのは出てきたパネルだけ。位置はdata-positionで決める。
+ * タブの表示領域の端に置くボタン（設定のhoverButtons）のパネル。
+ * 取っ手なしの枠の呼び出しの帯はDOM要素にせずmousemoveの座標で判定する（hover-buttons.ts参照）。
+ * 位置はdata-positionで決め、取っ手のある位置では--hover-handle-gap（取っ手の実寸から
+ * hover-buttons.tsが測る）だけ端から離して取っ手を隠さないようにする。
  * 地は--chrome-bgを不透明のまま塗る: 下にターミナルの文字がいるので、
  * ウィンドウ透過中（--term-bg-opacity < 100%）と同じ塗り方では文字が透けてしまう
  */
 .hover-panel {
   --hover-panel-inset: 4px;
+  --hover-panel-offset: calc(var(--hover-panel-inset) + var(--hover-handle-gap, 0px));
   position: absolute;
   z-index: 4;
   display: flex;
   gap: 4px;
   padding: 3px;
-  max-width: calc(100% - var(--hover-panel-inset) * 2);
-  max-height: calc(100% - var(--hover-panel-inset) * 2);
+  max-width: calc(100% - var(--hover-panel-inset) * 2 - var(--hover-handle-gap, 0px));
+  max-height: calc(100% - var(--hover-panel-inset) * 2 - var(--hover-handle-gap, 0px));
   overflow: auto;
   background-color: var(--chrome-bg);
   border: 1px solid var(--ui-border);
@@ -519,11 +521,12 @@ body {
   font-size: 12px;
 }
 
+/* 四隅は上下へずらす。角の取っ手の真上（真下）に開くほうが、押した場所から目で追いやすい */
 .hover-panel[data-position^="top"] {
-  top: var(--hover-panel-inset);
+  top: var(--hover-panel-offset);
 }
 .hover-panel[data-position^="bottom"] {
-  bottom: var(--hover-panel-inset);
+  bottom: var(--hover-panel-offset);
 }
 .hover-panel[data-position$="-left"] {
   left: var(--hover-panel-inset);
@@ -549,10 +552,10 @@ body {
   flex-direction: column;
 }
 .hover-panel[data-position="left"] {
-  left: var(--hover-panel-inset);
+  left: var(--hover-panel-offset);
 }
 .hover-panel[data-position="right"] {
-  right: var(--hover-panel-inset);
+  right: var(--hover-panel-offset);
 }
 
 /*
@@ -560,7 +563,163 @@ body {
  * 重ならないようパネルをバー1本分(29px)だけ下げる
  */
 .tile.tab-bar-overlay .hover-panel[data-position^="top"] {
-  top: calc(var(--hover-panel-inset) + 29px);
+  top: calc(var(--hover-panel-offset) + 29px);
+}
+
+/*
+ * 常に出しておく取っ手。"edge"は端に貼り付けて、辺なら半分・角なら1/4に切った形にする。
+ * 大きさは--hover-handle-sizeひとつから導くので、ユーザーCSSはこれを変えるだけで揃って伸縮する。
+ * 減光（z-index 3）より上に置き、フォーカスしていないタイルでも見つけられるようにする
+ */
+.hover-handle {
+  --hover-handle-size: 12px;
+  --hover-handle-inset: 0px;
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--ui-accent) 70%, transparent);
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+.hover-handle:hover,
+.hover-handle[data-open] {
+  opacity: 1;
+}
+.hover-handle-icon {
+  display: none;
+}
+
+.hover-handle[data-position^="top"] {
+  top: var(--hover-handle-inset);
+}
+.hover-handle[data-position^="bottom"] {
+  bottom: var(--hover-handle-inset);
+}
+.hover-handle[data-position$="-left"],
+.hover-handle[data-position="left"] {
+  left: var(--hover-handle-inset);
+}
+.hover-handle[data-position$="-right"],
+.hover-handle[data-position="right"] {
+  right: var(--hover-handle-inset);
+}
+.hover-handle[data-position="top"],
+.hover-handle[data-position="bottom"] {
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+}
+.hover-handle[data-position="left"],
+.hover-handle[data-position="right"] {
+  top: 0;
+  bottom: 0;
+  margin-block: auto;
+}
+
+/* 辺: 幅（端と垂直な向き）がsize、長さがその2倍。長方形は細く長くする */
+.hover-handle[data-style="edge"]:is([data-position="left"], [data-position="right"]) {
+  width: var(--hover-handle-size);
+  height: calc(var(--hover-handle-size) * 2);
+}
+.hover-handle[data-style="edge"]:is([data-position="top"], [data-position="bottom"]) {
+  width: calc(var(--hover-handle-size) * 2);
+  height: var(--hover-handle-size);
+}
+.hover-handle[data-style="edge"][data-shape="rect"]:is(
+  [data-position="left"],
+  [data-position="right"]
+) {
+  width: calc(var(--hover-handle-size) / 2);
+  height: calc(var(--hover-handle-size) * 3);
+}
+.hover-handle[data-style="edge"][data-shape="rect"]:is(
+  [data-position="top"],
+  [data-position="bottom"]
+) {
+  width: calc(var(--hover-handle-size) * 3);
+  height: calc(var(--hover-handle-size) / 2);
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="left"] {
+  border-radius: 0 var(--hover-handle-size) var(--hover-handle-size) 0;
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="right"] {
+  border-radius: var(--hover-handle-size) 0 0 var(--hover-handle-size);
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="top"] {
+  border-radius: 0 0 var(--hover-handle-size) var(--hover-handle-size);
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="bottom"] {
+  border-radius: var(--hover-handle-size) var(--hover-handle-size) 0 0;
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="left"] {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="right"] {
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="top"] {
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="bottom"] {
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+}
+
+/* 角: 正方形を基準に、丸は内側へ膨らむ1/4円、ひし形は内側の角を落とした直角三角形 */
+.hover-handle[data-style="edge"]:is([data-position$="-left"], [data-position$="-right"]) {
+  width: calc(var(--hover-handle-size) * 1.5);
+  height: calc(var(--hover-handle-size) * 1.5);
+}
+.hover-handle[data-style="edge"][data-shape="rect"]:is(
+  [data-position$="-left"],
+  [data-position$="-right"]
+) {
+  width: var(--hover-handle-size);
+  height: var(--hover-handle-size);
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="top-left"] {
+  border-bottom-right-radius: 100%;
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="top-right"] {
+  border-bottom-left-radius: 100%;
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="bottom-left"] {
+  border-top-right-radius: 100%;
+}
+.hover-handle[data-style="edge"][data-shape="round"][data-position="bottom-right"] {
+  border-top-left-radius: 100%;
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="top-left"] {
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="top-right"] {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="bottom-left"] {
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+.hover-handle[data-style="edge"][data-shape="diamond"][data-position="bottom-right"] {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+/* 浮いているアイコンボタン。地はパネルと同じ理由で不透明に塗る */
+.hover-handle[data-style="floating"] {
+  --hover-handle-inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--hover-handle-size) * 2);
+  height: calc(var(--hover-handle-size) * 2);
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  background: var(--chrome-bg);
+  color: var(--term-fg);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1;
+}
+.hover-handle[data-style="floating"] .hover-handle-icon {
+  display: contents;
 }
 
 /*

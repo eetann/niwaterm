@@ -1,6 +1,7 @@
-// タブの表示領域の端へマウスを寄せた間だけ出るボタンの設定。
+// タブの表示領域の端に置くボタンの設定。
 // custom-view.tsと同様、未設定なら機能自体がオフになる（既定のボタンは無いのでdefault定数は持たない）。
-// 1エントリ＝1つの位置に置く「枠」で、ホバーしたときにitemsが返した項目が並ぶ。
+// 1エントリ＝1つの位置に置く「枠」で、取っ手を押したとき（handle: falseならマウスを端へ寄せたとき）に
+// itemsが返した項目が並ぶ。
 // 項目1つならただのボタン、複数なら目次のように並ぶ（どちらも同じ形で書けるようitemsは常に配列）。
 
 import type { Niwa } from "./niwa";
@@ -67,14 +68,46 @@ export interface HoverButtonItem {
 }
 
 /**
- * ホバーしたときに並べる項目を組み立てる関数。ホバーのたびに呼ばれるため、
+ * 枠を開いたときに並べる項目を組み立てる関数。開くたびに呼ばれるため、
  * ファイルの読み直し・コマンド実行を伴う動的な項目でも素のTSで書ける。
- * 空配列を返せば何も出ない（呼び出しの帯だけが残る）
+ * 空配列を返せば何も出ない（取っ手・呼び出しの帯だけが残る）
  */
 export type HoverButtonItemsFn = (
   ctx: HoverButtonContext,
   niwa: Niwa,
 ) => HoverButtonItem[] | Promise<HoverButtonItem[]>;
+
+/**
+ * 取っ手の置き方。"edge"は端に貼り付く形（辺なら半分、角なら1/4に切った形になる）、
+ * "floating"は端から少し離れて浮く小さなアイコンボタン
+ */
+export type HoverButtonHandleStyle = "edge" | "floating";
+
+export const HOVER_BUTTON_HANDLE_STYLES: readonly HoverButtonHandleStyle[] = ["edge", "floating"];
+
+/**
+ * "edge"の取っ手の形。辺に置くと半円・細長い長方形・三角（ひし形の半分）、
+ * 角に置くと1/4円・正方形・直角三角形（ひし形の1/4）になる
+ */
+export type HoverButtonHandleShape = "round" | "rect" | "diamond";
+
+export const HOVER_BUTTON_HANDLE_SHAPES: readonly HoverButtonHandleShape[] = [
+  "round",
+  "rect",
+  "diamond",
+];
+
+export interface HoverButtonHandleConfig {
+  /** 省略時は"edge" */
+  style?: HoverButtonHandleStyle;
+  /** "edge"のときの形。省略時は"round" */
+  shape?: HoverButtonHandleShape;
+  /**
+   * "floating"のときにボタンの中へ差し込むHTML。省略時はDEFAULT_HOVER_HANDLE_ICON。
+   * itemsのhtmlと同じくwebviewへそのまま入る
+   */
+  icon?: string;
+}
 
 export interface HoverButtonConfig {
   /**
@@ -84,11 +117,11 @@ export interface HoverButtonConfig {
   id?: string;
   position: HoverButtonPosition;
   /**
-   * このタブに呼び出しの帯を張るか。省略時は全てのターミナルタブへ張る。
+   * このタブに取っ手（呼び出しの帯）を出すか。省略時は全てのターミナルタブへ出す。
    * タブ変数・cwdが変わるたびに評価されるため、非同期処理を伴わない軽い判定だけを書くこと
    */
   show?: (ctx: HoverButtonContext) => boolean;
-  /** ホバーした時に並べる項目 */
+  /** 枠を開いた時に並べる項目 */
   items: HoverButtonItemsFn;
   /**
    * itemsのhtmlから参照するCSS。webviewの<style>へそのまま入るので、
@@ -96,10 +129,22 @@ export interface HoverButtonConfig {
    */
   css?: string;
   /**
-   * 呼び出しの帯の太さ(px)。この幅まで端へ寄ればこの枠が出る。
+   * 常に出しておく取っ手。押すと枠が開き、もう一度押す・枠の外を押す・Escで閉じる。
+   * falseなら取っ手を出さず、端の見えない帯へマウスを寄せた間だけ枠を出す。
+   * 省略時は{ style: "edge", shape: "round" }
+   */
+  handle?: HoverButtonHandleConfig | false;
+  /**
+   * handle: falseのときの呼び出しの帯の太さ(px)。この幅まで端へ寄ればこの枠が出る。
    * 省略時はDEFAULT_HOVER_TRIGGER_PX。2〜200の範囲へ丸める
    */
   trigger?: number;
+}
+
+export interface ResolvedHoverButtonHandle {
+  style: HoverButtonHandleStyle;
+  shape: HoverButtonHandleShape;
+  icon: string;
 }
 
 /**
@@ -111,9 +156,14 @@ export interface ResolvedHoverButtonConfig {
   position: HoverButtonPosition;
   /** 未指定は空文字列（webview側が<style>を作らない合図） */
   css: string;
-  /** 呼び出しの帯の太さ(px)。webview側の当たり判定がこの値を使う */
+  /** 取っ手。nullなら取っ手を出さず、ホバーの帯で開く */
+  handle: ResolvedHoverButtonHandle | null;
+  /** 呼び出しの帯の太さ(px)。handleがnullのときだけwebview側の当たり判定がこの値を使う */
   trigger: number;
 }
+
+/** "floating"の取っ手にiconを指定しなかったときの中身 */
+export const DEFAULT_HOVER_HANDLE_ICON = "☰";
 
 /**
  * 呼び出しの帯の太さ(px)の既定値。マウスを端へ突き当てて止められない辺

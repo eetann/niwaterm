@@ -1545,6 +1545,8 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
   cursorElByTabId.set(tabId, cursorEl);
   copyOverlayElByTabId.set(tabId, copyOverlayEl);
   tileContentEl.appendChild(tabContentEl);
+  // どのタブに取っ手を置くかは要素より先に届きうるため、要素ができた時点で置き直す
+  hoverButtons.syncHandles();
   const ro = new ResizeObserver(() => {
     // .termのサイズが変わる＝タイル配置が動いたということなので、実寸を送るかどうかに
     // 関わらず（下のスキップ条件より先に）キャッシュした配置情報を捨てる
@@ -4268,7 +4270,7 @@ document.addEventListener("contextmenu", (e) => {
 });
 
 // ---- タブの端に出るホバーボタン（設定のhoverButtons）----
-// 帯の判定・パネルの組み立てはhover-buttons.tsが持ち、ここはRPCとの繋ぎ込みだけを行う。
+// 取っ手・帯の判定・パネルの組み立てはhover-buttons.tsが持ち、ここはRPCとの繋ぎ込みだけを行う。
 // 項目の組み立てはbun側（ユーザーの関数）で走るため、枠を開くたびにRPCで問い合わせる
 
 const hoverButtons = createHoverButtons({
@@ -4286,6 +4288,7 @@ const hoverButtons = createHoverButtons({
   refocusTerminal: () => {
     imeEl.focus({ preventScroll: true });
   },
+  tabContentOf: (tabId) => tabContentElByTabId.get(tabId),
 });
 
 document.addEventListener("mousemove", (e) => {
@@ -4294,7 +4297,7 @@ document.addEventListener("mousemove", (e) => {
 
 // ウィンドウの外へ抜けるとmousemoveが来なくなり、出したままのパネルが残る
 document.documentElement.addEventListener("mouseleave", () => {
-  hoverButtons.hide();
+  hoverButtons.handleMouseLeave();
 });
 
 // ---- ターミナル出力の中のリンク ----

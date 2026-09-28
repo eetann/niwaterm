@@ -52,9 +52,9 @@ export interface NiwatermConfig {
    */
   customViews?: CustomViewConfig[];
   /**
-   * タブの表示領域の端へマウスを寄せた間だけ出るボタンの設定。位置（8方向）ごとに、
-   * ホバーした時に並べる項目をitemsで組み立てる。項目1つならただのボタン、複数なら
-   * 目次のように並ぶ。showを書けばそのタブに出すかどうかを絞れる（タブ変数・cwdで判定できる）。
+   * タブの表示領域の端に置くボタンの設定。位置（8方向）ごとに取っ手を出し、押した時に
+   * 並べる項目をitemsで組み立てる（handle: falseなら取っ手を出さず、端へマウスを寄せた間だけ出す）。
+   * 項目1つならただのボタン、複数なら目次のように並ぶ。showを書けばそのタブに出すかどうかを絞れる（タブ変数・cwdで判定できる）。
    * 空配列・未指定なら機能自体がオフになる。
    * 例: [{ position: "bottom-right", items: (ctx, niwa) => [{ label: "git", run: () => niwa.popup.open({ command: "lazygit" }) }] }]
    */

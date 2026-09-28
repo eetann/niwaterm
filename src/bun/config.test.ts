@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  DEFAULT_HOVER_HANDLE_ICON,
   DEFAULT_HOVER_TRIGGER_PX,
   HOVER_TRIGGER_MAX_PX,
   defaultAppearance,
@@ -1233,6 +1234,46 @@ describe("resolveHoverButtons", () => {
       ],
     });
     expect(groups.map((group) => group.css)).toEqual(["", ".toc {}"]);
+  });
+
+  test("handleは省略時に端の半円、falseなら取っ手なしになる", () => {
+    const groups = resolveHoverButtons({
+      hoverButtons: [
+        { position: "left", items },
+        { position: "right", items, handle: false },
+        { position: "top", items, handle: { style: "floating", icon: "<b>+</b>" } },
+      ],
+    });
+    expect(groups.map((group) => group.handle)).toEqual([
+      { style: "edge", shape: "round", icon: DEFAULT_HOVER_HANDLE_ICON },
+      null,
+      { style: "floating", shape: "round", icon: "<b>+</b>" },
+    ]);
+  });
+
+  test("handleの不正なフィールドは警告して既定値へ落とし、取っ手自体は残す", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const groups = resolveHoverButtons(
+        {
+          hoverButtons: [
+            { position: "left", items, handle: { style: "big" as never, shape: "diamond" } },
+            { position: "right", items, handle: true as never },
+          ],
+        },
+        diag,
+      );
+      expect(groups.map((group) => group.handle)).toEqual([
+        { style: "edge", shape: "diamond", icon: DEFAULT_HOVER_HANDLE_ICON },
+        { style: "edge", shape: "round", icon: DEFAULT_HOVER_HANDLE_ICON },
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "hoverButtons[0].handle.style",
+        "hoverButtons[1].handle",
+      ]);
+    } finally {
+      restore();
+    }
   });
 });
 

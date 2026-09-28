@@ -53,10 +53,14 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
+  DEFAULT_HOVER_HANDLE_ICON,
   DEFAULT_HOVER_TRIGGER_PX,
+  HOVER_BUTTON_HANDLE_SHAPES,
+  HOVER_BUTTON_HANDLE_STYLES,
   HOVER_TRIGGER_MAX_PX,
   HOVER_TRIGGER_MIN_PX,
   type ResolvedHoverButtonConfig,
+  type ResolvedHoverButtonHandle,
   type ResolvedLinkConfig,
   type ResolvedLinkRule,
   type ResolvedMouseConfig,
@@ -901,12 +905,63 @@ export function resolveCustomViews(
 const HOVER_BUTTON_POSITION_HINT = HOVER_BUTTON_POSITIONS.join(" / ");
 
 /**
- * ホバーボタンを解決する。position不正・itemsが関数でない要素は警告して飛ばす。
- * idは明示指定 > positionからの連番の順で決め、重複はサフィックスで一意にする
- * （idはCLIからボタンを指す唯一の手がかりなので、重複したまま残すとどちらを指すか決まらなくなる）。
- * showが関数でない場合はその要素だけ「常に出す」へ落とす（ボタン自体は残す。
- * 条件の書き損じでボタンが消えると、設定のどこが悪いのか画面から分からなくなるため）
+ * 取っ手を解決する。不正なフィールドは警告してそのフィールドだけ既定値へ落とす
+ * （取っ手ごと消すと、ボタンに辿り着く手段が画面から無くなるため）
  */
+function resolveHoverHandle(
+  value: unknown,
+  scope: string,
+  diag: ConfigDiagnostics,
+): ResolvedHoverButtonHandle | null {
+  if (value === false) return null;
+  const handle: ResolvedHoverButtonHandle = {
+    style: "edge",
+    shape: "round",
+    icon: DEFAULT_HOVER_HANDLE_ICON,
+  };
+  if (value === undefined) return handle;
+  if (typeof value !== "object" || value === null) {
+    diag.warn(
+      scope,
+      `falseかオブジェクトでないため既定の取っ手を使います: ${describeValue(value)}`,
+    );
+    return handle;
+  }
+  const user = value as Record<string, unknown>;
+  const style = user["style"];
+  if (style !== undefined) {
+    if ((HOVER_BUTTON_HANDLE_STYLES as readonly unknown[]).includes(style)) {
+      handle.style = style as ResolvedHoverButtonHandle["style"];
+    } else {
+      diag.warn(
+        `${scope}.style`,
+        `${HOVER_BUTTON_HANDLE_STYLES.join(" / ")}のいずれかでないため"edge"を使います: ${describeValue(style)}`,
+      );
+    }
+  }
+  const shape = user["shape"];
+  if (shape !== undefined) {
+    if ((HOVER_BUTTON_HANDLE_SHAPES as readonly unknown[]).includes(shape)) {
+      handle.shape = shape as ResolvedHoverButtonHandle["shape"];
+    } else {
+      diag.warn(
+        `${scope}.shape`,
+        `${HOVER_BUTTON_HANDLE_SHAPES.join(" / ")}のいずれかでないため"round"を使います: ${describeValue(shape)}`,
+      );
+    }
+  }
+  const icon = user["icon"];
+  if (icon !== undefined) {
+    if (isNonEmptyString(icon)) handle.icon = icon;
+    else
+      diag.warn(
+        `${scope}.icon`,
+        `空でない文字列ではないため既定の印を使います: ${describeValue(icon)}`,
+      );
+  }
+  return handle;
+}
+
 /** 呼び出しの帯の太さ。数値でなければ既定値、範囲外なら丸めて、どちらも警告する */
 function resolveHoverTrigger(value: unknown, scope: string, diag: ConfigDiagnostics): number {
   if (value === undefined) return DEFAULT_HOVER_TRIGGER_PX;
@@ -927,6 +982,13 @@ function resolveHoverTrigger(value: unknown, scope: string, diag: ConfigDiagnost
   return clamped;
 }
 
+/**
+ * ホバーボタンを解決する。position不正・itemsが関数でない要素は警告して飛ばす。
+ * idは明示指定 > positionからの連番の順で決め、重複はサフィックスで一意にする
+ * （idはCLIからボタンを指す唯一の手がかりなので、重複したまま残すとどちらを指すか決まらなくなる）。
+ * showが関数でない場合はその要素だけ「常に出す」へ落とす（ボタン自体は残す。
+ * 条件の書き損じでボタンが消えると、設定のどこが悪いのか画面から分からなくなるため）
+ */
 export function resolveHoverButtons(
   userConfig: NiwatermConfig | null,
   diag: ConfigDiagnostics = createConfigDiagnostics(),
@@ -974,6 +1036,7 @@ export function resolveHoverButtons(
       id,
       position: entry.position,
       css: isNonEmptyString(entry.css) ? entry.css : "",
+      handle: resolveHoverHandle(entry.handle, `${scope}.handle`, diag),
       trigger: resolveHoverTrigger(entry.trigger, `${scope}.trigger`, diag),
       show,
       items: entry.items as HoverButtonItemsFn,

@@ -125,8 +125,15 @@ export async function claudePromptItems(
   }));
 }
 
-/** itemsのhtmlから参照するCSS。class名にidを含めてniwaterm本体と衝突させない */
+/**
+ * itemsのhtmlから参照するCSS。class名にidを含めてniwaterm本体と衝突させない。
+ * パネルは上下の辺・四隅に置くと横並びになるが、目次は置き場所によらず縦に並べたいので、
+ * 印を含むパネルだけ縦並びに固定する
+ */
 export const claudePromptCss = `
+.hover-panel:has(.claude-prompt-jump-mark) {
+  flex-direction: column;
+}
 .claude-prompt-jump-mark {
   flex: none;
   width: 10px;

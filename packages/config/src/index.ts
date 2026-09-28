@@ -34,17 +34,24 @@ export {
 } from "./custom-view";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export {
+  DEFAULT_HOVER_HANDLE_ICON,
   DEFAULT_HOVER_TRIGGER_PX,
+  HOVER_BUTTON_HANDLE_SHAPES,
+  HOVER_BUTTON_HANDLE_STYLES,
   HOVER_BUTTON_POSITIONS,
   HOVER_TRIGGER_MAX_PX,
   HOVER_TRIGGER_MIN_PX,
   type HoverButtonConfig,
   type HoverButtonContext,
+  type HoverButtonHandleConfig,
+  type HoverButtonHandleShape,
+  type HoverButtonHandleStyle,
   type HoverButtonItem,
   type HoverButtonItemsFn,
   type HoverButtonPosition,
   isHoverButtonPosition,
   type ResolvedHoverButtonConfig,
+  type ResolvedHoverButtonHandle,
 } from "./hover-button";
 export type {
   LayoutNodeConfig,
