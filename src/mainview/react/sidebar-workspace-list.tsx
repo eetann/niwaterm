@@ -5,10 +5,12 @@ import {
   ChevronRight,
   FolderX,
   LayoutTemplate,
+  LoaderCircle,
   Maximize2,
   PictureInPicture2,
 } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -21,6 +23,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ResolvedBoardPhase } from "@niwaterm/config";
 import { cn } from "@/lib/utils";
@@ -415,7 +418,7 @@ export function SidebarWorkspaceList({
 
   function renderNameInput() {
     return (
-      <input
+      <Input
         type="text"
         autoFocus
         value={editingValue}
@@ -432,7 +435,7 @@ export function SidebarWorkspaceList({
             cancelEditing();
           }
         }}
-        className="w-full min-w-0 rounded border border-ring bg-background px-1 py-0.5 text-xs text-foreground outline-none"
+        className="h-6 px-1.5 py-0.5 text-xs md:text-xs"
       />
     );
   }
@@ -586,8 +589,10 @@ export function SidebarWorkspaceList({
           {line.prefix === null ? (
             blocked ? (
               <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-amber-500" />
+            ) : line.agent.status === "working" ? (
+              <LoaderCircle className="mt-0.5 size-2.5 shrink-0 animate-spin text-sky-400" />
             ) : (
-              <span className="text-sky-400">❯</span>
+              <Bot className="mt-0.5 size-2.5 shrink-0 text-muted-foreground" />
             )
           ) : (
             <span className={cn("shrink-0", blocked ? "text-amber-500" : "text-sky-400")}>
@@ -623,7 +628,7 @@ export function SidebarWorkspaceList({
    * Board行はTile/Tabを表示しない1行が既定（ADR 0006後の再設計）。ブランチ・エージェント状態が
    * 何も無ければ展開せず1行のまま終わる。何かあれば縦線ガイド付きでステータスラインを展開する
    * （Neovimのwinbar・Claude Codeのステータスライン相当。等幅フォントで「on <branch>」
-   * 「❯/⚠ <statusText>」を表示する）
+   * 「<状態アイコン> <statusText>」を表示する）
    */
   function renderBoardRow(
     workspaceId: WorkspaceId,
@@ -852,11 +857,14 @@ export function SidebarWorkspaceList({
                 isBoardDropHeader && "bg-sky-400/20 ring-1 ring-sky-400",
               )}
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 tabIndex={-1}
+                aria-label={isWorkspaceCollapsed ? "展開" : "折りたたむ"}
                 onClick={() => toggleCollapsedWorkspace(workspace.workspaceId)}
-                className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                className="size-4 text-muted-foreground hover:text-foreground"
               >
                 <ChevronRight
                   className={cn(
@@ -864,7 +872,7 @@ export function SidebarWorkspaceList({
                     !isWorkspaceCollapsed && "rotate-90",
                   )}
                 />
-              </button>
+              </Button>
               {isEditingThisWorkspace ? (
                 <div className="min-w-0 flex-1">{renderNameInput()}</div>
               ) : (

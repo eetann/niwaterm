@@ -1,7 +1,8 @@
 import type { ShellProfile } from "@niwaterm/config";
-import { Bell, ChevronDown, Plus } from "lucide-react";
+import { Bell, ChevronDown, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -63,7 +64,7 @@ export interface TileTabBarProps {
  * アクティブ表示が文字色の濃淡だけになってしまう。下線をタブ下端の内側へ引き直す。
  */
 const TAB_TRIGGER_CLASS =
-  "h-7 flex-none gap-1.5 px-2 text-xs group-data-[orientation=horizontal]/tabs:after:bottom-0";
+  "group/tab h-7 flex-none gap-1.5 px-2 text-xs group-data-[orientation=horizontal]/tabs:after:bottom-0";
 
 /**
  * 新しいタブ・シェル選択ボタンのツールチップ。下はタブの中身で、ブラウザタブならwebview
@@ -141,7 +142,7 @@ export function TileTabBar({
         <TabsList variant="line" className="h-7 w-fit shrink-0 justify-start p-0">
           {tabs.map((tab) =>
             editingTabId === tab.tabId ? (
-              <input
+              <Input
                 key={tab.tabId}
                 type="text"
                 autoFocus
@@ -159,7 +160,7 @@ export function TileTabBar({
                     cancelEditing();
                   }
                 }}
-                className="h-7 w-20 flex-none rounded-md border border-ring bg-background px-2 text-xs text-foreground outline-none"
+                className="h-7 w-20 flex-none px-2 text-xs md:text-xs"
               />
             ) : (
               <ContextMenu
@@ -192,7 +193,8 @@ export function TileTabBar({
                       asChild
                       variant="ghost"
                       size="icon-xs"
-                      className="size-4 opacity-60 hover:opacity-100"
+                      // invisibleで場所は取り続け、ホバーでタブ幅が変わって隣のタブがずれないようにする
+                      className="invisible size-4 opacity-60 group-hover/tab:visible hover:opacity-100"
                       draggable={false}
                       onPointerDown={stopEventPropagation}
                       onMouseDown={stopEventPropagation}
@@ -201,7 +203,9 @@ export function TileTabBar({
                         onCloseTab(tab.tabId);
                       }}
                     >
-                      <span>×</span>
+                      <span>
+                        <X />
+                      </span>
                     </Button>
                   </TabsTrigger>
                 </ContextMenuTrigger>

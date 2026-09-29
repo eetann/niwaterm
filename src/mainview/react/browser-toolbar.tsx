@@ -1,4 +1,5 @@
 import type { WebviewTagElement } from "electrobun/view";
+import { ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,7 +91,7 @@ export function BrowserToolbar({
             aria-label="戻る"
             onClick={() => webviewEl.goBack()}
           >
-            ←
+            <ArrowLeft />
           </Button>
         </span>
       </ToolbarTooltip>
@@ -103,7 +104,7 @@ export function BrowserToolbar({
             aria-label="進む"
             onClick={() => webviewEl.goForward()}
           >
-            →
+            <ArrowRight />
           </Button>
         </span>
       </ToolbarTooltip>
@@ -114,7 +115,7 @@ export function BrowserToolbar({
           aria-label="再読み込み"
           onClick={() => webviewEl.reload()}
         >
-          ⟳
+          <RotateCw />
         </Button>
       </ToolbarTooltip>
       <Input
