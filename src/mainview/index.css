@@ -89,7 +89,8 @@
   --muted-foreground: color-mix(in srgb, var(--term-fg) 62%, var(--term-bg));
   --accent: color-mix(in srgb, var(--term-fg) 14%, var(--term-bg));
   --accent-foreground: var(--term-fg);
-  --popover: color-mix(in srgb, var(--term-fg) 8%, var(--term-bg));
+  /* メニュー・コマンドパレットもサイドバー等のクロームと同じ沈んだ面にそろえる */
+  --popover: var(--chrome-bg);
   --popover-foreground: var(--term-fg);
   /* 右クリックメニュー等は暗幕なしでターミナルの上へ直接浮くため、--popoverと地の差だけでは
      境界が埋もれる。--borderより文字色を多く混ぜて縁取りを一段はっきりさせる */
