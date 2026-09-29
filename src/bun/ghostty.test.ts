@@ -34,3 +34,108 @@ describe("dumpHtmlの背景色", () => {
     expect(runs).toEqual(["   "]);
   });
 });
+
+describe("kittyGraphics", () => {
+  /** Kitty graphics protocolのAPCシーケンス（ペイロードはbase64で埋め込む） */
+  function apc(control: string, payload: Uint8Array): string {
+    return `\x1b_G${control};${Buffer.from(payload).toString("base64")}\x1b\\`;
+  }
+
+  // 1x1の赤（不透明）のPNG
+  const redPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+
+  test("画像を受け取っていなければ空を返す", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.resize(20, 5, 10, 20);
+      term.write(encoder.encode("hello"));
+      expect(term.kittyGraphics()).toEqual({ placements: [], images: [] });
+    } finally {
+      term.free();
+    }
+  });
+
+  test("生のRGBを送って表示すると、配置とRGBAの画素を返す", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.resize(20, 5, 10, 20);
+      term.write(encoder.encode("\r\n  "));
+      // 2x1のRGB（f=24）を、カーソル位置（2列目, 1行目）へ表示する
+      term.write(
+        encoder.encode(apc("a=T,f=24,s=2,v=1,q=2", new Uint8Array([255, 0, 0, 0, 0, 255]))),
+      );
+      const { placements, images } = term.kittyGraphics();
+      expect(placements).toHaveLength(1);
+      expect(placements[0]).toMatchObject({
+        col: 2,
+        row: 1,
+        width: 2,
+        height: 1,
+        sourceWidth: 2,
+        sourceHeight: 1,
+        z: 0,
+      });
+      expect(images).toHaveLength(1);
+      expect(images[0]?.key).toBe(placements[0]?.imageKey);
+      expect([...Buffer.from(images[0]?.rgbaBase64 ?? "", "base64")]).toEqual([
+        255, 0, 0, 255, 0, 0, 255, 255,
+      ]);
+    } finally {
+      term.free();
+    }
+  });
+
+  test("PNGはデコーダで展開され、列・行の指定でセル単位の大きさになる", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.resize(20, 5, 10, 20);
+      term.write(encoder.encode(apc("a=T,f=100,c=3,r=2,q=2", redPng)));
+      const { placements, images } = term.kittyGraphics();
+      expect(placements[0]).toMatchObject({ col: 0, row: 0, width: 30, height: 40 });
+      expect([...Buffer.from(images[0]?.rgbaBase64 ?? "", "base64")]).toEqual([255, 0, 0, 255]);
+    } finally {
+      term.free();
+    }
+  });
+
+  test("画像を消すと配置も消える", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.resize(20, 5, 10, 20);
+      term.write(encoder.encode(apc("a=T,f=100,q=2", redPng)));
+      expect(term.kittyGraphics().placements).toHaveLength(1);
+      term.write(encoder.encode("\x1b_Ga=d,d=A,q=2\x1b\\"));
+      expect(term.kittyGraphics()).toEqual({ placements: [], images: [] });
+    } finally {
+      term.free();
+    }
+  });
+
+  test("グリッドが同じままセル寸法だけ変わっても画像の大きさへ反映する", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.setCellSize(8, 16);
+      term.write(encoder.encode(apc("a=T,f=100,c=2,r=1,q=2", redPng)));
+      expect(term.kittyGraphics().placements[0]).toMatchObject({ width: 16, height: 16 });
+      term.setCellSize(12, 24);
+      expect(term.kittyGraphics().placements[0]).toMatchObject({ width: 24, height: 24 });
+    } finally {
+      term.free();
+    }
+  });
+  test("XTWINOPSのセルサイズ問い合わせ（CSI 16 t）に応答する", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      const responses: string[] = [];
+      term.onWritePty((data) => responses.push(new TextDecoder().decode(data)));
+      term.resize(20, 5, 10, 20);
+      term.write(encoder.encode("\x1b[16t"));
+      expect(responses.join("")).toBe("\x1b[6;20;10t");
+    } finally {
+      term.free();
+    }
+  });
+});

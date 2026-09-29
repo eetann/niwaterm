@@ -38,6 +38,8 @@ function createFakeSessionFactory() {
         mouseAnyMotion: false,
         paletteCss: null,
         copyMode: null,
+        kittyPlacements: [],
+        kittyImages: [],
       }),
       dumpText: () => "",
       isCopyMode: () => false,

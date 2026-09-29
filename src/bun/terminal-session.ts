@@ -23,6 +23,8 @@ import {
 import {
   createGhosttyTerminal,
   type CursorShape,
+  type KittyImage,
+  type KittyPlacement,
   type MouseEventInput,
   type PromptLocation,
 } from "./ghostty";
@@ -81,6 +83,13 @@ export interface TerminalRenderState {
   mouseAnyMotion: boolean;
   /** vi風コピーモード中の状態。コピーモードでなければnull */
   copyMode: CopyModeRenderState | null;
+  /** Kitty graphics protocolで表示した画像の配置（ビューポートに掛かっているもののみ） */
+  kittyPlacements: KittyPlacement[];
+  /**
+   * kittyPlacementsが参照する画像。rgbaBase64がnullのものは同じウィンドウへ送信済みのため
+   * 中身を省いたもの（index.tsのdropSentKittyImages）で、webviewは手元のキャッシュを使う
+   */
+  kittyImages: Array<Omit<KittyImage, "rgbaBase64"> & { rgbaBase64: string | null }>;
 }
 
 /**
@@ -646,6 +655,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   function renderState(): TerminalRenderState {
     const cursor = term.cursor();
     const { paletteCss, body } = splitPaletteCss(term.dumpHtml());
+    const kitty = term.kittyGraphics();
     return {
       kind: "terminal",
       html: body,
@@ -658,6 +668,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       mouseTracking: term.mouseTracking(),
       mouseAnyMotion: term.mouseAnyMotion(),
       copyMode: copyModeRenderState(),
+      kittyPlacements: kitty.placements,
+      kittyImages: kitty.images,
     };
   }
 

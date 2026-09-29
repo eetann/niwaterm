@@ -376,6 +376,8 @@ interface WindowView {
   renderScheduled: boolean;
   /** 前回webviewへ送ったパレットCSS（dropUnchangedPaletteCss参照） */
   lastPaletteCssByTabId: Map<TabId, string>;
+  /** 前回の描画でwebviewへ画素を渡したKitty graphicsの画像（dropSentKittyImages参照） */
+  sentKittyImageKeys: Set<string>;
   /** 前回webviewへ送ったホバーボタンの帯の割り当て（sendHoverButtonTabs参照）。未送信は空文字列 */
   lastHoverButtonTabs: string;
   /** 保存対象のウィンドウ枠。一時ウィンドウでは保存しないので参照されない */
@@ -423,6 +425,7 @@ function render(windowId: WindowId) {
   const snap = windowManager.snapshotOf(windowId);
   if (!snap) return;
   dropUnchangedPaletteCss(view, snap);
+  dropSentKittyImages(view, snap);
   sendHoverButtonTabs(view, snap);
   statusBarHandle?.update(windowId, statusBarContextOf(windowId, snap));
   view.browserWindow.setTitle(
@@ -449,6 +452,26 @@ function dropUnchangedPaletteCss(view: WindowView, snap: AppRenderState): void {
     if (view.lastPaletteCssByTabId.get(tabId) === state.paletteCss) state.paletteCss = null;
     else view.lastPaletteCssByTabId.set(tabId, state.paletteCss);
   }
+}
+
+/**
+ * 前回の描画でwebviewへ渡し済みのKitty graphicsの画像は画素（base64）を省く。画像は数MBに
+ * なりうるため、表示し続けている間に毎フレーム運ぶわけにはいかない。
+ * webview側（mainview/kitty-images.ts）は「今回の描画で参照された画像」だけをキャッシュに残すので、
+ * こちらも送信済みの記録を同じ範囲へ絞る。画面から一度消えた画像は、再び映ったときに送り直す
+ */
+function dropSentKittyImages(view: WindowView, snap: AppRenderState): void {
+  const sent = new Set<string>();
+  for (const state of Object.values(snap.workspace.board?.tabs ?? {})) {
+    if (state.kind !== "terminal" || state.kittyImages.length === 0) continue;
+    state.kittyImages = state.kittyImages.map((image) => {
+      const alreadySent = view.sentKittyImageKeys.has(image.key) || sent.has(image.key);
+      sent.add(image.key);
+      // 画像オブジェクトはghostty.ts側のキャッシュと共有しているため書き換えずに作り直す
+      return alreadySent ? { ...image, rgbaBase64: null } : image;
+    });
+  }
+  view.sentKittyImageKeys = sent;
 }
 
 /**
@@ -1267,8 +1290,9 @@ function createWindowRpc(windowId: WindowId) {
           console.log(`[view] ${msg}`);
         },
         ready: () => {
-          // webviewが読み込み直されると保持していたパレットも消えるため、差分判定を振り出しへ戻す
+          // webviewが読み込み直されると保持していたパレット・画像も消えるため、差分判定を振り出しへ戻す
           views.get(windowId)?.lastPaletteCssByTabId.clear();
+          views.get(windowId)?.sentKittyImageKeys.clear();
           scheduleRender(windowId);
           sendConfig(windowId);
           rpcSendOf(windowId)?.statusBarHidden({ hidden: uiState.statusBarHidden });
@@ -1768,6 +1792,7 @@ function createWindowView(windowId: WindowId, frame: WindowFrame): WindowView {
     webviewFocused: false,
     renderScheduled: false,
     lastPaletteCssByTabId: new Map(),
+    sentKittyImageKeys: new Set(),
     lastHoverButtonTabs: "",
     frame,
     frameSaveScheduled: false,

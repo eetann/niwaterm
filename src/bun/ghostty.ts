@@ -1,7 +1,9 @@
 // libghostty-vt の bun:ffi バインディング
 import { dlopen, FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } from "bun:ffi";
 import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { findNativeArtifact } from "./native-artifacts";
+import { decodePng } from "./png-decode";
 
 // ネイティブ成果物の配置と命名はプラットフォームで異なる。
 // zigはWindowsのみDLL本体をbin/へ出す（lib/に入るのはリンク用のインポートライブラリ）
@@ -119,7 +121,82 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
     args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
     returns: FFIType.i32,
   },
+  // プロセス全体の設定（PNGデコーダ）。PNGデコーダへ渡されるアロケータで出力を確保する
+  ghostty_sys_set: {
+    args: [FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_alloc: {
+    args: [FFIType.ptr, FFIType.u64],
+    returns: FFIType.ptr,
+  },
+  // Kitty graphics protocol。解釈と画像の保持はlibghostty-vtが行い、描画は組み込み側の責務
+  ghostty_kitty_graphics_get: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_kitty_graphics_image: {
+    args: [FFIType.ptr, FFIType.u32],
+    returns: FFIType.ptr,
+  },
+  ghostty_kitty_graphics_image_get: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_kitty_graphics_placement_iterator_new: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_kitty_graphics_placement_iterator_free: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
+  ghostty_kitty_graphics_placement_next: {
+    args: [FFIType.ptr],
+    returns: FFIType.bool,
+  },
+  ghostty_kitty_graphics_placement_get: {
+    args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_kitty_graphics_placement_render_info: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
 });
+
+// GhosttySysOption
+const SYS_OPT_DECODE_PNG = 1;
+
+/**
+ * Kitty graphics protocolのPNGペイロード（f=100）を展開するコールバック。libghostty-vtは
+ * PNGデコーダを持たず、未設定だとPNGの画像を拒否する。設定はプロセス全体で1つなので
+ * モジュール読み込み時に1度だけ登録し、参照を持ち続けてGCから守る
+ */
+const decodePngCallback = new JSCallback(
+  (_userdata: Pointer, allocator: Pointer, data: Pointer, len: number | bigint, out: Pointer) => {
+    const n = Number(len);
+    if (!data || n === 0) return false;
+    const decoded = decodePng(new Uint8Array(toArrayBuffer(data, 0, n)));
+    if (!decoded) return false;
+    const size = decoded.rgba.length;
+    const dest = vt.symbols.ghostty_alloc(allocator, BigInt(size));
+    if (!dest) return false;
+    new Uint8Array(toArrayBuffer(dest, 0, size)).set(decoded.rgba);
+    // GhosttySysImage { uint32 width; uint32 height; uint8_t* data; size_t data_len; }
+    const outView = new DataView(toArrayBuffer(out, 0, 24));
+    outView.setUint32(0, decoded.width, true);
+    outView.setUint32(4, decoded.height, true);
+    outView.setBigUint64(8, BigInt(dest), true);
+    outView.setBigUint64(16, BigInt(size), true);
+    return true;
+  },
+  {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr],
+    returns: FFIType.bool,
+  },
+);
+vt.symbols.ghostty_sys_set(SYS_OPT_DECODE_PNG, decodePngCallback.ptr);
 
 const shim = dlopen(join(libDir, nativeLayout.shim), {
   niwa_dump_screen: {
@@ -154,6 +231,10 @@ const OPT_CLIPBOARD_WRITE = 26;
 const OPT_SCROLLBACK_MAX_BYTES = 27;
 const OPT_SCROLLBACK_MAX_LINES = 28;
 const OPT_PWD_CHANGED = 25;
+const OPT_SIZE = 6;
+const OPT_KITTY_IMAGE_STORAGE_LIMIT = 15;
+const OPT_KITTY_IMAGE_MEDIUM_FILE = 16;
+const OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE = 17;
 
 // GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。DEC privateなモードはフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
@@ -174,6 +255,34 @@ const DATA_MODE = 37;
 const DATA_PWD = 13;
 /** GhosttyTerminalScrollbar { uint64 total; uint64 offset; uint64 len; } を書き出す */
 const DATA_SCROLLBAR = 9;
+const DATA_KITTY_GRAPHICS = 30;
+
+// GhosttyKittyGraphicsData
+const KITTY_DATA_PLACEMENT_ITERATOR = 1;
+const KITTY_DATA_GENERATION = 2;
+
+// GhosttyKittyGraphicsPlacementData
+const KITTY_PLACEMENT_IMAGE_ID = 1;
+const KITTY_PLACEMENT_X_OFFSET = 4;
+const KITTY_PLACEMENT_Y_OFFSET = 5;
+const KITTY_PLACEMENT_Z = 12;
+
+// GhosttyKittyGraphicsImageData
+const KITTY_IMAGE_WIDTH = 3;
+const KITTY_IMAGE_HEIGHT = 4;
+const KITTY_IMAGE_FORMAT = 5;
+const KITTY_IMAGE_DATA_PTR = 7;
+const KITTY_IMAGE_DATA_LEN = 8;
+const KITTY_IMAGE_GENERATION = 9;
+
+// GhosttyKittyImageFormatの値ごとの1ピクセルあたりのバイト数（PNGは保存前にRGBAへ展開されるため来ない）
+const KITTY_IMAGE_BYTES_PER_PIXEL: Record<number, number> = { 0: 3, 1: 4, 3: 2, 4: 1 };
+
+/**
+ * Kitty graphicsの画像保存の上限（バイト）。0だと無効になり画像を一切受け付けない。
+ * 主画面・代替画面それぞれに効く
+ */
+const KITTY_IMAGE_STORAGE_LIMIT = 64n * 1024n * 1024n;
 
 // GhosttyRenderStateData
 const RENDER_DATA_CURSOR_VISUAL_STYLE = 10;
@@ -253,6 +362,72 @@ export interface CursorState {
   shape: CursorShape;
 }
 
+/** Kitty graphicsの配置1件。座標はビューポート基準で、寸法はターミナルに伝えたセル寸法基準のピクセル */
+export interface KittyPlacement {
+  /** 描く画像（KittyImage.key） */
+  imageKey: string;
+  /** 左上のセル。上へスクロールアウトしかけた配置ではrowが負になる */
+  col: number;
+  row: number;
+  /** セル左上からのずらし量 */
+  xOffset: number;
+  yOffset: number;
+  /** 描画サイズ */
+  width: number;
+  height: number;
+  /** 画像から切り出す範囲 */
+  sourceX: number;
+  sourceY: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  /** 負なら文字より奥、0以上なら文字より手前に描く */
+  z: number;
+}
+
+export interface KittyImage {
+  /**
+   * 画像の世代番号。同じ画像IDの再送でも変わり、プロセス全体で一意なので
+   * そのままキャッシュのキーに使える
+   */
+  key: string;
+  width: number;
+  height: number;
+  /** 1ピクセル4バイトのRGBAをbase64にしたもの */
+  rgbaBase64: string;
+}
+
+export interface KittyGraphicsState {
+  placements: KittyPlacement[];
+  /** placementsが参照する画像。同じ画像を複数の配置で使っても1件にまとめる */
+  images: KittyImage[];
+}
+
+const EMPTY_KITTY_GRAPHICS: KittyGraphicsState = { placements: [], images: [] };
+
+/** libghostty-vtが保持している画素を、webviewでそのまま使えるRGBAへ揃える */
+function toRgba(pixels: Uint8Array, bytesPerPixel: number): Uint8Array {
+  if (bytesPerPixel === 4) return pixels;
+  const count = pixels.length / bytesPerPixel;
+  const out = new Uint8Array(count * 4);
+  for (let i = 0; i < count; i++) {
+    const src = i * bytesPerPixel;
+    const dst = i * 4;
+    if (bytesPerPixel === 3) {
+      out[dst] = pixels[src] ?? 0;
+      out[dst + 1] = pixels[src + 1] ?? 0;
+      out[dst + 2] = pixels[src + 2] ?? 0;
+      out[dst + 3] = 255;
+    } else {
+      const gray = pixels[src] ?? 0;
+      out[dst] = gray;
+      out[dst + 1] = gray;
+      out[dst + 2] = gray;
+      out[dst + 3] = bytesPerPixel === 2 ? (pixels[src + 1] ?? 0) : 255;
+    }
+  }
+  return out;
+}
+
 // 呼び出し元が指定しなかった場合のスクロールバック上限。
 // 設定ファイル経由の既定値は@niwaterm/configのdefaultTerminalConfig.scrollbackが持つ
 const FALLBACK_MAX_SCROLLBACK = 10_000;
@@ -310,6 +485,157 @@ export function createGhosttyTerminal(
   const i32Out = new Int32Array(1);
   // NiwaPromptLocation（int32 x 2）の受け皿。呼び出しごとに使い回す
   const promptLocation = new Int32Array(2);
+
+  // ---- Kitty graphics protocol ----
+  vt.symbols.ghostty_terminal_set(
+    term,
+    OPT_KITTY_IMAGE_STORAGE_LIMIT,
+    ptr(new BigUint64Array([KITTY_IMAGE_STORAGE_LIMIT])),
+  );
+  // ファイル経由の転送（t=f/t=t）を受け付ける。kitten icat等は手元のターミナルと判断すると
+  // こちらを優先し、読めなければ（WSLディストロ内のパスをWindows側から開けない等）エスケープ
+  // シーケンスへ直接埋め込む転送へフォールバックする
+  vt.symbols.ghostty_terminal_set(term, OPT_KITTY_IMAGE_MEDIUM_FILE, ptr(new Uint8Array([1])));
+  const tempDir = new TextEncoder().encode(tmpdir());
+  // GhosttyString { const uint8_t* ptr; size_t len; }
+  const tempDirString = new BigUint64Array([BigInt(ptr(tempDir)), BigInt(tempDir.length)]);
+  vt.symbols.ghostty_terminal_set(term, OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE, ptr(tempDirString));
+
+  const kittyIteratorHandle = new BigUint64Array(1);
+  rc = vt.symbols.ghostty_kitty_graphics_placement_iterator_new(null, ptr(kittyIteratorHandle));
+  if (rc !== 0) throw new Error(`ghostty_kitty_graphics_placement_iterator_new failed: ${rc}`);
+  const kittyIterator = read.ptr(ptr(kittyIteratorHandle)) as Pointer;
+  const kittyHandleOut = new BigUint64Array(1);
+  const u32Out = new Uint32Array(1);
+  const u64Out = new BigUint64Array(1);
+  // GhosttyKittyGraphicsPlacementRenderInfo。先頭のsize_tへ構造体サイズ（56）を入れて渡す
+  const renderInfoBuf = new Uint8Array(56);
+  const renderInfoView = new DataView(renderInfoBuf.buffer);
+  renderInfoView.setBigUint64(0, 56n, true);
+  /** 画像の世代番号 → base64化したRGBA。同じ画像を描画のたびに変換し直さないためのもの */
+  let kittyImageCache = new Map<string, KittyImage>();
+
+  // XTWINOPS（CSI 14/16/18 t）へ応答する。画像を表示するツールの多くはこれでセルのピクセル寸法を
+  // 知り、何セル分の大きさで送るかを決める。セル寸法が未確定のうちは応答しない
+  const sizeCallback = new JSCallback(
+    (_term: Pointer, _userdata: Pointer, out: Pointer) => {
+      const cellWidth = Math.round(currentCellWidthPx);
+      const cellHeight = Math.round(currentCellHeightPx);
+      if (cellWidth <= 0 || cellHeight <= 0) return false;
+      // GhosttySizeReportSize { uint16 rows; uint16 columns; uint32 cell_width; uint32 cell_height; }
+      const outView = new DataView(toArrayBuffer(out, 0, 12));
+      outView.setUint16(0, currentRows, true);
+      outView.setUint16(2, currentCols, true);
+      outView.setUint32(4, cellWidth, true);
+      outView.setUint32(8, cellHeight, true);
+      return true;
+    },
+    {
+      args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+      returns: FFIType.bool,
+    },
+  );
+  vt.symbols.ghostty_terminal_set(term, OPT_SIZE, sizeCallback.ptr);
+
+  function kittyPlacementU32(data: number): number {
+    vt.symbols.ghostty_kitty_graphics_placement_get(kittyIterator, data, ptr(u32Out));
+    return u32Out[0] ?? 0;
+  }
+
+  function kittyImageU32(image: Pointer, data: number): number {
+    vt.symbols.ghostty_kitty_graphics_image_get(image, data, ptr(u32Out));
+    return u32Out[0] ?? 0;
+  }
+
+  /** 画像の画素をRGBAのbase64へ変換する。画素の受信が済んでいなければnull */
+  function readKittyImage(image: Pointer, key: string): KittyImage | null {
+    const bytesPerPixel = KITTY_IMAGE_BYTES_PER_PIXEL[kittyImageU32(image, KITTY_IMAGE_FORMAT)];
+    if (!bytesPerPixel) return null;
+    if (vt.symbols.ghostty_kitty_graphics_image_get(image, KITTY_IMAGE_DATA_PTR, ptr(u64Out)) !== 0)
+      return null;
+    const dataPtr = Number(u64Out[0]) as Pointer;
+    vt.symbols.ghostty_kitty_graphics_image_get(image, KITTY_IMAGE_DATA_LEN, ptr(u64Out));
+    const len = Number(u64Out[0]);
+    if (!dataPtr || len === 0) return null;
+    const pixels = new Uint8Array(toArrayBuffer(dataPtr, 0, len));
+    return {
+      key,
+      width: kittyImageU32(image, KITTY_IMAGE_WIDTH),
+      height: kittyImageU32(image, KITTY_IMAGE_HEIGHT),
+      rgbaBase64: Buffer.from(toRgba(pixels, bytesPerPixel)).toString("base64"),
+    };
+  }
+
+  /**
+   * ビューポートに少しでも掛かっているKitty graphicsの配置と、その画像を取り出す。
+   * スクロールでも位置が動くため、画像の出入りが無くても描画のたびに呼び直す
+   */
+  function kittyGraphics(): KittyGraphicsState {
+    if (vt.symbols.ghostty_terminal_get(term, DATA_KITTY_GRAPHICS, ptr(kittyHandleOut)) !== 0) {
+      return EMPTY_KITTY_GRAPHICS;
+    }
+    const graphics = Number(kittyHandleOut[0]) as Pointer;
+    if (!graphics) return EMPTY_KITTY_GRAPHICS;
+    // 一度も画像を受け取っていないターミナル（大半のタブ）はここで打ち切る
+    vt.symbols.ghostty_kitty_graphics_get(graphics, KITTY_DATA_GENERATION, ptr(u64Out));
+    if (u64Out[0] === 0n) {
+      kittyImageCache.clear();
+      return EMPTY_KITTY_GRAPHICS;
+    }
+    vt.symbols.ghostty_kitty_graphics_get(
+      graphics,
+      KITTY_DATA_PLACEMENT_ITERATOR,
+      ptr(kittyIteratorHandle),
+    );
+
+    const placements: KittyPlacement[] = [];
+    const images = new Map<string, KittyImage>();
+    while (vt.symbols.ghostty_kitty_graphics_placement_next(kittyIterator)) {
+      const image = vt.symbols.ghostty_kitty_graphics_image(
+        graphics,
+        kittyPlacementU32(KITTY_PLACEMENT_IMAGE_ID),
+      ) as Pointer | null;
+      if (!image) continue;
+      const rc = vt.symbols.ghostty_kitty_graphics_placement_render_info(
+        kittyIterator,
+        image,
+        term,
+        ptr(renderInfoBuf),
+      );
+      // 仮想配置（Unicodeプレースホルダ）はviewport_visibleがfalseで来る。未対応なので描かない
+      if (rc !== 0 || renderInfoBuf[32] === 0) continue;
+
+      vt.symbols.ghostty_kitty_graphics_image_get(image, KITTY_IMAGE_GENERATION, ptr(u64Out));
+      const key = String(u64Out[0]);
+      if (!images.has(key)) {
+        const cached = kittyImageCache.get(key) ?? readKittyImage(image, key);
+        if (!cached) continue;
+        images.set(key, cached);
+      }
+      vt.symbols.ghostty_kitty_graphics_placement_get(
+        kittyIterator,
+        KITTY_PLACEMENT_Z,
+        ptr(i32Out),
+      );
+      placements.push({
+        imageKey: key,
+        col: renderInfoView.getInt32(24, true),
+        row: renderInfoView.getInt32(28, true),
+        xOffset: kittyPlacementU32(KITTY_PLACEMENT_X_OFFSET),
+        yOffset: kittyPlacementU32(KITTY_PLACEMENT_Y_OFFSET),
+        width: renderInfoView.getUint32(8, true),
+        height: renderInfoView.getUint32(12, true),
+        sourceX: renderInfoView.getUint32(36, true),
+        sourceY: renderInfoView.getUint32(40, true),
+        sourceWidth: renderInfoView.getUint32(44, true),
+        sourceHeight: renderInfoView.getUint32(48, true),
+        z: i32Out[0] ?? 0,
+      });
+    }
+    // 画面から消えた画像の変換結果は捨てる（再び映れば変換し直す）
+    kittyImageCache = images;
+    return { placements, images: [...images.values()] };
+  }
 
   /** DSR等のクエリ応答をPTYへ書き戻すコールバックを登録する */
   function onWritePty(fn: (data: Uint8Array) => void): void {
@@ -454,25 +780,37 @@ export function createGhosttyTerminal(
   }
 
   /**
-   * セルの実寸（webview側の実測値）を控える。マウス座標のピクセル→グリッド変換に使う。
+   * セルの実寸（webview側の実測値）を控える。マウス座標のピクセル→グリッド変換と、
+   * Kitty graphicsの画像が何セル分を占めるかの計算に使う。
    * グリッド（cols/rows）が変わらないリサイズでも呼ばれるためresizeとは別入口にしている
    */
   function setCellSize(cellWidthPx: number, cellHeightPx: number): void {
+    const changed =
+      Math.round(cellWidthPx) !== Math.round(currentCellWidthPx) ||
+      Math.round(cellHeightPx) !== Math.round(currentCellHeightPx);
     currentCellWidthPx = cellWidthPx;
     currentCellHeightPx = cellHeightPx;
+    // libghostty-vt側のセル寸法はresize経由でしか変えられない。グリッドが同じならピクセル寸法の
+    // 更新だけで済むが、同期出力モード（DEC 2026）も解除されるため変わったときだけ呼ぶ
+    if (changed) resizeTerminal();
+  }
+
+  function resizeTerminal(): void {
+    vt.symbols.ghostty_terminal_resize(
+      term,
+      currentCols,
+      currentRows,
+      Math.round(currentCellWidthPx),
+      Math.round(currentCellHeightPx),
+    );
   }
 
   function resize(cols: number, rows: number, cellWidthPx: number, cellHeightPx: number): void {
     currentCols = cols;
     currentRows = rows;
-    setCellSize(cellWidthPx, cellHeightPx);
-    vt.symbols.ghostty_terminal_resize(
-      term,
-      cols,
-      rows,
-      Math.round(cellWidthPx),
-      Math.round(cellHeightPx),
-    );
+    currentCellWidthPx = cellWidthPx;
+    currentCellHeightPx = cellHeightPx;
+    resizeTerminal();
   }
 
   // ---- マウスレポート（TUIアプリ向けのマウス操作転送）----
@@ -781,11 +1119,13 @@ export function createGhosttyTerminal(
     mouseEvent = null;
     mouseEncoder = null;
     vt.symbols.ghostty_render_state_free(renderState);
+    vt.symbols.ghostty_kitty_graphics_placement_iterator_free(kittyIterator);
     vt.symbols.ghostty_terminal_free(term);
     writePtyCallback?.close();
     clipboardCallback?.close();
     pwdChangedCallback?.close();
     bellCallback?.close();
+    sizeCallback.close();
   }
 
   return {
@@ -802,6 +1142,7 @@ export function createGhosttyTerminal(
     resize,
     setCellSize,
     cursor,
+    kittyGraphics,
     dumpHtml,
     dumpText,
     dumpScreenRange,

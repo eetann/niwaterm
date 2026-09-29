@@ -695,6 +695,8 @@ export function createBoard(opts: BoardOptions) {
         mouseTracking: false,
         mouseAnyMotion: false,
         copyMode: null,
+        kittyPlacements: [],
+        kittyImages: [],
       };
     }
     for (const [tabId, state] of browserTabs) {

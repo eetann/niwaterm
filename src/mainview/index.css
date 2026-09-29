@@ -1042,9 +1042,26 @@ html.has-status-bar {
 
 .tile .term,
 #popup .term {
+  /*
+   * 位置指定の無い要素の文字は、位置指定のある兄弟（.kitty-layer）より先に描かれてしまう。
+   * relativeにしてDOM順で重なるようにし、.termより前に置いた文字の奥のレイヤを文字の下へ潜らせる
+   */
+  position: relative;
   color: var(--term-fg);
   height: 100%;
   overflow: hidden;
+}
+
+/* Kitty graphics protocolの画像（mainview/kitty-images.ts）。.termの前後に1枚ずつ置く */
+.kitty-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.kitty-layer canvas {
+  position: absolute;
 }
 
 /*

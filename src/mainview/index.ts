@@ -28,6 +28,12 @@ import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
 import type { CopyModeRenderState } from "../bun/terminal-session";
+import {
+  applyKittyGraphics,
+  clearKittyGraphics,
+  pruneKittyImages,
+  storeKittyImages,
+} from "./kitty-images";
 import type { ConfigSummary } from "../bun/config-summary";
 import type { LayoutListEntry } from "../bun/project-config";
 import type { PopupRenderState } from "../bun/popup";
@@ -877,9 +883,12 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           // パレットは.term要素の有無に関わらず反映する（DOM生成待ちのタブが先に
           // 送ってきた分を取りこぼすと、以後は差分なし扱いで二度と届かないため）
           applyPaletteCss(renderState.paletteCss);
+          // 画像も同じ理由で.termの有無に関わらず受け取る（bun側は送った時点で送信済みとみなす）
+          storeKittyImages(renderState.kittyImages);
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
           applyTermHtml(tabId, termEl, renderState.html);
+          applyKittyGraphics(termEl, renderState.kittyPlacements, cellWidth, cellHeight);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
           // 加えて、フォーカスしていないタイルのタブではカーソルを表示しない（tmux同様の挙動）
@@ -904,6 +913,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             updateImePosition(renderState.cursorX, renderState.cursorY);
           }
         }
+        pruneKittyImages();
         // コピーモードの出入り・フォーカス中タブの切り替えはどちらも描画で届く
         statusBar.refreshMode();
       },
@@ -1869,6 +1879,7 @@ function teardownPopupContent(): void {
     mouseTrackingByTabId.delete(currentPopupTabId);
   }
   popupTermEl.innerHTML = "";
+  clearKittyGraphics(popupTermEl);
   currentPopupTabId = null;
 }
 

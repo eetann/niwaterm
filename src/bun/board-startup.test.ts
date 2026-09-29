@@ -332,6 +332,8 @@ function createTestWorkspaceManager(): WorkspaceManager {
         mouseTracking: false,
         mouseAnyMotion: false,
         copyMode: null,
+        kittyPlacements: [],
+        kittyImages: [],
       }),
       dumpText: () => `screen-text-${index}`,
       setCallbacks: () => {},
