@@ -20,6 +20,7 @@ import type {
   ResolvedHoverButtonConfig,
   ResolvedHoverButtonHandle,
 } from "@niwaterm/config";
+import { DOM_TOOLTIP_ATTR } from "./dom-tooltip";
 
 /** bun側のHoverButtonEntryと同じ形。RPCで運ばれてくる項目1件 */
 export interface HoverButtonItemView {
@@ -240,7 +241,7 @@ export function createHoverButtons(opts: HoverButtonsOptions): HoverButtons {
     itemEl.dataset["buttonId"] = buttonId;
     itemEl.dataset["itemId"] = item.id;
     const tooltip = item.tooltip || item.label;
-    if (tooltip) itemEl.title = tooltip;
+    if (tooltip) itemEl.setAttribute(DOM_TOOLTIP_ATTR, tooltip);
     // htmlはユーザー設定がそのまま書いたもの。エスケープはユーザー側の責務で、
     // ここで再エスケープすると意図した装飾が出せなくなる（labelは常にテキストとして入れる）
     if (item.html) itemEl.innerHTML = item.html;

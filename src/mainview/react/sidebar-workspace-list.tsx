@@ -1,13 +1,14 @@
 import {
   AlertTriangle,
   Bell,
+  Bot,
   ChevronRight,
   FolderX,
   LayoutTemplate,
   Maximize2,
   PictureInPicture2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -27,6 +28,7 @@ import type { LayoutListEntry } from "../../bun/project-config";
 import type { BoardId } from "../../bun/workspace";
 import type { WorkspaceId } from "../../bun/workspace-manager";
 import {
+  type SidebarBoardAgentInfo,
   type SidebarBoardItem,
   type SidebarBoardStatusLine,
   type SidebarDropPosition,
@@ -125,6 +127,62 @@ function startupLabel(startup: NonNullable<SidebarBoardItem["startup"]>): string
   return startup.restoreMode === "layout"
     ? `起動時レイアウト: ${startup.preset}`
     : `プリセット: ${startup.preset}（起動時は骨格を復元）`;
+}
+
+/**
+ * Board行のツールチップが出るまでの待ち時間。行は大きく、サイドバーを横切るだけで次々に開いてしまうため、
+ * ボタン類（待ち時間なし）と違って少し留まったときだけ出す
+ */
+const BOARD_TOOLTIP_DELAY_MS = 500;
+
+const AGENT_STATUS_LABELS: Record<SidebarBoardAgentInfo["status"], string> = {
+  idle: "待機中",
+  working: "作業中",
+  blocked: "入力待ち",
+};
+
+/** Board行のツールチップに1行ずつ並べる状態。何も無ければ空配列（ツールチップを出さない） */
+function boardStateRows(board: SidebarBoardItem): { key: string; icon: ReactNode; text: string }[] {
+  const iconClass = "mt-0.5 size-3 shrink-0";
+  const rows: { key: string; icon: ReactNode; text: string }[] = [];
+  if (board.phase) {
+    rows.push({
+      key: "phase",
+      icon: (
+        <span
+          className="mt-1 size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: board.phase.color ?? "var(--ui-accent)" }}
+        />
+      ),
+      text: `フェーズ: ${board.phase.label}`,
+    });
+  }
+  if (board.agent) {
+    rows.push({
+      key: "agent",
+      icon: <Bot className={iconClass} />,
+      text: `${board.agent.agent}: ${AGENT_STATUS_LABELS[board.agent.status]}`,
+    });
+  }
+  if (board.bell) rows.push({ key: "bell", icon: <Bell className={iconClass} />, text: "ベル" });
+  if (board.zoomed) {
+    rows.push({ key: "zoomed", icon: <Maximize2 className={iconClass} />, text: "ズーム中" });
+  }
+  if (board.startup) {
+    rows.push({
+      key: "startup",
+      icon: <LayoutTemplate className={iconClass} />,
+      text: startupLabel(board.startup),
+    });
+  }
+  if (board.worktreeMissing) {
+    rows.push({
+      key: "worktree",
+      icon: <FolderX className={iconClass} />,
+      text: `ワークツリーが見つかりません: ${board.worktreePath}`,
+    });
+  }
+  return rows;
 }
 
 function loadCollapsedIds<T extends string>(storageKey: string): Set<T> {
@@ -411,9 +469,6 @@ export function SidebarWorkspaceList({
             <ContextMenuCheckboxItem
               key={`${entry.projectRoot ?? ""}\u0000${entry.name}`}
               checked={startup?.preset === entry.name}
-              title={
-                entry.projectRoot ? `${entry.projectRoot}/.niwaterm/config.ts` : entry.description
-              }
               onSelect={() =>
                 onApplyBoardLayout({
                   boardId: board.boardId,
@@ -423,10 +478,22 @@ export function SidebarWorkspaceList({
                 })
               }
             >
-              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-              {entry.projectRoot && (
-                <span className="shrink-0 text-[10px] text-muted-foreground">project</span>
-              )}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                  {entry.projectRoot && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">project</span>
+                  )}
+                </div>
+                {entry.description && (
+                  <span className="text-[10px] text-muted-foreground">{entry.description}</span>
+                )}
+                {entry.projectRoot && (
+                  <span className="text-[10px] break-all text-muted-foreground">
+                    {`${entry.projectRoot}/.niwaterm/config.ts`}
+                  </span>
+                )}
+              </div>
             </ContextMenuCheckboxItem>
           ))}
           {startup && (
@@ -582,85 +649,103 @@ export function SidebarWorkspaceList({
       dropTarget?.kind === "board" && dropTarget.boardId === board.boardId
         ? dropTarget.position
         : null;
-    const titleParts: string[] = [];
-    if (board.phase) titleParts.push(board.phase.label);
-    if (board.bell) titleParts.push("ベル");
-    if (board.zoomed) titleParts.push("ズーム中");
-    if (board.agent) titleParts.push(`${board.agent.agent}: ${board.agent.status}`);
-    if (board.startup) titleParts.push(startupLabel(board.startup));
-    if (board.worktreeMissing)
-      titleParts.push(`ワークツリーが見つかりません: ${board.worktreePath}`);
+    const stateRows = boardStateRows(board);
     return (
       <ContextMenu key={board.boardId}>
-        <ContextMenuTrigger asChild>
-          <button
-            type="button"
-            tabIndex={-1}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "move";
-              const payload: BoardDragPayload = { boardId: board.boardId, workspaceId };
-              e.dataTransfer.setData(BOARD_DRAG_MIME, JSON.stringify(payload));
-            }}
-            // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
-            onDragEnd={() => setDropTarget(null)}
-            onDragOver={(e) => handleBoardDragOver(e, board.boardId)}
-            onDrop={(e) => handleBoardDrop(e, workspaceId, boardIndex)}
-            data-hint-board-id={board.boardId}
-            onClick={() => onSelectBoard(workspaceId, board.boardId)}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              startEditing({ kind: "board", id: board.boardId }, board.label);
-            }}
-            className={cn(
-              // ガイド線は透明なborderの色替えで出す（ワークスペース行と同じ理由）
-              "flex w-full flex-col rounded-md border-y-2 border-transparent text-left transition-colors hover:bg-accent",
-              board.active && "bg-accent",
-              dropPosition === "before" && "border-t-sky-400",
-              dropPosition === "after" && "border-b-sky-400",
-            )}
-            title={titleParts.length > 0 ? titleParts.join(" / ") : undefined}
-          >
-            <div className="flex w-full items-center gap-1.5 px-1.5 py-1">
-              <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold">{board.label}</span>
-              {board.startup && (
-                <LayoutTemplate
-                  aria-label={startupLabel(board.startup)}
-                  className={cn(
-                    "size-3 shrink-0",
-                    // 起動時に組み直すBoardだけ色を付ける。プリセット名を覚えているだけの
-                    // Boardは起動時の見た目が変わらないため、区別が付く程度に落とす
-                    board.startup.restoreMode === "layout"
-                      ? "text-sky-400"
-                      : "text-muted-foreground/40",
+        <Tooltip delayDuration={BOARD_TOOLTIP_DELAY_MS} disableHoverableContent>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <button
+                type="button"
+                tabIndex={-1}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = "move";
+                  const payload: BoardDragPayload = { boardId: board.boardId, workspaceId };
+                  e.dataTransfer.setData(BOARD_DRAG_MIME, JSON.stringify(payload));
+                }}
+                // ドロップに至らずドラッグが終了した場合（Escapeでのキャンセル等）もガイド線を消す
+                onDragEnd={() => setDropTarget(null)}
+                onDragOver={(e) => handleBoardDragOver(e, board.boardId)}
+                onDrop={(e) => handleBoardDrop(e, workspaceId, boardIndex)}
+                data-hint-board-id={board.boardId}
+                onClick={() => onSelectBoard(workspaceId, board.boardId)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  startEditing({ kind: "board", id: board.boardId }, board.label);
+                }}
+                className={cn(
+                  // ガイド線は透明なborderの色替えで出す（ワークスペース行と同じ理由）
+                  "flex w-full flex-col rounded-md border-y-2 border-transparent text-left transition-colors hover:bg-accent",
+                  board.active && "bg-accent",
+                  dropPosition === "before" && "border-t-sky-400",
+                  dropPosition === "after" && "border-b-sky-400",
+                )}
+              >
+                <div className="flex w-full items-center gap-1.5 px-1.5 py-1">
+                  <span
+                    aria-hidden="true"
+                    className={cn("size-1.5 shrink-0 rounded-full", dotClass)}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold">
+                    {board.label}
+                  </span>
+                  {board.startup && (
+                    <LayoutTemplate
+                      aria-label={startupLabel(board.startup)}
+                      className={cn(
+                        "size-3 shrink-0",
+                        // 起動時に組み直すBoardだけ色を付ける。プリセット名を覚えているだけの
+                        // Boardは起動時の見た目が変わらないため、区別が付く程度に落とす
+                        board.startup.restoreMode === "layout"
+                          ? "text-sky-400"
+                          : "text-muted-foreground/40",
+                      )}
+                    />
                   )}
-                />
-              )}
-              {board.worktreeMissing && (
-                <FolderX
-                  aria-label="ワークツリーが見つかりません"
-                  className="size-3 shrink-0 text-amber-500"
-                />
-              )}
-              {board.zoomed && (
-                <Maximize2
-                  aria-label="ズーム中"
-                  className="size-3 shrink-0 text-muted-foreground"
-                />
-              )}
-              {board.bell && <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />}
-            </div>
-            {hasStatusLine && (
-              <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
-                <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
-                <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
-                  {board.statusItems.map((line) => renderBoardStatusLine(line))}
+                  {board.worktreeMissing && (
+                    <FolderX
+                      aria-label="ワークツリーが見つかりません"
+                      className="size-3 shrink-0 text-amber-500"
+                    />
+                  )}
+                  {board.zoomed && (
+                    <Maximize2
+                      aria-label="ズーム中"
+                      className="size-3 shrink-0 text-muted-foreground"
+                    />
+                  )}
+                  {board.bell && (
+                    <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />
+                  )}
                 </div>
-              </div>
-            )}
-          </button>
-        </ContextMenuTrigger>
+                {hasStatusLine && (
+                  <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
+                    <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
+                    <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
+                      {board.statusItems.map((line) => renderBoardStatusLine(line))}
+                    </div>
+                  </div>
+                )}
+              </button>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          {/* 上下に出すと隣のBoard行へ移るマウスの進路を塞ぐため、右（タイル側）へ出してポインタも受けない */}
+          {stateRows.length > 0 && (
+            <TooltipContent
+              side="right"
+              align="start"
+              className="pointer-events-none flex max-w-80 flex-col gap-1 text-left"
+            >
+              {stateRows.map((row) => (
+                <div key={row.key} className="flex items-start gap-1.5">
+                  {row.icon}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{row.text}</span>
+                </div>
+              ))}
+            </TooltipContent>
+          )}
+        </Tooltip>
         <ContextMenuContent>
           <ContextMenuItem
             onSelect={() => startEditing({ kind: "board", id: board.boardId }, board.label)}

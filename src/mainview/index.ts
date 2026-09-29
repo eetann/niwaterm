@@ -62,6 +62,7 @@ import {
 } from "./custom-view-bridge";
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
+import { installDomTooltip } from "./dom-tooltip";
 import { createHoverButtons } from "./hover-buttons";
 import { createStatusBar, type StatusBarMode } from "./status-bar";
 import { shouldRecoverImeFocus } from "./ime-focus";
@@ -80,6 +81,7 @@ import {
 } from "./react/command-palette";
 import { ConfigDialog } from "./react/config-dialog";
 import { ConfirmDialog } from "./react/confirm-dialog";
+import { DomTooltip } from "./react/dom-tooltip";
 import { PhasePicker } from "./react/phase-picker";
 import { PopupToolbar } from "./react/popup-toolbar";
 import { PromptDialog } from "./react/prompt-dialog";
@@ -150,6 +152,7 @@ const workspacePickerRootEl = document.getElementById("workspace-picker-root") a
 const phasePickerRootEl = document.getElementById("phase-picker-root") as HTMLDivElement;
 
 const selectionMenuRootEl = document.getElementById("selection-menu-root") as HTMLDivElement;
+const domTooltipRootEl = document.getElementById("dom-tooltip-root") as HTMLDivElement;
 const hintLayerEl = document.getElementById("hint-layer") as HTMLDivElement;
 const linkHighlightEl = document.getElementById("link-highlight") as HTMLDivElement;
 
@@ -4361,6 +4364,10 @@ const statusBar = createStatusBar({
     imeEl.focus({ preventScroll: true });
   },
 });
+
+// ---- 素DOM側（ステータスバー・ホバーボタン）の共有ツールチップ ----
+const domTooltipRoot = createMemoRoot(domTooltipRootEl, "dom-tooltip");
+installDomTooltip((state) => domTooltipRoot.renderOnEvent(createElement(DomTooltip, state)));
 
 // prefixキー・2打目キーはbunへ届かず描画も起きないため、打鍵のたびに見直す。
 // 本体のkeydownリスナより後に登録しているので、この時点で待ち状態は更新済み

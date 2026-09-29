@@ -6,6 +6,7 @@
 // ブラウザタブのネイティブwebviewはHTMLより手前に描かれるため、重ねるとバーが隠れる。
 
 import type { ResolvedStatusBarConfig, StatusBarSection, StatusBarValue } from "@niwaterm/config";
+import { DOM_TOOLTIP_ATTR } from "./dom-tooltip";
 
 /** builtin:modeで出すキー入力のモード */
 export type StatusBarMode = "normal" | "prefix" | "copy";
@@ -64,7 +65,8 @@ export function createStatusBar(opts: StatusBarOptions): StatusBarView {
     if (empty) return;
     if (value.html !== "") el.innerHTML = value.html;
     else el.textContent = value.text;
-    el.title = value.tooltip;
+    if (value.tooltip === "") el.removeAttribute(DOM_TOOLTIP_ATTR);
+    else el.setAttribute(DOM_TOOLTIP_ATTR, value.tooltip);
     if (value.color === "") el.style.removeProperty("color");
     else el.style.color = value.color;
   }
