@@ -31,6 +31,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
   - **`-Doptimize=ReleaseFast`必須**。Debugビルドはスクロール1行あたり約700µsかかり、PTY読み取りのイベントループごと止まる（docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
+- `bun run storybook` — src/mainview/react/のコンポーネントを状態別に確認するStorybookを起動する。ストーリーはコンポーネントの隣に`*.stories.tsx`で置く（詳細: docs/build/storybook.md）
 - `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/build/macos-build.md（**Zig 0.16.0以上が必要**）
 
 ## アーキテクチャ

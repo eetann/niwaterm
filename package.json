@@ -4,11 +4,13 @@
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
 	"workspaces": ["packages/*"],
 	"scripts": {
-		"lint": "oxlint src packages",
-		"lint:fix": "oxlint --fix src packages",
-		"format": "oxfmt src packages",
-		"format:check": "oxfmt --check src packages",
-		"test": "bun test"
+		"lint": "oxlint src packages .storybook",
+		"lint:fix": "oxlint --fix src packages .storybook",
+		"format": "oxfmt src packages .storybook",
+		"format:check": "oxfmt --check src packages .storybook",
+		"test": "bun test",
+		"storybook": "storybook dev -p 6006",
+		"build-storybook": "storybook build"
 	},
 	"dependencies": {
 		"@niwaterm/config": "workspace:*",
@@ -24,12 +26,17 @@
 		"tailwind-merge": "^3.6.0"
 	},
 	"devDependencies": {
+		"@storybook/react-vite": "^10.6.0",
 		"@tailwindcss/cli": "^4.3.3",
+		"@tailwindcss/vite": "^4.3.3",
 		"@types/bun": "latest",
 		"@types/react": "^19.2.18",
 		"@types/react-dom": "^19.2.4",
+		"@vitejs/plugin-react": "^6.1.1",
 		"oxfmt": "^0.59.0",
 		"oxlint": "^1.74.0",
-		"tailwindcss": "^4.3.3"
+		"storybook": "^10.6.0",
+		"tailwindcss": "^4.3.3",
+		"vite": "^8.3.1"
 	}
 }

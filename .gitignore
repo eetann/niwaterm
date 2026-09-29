@@ -22,3 +22,6 @@ mise.local.toml
 
 # プロジェクトローカル設定。中身は各自の作業レイアウト等の個人設定
 .niwaterm/
+
+# Storybookの静的ビルド成果物（bun run build-storybook）
+storybook-static/

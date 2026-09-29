@@ -1,0 +1,14 @@
+/*
+ * index.cssはアプリの1画面レイアウト前提でhtml/bodyをoverflow:hiddenのflex行にしている。
+ * そのままだとストーリーがはみ出た分を確認できないため、Storybookのプレビューでだけ戻す。
+ * 地の色も本番は#sidebar・#screenが塗っていてbodyは透明なので、ここで塗る
+ */
+html,
+body {
+  overflow: auto;
+}
+
+body {
+  display: block;
+  background: var(--term-bg);
+}
