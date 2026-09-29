@@ -71,6 +71,8 @@ export const KEYBIND_ACTIONS = [
   "toggle-sidebar",
   "next-sidebar-view",
   "prev-sidebar-view",
+  "toggle-status-bar",
+  "refresh-status-bar",
   "toggle-popup",
   "promote-popup",
   "jump-hint",

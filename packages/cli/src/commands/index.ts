@@ -14,6 +14,7 @@ import pingCommand from "./ping";
 import popupCommand from "./popup";
 import shellProfileCommand from "./shell-profile";
 import sidebarCommand from "./sidebar";
+import statusBarCommand from "./status-bar";
 import tabCommand from "./tab";
 import tileCommand from "./tile";
 import windowCommand from "./window";
@@ -43,6 +44,7 @@ export const subCommands = {
   browser: browserCommand,
   claude: claudeCommand,
   sidebar: sidebarCommand,
+  "status-bar": statusBarCommand,
   "shell-profile": shellProfileCommand,
   layout: layoutCommand,
   "font-size": fontSizeCommand,

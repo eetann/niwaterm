@@ -60,6 +60,8 @@ import {
   type HoverButtonListEntry,
   ipcSocketPath,
   type IpcServer,
+  type StatusBarRefreshResult,
+  type StatusBarToggleResult,
 } from "./ipc-server";
 import { applyBuiltinLayout, applyLayoutPreset, type ApplyLayoutResult } from "./layout-apply";
 import { listResolvedLayouts, loadProjectPreset, type LayoutListEntry } from "./project-config";
@@ -76,7 +78,7 @@ import {
 } from "./persistence";
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
-import { createStatusBar, type StatusBarHandle } from "./status-bar";
+import { createStatusBar, type StatusBarDefinition, type StatusBarHandle } from "./status-bar";
 import {
   listLeaves,
   type SplitOrientation,
@@ -97,6 +99,7 @@ import {
   type WindowFrame,
   windowStateFilePath,
 } from "./window-state";
+import { loadUiState, saveUiState, uiStateFilePath } from "./ui-state";
 import { createWindowManager, type WindowId, type WindowOps } from "./window-manager";
 import type { AppRenderState, BoardId, WorkspaceId } from "./workspace-manager";
 
@@ -269,6 +272,10 @@ export type NiwaRPC = {
       runHoverButtonItem: { tabId: TabId; buttonId: string; id: string };
       /** ステータスバーで押された部品。idはconfigのstatusBarで配ったもの */
       runStatusBarItem: { id: string };
+      /** toggle-status-barキーバインド・コマンドパレット。表示状態は全ウィンドウ共通でbun側が持つ */
+      toggleStatusBar: {};
+      /** refresh-status-barキーバインド・コマンドパレット */
+      refreshStatusBar: {};
       /**
        * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customViews[].handlers）。
        * 関数の実体はbun側にあるため、webviewはビューのidと名前・payloadだけを送ってくる
@@ -332,6 +339,11 @@ export type NiwaRPC = {
        * 状況が変わった時・intervalの周期で評価し直し、内容が前回と変わったときにしか送らない
        */
       statusBarValues: { values: Record<string, StatusBarValue> };
+      /**
+       * ユーザーがステータスバーを隠したか（toggle-status-bar・CLIの`status-bar toggle`）。
+       * 設定のstatusBar.visibleとは別に持ち、両方が出す指定の時だけ出す
+       */
+      statusBarHidden: { hidden: boolean };
       /**
        * ホバーボタンを強制的に出したままにする（CLIの`tab hover reveal`）。positionがnullなら解除。
        * 出ている間はマウスの出入りでは引っ込まない
@@ -556,6 +568,43 @@ function sendSidebarView(viewId: string, windowId: WindowId | null): void {
   rpcSendOf(windowId ?? windowManager.getFocusedWindowId())?.setSidebarView({ viewId });
 }
 
+const STATUS_BAR_DISABLED_ERROR = "statusBar is disabled in config (statusBar: false)";
+
+/**
+ * ステータスバーを隠す／出す（toggle-status-barキーバインド・CLIの`status-bar toggle`）。
+ * visible省略で今の逆へ。全ウィンドウへ同時に反映し、次回起動時にも引き継ぐ
+ */
+function toggleStatusBar(visible?: boolean): StatusBarToggleResult {
+  if (!statusBarHandle?.resolved().visible) return { ok: false, error: STATUS_BAR_DISABLED_ERROR };
+  const hidden = visible === undefined ? !uiState.statusBarHidden : !visible;
+  if (uiState.statusBarHidden !== hidden) {
+    uiState = { ...uiState, statusBarHidden: hidden };
+    try {
+      saveUiState(uiStatePath, uiState);
+    } catch (err) {
+      console.log(`[bun] failed to save ui state: ${String(err)}`);
+    }
+  }
+  statusBarHandle.setHidden(hidden);
+  for (const windowId of views.keys()) rpcSendOf(windowId)?.statusBarHidden({ hidden });
+  return { ok: true, visible: !hidden };
+}
+
+/**
+ * ステータスバーの部品を全ウィンドウで評価し直す（refresh-status-barキーバインド・CLIの
+ * `status-bar refresh`）。itemId省略で全部品
+ */
+function refreshStatusBar(itemId?: string): StatusBarRefreshResult {
+  if (!statusBarHandle?.resolved().visible) return { ok: false, error: STATUS_BAR_DISABLED_ERROR };
+  if (statusBarHandle.refresh(itemId)) return { ok: true };
+  const { sections } = statusBarHandle.resolved();
+  const ids = [...sections.left, ...sections.center, ...sections.right].map((item) => item.id);
+  return {
+    ok: false,
+    error: `status bar item not found: ${itemId} (available: ${ids.join(", ")})`,
+  };
+}
+
 /**
  * そのタブで今出せるホバーボタンと、並ぶ項目を返す（CLIの`niwaterm tab hover list`から）。
  * 項目の組み立てはホバー時と同じ経路を通すので、CLIで見えるものと画面に出るものが一致する
@@ -759,11 +808,16 @@ let hoverButtons: ResolvedHoverButtonConfig[];
 let hoverButtonsHandle: HoverButtonsHandle;
 /** 設定の初回読み込み前はnull。読み込み前にwebviewへ設定を送ることは無いが、描画は先に走りうる */
 let statusBarHandle: StatusBarHandle | null = null;
+/** config showで部品のidを引けるよう、関数を含む解決結果をそのまま持つ */
+let statusBarDefinition: StatusBarDefinition = { visible: false, css: "", components: [] };
 const HIDDEN_STATUS_BAR: ResolvedStatusBarConfig = {
   visible: false,
   css: "",
   sections: { left: [], center: [], right: [] },
 };
+const uiStatePath = uiStateFilePath();
+/** キーバインド・CLIで切り替えた表示状態。全ウィンドウで共有し、次回起動時に引き継ぐ */
+let uiState = loadUiState(uiStatePath);
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
@@ -936,6 +990,7 @@ function currentConfigSummary(): ConfigSummary {
     board: boardConfig,
     sidebar: sidebarConfig,
     terminal: terminalConfig,
+    statusBar: statusBarDefinition,
     link: linkConfig,
   });
 }
@@ -978,6 +1033,7 @@ async function refreshConfig(): Promise<void> {
     board: boardConfig,
     sidebar: sidebarConfig,
     terminal: terminalConfig,
+    statusBar: statusBarDefinition,
     customViews,
     customViewHandlers,
     hoverButtons,
@@ -1000,6 +1056,7 @@ async function refreshConfig(): Promise<void> {
   statusBarHandle = createStatusBar(next.statusBar, next.niwa, {
     send: (windowId, values) => rpcSendOf(windowId)?.statusBarValues({ values }),
     homeDir: homedir(),
+    hidden: uiState.statusBarHidden,
   });
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
   windowManager.applyMaxScrollback(terminalConfig.scrollback);
@@ -1135,6 +1192,7 @@ try {
     sendSidebarView,
     listHoverButtons,
     revealHoverButton,
+    { refresh: refreshStatusBar, toggle: toggleStatusBar },
   );
   console.log(`[bun] ipc server listening on ${ipcSocketPath()}`);
 } catch (err) {
@@ -1207,6 +1265,7 @@ function createWindowRpc(windowId: WindowId) {
           views.get(windowId)?.lastPaletteCssByTabId.clear();
           scheduleRender(windowId);
           sendConfig(windowId);
+          rpcSendOf(windowId)?.statusBarHidden({ hidden: uiState.statusBarHidden });
           statusBarHandle?.resend(windowId);
           focusWebviewOnce(windowId);
         },
@@ -1502,6 +1561,12 @@ function createWindowRpc(windowId: WindowId) {
         },
         runStatusBarItem: ({ id }: { id: string }) => {
           void statusBarHandle?.run(windowId, id);
+        },
+        toggleStatusBar: () => {
+          toggleStatusBar();
+        },
+        refreshStatusBar: () => {
+          refreshStatusBar();
         },
         customViewCall: ({
           callId,

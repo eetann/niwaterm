@@ -46,6 +46,7 @@ const ARG_SOURCES: Record<string, SourceKind> = {
 const COMMAND_ARG_SOURCES: Record<string, Record<string, SourceKind>> = {
   "agent setup": { agent: "agentKind", cli: "cliName" },
   "board phase set": { phase: "boardPhase" },
+  "status-bar refresh": { item: "statusBarItem" },
   "docs show": { name: "docTopic" },
   "layout apply": { name: "layoutPreset" },
   "sidebar switch": { view: "sidebarView" },

@@ -1083,6 +1083,39 @@ function resolveStatusBarInterval(
   return interval;
 }
 
+const STATUS_BAR_ITEM_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+/** 省略時の既定id（区画-番号）の形。ユーザーのidにこの形を許すと、後ろの部品の既定idと重なりうる */
+const POSITIONAL_STATUS_BAR_ITEM_ID_PATTERN = /^(left|center|right)-\d+$/;
+
+/** 部品のidを決める。未指定・不正・他の部品と重なる場合は区画-番号の既定idにする */
+function resolveStatusBarItemId(
+  raw: unknown,
+  fallback: string,
+  scope: string,
+  usedIds: ReadonlySet<string>,
+  diag: ConfigDiagnostics,
+): string {
+  if (typeof raw !== "object" || raw === null) return fallback;
+  const id: unknown = (raw as { id?: unknown }).id;
+  if (id === undefined) return fallback;
+  if (
+    typeof id !== "string" ||
+    !STATUS_BAR_ITEM_ID_PATTERN.test(id) ||
+    POSITIONAL_STATUS_BAR_ITEM_ID_PATTERN.test(id)
+  ) {
+    diag.warn(
+      scope,
+      `英数字・_・-の文字列でない（またはleft-0のような既定idの形の）ため、${fallback}を使います: ${describeValue(id)}`,
+    );
+    return fallback;
+  }
+  if (usedIds.has(id)) {
+    diag.warn(scope, `他の部品と重なっているため、${fallback}を使います: ${id}`);
+    return fallback;
+  }
+  return id;
+}
+
 function resolveStatusBarComponent(
   raw: unknown,
   id: string,
@@ -1168,6 +1201,7 @@ export function resolveStatusBar(
       );
   }
   const components: StatusBarComponentEntry[] = [];
+  const usedIds = new Set<string>();
   for (const section of STATUS_BAR_SECTIONS) {
     let list: unknown = fields[section];
     if (list === undefined) list = DEFAULT_STATUS_BAR[section];
@@ -1179,9 +1213,17 @@ export function resolveStatusBar(
       list = DEFAULT_STATUS_BAR[section];
     }
     for (const [index, raw] of (list as unknown[]).entries()) {
-      const entry = resolveStatusBarComponent(
+      const id = resolveStatusBarItemId(
         raw,
         `${section}-${index}`,
+        `statusBar.${section}[${index}].id`,
+        usedIds,
+        diag,
+      );
+      usedIds.add(id);
+      const entry = resolveStatusBarComponent(
+        raw,
+        id,
         section,
         `statusBar.${section}[${index}]`,
         diag,

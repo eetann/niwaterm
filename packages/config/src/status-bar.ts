@@ -84,6 +84,11 @@ export type StatusBarRenderFn = (
 
 export interface StatusBarComponentConfig {
   /**
+   * `niwaterm status-bar refresh --item <id>`で指す名前。英数字・`_`・`-`で、部品間で重ねない。
+   * 省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる）
+   */
+  id?: string;
+  /**
    * `builtin:mode` / `builtin:cwd` / `builtin:workspace` / `builtin:board` / `tab-var:<name>`。
    * renderと同時には書けない（renderが優先される）
    */

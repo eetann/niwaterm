@@ -33,6 +33,7 @@ export type SourceKind =
   | "customView"
   | "sidebarView"
   | "boardPhase"
+  | "statusBarItem"
   | "docTopic"
   | "worktree"
   | "gitRemote"
@@ -62,7 +63,7 @@ const COMPLETION_IPC_TIMEOUT_MS = 600;
 const FROM_WORKSPACES: SourceKind[] = ["tabId", "tileId", "boardId", "workspaceId"];
 
 /** 設定の読み出し1回で賄える種類 */
-const FROM_CONFIG: SourceKind[] = ["customView", "sidebarView", "boardPhase"];
+const FROM_CONFIG: SourceKind[] = ["customView", "sidebarView", "boardPhase", "statusBarItem"];
 
 /** 起動中のniwatermへ問い合わせないと分からない種類 */
 const FROM_IPC = new Set<SourceKind>([
@@ -139,7 +140,7 @@ export function fromWorkspaces(workspaces: WorkspaceListEntry[]): SourceMap {
 }
 
 /**
- * 設定の要約からビューとフェーズの候補を作る。
+ * 設定の要約からビュー・フェーズ・ステータスバーの部品の候補を作る。
  * customViewsのエントリはキーがそのままidだが、1つも定義が無いときだけ
  * `views`という別のキーでプレースホルダが入る（src/bun/config-summary.ts）ので取り除く
  */
@@ -162,10 +163,15 @@ export function fromConfig(
           .split(",")
           .map((phase) => ({ value: phase.trim() }))
           .filter((phase) => phase.value !== "");
+  // ステータスバーも部品のidがキー。出さない設定のときだけ"(なし)"のプレースホルダが1件入る
+  const statusBarItems = (sections.find((section) => section.name === "statusBar")?.entries ?? [])
+    .filter((entry) => entry.value !== "(なし)")
+    .map((entry) => ({ value: entry.key, description: entry.value }));
   return new Map([
     ["customView", customViews],
     ["sidebarView", [...customViews, WORKSPACES_VIEW]],
     ["boardPhase", phases],
+    ["statusBarItem", statusBarItems],
   ] satisfies [SourceKind, CompletionItem[]][]);
 }
 

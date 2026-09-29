@@ -6,6 +6,7 @@
 // 変わった時だけ走らせる。描画は出力のたびに16ms間隔で呼ばれるので、毎回renderを呼ぶと
 // ユーザーの関数（コマンド実行等）が出力の勢いで連打されてしまう。
 // 状況と無関係に変わる値（時計等）はintervalで別に呼び直す。
+// ユーザーがバーを隠している間はrenderを一切呼ばず、出し直した時にまとめて評価する。
 
 import type {
   Niwa,
@@ -53,6 +54,13 @@ export interface StatusBarHandle {
   resend(windowId: string): void;
   /** 閉じたウィンドウの状況・値を捨てる */
   forget(windowId: string): void;
+  /**
+   * 状況が変わっていなくても部品を評価し直す（renderが外部の状態を読む場合に、変化を知らせる口）。
+   * itemId省略で全部品、全ウィンドウ。未知のidならfalse
+   */
+  refresh(itemId?: string): boolean;
+  /** ユーザーがバーを隠したか。隠している間はrender・intervalを止め、出した時に評価し直す */
+  setHidden(hidden: boolean): void;
   /** webviewで押された部品のrunを、そのウィンドウの今の状況で呼ぶ */
   run(windowId: string, itemId: string): Promise<void>;
   /** intervalのタイマーを止める。設定のリロードで作り直す前に呼ぶ */
@@ -64,6 +72,8 @@ export interface CreateStatusBarOptions {
   send(windowId: string, values: Record<string, StatusBarValue>): void;
   /** builtin:cwdで`~`へ縮めるホームディレクトリ */
   homeDir: string;
+  /** 作った時点でユーザーがバーを隠しているか */
+  hidden: boolean;
 }
 
 interface WindowState {
@@ -158,6 +168,7 @@ export function createStatusBar(
   const windows = new Map<string, WindowState>();
   /** 部品id → 直前に出したエラー。intervalで同じ失敗を毎周期ログへ積まないために持つ */
   const lastErrors = new Map<string, string>();
+  let hidden = opts.hidden;
 
   function flush(windowId: string): void {
     const state = windows.get(windowId);
@@ -218,6 +229,7 @@ export function createStatusBar(
     .filter((entry) => entry.render !== undefined && entry.interval !== null)
     .map((entry) =>
       setInterval(() => {
+        if (hidden) return;
         for (const [windowId, state] of windows) {
           if (state.pending.has(entry.id)) continue;
           evaluate(windowId, state, entry);
@@ -250,7 +262,26 @@ export function createStatusBar(
         state.ctx = ctx;
         state.key = key;
       }
+      if (hidden) return;
       for (const entry of valueComponents) evaluate(windowId, state, entry);
+    },
+    refresh(itemId) {
+      if (itemId !== undefined && !byId.has(itemId)) return false;
+      if (hidden) return true;
+      const targets =
+        itemId === undefined
+          ? valueComponents
+          : valueComponents.filter((entry) => entry.id === itemId);
+      for (const [windowId, state] of windows) {
+        for (const entry of targets) evaluate(windowId, state, entry);
+      }
+      return true;
+    },
+    setHidden(next) {
+      if (hidden === next) return;
+      hidden = next;
+      // 隠している間に変わった状況は評価していないので、出した時点の状況で全部品を評価し直す
+      if (!hidden) this.refresh();
     },
     resend(windowId) {
       const state = windows.get(windowId);

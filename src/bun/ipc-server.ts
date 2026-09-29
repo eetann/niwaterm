@@ -762,6 +762,22 @@ function parseRevealHoverButtonBody(
   return { tabId: b.tabId, position: b.position };
 }
 
+export type StatusBarRefreshResult = { ok: true } | { ok: false; error: string };
+export type StatusBarToggleResult = { ok: true; visible: boolean } | { ok: false; error: string };
+
+/** `niwaterm status-bar`の実体。表示状態は全ウィンドウ共通なので、呼び出し元のウィンドウは問わない */
+export interface StatusBarOps {
+  /** 部品を全ウィンドウで評価し直す。itemId省略で全部品 */
+  refresh(itemId: string | undefined): StatusBarRefreshResult;
+  /** 表示を切り替える。visible省略で今の逆へ */
+  toggle(visible: boolean | undefined): StatusBarToggleResult;
+}
+
+const UNAVAILABLE_STATUS_BAR: StatusBarOps = {
+  refresh: () => ({ ok: false, error: "status bar is not available" }),
+  toggle: () => ({ ok: false, error: "status bar is not available" }),
+};
+
 function buildApp(
   workspaceManager: WorkspaceManager,
   getCustomViews: () => ResolvedCustomViewConfig[],
@@ -780,6 +796,7 @@ function buildApp(
   setSidebarView: (viewId: string, windowId: WindowId | null) => void,
   listHoverButtons: (tabId: TabId) => Promise<HoverButtonListEntry[]>,
   revealHoverButton: (tabId: TabId, position: HoverButtonPosition | null) => void,
+  statusBarOps: StatusBarOps,
 ) {
   const app = new Hono();
 
@@ -1716,6 +1733,30 @@ function buildApp(
     return c.json({ ok: true, viewId });
   });
 
+  // ステータスバーの部品のrenderを、状況が変わっていなくても呼び直す。renderが外部の状態
+  // （gitの状態・ファイル等）を読む場合に、外から変化を知らせる口
+  app.post("/status-bar/refresh", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const itemId = (body as { itemId?: unknown }).itemId;
+    if (itemId !== undefined && (typeof itemId !== "string" || itemId.length === 0)) {
+      return c.json({ ok: false, error: "expected { itemId?: string }" }, 400);
+    }
+    const result = statusBarOps.refresh(itemId);
+    return c.json(result, result.ok ? 200 : 404);
+  });
+
+  app.post("/status-bar/toggle", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const visible = (body as { visible?: unknown }).visible;
+    if (visible !== undefined && typeof visible !== "boolean") {
+      return c.json({ ok: false, error: "expected { visible?: boolean }" }, 400);
+    }
+    const result = statusBarOps.toggle(visible);
+    return c.json(result, result.ok ? 200 : 409);
+  });
+
   // フォントサイズをキーバインド1回分だけ拡大・縮小、またはconfig値へリセットする
   // （現在の実効フォントサイズをpxで返す。configファイルのappearance.fontSize自体は変更しない）
   app.post("/font-size", async (c) => {
@@ -1869,6 +1910,7 @@ export async function createIpcServer(
   setSidebarView: (viewId: string, windowId: WindowId | null) => void = () => {},
   listHoverButtons: (tabId: TabId) => Promise<HoverButtonListEntry[]> = async () => [],
   revealHoverButton: (tabId: TabId, position: HoverButtonPosition | null) => void = () => {},
+  statusBarOps: StatusBarOps = UNAVAILABLE_STATUS_BAR,
 ): Promise<IpcServer> {
   // 置き場所（アプリケーションサポートディレクトリ）は初回起動時には存在しない。
   // 無いままlistenするとENOENTでIPCサーバーだけ起動に失敗する
@@ -1896,6 +1938,7 @@ export async function createIpcServer(
     setSidebarView,
     listHoverButtons,
     revealHoverButton,
+    statusBarOps,
   );
   const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];

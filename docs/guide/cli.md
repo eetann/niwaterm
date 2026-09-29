@@ -336,6 +336,18 @@ niwaterm sidebar switch --view <viewId>
 サイドバーに出すビューを切り替える。`<viewId>`はワークスペース一覧の`workspaces`か、`niwaterm.config.ts`の`customViews`のid（どちらも`niwaterm config show`で確認できる）。サイドバーを閉じている場合は開いた上で切り替える。キーバインド（順送りの`next-sidebar-view`・id指定の`show-sidebar-view:<id>`）・コマンドパレットからの操作と同じもので、設定の詳細は`docs/guide/config.md`「ユーザー定義HTML UI（customViews）」節を参照。存在しないidを指定した場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
+niwaterm status-bar refresh [--item <id>]
+niwaterm status-bar toggle [--visible on|off]
+```
+
+ウィンドウ下端のステータスバー（設定の`statusBar`。詳細は`docs/guide/config.md`「ステータスバー（statusBar）」節）を操作する。どちらも全ウィンドウが対象で、呼び出し元のウィンドウは問わない。
+
+- `status-bar refresh` — 部品を状況が変わっていなくても評価し直す。`render`がniwatermの外の状態（gitの状態・ファイル等）を読む場合に、変えた側から変化を知らせるためのもの。`--item`でその部品だけに絞る。`<id>`は部品の`id`フィールド（付けていなければ`left-0`のような区画-番号）で、`niwaterm config show`の`statusBar`で確認できる。存在しないidはエラーメッセージ（今あるidの一覧付き）と共に終了コード1を返す。バーを隠している間は何も評価せず、出し直した時にまとめて評価する
+- `status-bar toggle` — バーの表示/非表示を切り替える。`--visible on`/`off`で向きを指定でき、省略時は今の逆になる。隠した状態は次回起動時にも引き継ぐ（成功時 `status-bar: visible`/`status-bar: hidden` を表示）
+
+`statusBar: false`で出さない設定にしている場合は、いずれもエラーメッセージと共に終了コード1を返す。キーバインド（`refresh-status-bar`・`toggle-status-bar`アクション。既定キーは無い）とコマンドパレットの「Refresh Status Bar」「Toggle Status Bar」からも実行できる。
+
+```sh
 niwaterm font-size increase|decrease|reset
 ```
 

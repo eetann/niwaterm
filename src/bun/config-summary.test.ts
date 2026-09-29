@@ -35,6 +35,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     board: defaultBoardConfig,
     sidebar: defaultSidebarConfig,
     terminal: defaultTerminalConfig,
+    statusBar: { visible: false, css: "", components: [] },
     ...overrides,
   };
 }
@@ -73,6 +74,7 @@ describe("buildConfigSummary", () => {
       "workspace",
       "mouse",
       "link",
+      "statusBar",
       "customViews",
     ]);
   });
@@ -243,5 +245,43 @@ describe("buildConfigSummary", () => {
       value: "50000行",
       note: "実際に遡れる行数はこれより数十〜数百行多くなる（刈り込みがページ単位のため）",
     });
+  });
+});
+
+describe("buildConfigSummary statusBar", () => {
+  const base = {
+    section: "right" as const,
+    render: undefined,
+    interval: null,
+    prefix: "",
+    color: "",
+    tooltip: "",
+    run: undefined,
+  };
+
+  test("部品をidをキーに、出どころと区画・押せるかを並べる", () => {
+    const summary = buildConfigSummary(
+      input({
+        statusBar: {
+          visible: true,
+          css: "",
+          components: [
+            { ...base, id: "left-0", section: "left", source: { kind: "builtin", id: "mode" } },
+            { ...base, id: "git", source: { kind: "tab-var", name: "branch" }, run: () => {} },
+            { ...base, id: "clock", source: null, render: () => "", interval: 1000 },
+          ],
+        },
+      }),
+    );
+    expect(summary.sections.find((s) => s.name === "statusBar")?.entries).toEqual([
+      { key: "left-0", value: "builtin:mode", note: "left" },
+      { key: "git", value: "tab-var:branch", note: "right・押せる" },
+      { key: "clock", value: "render (1000msごと)", note: "right" },
+    ]);
+  });
+
+  test("出さない設定では部品の代わりにその旨を出す", () => {
+    const summary = buildConfigSummary(input());
+    expect(entry(summary, "statusBar", "items")?.value).toBe("(なし)");
   });
 });

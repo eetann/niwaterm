@@ -289,7 +289,7 @@ keybindings: {
 | `home` / `end` | scroll-to-top / scroll-to-bottom |
 | `shift+up` / `shift+down` | jump-prompt-up / jump-prompt-down |
 
-**KeybindAction の一覧**（62種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
+**KeybindAction の一覧**（64種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
 | アクション | 意味 |
 |---|---|
@@ -327,6 +327,8 @@ keybindings: {
 | `toggle-sidebar` | サイドバーの表示/非表示切替 |
 | `next-sidebar-view` / `prev-sidebar-view` | サイドバーに出すビュー（ワークスペース一覧と各`customViews`パネル）を循環で切り替える（既定はnext側のみ prefix + `shift+b`。ビューが2つの間はnextだけで往復できるため、prevを使うには自分で割り当てる必要がある。`customViews`未設定時はビューが1つしかないので何もしない。サイドバーを閉じている場合は開いた上で切り替える） |
 | `show-sidebar-view:<id>` | サイドバーに出すビューをidで直接指定する（`<id>`は`customViews`のidか、ワークスペース一覧の`workspaces`。ビューが増えたときに循環で辿らず1打で届かせるためのもの。既定キーは無いため使うには自分で割り当てる必要がある。サイドバーを閉じている場合は開いた上で切り替える） |
+| `toggle-status-bar` | ステータスバーの表示/非表示切替（CLIの`niwaterm status-bar toggle`と同じ）。全ウィンドウへ同時に反映し、次回起動時にも引き継ぐ。`statusBar: false`の場合は何もしない。既定キーは無いため使うには自分で割り当てる必要がある |
+| `refresh-status-bar` | ステータスバーの部品を全ウィンドウで評価し直す（CLIの`niwaterm status-bar refresh`と同じ）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `toggle-popup` | ポップアップの表示/非表示切替 |
 | `promote-popup` | 開いているポップアップの中身を、フォーカス中タイルへ通常タブとして編入する（CLIの`niwaterm popup promote`と同じでPTYは維持される。ポップアップのツールバーの↑ボタンでも同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
 | `jump-hint` | ジャンプ先へラベルを出し、打ったラベルの場所へ飛ぶ（既定は prefix + `f`。vimiumの`f`相当。操作は下記「ジャンプヒント」参照） |
@@ -1315,6 +1317,7 @@ statusBar: {
 
 | フィールド | 型 | 意味 |
 |---|---|---|
+| `id` | `string` | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で、部品間で重ねない。省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる） |
 | `source` | `string` | 上の表の値。`render`と同時には書けない（`render`が優先される） |
 | `render` | `(ctx, niwa) => StatusBarSegment \| string \| null` | 中身を組み立てる関数。`async`も可。文字列を返せば`text`だけを指定したのと同じで、`null`・空文字列なら出ない |
 | `interval` | `number` | `render`を呼び直す周期(ms)。250ms未満は250msへ切り上げる。省略時は状況が変わった時だけ呼ぶ |
@@ -1340,6 +1343,31 @@ statusBar: {
 | `tabName` | サイドバーから付けたタブ名（未設定なら`undefined`） |
 
 `render`はこれらのどれかが変わった時にだけ呼ばれる（ターミナルの出力のたびには呼ばれない）。時計のように状況と無関係に変わる値は`interval`で周期的に呼び直す。`render`が例外を投げた部品は何も出さず、エラーはbun側のログへ出る。
+
+### 再描画・表示の切り替え
+
+`render`がniwatermの外の状態（gitの状態・ファイルの中身等）を読む場合、その変化は状況の変化として届かない。周期で読み直す`interval`の代わりに、変えた側から`niwaterm status-bar refresh`を呼んで知らせられる。`--item <id>`でその部品だけを評価し直す。idは部品の`id`フィールドで付けておくと、並べ替えても変わらない。付けていない部品のidと今の部品の一覧は`niwaterm config show`の`statusBar`で確認できる。
+
+```ts
+statusBar: {
+  right: [
+    {
+      id: "todo",
+      render: async (_ctx, niwa) => {
+        const { stdout } = await niwa.shell.run("grep -c TODO ~/notes.md");
+        return `TODO ${stdout.trim()}`;
+      },
+    },
+  ],
+},
+```
+
+```sh
+# ノートを編集した後に
+niwaterm status-bar refresh --item todo
+```
+
+バーを一時的に隠すには`toggle-status-bar`キーバインド（既定キーは無い）・コマンドパレットの「Toggle Status Bar」・`niwaterm status-bar toggle`を使う。隠した状態は全ウィンドウで共通で、次回起動時にも引き継ぐ。隠している間は`render`も`interval`も呼ばれず、出し直した時点の状況でまとめて評価し直す。`statusBar: false`で出さない設定にしている場合は切り替えられない。
 
 ## レイアウト
 

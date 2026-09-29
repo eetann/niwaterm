@@ -60,6 +60,8 @@ export type TileCommand =
   | { type: "toggleSidebar" }
   | { type: "cycleSidebarView"; delta: 1 | -1 }
   | { type: "showSidebarView"; viewId: string }
+  | { type: "toggleStatusBar" }
+  | { type: "refreshStatusBar" }
   | { type: "togglePopup" }
   | { type: "promotePopup" }
   | { type: "jumpHint" }
@@ -287,6 +289,10 @@ export function actionToTileCommand(action: KeybindAction): TileCommand {
       return { type: "cycleSidebarView", delta: 1 };
     case "prev-sidebar-view":
       return { type: "cycleSidebarView", delta: -1 };
+    case "toggle-status-bar":
+      return { type: "toggleStatusBar" };
+    case "refresh-status-bar":
+      return { type: "refreshStatusBar" };
     case "toggle-popup":
       return { type: "togglePopup" };
     case "promote-popup":

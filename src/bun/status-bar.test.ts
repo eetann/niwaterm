@@ -74,7 +74,7 @@ describe("createStatusBar", () => {
         component({ source: { kind: "tab-var", name: "branch" }, run: () => {} }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "/home/me" },
+      { send: rec.send, homeDir: "/home/me", hidden: false },
     );
     expect(bar.resolved().sections).toEqual({
       left: [{ id: "left-0", kind: "mode", clickable: false }],
@@ -100,7 +100,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "" },
+      { send: rec.send, homeDir: "", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
@@ -132,7 +132,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "/home/me" },
+      { send: rec.send, homeDir: "/home/me", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
@@ -162,7 +162,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "" },
+      { send: rec.send, homeDir: "", hidden: false },
     );
     const log = console.log;
     console.log = () => {};
@@ -190,7 +190,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "" },
+      { send: rec.send, homeDir: "", hidden: false },
     );
     bar.update("win-1", ctx());
     bar.update("win-1", ctx({ tabId: "tab-2" }));
@@ -208,7 +208,7 @@ describe("createStatusBar", () => {
     const bar = createStatusBar(
       definition([component({ render: () => String(++count), interval: 5 })]),
       niwa,
-      { send: rec.send, homeDir: "" },
+      { send: rec.send, homeDir: "", hidden: false },
     );
     bar.update("win-1", ctx());
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -232,7 +232,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: () => {}, homeDir: "" },
+      { send: () => {}, homeDir: "", hidden: false },
     );
     await bar.run("win-1", "left-0");
     expect(calls).toHaveLength(0);
@@ -251,13 +251,72 @@ describe("createStatusBar", () => {
     const bar = createStatusBar(
       definition([component({ source: { kind: "tab-var", name: "branch" } })]),
       niwa,
-      { send: rec.send, homeDir: "" },
+      { send: rec.send, homeDir: "", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
     bar.resend("win-1");
     bar.resend("win-unknown");
     expect(rec.sent).toHaveLength(2);
+    bar.dispose();
+  });
+
+  test("refreshは状況が同じでも全ウィンドウで評価し直し、idを指せばその部品だけ", async () => {
+    let a = 0;
+    let b = 0;
+    const bar = createStatusBar(
+      definition([
+        component({ id: "a", render: () => String(++a) }),
+        component({ id: "b", render: () => String(++b) }),
+        component({ id: "mode", section: "left", source: { kind: "builtin", id: "mode" } }),
+      ]),
+      niwa,
+      { send: () => {}, homeDir: "", hidden: false },
+    );
+    bar.update("win-1", ctx());
+    bar.update("win-2", ctx({ windowId: "win-2" }));
+    await flush();
+    expect([a, b]).toEqual([2, 2]);
+    expect(bar.refresh()).toBe(true);
+    await flush();
+    expect([a, b]).toEqual([4, 4]);
+    expect(bar.refresh("a")).toBe(true);
+    await flush();
+    expect([a, b]).toEqual([6, 4]);
+    // builtin:modeは値を評価しない部品だが、存在するidなので失敗にはしない
+    expect(bar.refresh("mode")).toBe(true);
+    expect(bar.refresh("missing")).toBe(false);
+    bar.dispose();
+  });
+
+  test("隠している間はrender・intervalを呼ばず、出した時の状況で評価し直す", async () => {
+    const rec = recorder();
+    const seen: Array<string | null> = [];
+    let ticks = 0;
+    const bar = createStatusBar(
+      definition([
+        component({
+          id: "tab",
+          render: (c) => {
+            seen.push(c.tabId);
+            return c.tabId ?? "";
+          },
+        }),
+        component({ id: "clock", render: () => String(++ticks), interval: 5 }),
+      ]),
+      niwa,
+      { send: rec.send, homeDir: "", hidden: true },
+    );
+    bar.update("win-1", ctx({ tabId: "tab-1" }));
+    bar.update("win-1", ctx({ tabId: "tab-2" }));
+    expect(bar.refresh()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual([]);
+    expect(ticks).toBe(0);
+    bar.setHidden(false);
+    await flush();
+    expect(seen).toEqual(["tab-2"]);
+    expect(rec.sent.at(-1)?.values["tab"]?.text).toBe("tab-2");
     bar.dispose();
   });
 });

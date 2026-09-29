@@ -1162,6 +1162,26 @@ export function switchSidebarView(
   return postJson(endpoint, "/sidebar-view", { viewId });
 }
 
+export type RefreshStatusBarResult = { ok: true } | { ok: false; error: string };
+
+/** ステータスバーの部品を全ウィンドウで評価し直す。itemId省略で全部品 */
+export function refreshStatusBar(
+  endpoint: IpcEndpoint,
+  itemId: string | undefined,
+): Promise<RefreshStatusBarResult> {
+  return postJson(endpoint, "/status-bar/refresh", { itemId });
+}
+
+export type ToggleStatusBarResult = { ok: true; visible: boolean } | { ok: false; error: string };
+
+/** ステータスバーの表示を切り替える（全ウィンドウ共通）。visible省略で今の逆へ */
+export function toggleStatusBar(
+  endpoint: IpcEndpoint,
+  visible: boolean | undefined,
+): Promise<ToggleStatusBarResult> {
+  return postJson(endpoint, "/status-bar/toggle", { visible });
+}
+
 export type PromotePopupResult =
   | { ok: true; tileId: TileId; tabId: TabId }
   | { ok: false; error: string };

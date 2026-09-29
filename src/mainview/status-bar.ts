@@ -29,6 +29,8 @@ export interface StatusBarOptions {
 export interface StatusBarView {
   setConfig(config: ResolvedStatusBarConfig): void;
   setValues(values: Record<string, StatusBarValue>): void;
+  /** ユーザーがバーを隠したか（toggle-status-bar）。設定のvisibleと両方が出す指定の時だけ出す */
+  setHidden(hidden: boolean): void;
   /** モードが変わりうる操作（キー入力・描画・フォーカス喪失）の後に呼ぶ。変化が無ければDOMに触らない */
   refreshMode(): void;
 }
@@ -53,6 +55,8 @@ export function createStatusBar(opts: StatusBarOptions): StatusBarView {
   let currentMode: StatusBarMode | null = null;
   /** 設定し直した時の比較用。同じ並びならDOMを作り直さない（値の表示を消さない） */
   let lastConfigKey = "";
+  let configVisible = false;
+  let hidden = false;
 
   function applyValue(el: HTMLElement, value: StatusBarValue | undefined): void {
     const empty = value === undefined || (value.text === "" && value.html === "");
@@ -70,7 +74,8 @@ export function createStatusBar(opts: StatusBarOptions): StatusBarView {
     el.textContent = MODE_LABELS[mode];
   }
 
-  function setVisible(visible: boolean): void {
+  function applyVisibility(): void {
+    const visible = configVisible && !hidden;
     container.hidden = !visible;
     document.documentElement.classList.toggle("has-status-bar", visible);
   }
@@ -114,8 +119,13 @@ export function createStatusBar(opts: StatusBarOptions): StatusBarView {
           }),
         );
       }
-      setVisible(config.visible);
+      configVisible = config.visible;
+      applyVisibility();
       this.refreshMode();
+    },
+    setHidden(next) {
+      hidden = next;
+      applyVisibility();
     },
     setValues(next) {
       values = next;

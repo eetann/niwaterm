@@ -39,6 +39,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `popup open` / `close` / `toggle` / `promote` — タイル・タブに所属しない一時的なポップアップ画面（tmuxのpopup/floating相当。`open`は`--cwd`/`--width`/`--height`指定可、コマンド指定でワンショット実行）
 - `browser navigate` / `get-text` / `get-html` / `screenshot` — ブラウザタブ操作
 - `sidebar switch --view <viewId>` — サイドバーに出すビューの切替（ワークスペース一覧の`workspaces`、または設定の`customViews`のid。idは`config show`で確認）
+- `status-bar refresh [--item <id>]` / `status-bar toggle [--visible on|off]` — ステータスバーの部品の評価し直し・表示切り替え（全ウィンドウ共通。部品のidは`config show`で確認）
 - `layout list` / `apply <name>` — niwaterm.config.tsまたはプロジェクトローカルの`.niwaterm/config.ts`で定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う。`--startup`を付けるとそのBoardが次回起動時も同じプリセットで組み直される（`board startup`で後から切替・解除可）
   - ビルトインの`empty`は設定不要で使える。`layout apply empty --replace`でBoardをタイル1つ・タブ1つへ畳み、残る1タブもシェルを起動し直す（動いていたプロセスは全部止まる。引き継ぐのは作業ディレクトリだけ）。同名を設定に定義すればそちらが優先される
   - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show cli`の「プロジェクトローカルのレイアウト」節

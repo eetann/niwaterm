@@ -93,4 +93,22 @@ describe("fromConfig", () => {
     const sources = fromConfig(sections([{ key: "phases", value: "(なし)" }], "board"));
     expect(sources.get("boardPhase")).toEqual([]);
   });
+
+  test("ステータスバーは部品のidが候補で、出さない設定のプレースホルダは除く", () => {
+    const sources = fromConfig(
+      sections(
+        [
+          { key: "git", value: "tab-var:branch" },
+          { key: "right-1", value: "builtin:cwd" },
+        ],
+        "statusBar",
+      ),
+    );
+    expect(sources.get("statusBarItem")).toEqual([
+      { value: "git", description: "tab-var:branch" },
+      { value: "right-1", description: "builtin:cwd" },
+    ]);
+    const hidden = fromConfig(sections([{ key: "items", value: "(なし)" }], "statusBar"));
+    expect(hidden.get("statusBarItem")).toEqual([]);
+  });
 });

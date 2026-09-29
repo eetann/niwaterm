@@ -7,7 +7,7 @@ import type { LayoutsConfig } from "@niwaterm/config";
 import { BUILTIN_LAYOUT_DESCRIPTIONS } from "./builtin-layouts";
 import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
-import { createIpcServer, type IpcServer } from "./ipc-server";
+import { createIpcServer, type IpcServer, type StatusBarOps } from "./ipc-server";
 import type { TerminalSession, TerminalSessionOptions } from "./terminal-session";
 import { listLeaves, type TileLeaf, type TileSplit } from "./tile-layout";
 import { createWindowManager } from "./window-manager";
@@ -4558,5 +4558,107 @@ describe("ウィンドウ（複数OSウィンドウ）", () => {
     const body = (await res.json()) as { ok: true; workspaceId: string; tabId: string };
     expect(body.tabId).toBe(tempTabId);
     expect(body.workspaceId).toBe(wm.getActiveWorkspaceId(created.windowId));
+  });
+});
+
+describe("POST /status-bar/*", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** statusBarOpsはcreateIpcServerの最後の引数なので、間の既定値はundefinedで埋める */
+  function createServerWith(ops: StatusBarOps) {
+    const { mgr } = createTestWorkspaceManager();
+    return createIpcServer(
+      socketPath,
+      mgr,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ops,
+    );
+  }
+
+  function post(path: string, body: unknown) {
+    return fetch(`http://localhost${path}`, {
+      unix: socketPath,
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function recordingOps() {
+    const refreshed: Array<string | undefined> = [];
+    const toggled: Array<boolean | undefined> = [];
+    const ops: StatusBarOps = {
+      refresh(itemId) {
+        refreshed.push(itemId);
+        return itemId === "missing" ? { ok: false, error: "not found" } : { ok: true };
+      },
+      toggle(visible) {
+        toggled.push(visible);
+        return { ok: true, visible: visible ?? false };
+      },
+    };
+    return { ops, refreshed, toggled };
+  }
+
+  test("refreshはitemIdを省略でき、未知のidは404を返す", async () => {
+    const { ops, refreshed } = recordingOps();
+    server = await createServerWith(ops);
+
+    expect((await post("/status-bar/refresh", {})).status).toBe(200);
+    expect((await post("/status-bar/refresh", { itemId: "git" })).status).toBe(200);
+    const missing = await post("/status-bar/refresh", { itemId: "missing" });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ ok: false, error: "not found" });
+    expect((await post("/status-bar/refresh", { itemId: 1 })).status).toBe(400);
+    expect(refreshed).toEqual([undefined, "git", "missing"]);
+  });
+
+  test("toggleはvisibleを省略でき、真偽値以外は400を返す", async () => {
+    const { ops, toggled } = recordingOps();
+    server = await createServerWith(ops);
+
+    const res = await post("/status-bar/toggle", { visible: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, visible: true });
+    expect((await post("/status-bar/toggle", {})).status).toBe(200);
+    expect((await post("/status-bar/toggle", { visible: "on" })).status).toBe(400);
+    expect(toggled).toEqual([true, undefined]);
+  });
+
+  test("statusBarOpsを渡さないとエラーを返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await post("/status-bar/toggle", {});
+    expect(res.status).toBe(409);
+    expect((await res.json()).ok).toBe(false);
   });
 });

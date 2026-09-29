@@ -251,6 +251,10 @@ const UNASSIGNED_BINDING_ACTIONS = [
   "clear-board-startup",
   // prev-sidebar-viewも既定キーを持たない（customViewが1つだけならnext-sidebar-viewの往復で足りるため）
   "prev-sidebar-view",
+  // toggle-status-bar・refresh-status-barも既定キーを持たない（バーを隠すのは画面を広く使いたい人の
+  // 好みで、再描画は外部の状態を読むrenderを書いた人だけが要る操作のため）
+  "toggle-status-bar",
+  "refresh-status-bar",
   // close-boardは既定キーを持たない（Boardを中のタブごと消す破壊的操作で、tmuxにもbind-key &（確認付きの
   // kill-window）に相当するキーしか無いため。ユーザーの好みに委ねる）
   "close-board",

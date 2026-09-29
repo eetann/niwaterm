@@ -1561,4 +1561,38 @@ describe("resolveStatusBar", () => {
       restore();
     }
   });
+
+  test("idを付けた部品はそのidで、不正・重複・既定idの形は警告して区画-番号へ落とす", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const def = resolveStatusBar(
+        {
+          statusBar: {
+            left: [{ id: "git", source: "tab-var:branch" }],
+            right: [
+              { id: "git", source: "builtin:cwd" },
+              { id: "has space", source: "builtin:cwd" },
+              { id: "left-0", source: "builtin:cwd" },
+              { id: "clock_1", source: "builtin:board" },
+            ],
+          },
+        },
+        diag,
+      );
+      expect(def.components.map((entry) => entry.id)).toEqual([
+        "git",
+        "right-0",
+        "right-1",
+        "right-2",
+        "clock_1",
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "statusBar.right[0].id",
+        "statusBar.right[1].id",
+        "statusBar.right[2].id",
+      ]);
+    } finally {
+      restore();
+    }
+  });
 });

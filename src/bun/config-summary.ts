@@ -24,6 +24,7 @@ import type {
 import { formatSidebarBoardStatusSource } from "@niwaterm/config";
 import type { ConfigDiagnostic } from "./config-diagnostics";
 import { buildKeybindList } from "./keybind-list";
+import type { StatusBarComponentEntry, StatusBarDefinition } from "./status-bar";
 
 /** 値が無い項目の表示。未設定でも既定値で動く項目はnoteへフォールバック先を書く */
 const UNSET = "(未設定)";
@@ -82,6 +83,7 @@ export interface ConfigSummaryInput {
   board: ResolvedBoardConfig;
   sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
+  statusBar: StatusBarDefinition;
 }
 
 /** background-imageの値がdata URIとして埋め込まれた画像かどうかと、そのMIMEタイプ */
@@ -197,6 +199,35 @@ function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySectio
       },
       { key: "direct", value: `${directEntries}件`, note: "prefix不要で即時発火するバインド" },
     ],
+  };
+}
+
+function statusBarComponentValue(entry: StatusBarComponentEntry): string {
+  if (entry.source === null) {
+    return entry.interval === null ? "render" : `render (${entry.interval}msごと)`;
+  }
+  return entry.source.kind === "builtin"
+    ? `builtin:${entry.source.id}`
+    : `tab-var:${entry.source.name}`;
+}
+
+/** 部品はidをキーに並べる。`niwaterm status-bar refresh --item`で指す名前をここで引けるようにする */
+function statusBarSection(statusBar: StatusBarDefinition): ConfigSummarySection {
+  if (!statusBar.visible) {
+    return {
+      name: "statusBar",
+      entries: [
+        { key: "items", value: "(なし)", note: "statusBar: falseか全区画が空のため出さない" },
+      ],
+    };
+  }
+  return {
+    name: "statusBar",
+    entries: statusBar.components.map((entry) => ({
+      key: entry.id,
+      value: statusBarComponentValue(entry),
+      note: entry.run === undefined ? entry.section : `${entry.section}・押せる`,
+    })),
   };
 }
 
@@ -343,6 +374,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
           },
         ],
       },
+      statusBarSection(input.statusBar),
       customViewsSection(input.customViews),
     ],
   };

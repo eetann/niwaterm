@@ -963,6 +963,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       statusBarValues: ({ values }: { values: Record<string, StatusBarValue> }) => {
         statusBar.setValues(values);
       },
+      statusBarHidden: ({ hidden }: { hidden: boolean }) => {
+        statusBar.setHidden(hidden);
+      },
       hoverButtonTabs: ({ byTabId }: { byTabId: Record<TabId, string[]> }) => {
         hoverButtons.setActiveButtons(byTabId);
       },
@@ -3740,6 +3743,15 @@ function handleTileCommand(cmd: TileCommand): void {
   }
   if (cmd.type === "cycleSidebarView") {
     cycleSidebarView(cmd.delta);
+    return;
+  }
+  // ステータスバーの表示状態は全ウィンドウ共通でbun側が持つため、切り替えもbunへ任せる
+  if (cmd.type === "toggleStatusBar") {
+    sendMessage("toggleStatusBar");
+    return;
+  }
+  if (cmd.type === "refreshStatusBar") {
+    sendMessage("refreshStatusBar");
     return;
   }
   if (cmd.type === "showSidebarView") {
