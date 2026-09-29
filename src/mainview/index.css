@@ -194,7 +194,7 @@ html.scrollbar-rebuild * {
 }
 
 /*
- * 半透明の地はビューポートを隙間なく分割する#sidebar・#sidebar-divider・#screen・#status-barへ
+ * 半透明の地はビューポートを隙間なく分割する#sidebar・#screen・#status-barへ
  * 分けて置き、bodyには置かない。半透明の塗りは重ねた枚数だけ不透明に近づくため
  * （不透明度0.8を2枚重ねると0.96になる）、1ピクセルあたり1枚に保たないと
  * 領域ごとに透け方がばらつく。これらの内側にあるクロームも、地を塗り直すのではなく
@@ -243,10 +243,16 @@ html.has-status-bar {
   display: flex;
   flex-direction: column;
   background-color: color-mix(in srgb, var(--chrome-bg) var(--term-bg-opacity), transparent);
-  border-right: 1px solid var(--ui-border);
 }
 
+/*
+ * 幅を持たせず、ドラッグの当たり判定は.divider::beforeのはみ出しだけで取る。幅を持たせると
+ * #screenのpaddingに上乗せされ、サイドバーとタイルの間がタイル同士の隙間より太く見える。
+ * 右側のはみ出しは後続の#screenに隠れるので、z-indexで前に出す
+ */
 #sidebar-divider {
+  flex: 0 0 0;
+  z-index: 1;
   cursor: col-resize;
 }
 
