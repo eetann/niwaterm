@@ -60,3 +60,13 @@ ghostty側でフォーマッタの実装が変わって想定の箇所が見つ�
 手元のdylibが古いままのことがある。`bun test src/bun/ghostty.test.ts`で、実際に読み込まれる
 vendorのdylibが直っているかを確かめられる。落ちたら`mise run build:vendor:mac` /
 `mise run build:vendor:win`でビルドし直す。
+
+WSLで`bun test`を回すときに読み込まれるのは、Windows向けのDLLではなくLinux向けの
+`vendor/libghostty/lib/libghostty-vt.so.0.1.0`。`build:vendor:win`はこれを作り直さないため、
+WSLだけでテストが落ちることがある。その場合は`-Dtarget`を付けずにネイティブビルドする。
+
+```sh
+bun scripts/patch-ghostty-formatter.ts vendor/libghostty
+cd vendor/libghostty
+mise exec zig@0.16.0 -- zig build -Demit-lib-vt -Doptimize=ReleaseFast --prefix "$PWD"
+```
