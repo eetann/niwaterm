@@ -1,5 +1,6 @@
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -369,6 +370,9 @@ html.has-status-bar {
   cursor: pointer;
   border-radius: 3px;
   padding: 0 4px;
+  transition:
+    background-color 120ms,
+    color 120ms;
 }
 .status-item.clickable:hover {
   background: color-mix(in srgb, var(--term-fg) 12%, transparent);
@@ -420,6 +424,7 @@ html.has-status-bar {
   color: inherit;
   font: inherit;
   cursor: pointer;
+  transition: border-color 120ms;
 }
 
 #no-board-new:hover {
@@ -463,6 +468,7 @@ html.has-status-bar {
   border-radius: var(--tile-radius);
   outline: 1px solid var(--ui-border);
   outline-offset: -1px;
+  transition: outline-color 120ms;
   /*
    * タイル自身は地を塗らないので、影は枠の外側へ落ちる。隣のタイルへはみ出した分は
    * position指定のある中身（ターミナル描画）より先に描かれるため、文字の上には乗らない
@@ -814,6 +820,7 @@ html.has-status-bar {
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 120ms;
 }
 .hover-item:hover {
   background: color-mix(in srgb, var(--ui-accent) 25%, transparent);

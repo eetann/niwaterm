@@ -613,7 +613,7 @@ export function SidebarWorkspaceList({
             }}
             className={cn(
               // ガイド線は透明なborderの色替えで出す（ワークスペース行と同じ理由）
-              "flex w-full flex-col rounded-md border-y-2 border-transparent text-left hover:bg-accent",
+              "flex w-full flex-col rounded-md border-y-2 border-transparent text-left transition-colors hover:bg-accent",
               board.active && "bg-accent",
               dropPosition === "before" && "border-t-sky-400",
               dropPosition === "after" && "border-b-sky-400",
@@ -703,7 +703,7 @@ export function SidebarWorkspaceList({
           data-hint-popup-workspace-id={workspaceId}
           onClick={() => onSelectPopup(workspaceId)}
           title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
-          className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md hover:bg-accent"
+          className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md transition-colors hover:bg-accent"
         >
           <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
@@ -761,7 +761,7 @@ export function SidebarWorkspaceList({
                 type="button"
                 tabIndex={-1}
                 onClick={() => toggleCollapsedWorkspace(workspace.workspaceId)}
-                className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
               >
                 <ChevronRight
                   className={cn(
@@ -798,7 +798,7 @@ export function SidebarWorkspaceList({
                         );
                       }}
                       className={cn(
-                        "min-w-0 flex-1 truncate text-left text-xs font-bold text-muted-foreground hover:text-foreground",
+                        "min-w-0 flex-1 truncate text-left text-xs font-bold text-muted-foreground transition-colors hover:text-foreground",
                         workspace.active && "text-foreground",
                       )}
                     >
