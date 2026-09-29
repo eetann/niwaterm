@@ -15,8 +15,10 @@ import {
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
   type ResolvedSidebarBoardStatusItem,
+  type ResolvedStatusBarConfig,
   resolveBoardPhase,
   type ShellProfile,
+  type StatusBarValue,
   type TabBarMode,
   type TitleBarMode,
   WORKSPACES_VIEW_ID,
@@ -55,6 +57,7 @@ import {
 import { DRAG_REGION_CLASS } from "./drag-region";
 import { createHintMode, type HintTarget } from "./hint-mode";
 import { createHoverButtons } from "./hover-buttons";
+import { createStatusBar, type StatusBarMode } from "./status-bar";
 import { shouldRecoverImeFocus } from "./ime-focus";
 import { keyToBytes } from "./key-to-bytes";
 import { compileLinkRules, type CompiledLinkRule, findLinkAt, type LinkSpan } from "./link-detect";
@@ -843,6 +846,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           renderNoBoard();
           lastWorkspaces = p.workspaces;
           if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
+          statusBar.refreshMode();
           return;
         }
         setNoBoardVisible(false);
@@ -900,6 +904,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             updateImePosition(renderState.cursorX, renderState.cursorY);
           }
         }
+        // コピーモードの出入り・フォーカス中タブの切り替えはどちらも描画で届く
+        statusBar.refreshMode();
       },
       config: ({
         keybindings,
@@ -908,6 +914,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link,
         customViews: views,
         hoverButtons: hoverButtonConfigs,
+        statusBar: statusBarConfig,
         shellProfiles: profiles,
         boardPhases: phases,
         boardStatus,
@@ -919,6 +926,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
         hoverButtons: ResolvedHoverButtonConfig[];
+        statusBar: ResolvedStatusBarConfig;
         shellProfiles: ShellProfile[];
         boardPhases: ResolvedBoardPhase[];
         boardStatus: ResolvedSidebarBoardStatusItem[];
@@ -933,6 +941,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         compiledLinkRules = compileLinkRules(link.rules);
         applyCustomViews(views);
         hoverButtons.setConfig(hoverButtonConfigs);
+        statusBar.setConfig(statusBarConfig);
         shellProfiles = profiles;
         shellProfilesVersion++;
         boardPhases = phases;
@@ -950,6 +959,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         // 開いたままのモーダルも最新値へ追従させる
         lastConfigSummary = configSummary;
         renderConfigDialog();
+      },
+      statusBarValues: ({ values }: { values: Record<string, StatusBarValue> }) => {
+        statusBar.setValues(values);
       },
       hoverButtonTabs: ({ byTabId }: { byTabId: Record<TabId, string[]> }) => {
         hoverButtons.setActiveButtons(byTabId);
@@ -4300,6 +4312,33 @@ document.documentElement.addEventListener("mouseleave", () => {
   hoverButtons.handleMouseLeave();
 });
 
+// ---- ウィンドウ下端のステータスバー（設定のstatusBar）----
+// 部品の値はbun側（ユーザーのrender関数）で評価されて届く。ここはbuiltin:modeの元になる
+// キー入力のモードを渡すのと、押された部品をbunへ伝える繋ぎ込みだけを行う
+
+function currentStatusBarMode(): StatusBarMode {
+  if (keybindResolver.isAwaitingSecondKey()) return "prefix";
+  if (currentTabId !== null && copyModeTabIds.has(currentTabId)) return "copy";
+  return "normal";
+}
+
+const statusBar = createStatusBar({
+  container: document.getElementById("status-bar")!,
+  getMode: currentStatusBarMode,
+  runItem: (id) => {
+    sendMessage("runStatusBarItem", { id });
+  },
+  refocusTerminal: () => {
+    imeEl.focus({ preventScroll: true });
+  },
+});
+
+// prefixキー・2打目キーはbunへ届かず描画も起きないため、打鍵のたびに見直す。
+// 本体のkeydownリスナより後に登録しているので、この時点で待ち状態は更新済み
+document.addEventListener("keydown", () => {
+  statusBar.refreshMode();
+});
+
 // ---- ターミナル出力の中のリンク ----
 // OSC 8ハイパーリンク（フォーマッタが<a href>として出力する）と、link.rulesの正規表現で
 // 画面テキストから見つけた素のURLの両方を、修飾キー＋クリックで開く。修飾キーを要求するのは、
@@ -4529,6 +4568,7 @@ window.addEventListener("focus", () => {
 window.addEventListener("blur", () => {
   sendMessage("windowFocusChanged", { focused: false });
   keybindResolver.reset();
+  statusBar.refreshMode();
 });
 imeEl.focus({ preventScroll: true });
 

@@ -10,6 +10,7 @@ import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
 import type { ShellConfig } from "./shell";
 import type { SidebarConfig } from "./sidebar";
+import type { StatusBarConfig } from "./status-bar";
 import type { TerminalConfig } from "./terminal";
 import type { WorkspaceConfig } from "./workspace";
 import type { WorktreeConfig } from "./worktree";
@@ -113,6 +114,13 @@ export interface NiwatermConfig {
    * 例: { boardStatus: ["builtin:branch", { source: "tab-var:ticket", prefix: "#" }] }
    */
   sidebar?: SidebarConfig;
+  /**
+   * ウィンドウ下端のステータスバー。左・中央・右の3区画へ部品を並べる（tmuxのstatus-left/right、
+   * lualine相当）。部品はビルトイン（`builtin:mode`等）・タブ変数（`tab-var:<name>`）・render関数で書け、
+   * runを書いた部品は押せる。未指定の区画は既定値（左にモード、右にcwd）のまま。falseなら出さない。
+   * 例: { right: ["tab-var:branch", "builtin:cwd", { render: () => new Date().toLocaleTimeString(), interval: 1000 }] }
+   */
+  statusBar?: StatusBarConfig | false;
   /**
    * git worktree管理の設定。新規ワークツリーの置き場所テンプレート（worktree.dir）と、
    * 作成後の開き方の既定値（worktree.open）を指定する。

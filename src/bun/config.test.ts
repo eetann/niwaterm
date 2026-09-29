@@ -8,6 +8,7 @@ import {
   DEFAULT_HOVER_HANDLE_ICON,
   DEFAULT_HOVER_HANDLE_SHAPE,
   DEFAULT_HOVER_TRIGGER_PX,
+  STATUS_BAR_MIN_INTERVAL_MS,
   HOVER_TRIGGER_MAX_PX,
   defaultAppearance,
   defaultBoardConfig,
@@ -38,6 +39,7 @@ import {
   resolveSelectionMenu,
   restoreConfigDirInMessage,
   resolveShell,
+  resolveStatusBar,
   resolveShellProfiles,
   resolveSidebar,
   resolveTerminal,
@@ -1462,5 +1464,101 @@ describe('設定ファイルのniwa.on("bell")', () => {
     resolveKeybindings({ keybindings: (niwa) => niwa.keybind("d", "close-tile") }, api);
 
     expect(api.extractBellHandler()).toBeNull();
+  });
+});
+
+describe("resolveStatusBar", () => {
+  const sourcesOf = (def: ReturnType<typeof resolveStatusBar>) =>
+    def.components.map((entry) => [
+      entry.id,
+      entry.source === null
+        ? "render"
+        : `${entry.source.kind}:${"id" in entry.source ? entry.source.id : entry.source.name}`,
+    ]);
+
+  test("未指定なら既定の並び（左にモード、右にcwd）で出す", () => {
+    const def = resolveStatusBar(null);
+    expect(def.visible).toBe(true);
+    expect(sourcesOf(def)).toEqual([
+      ["left-0", "builtin:mode"],
+      ["right-0", "builtin:cwd"],
+    ]);
+  });
+
+  test("falseなら出さない", () => {
+    expect(resolveStatusBar({ statusBar: false })).toEqual({
+      visible: false,
+      css: "",
+      components: [],
+    });
+  });
+
+  test("書いた区画だけ差し替え、書かなかった区画は既定の並びのまま", () => {
+    const def = resolveStatusBar({
+      statusBar: { right: ["tab-var:branch", { source: "builtin:board", prefix: "@" }] },
+    });
+    expect(sourcesOf(def)).toEqual([
+      ["left-0", "builtin:mode"],
+      ["right-0", "tab-var:branch"],
+      ["right-1", "builtin:board"],
+    ]);
+    expect(def.components[2]?.prefix).toBe("@");
+  });
+
+  test("全区画を空にするとバー自体を出さない", () => {
+    expect(resolveStatusBar({ statusBar: { left: [], right: [] } }).visible).toBe(false);
+  });
+
+  test("renderはsourceより優先し、intervalは下限へ切り上げて警告する", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const render = () => "x";
+      const def = resolveStatusBar(
+        {
+          statusBar: {
+            left: [],
+            right: [
+              { render, source: "builtin:cwd", interval: 10 },
+              { render, interval: 1000 },
+            ],
+          },
+        },
+        diag,
+      );
+      expect(def.components.map((entry) => [entry.source, entry.interval])).toEqual([
+        [null, STATUS_BAR_MIN_INTERVAL_MS],
+        [null, 1000],
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual(["statusBar.right[0].interval"]);
+    } finally {
+      restore();
+    }
+  });
+
+  test("不正な部品だけ落として警告し、区画が配列でなければ既定の並びへ落とす", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const def = resolveStatusBar(
+        {
+          statusBar: {
+            left: "builtin:mode" as never,
+            right: ["builtin:nope", 42 as never, { render: "x" as never }, "tab-var:ok"],
+          },
+        },
+        diag,
+      );
+      expect(sourcesOf(def)).toEqual([
+        ["left-0", "builtin:mode"],
+        ["right-3", "tab-var:ok"],
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "statusBar.left",
+        "statusBar.right[0].source",
+        "statusBar.right[1]",
+        "statusBar.right[2].render",
+      ]);
+    } finally {
+      restore();
+    }
   });
 });

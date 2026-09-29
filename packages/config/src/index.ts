@@ -102,6 +102,24 @@ export {
 } from "./sidebar";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export {
+  DEFAULT_STATUS_BAR,
+  parseStatusBarSource,
+  type ResolvedStatusBarConfig,
+  type ResolvedStatusBarItem,
+  STATUS_BAR_MIN_INTERVAL_MS,
+  STATUS_BAR_SECTIONS,
+  type StatusBarBuiltin,
+  type StatusBarComponent,
+  type StatusBarComponentConfig,
+  type StatusBarConfig,
+  type StatusBarContext,
+  type StatusBarRenderFn,
+  type StatusBarSection,
+  type StatusBarSegment,
+  type StatusBarSource,
+  type StatusBarValue,
+} from "./status-bar";
+export {
   defaultTerminalConfig,
   type ResolvedTerminalConfig,
   type TerminalConfig,

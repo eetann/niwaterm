@@ -67,6 +67,11 @@ import {
   type ResolvedLinkRule,
   type ResolvedMouseConfig,
   type ResolvedSidebarConfig,
+  DEFAULT_STATUS_BAR,
+  parseStatusBarSource,
+  STATUS_BAR_MIN_INTERVAL_MS,
+  STATUS_BAR_SECTIONS,
+  type StatusBarComponentConfig,
   toResolvedLinkRule,
   type ResolvedTerminalConfig,
   type ResolvedUiColors,
@@ -95,6 +100,7 @@ import {
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
+import type { StatusBarComponentEntry, StatusBarDefinition } from "./status-bar";
 import type { WorkspaceManager } from "./workspace-manager";
 
 /**
@@ -1048,6 +1054,148 @@ export function resolveHoverButtons(
   return groups;
 }
 
+/** 文字列フィールド。未指定は空文字列、文字列でなければ警告して空文字列へ落とす */
+function resolveOptionalString(value: unknown, scope: string, diag: ConfigDiagnostics): string {
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  diag.warn(scope, `文字列ではないため無視します: ${describeValue(value)}`);
+  return "";
+}
+
+/** renderを呼び直す周期。数値でなければ警告して周期無し、下限未満は切り上げて警告する */
+function resolveStatusBarInterval(
+  value: unknown,
+  scope: string,
+  diag: ConfigDiagnostics,
+): number | null {
+  if (value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    diag.warn(scope, `正の数値ではないため状況が変わった時だけ呼びます: ${describeValue(value)}`);
+    return null;
+  }
+  const interval = Math.max(STATUS_BAR_MIN_INTERVAL_MS, Math.round(value));
+  if (interval !== value) {
+    diag.warn(
+      scope,
+      `${STATUS_BAR_MIN_INTERVAL_MS}ms以上の整数へ丸めます: ${value} -> ${interval}`,
+    );
+  }
+  return interval;
+}
+
+function resolveStatusBarComponent(
+  raw: unknown,
+  id: string,
+  section: StatusBarComponentEntry["section"],
+  scope: string,
+  diag: ConfigDiagnostics,
+): StatusBarComponentEntry | null {
+  const entry: StatusBarComponentEntry = {
+    id,
+    section,
+    source: null,
+    render: undefined,
+    interval: null,
+    prefix: "",
+    color: "",
+    tooltip: "",
+    run: undefined,
+  };
+  const user: StatusBarComponentConfig | null =
+    typeof raw === "string"
+      ? { source: raw }
+      : typeof raw === "object" && raw !== null
+        ? (raw as StatusBarComponentConfig)
+        : null;
+  if (user === null) {
+    diag.warn(scope, `文字列かオブジェクトでないためこの部品だけ無視します: ${describeValue(raw)}`);
+    return null;
+  }
+  if (user.render !== undefined) {
+    if (typeof user.render !== "function") {
+      diag.warn(
+        `${scope}.render`,
+        `関数ではないためこの部品だけ無視します: ${describeValue(user.render)}`,
+      );
+      return null;
+    }
+    entry.render = user.render;
+    entry.interval = resolveStatusBarInterval(user.interval, `${scope}.interval`, diag);
+  } else {
+    const source = typeof user.source === "string" ? parseStatusBarSource(user.source) : null;
+    if (source === null) {
+      diag.warn(
+        `${scope}.source`,
+        `builtin:mode / builtin:cwd / builtin:workspace / builtin:board / tab-var:<name>のいずれでもないためこの部品だけ無視します: ${describeValue(user.source)}`,
+      );
+      return null;
+    }
+    entry.source = source;
+    if (user.interval !== undefined) {
+      diag.warn(`${scope}.interval`, "renderを持たない部品では使わないため無視します");
+    }
+  }
+  entry.prefix = resolveOptionalString(user.prefix, `${scope}.prefix`, diag);
+  entry.color = resolveOptionalString(user.color, `${scope}.color`, diag);
+  entry.tooltip = resolveOptionalString(user.tooltip, `${scope}.tooltip`, diag);
+  if (user.run !== undefined) {
+    if (typeof user.run === "function") entry.run = user.run;
+    else
+      diag.warn(`${scope}.run`, `関数ではないため押しても何もしません: ${describeValue(user.run)}`);
+  }
+  return entry;
+}
+
+/**
+ * ステータスバーを解決する。falseなら出さない。区画ごとに、未指定なら既定の並び、
+ * 配列でなければ警告して既定の並びへ落とす。不正な部品は警告してその部品だけ飛ばす
+ * （1件の書き間違いでバーごと消えると、設定のどこが悪いのか画面から分からなくなるため）。
+ * 全区画が空になった場合はバー自体を出さない（空の帯が1行ぶん場所を取るだけになるため）
+ */
+export function resolveStatusBar(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): StatusBarDefinition {
+  const user = userConfig?.statusBar;
+  if (user === false) return { visible: false, css: "", components: [] };
+  let fields: Record<string, unknown> = {};
+  if (user !== undefined) {
+    if (typeof user === "object" && user !== null) fields = user as Record<string, unknown>;
+    else
+      diag.warn(
+        "statusBar",
+        `falseかオブジェクトでないため既定の並びを使います: ${describeValue(user)}`,
+      );
+  }
+  const components: StatusBarComponentEntry[] = [];
+  for (const section of STATUS_BAR_SECTIONS) {
+    let list: unknown = fields[section];
+    if (list === undefined) list = DEFAULT_STATUS_BAR[section];
+    else if (!Array.isArray(list)) {
+      diag.warn(
+        `statusBar.${section}`,
+        `配列ではないため既定の並びを使います: ${describeValue(list)}`,
+      );
+      list = DEFAULT_STATUS_BAR[section];
+    }
+    for (const [index, raw] of (list as unknown[]).entries()) {
+      const entry = resolveStatusBarComponent(
+        raw,
+        `${section}-${index}`,
+        section,
+        `statusBar.${section}[${index}]`,
+        diag,
+      );
+      if (entry) components.push(entry);
+    }
+  }
+  return {
+    visible: components.length > 0,
+    css: resolveOptionalString(fields["css"], "statusBar.css", diag),
+    components,
+  };
+}
+
 /**
  * 新規タブ作成時に使うデフォルトシェルを解決する。未指定・不正値はundefined
  * （pty.ts側のOS標準シェルにフォールバックする。appearance/browserと異なりOS共通の
@@ -1221,6 +1369,13 @@ export async function loadAndResolveConfig(
   hoverButtons: ResolvedHoverButtonConfig[];
   /** ホバーボタンの帯を張る判定と、項目の組み立て・実行 */
   hoverButtonsHandle: HoverButtonsHandle;
+  /**
+   * ステータスバーの部品。intervalのタイマーを持つハンドルは、この解決結果を適用すると
+   * 決めてから呼び出し元がniwaと合わせて作る（捨てる解決結果からタイマーが漏れないように）
+   */
+  statusBar: StatusBarDefinition;
+  /** render・runへ渡すniwa API */
+  niwa: Niwa;
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
@@ -1288,6 +1443,8 @@ export async function loadAndResolveConfig(
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
     hoverButtons: hoverButtonsHandle.resolved(),
     hoverButtonsHandle,
+    statusBar: resolveStatusBar(userConfig, diag),
+    niwa: niwaApi.niwa,
     defaultShell,
     shellProfiles,
     layouts: resolveLayouts(userConfig, diag),

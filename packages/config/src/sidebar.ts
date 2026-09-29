@@ -14,7 +14,7 @@ const SIDEBAR_BOARD_STATUS_BUILTINS: readonly SidebarBoardStatusBuiltin[] = [
 ];
 
 /** タブ変数名に許す文字。CLI（`niwaterm tab var set`）が受け付ける範囲と揃える */
-const TAB_VAR_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+export const TAB_VAR_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
 
 const BUILTIN_PREFIX = "builtin:";
 const TAB_VAR_PREFIX = "tab-var:";

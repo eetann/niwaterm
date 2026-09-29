@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import Electrobun, {
   ApplicationMenu,
   BrowserView,
@@ -28,8 +29,11 @@ import type {
   ResolvedMouseConfig,
   ResolvedSidebarBoardStatusItem,
   ResolvedSidebarConfig,
+  ResolvedStatusBarConfig,
   ResolvedTerminalConfig,
   ShellProfile,
+  StatusBarContext,
+  StatusBarValue,
 } from "@niwaterm/config";
 import { defaultBoardConfig, defaultSidebarConfig, scaleLineHeight } from "@niwaterm/config";
 import { AGENT_STATUS_TAB_VAR } from "./board";
@@ -72,7 +76,14 @@ import {
 } from "./persistence";
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
-import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
+import { createStatusBar, type StatusBarHandle } from "./status-bar";
+import {
+  listLeaves,
+  type SplitOrientation,
+  type SplitPlacement,
+  type TabId,
+  type TileId,
+} from "./tile-layout";
 import { enableWindowTransparency } from "./win-window";
 import { sendWindowsNotification } from "./windows-notification";
 import { createMacNotifier } from "./mac-notification";
@@ -256,6 +267,8 @@ export type NiwaRPC = {
       runSelectionMenuItem: { id: string };
       /** ホバーボタンで押された項目。idはhoverButtonItemsで返したもの */
       runHoverButtonItem: { tabId: TabId; buttonId: string; id: string };
+      /** ステータスバーで押された部品。idはconfigのstatusBarで配ったもの */
+      runStatusBarItem: { id: string };
       /**
        * customViewのHTMLがniwaterm.callで呼んだユーザー定義ハンドラ（customViews[].handlers）。
        * 関数の実体はbun側にあるため、webviewはビューのidと名前・payloadだけを送ってくる
@@ -299,6 +312,8 @@ export type NiwaRPC = {
         customViews: ResolvedCustomViewConfig[];
         /** タブの端に出るホバーボタンの定義。どのタブへ帯を張るかはhoverButtonTabsで別に配る */
         hoverButtons: ResolvedHoverButtonConfig[];
+        /** ウィンドウ下端のステータスバーの部品の並び。値はstatusBarValuesで別に配る */
+        statusBar: ResolvedStatusBarConfig;
         shellProfiles: ShellProfile[];
         /** Boardへ付けられるフェーズの候補（board.phases）。サイドバーのメニュー・コマンドパレットに並ぶ */
         boardPhases: ResolvedBoardPhase[];
@@ -312,6 +327,11 @@ export type NiwaRPC = {
        * showの評価はタブの状況が変わった時だけ走るため、内容が前回と変わったときにしか送らない
        */
       hoverButtonTabs: { byTabId: Record<TabId, string[]> };
+      /**
+       * ステータスバーの部品の評価済みの値（部品id → 値）。builtin:modeはwebview側で描くので含まない。
+       * 状況が変わった時・intervalの周期で評価し直し、内容が前回と変わったときにしか送らない
+       */
+      statusBarValues: { values: Record<string, StatusBarValue> };
       /**
        * ホバーボタンを強制的に出したままにする（CLIの`tab hover reveal`）。positionがnullなら解除。
        * 出ている間はマウスの出入りでは引っ込まない
@@ -391,6 +411,7 @@ function render(windowId: WindowId) {
   if (!snap) return;
   dropUnchangedPaletteCss(view, snap);
   sendHoverButtonTabs(view, snap);
+  statusBarHandle?.update(windowId, statusBarContextOf(windowId, snap));
   view.browserWindow.setTitle(
     snap.workspaceIds.length === 1
       ? APP_VARIANT
@@ -442,6 +463,36 @@ function sendHoverButtonTabs(view: WindowView, snap: AppRenderState): void {
 }
 
 /**
+ * ステータスバーのrender・runへ渡す状況。基準はそのウィンドウでフォーカス中のタイルのアクティブタブ。
+ * ワークスペース名・Board名の連番へのフォールバックはサイドバー（sidebar-props.tsの
+ * workspaceLabel・boardLabel）と揃える
+ */
+function statusBarContextOf(windowId: WindowId, snap: AppRenderState): StatusBarContext {
+  const workspaceIndex = snap.workspaces.findIndex(
+    (entry) => entry.workspaceId === snap.activeWorkspaceId,
+  );
+  const workspace = snap.workspaces[workspaceIndex];
+  const boardIndex = workspace?.boards.findIndex((entry) => entry.active) ?? -1;
+  const board = boardIndex >= 0 ? workspace?.boards[boardIndex] : undefined;
+  const leaf = board
+    ? listLeaves(board.layout).find((entry) => entry.id === board.focusedTileId)
+    : undefined;
+  const tabId = leaf?.activeTabId ?? null;
+  const vars = (tabId !== null ? board?.tabVars[tabId] : undefined) ?? {};
+  return {
+    windowId,
+    workspaceId: snap.activeWorkspaceId,
+    workspaceName: workspace?.name || `Workspace ${workspaceIndex + 1}`,
+    boardId: board?.boardId ?? null,
+    boardName: board ? board.name || board.autoName || `Board ${boardIndex + 1}` : null,
+    tabId,
+    cwd: vars["cwd"],
+    vars,
+    tabName: tabId !== null ? board?.tabNames[tabId] : undefined,
+  };
+}
+
+/**
  * ホバーボタンのshow・itemsへ渡すタブの状況を組み立てる。cwdはOSC7報告をそのまま
  * タブ変数の"cwd"へ入れているので、varsから引けばよい（selectionMenuと同じ引き方）
  */
@@ -468,6 +519,7 @@ function sendConfig(windowId?: WindowId) {
       link: linkConfig,
       customViews,
       hoverButtons,
+      statusBar: statusBarHandle?.resolved() ?? HIDDEN_STATUS_BAR,
       shellProfiles,
       boardPhases: boardConfig.phases,
       boardStatus: sidebarConfig.boardStatus,
@@ -705,6 +757,13 @@ let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
 let hoverButtons: ResolvedHoverButtonConfig[];
 let hoverButtonsHandle: HoverButtonsHandle;
+/** 設定の初回読み込み前はnull。読み込み前にwebviewへ設定を送ることは無いが、描画は先に走りうる */
+let statusBarHandle: StatusBarHandle | null = null;
+const HIDDEN_STATUS_BAR: ResolvedStatusBarConfig = {
+  visible: false,
+  css: "",
+  sections: { left: [], center: [], right: [] },
+};
 let defaultShell: string | undefined;
 let shellProfiles: ShellProfile[];
 let layouts: LayoutsConfig;
@@ -937,6 +996,11 @@ async function refreshConfig(): Promise<void> {
     runDefaultOpenLink,
   } = next);
   configApplied = true;
+  statusBarHandle?.dispose();
+  statusBarHandle = createStatusBar(next.statusBar, next.niwa, {
+    send: (windowId, values) => rpcSendOf(windowId)?.statusBarValues({ values }),
+    homeDir: homedir(),
+  });
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
   windowManager.applyMaxScrollback(terminalConfig.scrollback);
   // 自動名は付いた時点の方式で固定されるので、方式を変えた分をここで付け直す
@@ -1143,6 +1207,7 @@ function createWindowRpc(windowId: WindowId) {
           views.get(windowId)?.lastPaletteCssByTabId.clear();
           scheduleRender(windowId);
           sendConfig(windowId);
+          statusBarHandle?.resend(windowId);
           focusWebviewOnce(windowId);
         },
         input: ({ tabId, data }: { tabId: TabId; data: string }) => {
@@ -1435,6 +1500,9 @@ function createWindowRpc(windowId: WindowId) {
         }) => {
           void hoverButtonsHandle.run(tabId, buttonId, id);
         },
+        runStatusBarItem: ({ id }: { id: string }) => {
+          void statusBarHandle?.run(windowId, id);
+        },
         customViewCall: ({
           callId,
           viewId,
@@ -1563,6 +1631,7 @@ function finalizeWindow(windowId: WindowId, closeNative: boolean): void {
   if (!view || view.closed) return;
   view.closed = true;
   views.delete(windowId);
+  statusBarHandle?.forget(windowId);
   // window-manager側から畳まれた場合、この時点で既にpersistent判定はfalseになっており
   // 中身も空なので保存は走らない（空のワークスペースで上書きしないための順序）
   saveWindowFrameNow(view);

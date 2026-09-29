@@ -1272,6 +1272,75 @@ sidebar: {
 
 なお、この設定が効くのはステータスラインだけ。**Board名の左のドット（エージェントの状態色）・ベル・ズーム・起動時レイアウト・ワークツリー欠損のアイコンは対象外**で、常に出る。
 
+## ステータスバー（statusBar）
+
+`statusBar`は、ウィンドウ下端に全幅で1本出すステータスバー（tmuxの`status-left`/`status-right`、Neovimのlualineに当たるもの）の設定。左・中央・右の3区画へ部品を並べる。表示の基準は**そのウィンドウでフォーカス中のタイルのアクティブタブ**で、タブ・Board・ワークスペースを切り替えると追従する。
+
+未指定時は左にキー入力のモード、右にcwdが出る。サイドバーに出ている情報（Board名・ブランチ・エージェント状態）とは重ねていない。
+
+```ts
+statusBar: {
+  left: ["builtin:mode", "builtin:board"],
+  right: [
+    { source: "tab-var:branch", prefix: " " },
+    {
+      source: "builtin:cwd",
+      tooltip: "lazygitを開く",
+      run: (ctx, niwa) => niwa.popup.open({ command: "lazygit", cwd: ctx.cwd }),
+    },
+    { render: () => new Date().toLocaleTimeString(), interval: 1000 },
+  ],
+},
+```
+
+- 書かなかった区画は既定の並びのまま（上の例では`center`が既定の空）。区画に空配列`[]`を書けばその区画は何も出さない
+- `statusBar: false`でバーごと消える。全区画が空になった場合も出さない（空の帯が1行ぶん場所を取るだけになるため）
+- バーはターミナルに重ねず、高さぶんをタイルの領域から差し引く（ブラウザタブのネイティブwebviewはHTMLより手前に描かれ、重ねるとバーが隠れるため）
+
+### 部品の書き方
+
+文字列で書いた部品は`source`だけを指定したのと同じ。
+
+| `source` | 出るもの |
+|---|---|
+| `"builtin:mode"` | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押して2打目を待っている間）・`COPY`（コピーモード中）のバッジ。配色は`appearance.ui`の`accent`・`warning`・`success` |
+| `"builtin:cwd"` | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め、マウスを載せると省略前のパスが出る |
+| `"builtin:workspace"` | ワークスペース名（未設定なら`Workspace <n>`） |
+| `"builtin:board"` | Board名（未設定なら自動名・`Board <n>`） |
+| `"tab-var:<name>"` | フォーカス中タブのタブ変数の値（`niwaterm tab var set`で書き込む。ブランチなら`tab-var:branch`） |
+
+値が空の部品は幅を持たずに詰まる。
+
+オブジェクトで書くと次のフィールドを指定できる。
+
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `source` | `string` | 上の表の値。`render`と同時には書けない（`render`が優先される） |
+| `render` | `(ctx, niwa) => StatusBarSegment \| string \| null` | 中身を組み立てる関数。`async`も可。文字列を返せば`text`だけを指定したのと同じで、`null`・空文字列なら出ない |
+| `interval` | `number` | `render`を呼び直す周期(ms)。250ms未満は250msへ切り上げる。省略時は状況が変わった時だけ呼ぶ |
+| `prefix` | `string` | 値の前に出す短いラベル（値が空なら出ない）。区切りの空白が要るならここへ含める |
+| `color` | `string` | 文字色（CSSカラー） |
+| `tooltip` | `string` | マウスを載せた時に出す説明 |
+| `run` | `(ctx, niwa) => void \| Promise<void>` | 部品を押した時の処理。書いた部品だけが押せる見た目になる |
+
+`builtin:mode`には`prefix`・`color`が効かない（モードごとの配色は`appearance.ui`から取る）。
+
+`render`の戻り値（`StatusBarSegment`）は`text`・`html`・`tooltip`・`color`を持てる。`html`は`text`より優先され、niwaterm本体のwebviewへそのまま入るため、外部から来た文字列（コマンド出力等）を埋め込むときは自分でエスケープする。`html`から参照するCSSは`statusBar.css`へ書く（本体のスタイルと衝突しないようclass名を工夫すること）。
+
+### render・runへ渡る状況（`StatusBarContext`）
+
+| フィールド | 意味 |
+|---|---|
+| `windowId` | バーを出しているウィンドウ |
+| `workspaceId` / `workspaceName` | アクティブなワークスペースと表示名 |
+| `boardId` / `boardName` | アクティブなBoardと表示名。Boardが無ければ`null` |
+| `tabId` | フォーカス中タイルのアクティブタブ。Boardが無ければ`null` |
+| `cwd` | そのタブの作業ディレクトリ（未報告なら`undefined`） |
+| `vars` | そのタブのタブ変数 |
+| `tabName` | サイドバーから付けたタブ名（未設定なら`undefined`） |
+
+`render`はこれらのどれかが変わった時にだけ呼ばれる（ターミナルの出力のたびには呼ばれない）。時計のように状況と無関係に変わる値は`interval`で周期的に呼び直す。`render`が例外を投げた部品は何も出さず、エラーはbun側のログへ出る。
+
 ## レイアウト
 
 `layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`にはビルトインのプリセット（`empty`。`docs/guide/cli.md`「ビルトインのプリセット」節）だけが並ぶ。ビルトインと同名のプリセットをここで定義すると、そちらが優先されてビルトイン側は隠れる。
