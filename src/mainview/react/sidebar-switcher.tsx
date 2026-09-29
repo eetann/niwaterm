@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { type Ref, useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** deltaMode=line/page時の1単位あたりの送り量。行はテキスト1行ぶん、ページは表示幅ぶん進める */
 const WHEEL_LINE_PX = 16;
@@ -63,17 +64,48 @@ export function SidebarSwitcher({ views, activeViewId, onSelect }: SidebarSwitch
         className="h-auto w-full justify-start overflow-x-auto rounded-none p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {views.map((view) => (
-          <TabsTrigger
+          <ViewTabTrigger
             key={view.id}
-            ref={view.id === activeViewId ? activeTriggerRef : undefined}
-            value={view.id}
-            className="h-8 min-w-20 flex-1 shrink-0 px-2 text-xs font-bold"
-            title={view.name}
-          >
-            <span className="truncate">{view.name}</span>
-          </TabsTrigger>
+            view={view}
+            triggerRef={view.id === activeViewId ? activeTriggerRef : undefined}
+          />
         ))}
       </TabsList>
     </Tabs>
+  );
+}
+
+/** ビュー名が省略表示（truncate）されているときだけ、全文をツールチップで出す */
+function ViewTabTrigger({
+  view,
+  triggerRef,
+}: {
+  view: SidebarSwitcherView;
+  triggerRef?: Ref<HTMLButtonElement>;
+}) {
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Tooltip
+      open={open}
+      onOpenChange={(next) => {
+        const labelEl = labelRef.current;
+        setOpen(next && !!labelEl && labelEl.scrollWidth > labelEl.clientWidth);
+      }}
+    >
+      <TooltipTrigger asChild>
+        <TabsTrigger
+          ref={triggerRef}
+          value={view.id}
+          className="h-8 min-w-20 flex-1 shrink-0 px-2 text-xs font-bold"
+        >
+          <span ref={labelRef} className="truncate">
+            {view.name}
+          </span>
+        </TabsTrigger>
+      </TooltipTrigger>
+      <TooltipContent>{view.name}</TooltipContent>
+    </Tooltip>
   );
 }

@@ -70,6 +70,7 @@ import { compileLinkRules, type CompiledLinkRule, findLinkAt, type LinkSpan } fr
 import { domMouseButton, mouseModsFromEvent, wheelReport } from "./mouse";
 import { extractNavigatedUrl } from "./navigated-url";
 import { normalizeUrl } from "./normalize-url";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { BrowserToolbar } from "./react/browser-toolbar";
 import {
   CommandPalette,
@@ -213,6 +214,8 @@ const dividerElBySplitId = new Map<TileId, HTMLDivElement>();
  *
  * さらに、`renderOnEvent`が将来ホットパスへ紛れ込んだ場合に気づけるよう、
  * 1秒あたりのrender回数が閾値を超えたら一度だけ警告する。
+ *
+ * React rootが領域ごとに分かれているため、Tooltipが要求するTooltipProviderもここで全rootへ被せる。
  */
 type MemoRoot = {
   /** keyが前回と同じならrenderしない（elementの構築自体も行わない） */
@@ -248,7 +251,7 @@ function createMemoRoot(container: Element, name: string): MemoRoot {
           `（rendererプロセスのメモリリークの原因になる）`,
       });
     }
-    root.render(element);
+    root.render(createElement(TooltipProvider, null, element));
   };
 
   return {
@@ -961,7 +964,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         sidebarConfigVersion++;
         if (sidebarOpen) renderSidebar(lastWorkspaces, activeWorkspaceId);
         // configの到達タイミングは既存タイルの最終renderより後になりうるため、
-        // ドロップダウンの中身（shellProfiles）を最新化するために明示的に再renderする
+        // ドロップダウンの中身（shellProfiles）とツールチップのショートカット表示を最新化するために
+        // 明示的に再renderする
         for (const tileId of tabBarReactRootByTileId.keys()) renderTileTabBar(tileId);
         // ショートカット表示（prefix+2打目キー）を最新のkeybindingsで再renderする
         renderCommandPalette();
@@ -2005,7 +2009,8 @@ function renderTileTabBar(tileId: TileId): void {
     bell: lastBellTabIds.has(tabId),
   }));
   const zoomed = zoomedTileId === tileId;
-  let key = `${shellProfilesVersion}\u0000${leaf.activeTabId}\u0000${zoomed}`;
+  const newTabShortcut = shortcutLabelForAction("new-tab");
+  let key = `${shellProfilesVersion}\u0000${newTabShortcut}\u0000${leaf.activeTabId}\u0000${zoomed}`;
   for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}\u0001${tab.bell}`;
   root.renderIfChanged(key, () =>
     createElement(TileTabBar, {
@@ -2014,6 +2019,7 @@ function renderTileTabBar(tileId: TileId): void {
       activeTabId: leaf.activeTabId,
       zoomed,
       shellProfiles,
+      newTabShortcut,
       onSelectTab: (tabId) => {
         switchToTab(tileId, tabId);
         imeEl.focus({ preventScroll: true });

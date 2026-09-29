@@ -1,7 +1,8 @@
 import type { WebviewTagElement } from "electrobun/view";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { extractNavigatedUrl } from "../navigated-url";
 import { normalizeUrl } from "../normalize-url";
 
@@ -14,6 +15,22 @@ export interface BrowserToolbarProps {
    */
   autoFocusUrl?: boolean;
   onRequestTerminalFocus: () => void;
+}
+
+/**
+ * ツールバーの下はブラウザタブのwebview（ネイティブのオーバーレイ）で、HTMLはその裏に隠れる。
+ * 上はウィンドウ上端に接していることが多く、Radixが下へ反転させてしまうため、右（URL欄側）へ出す。
+ * 隣のボタンに被るので、ツールチップ自体はポインタを受けずに閉じるようにする
+ */
+function ToolbarTooltip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip disableHoverableContent>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right" className="pointer-events-none">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 /**
@@ -63,27 +80,43 @@ export function BrowserToolbar({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        disabled={!canGoBack}
-        title="戻る"
-        onClick={() => webviewEl.goBack()}
-      >
-        ←
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        disabled={!canGoForward}
-        title="進む"
-        onClick={() => webviewEl.goForward()}
-      >
-        →
-      </Button>
-      <Button variant="ghost" size="icon-xs" title="再読み込み" onClick={() => webviewEl.reload()}>
-        ⟳
-      </Button>
+      <ToolbarTooltip label="戻る">
+        {/* disabledのボタンはポインタイベントを発火しないため、spanでホバーを受ける */}
+        <span className="inline-flex">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            disabled={!canGoBack}
+            aria-label="戻る"
+            onClick={() => webviewEl.goBack()}
+          >
+            ←
+          </Button>
+        </span>
+      </ToolbarTooltip>
+      <ToolbarTooltip label="進む">
+        <span className="inline-flex">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            disabled={!canGoForward}
+            aria-label="進む"
+            onClick={() => webviewEl.goForward()}
+          >
+            →
+          </Button>
+        </span>
+      </ToolbarTooltip>
+      <ToolbarTooltip label="再読み込み">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="再読み込み"
+          onClick={() => webviewEl.reload()}
+        >
+          ⟳
+        </Button>
+      </ToolbarTooltip>
       <Input
         ref={inputRef}
         type="text"

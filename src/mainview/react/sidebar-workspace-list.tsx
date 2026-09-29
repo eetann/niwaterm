@@ -20,6 +20,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ResolvedBoardPhase } from "@niwaterm/config";
 import { cn } from "@/lib/utils";
 import type { LayoutListEntry } from "../../bun/project-config";
@@ -688,6 +689,21 @@ export function SidebarWorkspaceList({
    * 明確に区別するため、破線の枠＋影で意図的に「浮いている」見た目にする
    */
   function renderPopupCard(workspaceId: WorkspaceId, popup: SidebarPopupItem) {
+    const card = (
+      <button
+        type="button"
+        tabIndex={-1}
+        data-hint-popup-workspace-id={workspaceId}
+        onClick={() => onSelectPopup(workspaceId)}
+        className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md transition-colors hover:bg-accent"
+      >
+        <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
+        <span className="shrink-0 text-[9px] text-muted-foreground">
+          {popup.visible ? "popup" : "最小化"}
+        </span>
+      </button>
+    );
     return (
       <div className="mt-2 flex flex-col gap-1.5">
         <div className="flex items-center gap-1.5 px-1">
@@ -697,20 +713,14 @@ export function SidebarWorkspaceList({
           </span>
           <div className="h-px flex-1 bg-border" />
         </div>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-hint-popup-workspace-id={workspaceId}
-          onClick={() => onSelectPopup(workspaceId)}
-          title={popup.visible ? undefined : "最小化中のポップアップ（クリックで再表示）"}
-          className="flex items-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-accent/40 px-2.5 py-1.5 text-left shadow-md transition-colors hover:bg-accent"
-        >
-          <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
-          <span className="shrink-0 text-[9px] text-muted-foreground">
-            {popup.visible ? "popup" : "最小化"}
-          </span>
-        </button>
+        {popup.visible ? (
+          card
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>{card}</TooltipTrigger>
+            <TooltipContent>最小化中のポップアップ（クリックで再表示）</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     );
   }

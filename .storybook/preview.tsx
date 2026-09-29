@@ -1,5 +1,6 @@
 import type { Decorator, Preview } from "@storybook/react-vite";
 import "../src/mainview/index.css";
+import { TooltipProvider } from "../src/mainview/components/ui/tooltip";
 // index.cssより後に読み込み、同じ詳細度のルールを上書きさせる
 import "./preview.css";
 
@@ -72,7 +73,11 @@ function applyTheme(theme: StoryTheme): void {
 
 const withTheme: Decorator = (Story, context) => {
   applyTheme(THEMES[String(context.globals["theme"])] ?? THEMES["dark"]!);
-  return <Story />;
+  return (
+    <TooltipProvider>
+      <Story />
+    </TooltipProvider>
+  );
 };
 
 const preview: Preview = {

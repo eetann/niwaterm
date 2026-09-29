@@ -1,5 +1,6 @@
 import { ArrowUpToLine, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface PopupToolbarProps {
   onPromote: () => void;
@@ -27,15 +28,30 @@ export function PopupToolbar({ onPromote, onMinimize, onClose }: PopupToolbarPro
       onPointerDown={stopEventPropagation}
       onMouseDown={stopEventPropagation}
     >
-      <Button variant="ghost" size="icon-xs" onClick={onPromote} title="タブへ昇格">
-        <ArrowUpToLine />
-      </Button>
-      <Button variant="ghost" size="icon-xs" onClick={onMinimize} title="最小化">
-        <Minus />
-      </Button>
-      <Button variant="ghost" size="icon-xs" onClick={onClose} title="閉じる">
-        <X />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-xs" onClick={onPromote} aria-label="タブへ昇格">
+            <ArrowUpToLine />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>タブへ昇格</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-xs" onClick={onMinimize} aria-label="最小化">
+            <Minus />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>最小化</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-xs" onClick={onClose} aria-label="閉じる">
+            <X />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>閉じる</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

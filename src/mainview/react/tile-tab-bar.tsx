@@ -14,7 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Kbd } from "@/components/ui/kbd";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TabId, TileId } from "../../bun/tile-layout";
 
 export interface TileTabBarTabItem {
@@ -39,6 +41,8 @@ export interface TileTabBarProps {
   /** このタイルがズーム表示中か。右クリックメニューのラベル出し分けに使う */
   zoomed: boolean;
   shellProfiles: ShellProfile[];
+  /** 新しいタブ（new-tab）のショートカット表記。キーが割り当てられていなければundefined */
+  newTabShortcut?: string;
   onSelectTab: (tabId: TabId) => void;
   onCloseTab: (tabId: TabId) => void;
   onAddTab: () => void;
@@ -62,6 +66,14 @@ const TAB_TRIGGER_CLASS =
   "h-7 flex-none gap-1.5 px-2 text-xs group-data-[orientation=horizontal]/tabs:after:bottom-0";
 
 /**
+ * 新しいタブ・シェル選択ボタンのツールチップ。下はタブの中身で、ブラウザタブならwebview
+ * （ネイティブのオーバーレイ）の裏に隠れる。上はウィンドウ上端に接していることが多く、Radixが
+ * 下へ反転させてしまうため、左（タブ列側）へ出す。隣のボタンやタブに被るので、ツールチップ自体は
+ * ポインタを受けないようにする（Tooltip側のdisableHoverableContentと対）
+ */
+const TOOLTIP_CONTENT_CLASS = "pointer-events-none flex items-center gap-2";
+
+/**
  * Radix TabsTriggerはpointerdown/clickでタブ選択がトリガーされるため、内側の閉じるボタンは
  * onPointerDown/onClick両方でstopPropagationしないと、閉じる前に一瞬そのタブが選択されてしまう。
  */
@@ -75,6 +87,7 @@ export function TileTabBar({
   activeTabId,
   zoomed,
   shellProfiles,
+  newTabShortcut,
   onSelectTab,
   onCloseTab,
   onAddTab,
@@ -216,15 +229,30 @@ export function TileTabBar({
           )}
         </TabsList>
       </Tabs>
-      <Button variant="ghost" size="icon-xs" onClick={onAddTab} title="新しいタブ">
-        <Plus />
-      </Button>
-      <DropdownMenu onOpenChange={(open) => changeInteractive(open ? 1 : -1)}>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs" title="シェルを選択">
-            <ChevronDown />
+      <Tooltip disableHoverableContent>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-xs" onClick={onAddTab} aria-label="新しいタブ">
+            <Plus />
           </Button>
-        </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="left" className={TOOLTIP_CONTENT_CLASS}>
+          新しいタブ
+          {newTabShortcut && <Kbd>{newTabShortcut}</Kbd>}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenu onOpenChange={(open) => changeInteractive(open ? 1 : -1)}>
+        <Tooltip disableHoverableContent>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-xs" aria-label="シェルを選択">
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="left" className={TOOLTIP_CONTENT_CLASS}>
+            シェルを選択
+          </TooltipContent>
+        </Tooltip>
         <DropdownMenuContent
           align="start"
           onCloseAutoFocus={(e) => {
