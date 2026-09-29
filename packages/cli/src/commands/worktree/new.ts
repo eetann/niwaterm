@@ -308,15 +308,17 @@ export default define({
       repoRoot,
       path,
       branch,
+      created: !existing,
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
       ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
-      layout: {
-        ...(ctx.values.layout !== undefined ? { explicit: ctx.values.layout } : {}),
+      boardSetup: {
+        ...(ctx.values.layout !== undefined ? { explicitLayout: ctx.values.layout } : {}),
         resolve: async () => ({
           ...(layoutPreset !== undefined ? { preset: layoutPreset } : {}),
           // --trustはプロジェクトローカル設定を持たないリポジトリでも承認の意思表示として効かせる。
           // プリセットの解決元がリポジトリの外にある場合、ensureProjectTrustは"absent"を返すため
           trusted: trust === "trusted" || ctx.values.trust === true,
+          onOpen: plan.onOpen,
         }),
       },
     });

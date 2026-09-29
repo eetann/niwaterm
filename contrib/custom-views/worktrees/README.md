@@ -52,7 +52,7 @@ export default defineConfig({
 | `currentCwd` | フォーカス中タイルのcwd | 常に同じリポジトリを見たいなら固定パスを返す |
 
 ワークツリーの作成先ディレクトリ・作成後に走らせるコマンドは、このビューではなく
-niwaterm側の`worktree`設定（`worktree.dir`・`worktree.onCreate`）で決まる。
+niwaterm側の`worktree`設定（`worktree.dir`・`worktree.onCreate`・`worktree.onOpen`）で決まる。
 [docs/guide/config.md](../../../docs/guide/config.md)の「ワークツリー」節を参照。
 
 ## 削除

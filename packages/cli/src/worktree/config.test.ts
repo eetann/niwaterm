@@ -139,6 +139,7 @@ describe("resolveWorktreeSettings", () => {
         layout: { value: undefined, source: "default" },
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
+        onOpen: [],
       });
     });
   });
@@ -157,6 +158,7 @@ describe("resolveWorktreeSettings", () => {
         layout: { value: undefined, source: "default" },
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
+        onOpen: [],
       });
     });
   });
@@ -202,6 +204,7 @@ describe("resolveWorktreeSettings", () => {
         layout: { value: "from-project", source: "project" },
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
+        onOpen: [],
       });
     });
   });
@@ -298,7 +301,7 @@ describe("worktreeDirSourcesFor", () => {
   });
 });
 
-describe("onCreateの解決", () => {
+describe("フック（onCreate・onOpen）の解決", () => {
   async function withTempDir(fn: (root: string) => Promise<void>): Promise<void> {
     const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-hook-test-"));
     try {
@@ -371,6 +374,34 @@ describe("onCreateの解決", () => {
         { includeProject: false },
       );
       expect(resolved.dir).toEqual({ value: "../from-global/${branch}", source: "global" });
+    });
+  });
+
+  test("onOpenもグローバル→プロジェクトの順に並び、onCreateとは別に解決する", async () => {
+    await withTempDir(async (root) => {
+      const openHook = (marker: string) =>
+        `export default { worktree: { onOpen: async (ctx) => { await Bun.write(ctx.worktreePath, ${JSON.stringify(marker)} + ":" + ctx.boardId); } } };\n`;
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, { global: openHook("global"), project: openHook("project") }),
+        { includeProject: true },
+      );
+      expect(resolved.onCreate).toEqual([]);
+
+      const calls: string[] = [];
+      const markerFile = join(root, "marker");
+      for (const hook of resolved.onOpen) {
+        await hook({
+          repoRoot: join(root, "repo"),
+          worktreePath: markerFile,
+          branch: "x",
+          created: true,
+          workspaceId: "ws-1",
+          boardId: "board-1",
+          tabIds: [],
+        });
+        calls.push(await Bun.file(markerFile).text());
+      }
+      expect(calls).toEqual(["global:board-1", "project:board-1"]);
     });
   });
 

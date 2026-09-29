@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: ワークツリー管理
-description: niwatermからgitワークツリーを作成・開閉・削除する仕組みと、置き場所・作成後フック・レイアウト適用の設定
+description: niwatermからgitワークツリーを作成・開閉・削除する仕組みと、置き場所・作成後フック・Boardを開いた後のフック・レイアウト適用の設定
 ---
 
 # ワークツリー管理
@@ -241,6 +241,8 @@ worktree: {
 
 フックが例外を投げた場合は**ワークツリーを残したまま終了コード1で止まり、Boardは開かない**。準備できていないワークツリーで作業を始めてしまうより、直して開き直せるほうがよいため。残ったワークツリーは`worktree new`を再実行すれば開けるが、そのときフックは走らない（新規作成ではないため）。
 
+Boardのフェーズ・タブ変数のように、Boardができてから行う操作は`onOpen`（「Boardを開いた後のフック」節）に書く。
+
 ## レイアウトプリセットの適用
 
 ```sh
@@ -260,15 +262,53 @@ niwaterm worktree open feat/x --layout dev
 
 プロジェクトローカルのプリセットを使う場合は、**プロジェクトローカル設定の承認（下記）が必要**。プリセットの解決でそのリポジトリの`.niwaterm/config.ts`が評価されるためで、未承認のままレイアウトを指定すると終了コード1で止まる（`--trust`で承認できる）。グローバル設定の`layouts`だけを使う場合も、プロジェクトローカル設定を持つリポジトリでは同じ理由で承認が要る。
 
+## Boardを開いた後のフック
+
+ワークツリーのBoardを**新規に作った後**に走るフックを設定できる。Boardの作業フェーズ・タブ変数の設定など、Boardができていないとできない操作を想定している。`onCreate`はBoardを開く前に走るため、そこから`niwaterm board phase set`を叩いても対象のBoardがまだ無い。
+
+```ts
+// ~/.config/niwaterm/niwaterm.config.ts
+worktree: {
+  onOpen: async (ctx) => {
+    if (ctx.created) {
+      await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`;
+    }
+    await Bun.$`niwaterm tab var set --tab ${ctx.tabIds[0]} role main`;
+  },
+},
+```
+
+`ctx`の中身は次のとおり。
+
+| フィールド | 意味 |
+|---|---|
+| `repoRoot` | メインワークツリーのパス |
+| `worktreePath` | 開いたワークツリーのパス |
+| `branch` | ブランチ名（detached HEADのワークツリーは`null`） |
+| `created` | 今回の`worktree new`でワークツリーを新規作成したか。`worktree open`・作成済みのワークツリーでは`false` |
+| `workspaceId` | Boardが属するワークスペース |
+| `boardId` | 作ったBoard |
+| `tabIds` | Boardのタブ（レイアウトプリセット適用後）。タイルの並び順 |
+
+Boardの操作用の関数は`ctx`に生やしていない。IDを受け取ってCLIを叩けば何でも書けるため、同じ操作の口を二重に持たないようにしている。フックの中で`--board`・`--tab`を省略すると、フックではなく**コマンドを実行したタブ**が対象になるので、必ずIDを渡す。
+
+走るのは**Boardを新規に作ったときだけ**で、条件はレイアウトプリセットの適用と同じ。既にそのワークツリーのBoardが開いていて使い回した場合・`--open none`／`current-tab`の場合は走らない。作業中のBoardのフェーズや変数を勝手に上書きしないため。`worktree new`でも`worktree open`でも走るので、ワークツリーを作ったときだけの処理は`ctx.created`で分ける。
+
+**niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでから**awaitされる（`board: <boardId>`の出力の後）。niwatermの起動時にプリセットでBoardを組み直すときは走らない。起動のたびに走らせたい処理はプリセットのタブの`command`に書く。
+
+フックが例外を投げても**Boardは閉じず**、終了コード1で止まる。Boardは作業できる状態になっているので、捨てるより足りない操作を手で補えるほうがよいため。
+
+`onCreate`と同じく、グローバル設定とプロジェクトローカル設定の両方に書くとグローバル→プロジェクトの順に**両方**走る。プロジェクトローカル側のフックは承認（下記）したリポジトリでだけ読む。
+
 ## プロジェクトローカル設定の承認
 
-`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`を叩くと、`onCreate`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
+`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`を叩くと、`onCreate`・`onOpen`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
 
 ```
 $ niwaterm worktree new feat/x
 このリポジトリはniwatermのプロジェクトローカル設定を持っています:
   /path/to/repo/.niwaterm/config.ts
-ワークツリーの操作でこのファイルが評価され、worktree.onCreateのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
+ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpenのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
 レイアウトプリセットを適用したBoardは起動時レイアウトとしても紐づくため、以後niwatermを起動するたびにも実行されます。
 信頼できるリポジトリでのみ許可してください。
 このリポジトリを信頼しますか？ (y/N)
@@ -278,7 +318,7 @@ $ niwaterm worktree new feat/x
 
 `--trust`を付けると確認を省いて承認する（非対話環境向け）。非対話環境で`--trust`も無い場合は、確認できない旨を表示してプロジェクトローカル設定を無視したまま続行する（ハングもエラーもしない）。
 
-承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、`onCreate`の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
+承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、フック（`onCreate`・`onOpen`）の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
 
 `--layout`（「レイアウトプリセットの適用」節）も同じ承認で門番する。プリセットの解決はアプリ側が`<repoRoot>/.niwaterm/config.ts`を評価して行うため、CLIがimportしなくてもそこでコードが走るためで、未承認のままレイアウトを指定すると終了コード1で止まる。
 

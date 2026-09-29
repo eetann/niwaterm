@@ -2,17 +2,19 @@ import { failAndExit } from "../cli-error";
 import {
   applyLayout,
   type IpcEndpoint,
+  listWorkspaces,
   newBoard,
   renameBoard,
   sendKeys,
   switchBoard,
   switchWorkspace,
+  type TileSummary,
   toAppAccessiblePath,
 } from "../ipc-client";
 import { confirmTrust } from "../layout-trust";
 import { createTargetResolver } from "../resolve-target";
 import { findWorktreeBoards, type WorktreeBoard } from "./board";
-import type { WorktreeOpenMode } from "./config";
+import type { WorktreeOpenHook, WorktreeOpenMode } from "./config";
 import type { ProjectTrustDecision } from "./trust";
 
 /**
@@ -61,8 +63,8 @@ export function resolveWorktreeLayout(opts: {
   return name;
 }
 
-/** WorktreeLayoutRequest.resolveの結果 */
-export interface ResolvedWorktreeLayout {
+/** WorktreeBoardSetupRequest.resolveの結果 */
+export interface ResolvedWorktreeBoardSetup {
   /** 適用するプリセット名。undefinedならレイアウトを適用しない */
   preset?: string;
   /**
@@ -71,17 +73,19 @@ export interface ResolvedWorktreeLayout {
    * 含めて聞いているため、同じリポジトリのプリセットを紐づけるのに再度確認は取らない
    */
   trusted: boolean;
+  /** Boardを作った後に走らせるフック（worktree.onOpen）。実行順に並ぶ */
+  onOpen: WorktreeOpenHook[];
 }
 
-export interface WorktreeLayoutRequest {
+export interface WorktreeBoardSetupRequest {
   /** `--layout`で明示指定された名前。Boardを作らなかったときに効いていない旨を伝えるために使う */
-  explicit?: string;
+  explicitLayout?: string;
   /**
-   * 適用するプリセットを返す。**Boardを新規に作るときだけ**呼ばれる。
+   * 適用するプリセットとBoardを作った後のフックを返す。**Boardを新規に作るときだけ**呼ばれる。
    * 設定から既定値を読むにはプロジェクトローカル設定の承認が要るため、承認が要る場面でだけ
    * 呼べるよう関数で受ける（Boardを使い回すだけのときに確認を出さない）
    */
-  resolve: () => Promise<ResolvedWorktreeLayout>;
+  resolve: () => Promise<ResolvedWorktreeBoardSetup>;
 }
 
 export interface OpenWorktreeOptions {
@@ -95,11 +99,13 @@ export interface OpenWorktreeOptions {
   path: string;
   /** Board名に使うブランチ名。detached HEADのワークツリーはnull */
   branch: string | null;
+  /** 今回ワークツリーを新規作成したか。onOpenのフックへそのまま渡す */
+  created: boolean;
   /** Boardの作成先。省略時はアクティブなワークスペース */
   workspaceId?: string;
   /** `--name`で明示指定されたBoard名。省略時はブランチ名をBoard名にする */
   name?: string;
-  layout?: WorktreeLayoutRequest;
+  boardSetup?: WorktreeBoardSetupRequest;
 }
 
 /** Boardを作らなかったときに、なぜ効いていないのかを伝える。reasonは「〜ため」までの理由句 */
@@ -111,9 +117,69 @@ function warnOptionsIgnored(reason: string, names: string[]): void {
 /** Boardを新規に作るときだけ効くオプションのうち、明示指定されたものを並べる */
 function boardOnlyOptions(opts: OpenWorktreeOptions): string[] {
   return [
-    ...(opts.layout?.explicit !== undefined ? ["--layout"] : []),
+    ...(opts.boardSetup?.explicitLayout !== undefined ? ["--layout"] : []),
     ...(opts.name !== undefined ? ["--name"] : []),
   ];
+}
+
+function collectTabIds(tile: TileSummary): string[] {
+  return tile.kind === "leaf"
+    ? [...tile.tabIds]
+    : [...collectTabIds(tile.first), ...collectTabIds(tile.second)];
+}
+
+interface RunOpenHooksOptions {
+  endpoint: IpcEndpoint;
+  commandName: string;
+  boardId: string;
+  context: { repoRoot: string; worktreePath: string; branch: string | null; created: boolean };
+}
+
+/**
+ * Boardを作った後のフック（worktree.onOpen）を順に実行する。タブIDはレイアウトの適用で
+ * 入れ替わるため、適用後に一覧から引き直す。
+ * 失敗してもBoardは閉じない。作業できる状態のBoardを捨てるより、足りない操作を手で補えるほうがよいため
+ */
+async function runOpenHooks(hooks: WorktreeOpenHook[], opts: RunOpenHooksOptions): Promise<void> {
+  if (hooks.length === 0) return;
+  const boardNote = `Board ${opts.boardId} は作成済みです`;
+  const list = await listWorkspaces(opts.endpoint);
+  if (!list.ok) {
+    failAndExit(
+      `${opts.commandName}に失敗しました: Boardを開いた後のフックに渡すタブを取得できませんでした: ${list.error}\n${boardNote}`,
+    );
+  }
+  let target: { workspaceId: string; tabIds: string[] } | null = null;
+  for (const workspace of list.workspaces) {
+    const board = workspace.boards.find((entry) => entry.boardId === opts.boardId);
+    if (board) {
+      target = { workspaceId: workspace.workspaceId, tabIds: collectTabIds(board.layout) };
+      break;
+    }
+  }
+  if (!target) {
+    failAndExit(
+      `${opts.commandName}に失敗しました: Boardを開いた後のフックを実行する前にBoardが閉じられました: ${opts.boardId}`,
+    );
+  }
+
+  console.log(`running worktree open hook (${hooks.length})...`);
+  for (const hook of hooks) {
+    try {
+      await hook({
+        ...opts.context,
+        workspaceId: target.workspaceId,
+        boardId: opts.boardId,
+        // 前のフックが配列を書き換えても次のフックへ波及しないよう、毎回複製して渡す
+        tabIds: [...target.tabIds],
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      failAndExit(
+        `${opts.commandName}に失敗しました: Boardを開いた後のフックが失敗しました: ${message}\n${boardNote}`,
+      );
+    }
+  }
 }
 
 /**
@@ -122,7 +188,7 @@ function boardOnlyOptions(opts: OpenWorktreeOptions): string[] {
  * Boardが増えないようにする
  */
 export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
-  const { endpoint, commandName, mode, path, branch, layout } = opts;
+  const { endpoint, commandName, mode, path, branch, boardSetup } = opts;
   if (mode === "none") {
     warnOptionsIgnored("--open noneのため", boardOnlyOptions(opts));
     return;
@@ -147,7 +213,7 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
     // 名前の変更は非破壊なので、明示指定されていれば使い回すBoardへも反映する
     warnOptionsIgnored(
       "Boardが既に開いているため",
-      layout?.explicit !== undefined ? ["--layout"] : [],
+      boardSetup?.explicitLayout !== undefined ? ["--layout"] : [],
     );
     if (opts.name !== undefined) {
       const renamed = await renameBoard(endpoint, found.boardId, opts.name);
@@ -170,8 +236,8 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
     return;
   }
 
-  const resolvedLayout = await layout?.resolve();
-  const preset = resolvedLayout?.preset;
+  const setup = await boardSetup?.resolve();
+  const preset = setup?.preset;
 
   // 遷移しないモードではサイドバーの見分けが唯一の手がかりになるため、
   // 名前の指定が無ければブランチ名を付ける
@@ -201,7 +267,7 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
       });
     // 起動時レイアウトとしても紐づける。Boardの中身をプリセットが決めているので、
     // 次の起動でも保存した骨格ではなくプリセットで組み直すほうが指定どおりになる
-    let applied = await applyOnce(true, resolvedLayout?.trusted === true);
+    let applied = await applyOnce(true, setup?.trusted === true);
     if (!applied.ok && "needsTrust" in applied) {
       // プリセットの解決元がこのリポジトリの外（親ディレクトリの.niwaterm/等）だと、
       // ワークツリーの承認では足りない。改めて同意を取り、断られたら紐づけだけ諦める
@@ -221,4 +287,11 @@ export async function openWorktree(opts: OpenWorktreeOptions): Promise<void> {
     }
   }
   console.log(`board: ${created.boardId}`);
+
+  await runOpenHooks(setup?.onOpen ?? [], {
+    endpoint,
+    commandName,
+    boardId: created.boardId,
+    context: { repoRoot: opts.repoRoot, worktreePath: path, branch, created: opts.created },
+  });
 }

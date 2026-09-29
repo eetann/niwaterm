@@ -129,6 +129,8 @@ export {
   type WorktreeConfig,
   type WorktreeHook,
   type WorktreeHookContext,
+  type WorktreeOpenHook,
+  type WorktreeOpenHookContext,
   type WorktreeOpenMode,
 } from "./worktree";
 export {

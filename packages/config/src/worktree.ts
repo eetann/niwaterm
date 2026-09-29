@@ -30,6 +30,28 @@ export interface WorktreeHookContext {
  */
 export type WorktreeHook = (ctx: WorktreeHookContext) => unknown;
 
+export interface WorktreeOpenHookContext {
+  /** メインワークツリーのパス */
+  repoRoot: string;
+  /** 開いたワークツリーのパス */
+  worktreePath: string;
+  /** detached HEADのワークツリーはnull */
+  branch: string | null;
+  /** 今回の`worktree new`でワークツリーを新規作成したか。`worktree open`・作成済みならfalse */
+  created: boolean;
+  workspaceId: string;
+  boardId: string;
+  /** Boardのタブ（レイアウトプリセット適用後）。タイルの並び順 */
+  tabIds: string[];
+}
+
+/**
+ * ワークツリーのBoardを新規に作った後に走るフック。Boardのフェーズやタブ変数の設定を想定。
+ * niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでからawaitされる。
+ * 既に開いているBoardを使い回したとき・Boardを作らない`--open`（`none`・`current-tab`）では走らない。
+ */
+export type WorktreeOpenHook = (ctx: WorktreeOpenHookContext) => unknown;
+
 export interface WorktreeConfig {
   /**
    * 新規ワークツリーの置き場所テンプレート。`${repo}`（メインワークツリーのディレクトリ名）と
@@ -69,4 +91,12 @@ export interface WorktreeConfig {
    * 例: async (ctx) => { await Bun.$`bun install`.cwd(ctx.worktreePath); }
    */
   onCreate?: WorktreeHook;
+  /**
+   * `niwaterm worktree new`・`worktree open`がワークツリーのBoardを新規に作った後に走るフック。
+   * `ctx.boardId`・`ctx.tabIds`を使ってCLIでBoardを操作する用途向け（`onCreate`の時点では
+   * Boardがまだ無い）。`onCreate`と同じくグローバル→プロジェクトの順に**両方**走る。
+   * 失敗してもBoardは閉じず、コマンドが終了コード1で止まる。
+   * 例: async (ctx) => { if (ctx.created) await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`; }
+   */
+  onOpen?: WorktreeOpenHook;
 }

@@ -108,7 +108,7 @@ async function confirm(repoRoot: string): Promise<boolean> {
   console.log("このリポジトリはniwatermのプロジェクトローカル設定を持っています:");
   console.log(`  ${path}`);
   console.log(
-    "ワークツリーの操作でこのファイルが評価され、worktree.onCreateのフックやlayoutsのプリセットに書かれたコマンドが実行されます。",
+    "ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpenのフックやlayoutsのプリセットに書かれたコマンドが実行されます。",
   );
   console.log(
     "レイアウトプリセットを適用したBoardは起動時レイアウトとしても紐づくため、以後niwatermを起動するたびにも実行されます。",

@@ -94,10 +94,11 @@ export default define({
       repoRoot,
       path: found.worktree.path,
       branch: found.worktree.branch,
+      created: false,
       ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
       ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
-      layout: {
-        ...(ctx.values.layout !== undefined ? { explicit: ctx.values.layout } : {}),
+      boardSetup: {
+        ...(ctx.values.layout !== undefined ? { explicitLayout: ctx.values.layout } : {}),
         // Boardを新規に作るときだけ呼ばれる。ワークツリーへ移るだけの用途で
         // プロジェクトローカル設定の確認が出ないよう、設定の読み取りはここまで遅らせる
         resolve: async () => {
@@ -118,6 +119,7 @@ export default define({
             // --trustはプロジェクトローカル設定を持たないリポジトリでも承認の意思表示として効かせる。
             // プリセットの解決元がリポジトリの外にある場合、ensureProjectTrustは"absent"を返すため
             trusted: trust === "trusted" || ctx.values.trust === true,
+            onOpen: settings.onOpen,
           };
         },
       },
