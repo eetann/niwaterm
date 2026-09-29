@@ -15,6 +15,7 @@ import { confirmTrust } from "../layout-trust";
 import { createTargetResolver } from "../resolve-target";
 import { findWorktreeBoards, type WorktreeBoard } from "./board";
 import type { WorktreeOpenHook, WorktreeOpenMode } from "./config";
+import { runInWorktree } from "./hook-cwd";
 import type { ProjectTrustDecision } from "./trust";
 
 /**
@@ -166,13 +167,15 @@ async function runOpenHooks(hooks: WorktreeOpenHook[], opts: RunOpenHooksOptions
   console.log(`running worktree open hook (${hooks.length})...`);
   for (const hook of hooks) {
     try {
-      await hook({
-        ...opts.context,
-        workspaceId: target.workspaceId,
-        boardId: opts.boardId,
-        // 前のフックが配列を書き換えても次のフックへ波及しないよう、毎回複製して渡す
-        tabIds: [...target.tabIds],
-      });
+      await runInWorktree(opts.context.worktreePath, () =>
+        hook({
+          ...opts.context,
+          workspaceId: target.workspaceId,
+          boardId: opts.boardId,
+          // 前のフックが配列を書き換えても次のフックへ波及しないよう、毎回複製して渡す
+          tabIds: [...target.tabIds],
+        }),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failAndExit(

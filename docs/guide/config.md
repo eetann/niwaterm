@@ -1481,8 +1481,8 @@ worktree: {
   dir: ".worktrees/${branch}",
   open: "board-switch",
   layout: "dev",
-  onCreate: async (ctx) => {
-    await Bun.$`bun install`.cwd(ctx.worktreePath);
+  onCreate: async () => {
+    await Bun.$`bun install`;
   },
   onOpen: async (ctx) => {
     if (ctx.created) await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`;
@@ -1498,7 +1498,7 @@ worktree: {
 
 `fetch`は、リモートのブランチをワークツリーとして開くときに手元のリモート追跡ブランチが古いままにならないよう、**ワークツリーを新規に作る前**に`git fetch`を打つかどうか。既存のワークツリーを開き直すだけのときと`--track local`のときは、`true`でもfetchしない。作成のたびのネットワーク待ちが気になる場合は`false`にして、必要なときだけ`--fetch`を付ける。詳細は`docs/guide/worktree.md`「リモートのブランチから作る」節。
 
-`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/worktree.md`「作成後フック」節。
+`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。`onCreate`・`onOpen`とも、実行中のカレントディレクトリはそのワークツリーになる（`Bun.$`に`.cwd()`を付けなくてよい）。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/worktree.md`「作成後フック」節。
 
 `onOpen`はBoardを新規に作り、レイアウトプリセットの適用まで済んだ後にawaitされる。`ctx`には`onCreate`と同じ項目に加えて`created`（ワークツリーを新規作成したか）・`workspaceId`・`boardId`・`tabIds`が入るので、CLIでBoardのフェーズやタブ変数を設定できる。既に開いているBoardを使い回したとき・Boardを作らない`--open`では走らない。失敗してもBoardは閉じず、終了コード1で止まる。詳細は`docs/guide/worktree.md`「Boardを開いた後のフック」節。
 

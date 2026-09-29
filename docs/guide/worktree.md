@@ -229,13 +229,13 @@ git config niwaterm.worktree.fetch false
 ```ts
 // ~/.config/niwaterm/niwaterm.config.ts
 worktree: {
-  onCreate: async (ctx) => {
-    await Bun.$`bun install`.cwd(ctx.worktreePath);
+  onCreate: async () => {
+    await Bun.$`bun install`;
   },
 },
 ```
 
-`ctx`には`repoRoot`（メインワークツリー）・`worktreePath`（作ったワークツリー）・`branch`が入る。宣言的なコピー・リンクのDSLは用意していない。設定がTypeScriptなので、条件分岐もファイル操作も素のコードで書けるため（キーバインドの関数ハンドラと同じ方針）。
+フックの実行中は**カレントディレクトリが作ったワークツリーになる**ので、`Bun.$`・`Bun.spawn`はそのワークツリーで走る（コマンドを実行したディレクトリには、フックが終わった後で戻る）。`ctx`には`repoRoot`（メインワークツリー）・`worktreePath`（作ったワークツリー）・`branch`が入る。宣言的なコピー・リンクのDSLは用意していない。設定がTypeScriptなので、条件分岐もファイル操作も素のコードで書けるため（キーバインドの関数ハンドラと同じ方針）。
 
 **niwaterm CLIのプロセスで、Boardを開く前にawaitされる**。タブが立ち上がる時点でセットアップが済んでいるので、`--open`のどのモード（`none`・`current-tab`含む）でも同じように走る。標準出力はコマンドを実行したターミナルへそのまま流れるため、完了するまでプロンプトは戻らない。
 
@@ -294,7 +294,7 @@ Boardの操作用の関数は`ctx`に生やしていない。IDを受け取っ�
 
 走るのは**Boardを新規に作ったときだけ**で、条件はレイアウトプリセットの適用と同じ。既にそのワークツリーのBoardが開いていて使い回した場合・`--open none`／`current-tab`の場合は走らない。作業中のBoardのフェーズや変数を勝手に上書きしないため。`worktree new`でも`worktree open`でも走るので、ワークツリーを作ったときだけの処理は`ctx.created`で分ける。
 
-**niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでから**awaitされる（`board: <boardId>`の出力の後）。niwatermの起動時にプリセットでBoardを組み直すときは走らない。起動のたびに走らせたい処理はプリセットのタブの`command`に書く。
+**niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでから**awaitされる（`board: <boardId>`の出力の後）。`onCreate`と同じく、実行中のカレントディレクトリは開いたワークツリーになる。niwatermの起動時にプリセットでBoardを組み直すときは走らない。起動のたびに走らせたい処理はプリセットのタブの`command`に書く。
 
 フックが例外を投げても**Boardは閉じず**、終了コード1で止まる。Boardは作業できる状態になっているので、捨てるより足りない操作を手で補えるほうがよいため。
 

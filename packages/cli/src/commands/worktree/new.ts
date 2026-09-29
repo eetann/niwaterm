@@ -9,6 +9,7 @@ import {
   type WorktreeHook,
   type WorktreeHookContext,
 } from "../../worktree/config";
+import { runInWorktree } from "../../worktree/hook-cwd";
 import { openWorktree, resolveWorktreeLayout } from "../../worktree/open";
 import { ensureProjectTrust } from "../../worktree/trust";
 import {
@@ -40,7 +41,7 @@ async function runCreateHooks(hooks: WorktreeHook[], ctx: WorktreeHookContext): 
   console.log(`running worktree hook (${hooks.length})...`);
   for (const hook of hooks) {
     try {
-      await hook(ctx);
+      await runInWorktree(ctx.worktreePath, () => hook(ctx));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failAndExit(

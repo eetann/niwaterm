@@ -26,6 +26,7 @@ export interface WorktreeHookContext {
 /**
  * ワークツリーを作った直後に走るフック。`bun install`・`.env`のコピー・`direnv allow`あたりを想定。
  * niwaterm CLIのプロセスで、Boardを開く前にawaitされる（タブが立ち上がる時点で準備が済んでいる）。
+ * 実行中のカレントディレクトリは作成したワークツリーになる。
  * 標準出力はコマンドを実行したターミナルへそのまま流れる。
  */
 export type WorktreeHook = (ctx: WorktreeHookContext) => unknown;
@@ -48,6 +49,7 @@ export interface WorktreeOpenHookContext {
 /**
  * ワークツリーのBoardを新規に作った後に走るフック。Boardのフェーズやタブ変数の設定を想定。
  * niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでからawaitされる。
+ * 実行中のカレントディレクトリは開いたワークツリーになる。
  * 既に開いているBoardを使い回したとき・Boardを作らない`--open`（`none`・`current-tab`）では走らない。
  */
 export type WorktreeOpenHook = (ctx: WorktreeOpenHookContext) => unknown;
@@ -88,7 +90,7 @@ export interface WorktreeConfig {
    * グローバル設定とプロジェクトローカル設定の両方に書いた場合は、グローバル→プロジェクトの順に
    * **両方**走る（dir・openのような上書きではない）。
    * 失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。
-   * 例: async (ctx) => { await Bun.$`bun install`.cwd(ctx.worktreePath); }
+   * 例: async () => { await Bun.$`bun install`; }
    */
   onCreate?: WorktreeHook;
   /**

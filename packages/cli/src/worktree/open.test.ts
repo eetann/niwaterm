@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { IpcEndpoint } from "../ipc-client";
@@ -195,6 +195,8 @@ const CREATED_BOARD_WORKSPACES = [
 describe("openWorktreeのonOpenフック", () => {
   test("Boardを新規に作ったら、タブを含むctxでフックを順に呼ぶ", async () => {
     const app = await startFakeApp([], CREATED_BOARD_WORKSPACES);
+    const worktreePath = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-hook-")));
+    const originalCwd = process.cwd();
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     const calls: unknown[] = [];
     try {
@@ -203,7 +205,7 @@ describe("openWorktreeのonOpenフック", () => {
         commandName: "worktree new",
         mode: "board",
         repoRoot: "/repo/main",
-        path: "/repo/work/feature",
+        path: worktreePath,
         branch: "feature",
         created: true,
         boardSetup: {
@@ -214,7 +216,7 @@ describe("openWorktreeのonOpenフック", () => {
                 calls.push({ hook: 1, ...ctx });
               },
               async (ctx) => {
-                calls.push({ hook: 2, boardId: ctx.boardId });
+                calls.push({ hook: 2, boardId: ctx.boardId, cwd: process.cwd() });
               },
             ],
           }),
@@ -225,18 +227,19 @@ describe("openWorktreeのonOpenフック", () => {
       app.stop();
     }
 
+    expect(process.cwd()).toBe(originalCwd);
     expect(calls).toEqual([
       {
         hook: 1,
         repoRoot: "/repo/main",
-        worktreePath: "/repo/work/feature",
+        worktreePath,
         branch: "feature",
         created: true,
         workspaceId: "ws-1",
         boardId: "board-9",
         tabIds: ["tab-1", "tab-2", "tab-3"],
       },
-      { hook: 2, boardId: "board-9" },
+      { hook: 2, boardId: "board-9", cwd: worktreePath },
     ]);
   });
 
@@ -281,6 +284,7 @@ describe("openWorktreeのonOpenフック", () => {
 
   test("フックが失敗したらBoardは閉じずに終了する", async () => {
     const app = await startFakeApp([], CREATED_BOARD_WORKSPACES);
+    const worktreePath = await mkdtemp(join(tmpdir(), "niwaterm-worktree-hook-"));
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
     const exitSpy = spyOn(process, "exit").mockImplementation(((code?: number) => {
@@ -293,7 +297,7 @@ describe("openWorktreeのonOpenフック", () => {
           commandName: "worktree new",
           mode: "board",
           repoRoot: "/repo/main",
-          path: "/repo/work/feature",
+          path: worktreePath,
           branch: "feature",
           created: true,
           boardSetup: {
