@@ -64,7 +64,7 @@ export interface HoverButtonItem {
   /** マウスを載せた時に出す説明。省略時はlabelが使われる */
   tooltip?: string;
   /** 項目を押した時の処理。niwa.popup.open等はここから呼ぶ */
-  run: () => void | Promise<void>;
+  run: () => unknown;
 }
 
 /**

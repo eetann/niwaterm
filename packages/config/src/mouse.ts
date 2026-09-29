@@ -18,7 +18,7 @@ export interface SelectionMenuItem {
   /** メニューに並べるラベル */
   label: string;
   /** 項目を選んだ時の処理。niwa.shell.run等はここから呼ぶ */
-  run: () => void | Promise<void>;
+  run: () => unknown;
 }
 
 /**

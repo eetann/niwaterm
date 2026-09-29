@@ -245,7 +245,7 @@ export interface NiwaBellEvent {
   agentStatus: string | null;
 }
 
-export type NiwaBellHandler = (event: NiwaBellEvent) => void | Promise<void>;
+export type NiwaBellHandler = (event: NiwaBellEvent) => unknown;
 
 export interface NiwaBellApi {
   /**
@@ -272,7 +272,7 @@ export interface NiwaLinkEvent {
   cwd: string | undefined;
 }
 
-export type NiwaLinkHandler = (event: NiwaLinkEvent) => void | Promise<void>;
+export type NiwaLinkHandler = (event: NiwaLinkEvent) => unknown;
 
 export interface NiwaLinkApi {
   /**
@@ -305,7 +305,7 @@ export interface KeybindOptions {
  * キーバインドの関数ハンドラ。呼び出しタイミングは登録時（configファイル実行時）ではなく、
  * 実際にそのキーが押された時。niwa.tile.current()等はこの時点の実際の状態を返す。
  */
-export type KeybindHandler = (niwa: Niwa) => void | Promise<void>;
+export type KeybindHandler = (niwa: Niwa) => unknown;
 
 export interface Niwa {
   /** prefixキー本体を設定する。例: niwa.prefix("ctrl+b") */

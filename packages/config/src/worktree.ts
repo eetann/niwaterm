@@ -28,7 +28,7 @@ export interface WorktreeHookContext {
  * niwaterm CLIのプロセスで、Boardを開く前にawaitされる（タブが立ち上がる時点で準備が済んでいる）。
  * 標準出力はコマンドを実行したターミナルへそのまま流れる。
  */
-export type WorktreeHook = (ctx: WorktreeHookContext) => void | Promise<void>;
+export type WorktreeHook = (ctx: WorktreeHookContext) => unknown;
 
 export interface WorktreeConfig {
   /**

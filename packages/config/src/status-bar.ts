@@ -107,7 +107,7 @@ export interface StatusBarComponentConfig {
   /** マウスを載せた時に出す説明。renderが返したtooltipがあればそちらが優先される */
   tooltip?: string;
   /** 部品を押した時の処理。書いた部品だけが押せる見た目になる */
-  run?: (ctx: StatusBarContext, niwa: Niwa) => void | Promise<void>;
+  run?: (ctx: StatusBarContext, niwa: Niwa) => unknown;
 }
 
 /** 文字列だけで書いた場合はsourceだけを指定したのと同じ */
