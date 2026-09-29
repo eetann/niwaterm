@@ -25,3 +25,6 @@ mise.local.toml
 
 # Storybookの静的ビルド成果物（bun run build-storybook）
 storybook-static/
+
+# playwright-cliのセッション出力（スナップショット・コンソールログ等）
+.playwright-cli/
