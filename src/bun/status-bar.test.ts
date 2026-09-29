@@ -74,7 +74,7 @@ describe("createStatusBar", () => {
         component({ source: { kind: "tab-var", name: "branch" }, run: () => {} }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "/home/me", hidden: false },
+      { send: rec.send, homeDirOf: () => "/home/me", hidden: false },
     );
     expect(bar.resolved().sections).toEqual({
       left: [{ id: "left-0", kind: "mode", clickable: false }],
@@ -100,7 +100,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: false },
+      { send: rec.send, homeDirOf: () => "", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
@@ -132,7 +132,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "/home/me", hidden: false },
+      { send: rec.send, homeDirOf: () => "/home/me", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
@@ -141,6 +141,32 @@ describe("createStatusBar", () => {
       b: { text: "", html: "", tooltip: "", color: "" },
       c: { text: " main", html: "", tooltip: "", color: "red" },
     });
+    bar.dispose();
+  });
+
+  test("cwdを縮めるホームは評価する状況ごとに引き、refreshで引き直す", async () => {
+    const rec = recorder();
+    let wslHome = "C:\\Users\\me";
+    const bar = createStatusBar(
+      definition([component({ id: "a", source: { kind: "builtin", id: "cwd" } })]),
+      niwa,
+      {
+        send: rec.send,
+        homeDirOf: (c) => (c.tabId === "wsl-tab" ? wslHome : "C:\\Users\\me"),
+        hidden: false,
+      },
+    );
+    bar.update("win-1", ctx({ tabId: "wsl-tab", cwd: "/home/me/src" }));
+    await flush();
+    expect(rec.sent.at(-1)?.values["a"]?.text).toBe("/home/me/src");
+    // WSLのホームが後から分かった
+    wslHome = "/home/me";
+    bar.refresh();
+    await flush();
+    expect(rec.sent.at(-1)?.values["a"]?.text).toBe("~/src");
+    bar.update("win-1", ctx({ tabId: "win-tab", cwd: "C:\\Users\\me\\src" }));
+    await flush();
+    expect(rec.sent.at(-1)?.values["a"]?.text).toBe("~\\src");
     bar.dispose();
   });
 
@@ -162,7 +188,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: false },
+      { send: rec.send, homeDirOf: () => "", hidden: false },
     );
     const log = console.log;
     console.log = () => {};
@@ -190,7 +216,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: false },
+      { send: rec.send, homeDirOf: () => "", hidden: false },
     );
     bar.update("win-1", ctx());
     bar.update("win-1", ctx({ tabId: "tab-2" }));
@@ -208,7 +234,7 @@ describe("createStatusBar", () => {
     const bar = createStatusBar(
       definition([component({ render: () => String(++count), interval: 5 })]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: false },
+      { send: rec.send, homeDirOf: () => "", hidden: false },
     );
     bar.update("win-1", ctx());
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -232,7 +258,7 @@ describe("createStatusBar", () => {
         }),
       ]),
       niwa,
-      { send: () => {}, homeDir: "", hidden: false },
+      { send: () => {}, homeDirOf: () => "", hidden: false },
     );
     await bar.run("win-1", "left-0");
     expect(calls).toHaveLength(0);
@@ -251,7 +277,7 @@ describe("createStatusBar", () => {
     const bar = createStatusBar(
       definition([component({ source: { kind: "tab-var", name: "branch" } })]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: false },
+      { send: rec.send, homeDirOf: () => "", hidden: false },
     );
     bar.update("win-1", ctx());
     await flush();
@@ -271,7 +297,7 @@ describe("createStatusBar", () => {
         component({ id: "mode", section: "left", source: { kind: "builtin", id: "mode" } }),
       ]),
       niwa,
-      { send: () => {}, homeDir: "", hidden: false },
+      { send: () => {}, homeDirOf: () => "", hidden: false },
     );
     bar.update("win-1", ctx());
     bar.update("win-2", ctx({ windowId: "win-2" }));
@@ -305,7 +331,7 @@ describe("createStatusBar", () => {
         component({ id: "clock", render: () => String(++ticks), interval: 5 }),
       ]),
       niwa,
-      { send: rec.send, homeDir: "", hidden: true },
+      { send: rec.send, homeDirOf: () => "", hidden: true },
     );
     bar.update("win-1", ctx({ tabId: "tab-1" }));
     bar.update("win-1", ctx({ tabId: "tab-2" }));

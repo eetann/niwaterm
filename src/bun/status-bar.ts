@@ -70,8 +70,11 @@ export interface StatusBarHandle {
 export interface CreateStatusBarOptions {
   /** 評価した値をそのウィンドウのwebviewへ送る。内容が前回と変わった時だけ呼ばれる */
   send(windowId: string, values: Record<string, StatusBarValue>): void;
-  /** builtin:cwdで`~`へ縮めるホームディレクトリ */
-  homeDir: string;
+  /**
+   * builtin:cwdで`~`へ縮めるホームディレクトリ。タブのシェルごとに違う（WSLのタブはLinux側の
+   * ホーム）ので、評価する状況ごとに引く
+   */
+  homeDirOf(ctx: StatusBarContext): string;
   /** 作った時点でユーザーがバーを隠しているか */
   hidden: boolean;
 }
@@ -197,7 +200,10 @@ export function createStatusBar(
 
   function evaluate(windowId: string, state: WindowState, entry: StatusBarComponentEntry): void {
     if (entry.render === undefined) {
-      const text = entry.source === null ? "" : sourceValue(entry.source, state.ctx, opts.homeDir);
+      const text =
+        entry.source === null
+          ? ""
+          : sourceValue(entry.source, state.ctx, opts.homeDirOf(state.ctx));
       // builtin:cwdは縮めた形を出すので、省略前の全体をツールチップで引けるようにする
       const tooltip =
         entry.tooltip === "" && entry.source?.kind === "builtin" && entry.source.id === "cwd"

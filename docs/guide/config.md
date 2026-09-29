@@ -1306,7 +1306,7 @@ statusBar: {
 | `source` | 出るもの |
 |---|---|
 | `"builtin:mode"` | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押して2打目を待っている間）・`COPY`（コピーモード中）のバッジ。配色は`appearance.ui`の`accent`・`warning`・`success` |
-| `"builtin:cwd"` | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め、マウスを載せると省略前のパスが出る |
+| `"builtin:cwd"` | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め（WSLのタブはディストロ側のホーム）、マウスを載せると省略前のパスが出る |
 | `"builtin:workspace"` | ワークスペース名（未設定なら`Workspace <n>`） |
 | `"builtin:board"` | Board名（未設定なら自動名・`Board <n>`） |
 | `"tab-var:<name>"` | フォーカス中タブのタブ変数の値（`niwaterm tab var set`で書き込む。ブランチなら`tab-var:branch`） |

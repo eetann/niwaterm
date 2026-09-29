@@ -79,6 +79,7 @@ import {
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
 import { createStatusBar, type StatusBarDefinition, type StatusBarHandle } from "./status-bar";
+import { createWslHomeResolver } from "./wsl-home";
 import {
   listLeaves,
   type SplitOrientation,
@@ -810,6 +811,8 @@ let hoverButtonsHandle: HoverButtonsHandle;
 let statusBarHandle: StatusBarHandle | null = null;
 /** config showで部品のidを引けるよう、関数を含む解決結果をそのまま持つ */
 let statusBarDefinition: StatusBarDefinition = { visible: false, css: "", components: [] };
+/** ステータスバーのbuiltin:cwdを縮めるため。設定のリロードをまたいで問い合わせ結果を使い回す */
+const wslHomes = createWslHomeResolver({ onResolved: () => statusBarHandle?.refresh() });
 const HIDDEN_STATUS_BAR: ResolvedStatusBarConfig = {
   visible: false,
   css: "",
@@ -1055,7 +1058,10 @@ async function refreshConfig(): Promise<void> {
   statusBarHandle?.dispose();
   statusBarHandle = createStatusBar(next.statusBar, next.niwa, {
     send: (windowId, values) => rpcSendOf(windowId)?.statusBarValues({ values }),
-    homeDir: homedir(),
+    homeDirOf: (ctx) =>
+      (ctx.boardId !== null
+        ? wslHomes.homeOf(windowManager.getBoardFocusedShell(ctx.boardId))
+        : undefined) ?? homedir(),
     hidden: uiState.statusBarHidden,
   });
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
