@@ -12,7 +12,7 @@ description: niwatermからgitワークツリーを作成・開閉・削除す�
 niwaterm worktree list [--cwd <dir>]
 niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
-niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--trust] [--cwd <dir>]
 niwaterm board worktree set <path> [--board <boardId>]
 niwaterm board worktree clear [--board <boardId>]
 niwaterm board worktree show [--board <boardId>]
@@ -146,7 +146,7 @@ niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace
 ## ワークツリーの削除
 
 ```sh
-niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--trust] [--cwd <dir>]
 ```
 
 ワークツリーをディレクトリごと削除し、そのワークツリーで開いたBoardを閉じる。`<worktree>`の指定方法は`worktree open`と同じ（ブランチ名・パス・ディレクトリ名）で、スペース区切りで複数渡せる。同じワークツリーを指す重複指定は1つに畳む。メインワークツリーは削除できない。
@@ -192,6 +192,8 @@ Boardは既定で閉じる。ワークツリーを消した後もBoardが残る�
 **このコマンドを実行しているタブが属するBoardは閉じない**。閉じるとそのタブのPTYが落ち、シェルごとCLI自身が巻き添えで殺されるため、残りのBoardのcloseも出力も終了コードも受け取れなくなる。削除対象のワークツリーのタブから実行した場合はそのBoardだけが警告付きで残るので、別のワークツリーへ移るか手で閉じる。niwatermの外（普通のターミナル・スクリプト）から実行した場合は閉じてもCLIが死なないため、対象のBoardをすべて閉じる。
 
 Boardを閉じるのはワークツリーを消し終えた後。複数のワークツリーを指定した場合も、全部消し終えてから対応するBoardをまとめて閉じる。
+
+削除の直前・直後に自分の後始末を走らせたい場合は`worktree.onBeforeRemove`・`worktree.onRemove`を使う（「削除前後のフック」節）。
 
 Windowsは**カレントディレクトリにしているプロセスがあるとディレクトリを削除できない**ので、そのワークツリーで動いている別のシェル・エディタがあると`git worktree remove`が失敗する（CLI自身のcwdは削除前に退避する）。
 
@@ -300,15 +302,55 @@ Boardの操作用の関数は`ctx`に生やしていない。IDを受け取っ�
 
 `onCreate`と同じく、グローバル設定とプロジェクトローカル設定の両方に書くとグローバル→プロジェクトの順に**両方**走る。プロジェクトローカル側のフックは承認（下記）したリポジトリでだけ読む。
 
+## 削除前後のフック
+
+`worktree remove`でワークツリーを削除する**直前**（`onBeforeRemove`）と**直後**（`onRemove`）に走るフックを設定できる。
+
+```ts
+// <repoRoot>/.niwaterm/config.ts
+worktree: {
+  // ワークツリーの中身が残っているうちに行う後始末
+  onBeforeRemove: async () => {
+    await Bun.$`docker compose down`;
+  },
+  // ワークツリーの外に作ったものの掃除
+  onRemove: async (ctx) => {
+    if (ctx.branch !== null) await Bun.$`dropdb --if-exists app_${ctx.branch}`;
+  },
+},
+```
+
+`ctx`の中身は次のとおり（両フック共通）。
+
+| フィールド | 意味 |
+|---|---|
+| `repoRoot` | メインワークツリーのパス |
+| `worktreePath` | 削除する（した）ワークツリーのパス |
+| `branch` | ブランチ名（detached HEADのワークツリーは`null`） |
+| `force` | `--force`付きで実行されたか |
+
+**niwaterm CLIのプロセスで、対象のワークツリーごとに**awaitされる。複数指定した場合は、1つ目の`onBeforeRemove`→削除→`onRemove`→2つ目の`onBeforeRemove`…の順に進む。実行中のカレントディレクトリは次のとおり。
+
+- `onBeforeRemove`: 削除するワークツリー。実体ディレクトリが既に無いワークツリー（`prunable`）はchdirできないのでメインワークツリーになる
+- `onRemove`: メインワークツリー（削除したワークツリーはもう無いため）
+
+`onBeforeRemove`が走るのは**ガード判定（「ワークツリーの削除」節）を抜けた後**。未コミットの変更等で止まる場合は、どの対象のフックも走らない。
+
+`onBeforeRemove`が例外を投げた場合、**そのワークツリーは削除せずに残し**、残りの対象の処理を続けてから終了コード1で止まる。後始末が済んでいない（コンテナが動いたまま等）ワークツリーを消すと、手で片付ける手がかりまで失われるため。`--force`付きなら警告を出して削除を続ける。
+
+`onRemove`が例外を投げても、ワークツリー（`--delete-branch`ならブランチも）は削除済みなので戻さず、終了コード1で止まる。`--delete-branch`のブランチ削除が失敗した場合も`onRemove`は走る。
+
+`onCreate`と同じく、グローバル設定とプロジェクトローカル設定の両方に書くとグローバル→プロジェクトの順に**両方**走る。プロジェクトローカル側のフックは承認（下記）したリポジトリでだけ読むので、プロジェクトローカル設定を持つリポジトリでは`worktree remove`でも承認の確認が出る（`--trust`で省ける）。確認はガード判定を抜けた後に出るので、何も消せない場合には出ない。
+
 ## プロジェクトローカル設定の承認
 
-`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`を叩くと、`onCreate`・`onOpen`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
+`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`・`worktree remove`を叩くと、`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
 
 ```
 $ niwaterm worktree new feat/x
 このリポジトリはniwatermのプロジェクトローカル設定を持っています:
   /path/to/repo/.niwaterm/config.ts
-ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpenのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
+ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpen・onBeforeRemove・onRemoveのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
 レイアウトプリセットを適用したBoardは起動時レイアウトとしても紐づくため、以後niwatermを起動するたびにも実行されます。
 信頼できるリポジトリでのみ許可してください。
 このリポジトリを信頼しますか？ (y/N)
@@ -318,7 +360,7 @@ $ niwaterm worktree new feat/x
 
 `--trust`を付けると確認を省いて承認する（非対話環境向け）。非対話環境で`--trust`も無い場合は、確認できない旨を表示してプロジェクトローカル設定を無視したまま続行する（ハングもエラーもしない）。
 
-承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、フック（`onCreate`・`onOpen`）の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
+承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、フック（`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`）の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
 
 `--layout`（「レイアウトプリセットの適用」節）も同じ承認で門番する。プリセットの解決はアプリ側が`<repoRoot>/.niwaterm/config.ts`を評価して行うため、CLIがimportしなくてもそこでコードが走るためで、未承認のままレイアウトを指定すると終了コード1で止まる。
 

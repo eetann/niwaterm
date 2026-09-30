@@ -54,6 +54,24 @@ export interface WorktreeOpenHookContext {
  */
 export type WorktreeOpenHook = (ctx: WorktreeOpenHookContext) => unknown;
 
+export interface WorktreeRemoveHookContext {
+  /** メインワークツリーのパス */
+  repoRoot: string;
+  /** 削除する（した）ワークツリーのパス */
+  worktreePath: string;
+  /** detached HEADのワークツリーはnull */
+  branch: string | null;
+  /** `--force`付きで実行されたか */
+  force: boolean;
+}
+
+/**
+ * ワークツリーの削除前後に走るフック。niwaterm CLIのプロセスで、対象のワークツリーごとにawaitされる。
+ * `onBeforeRemove`の実行中のカレントディレクトリは削除するワークツリー（実体ディレクトリが既に無い
+ * ワークツリーならメインワークツリー）、`onRemove`はメインワークツリーになる。
+ */
+export type WorktreeRemoveHook = (ctx: WorktreeRemoveHookContext) => unknown;
+
 export interface WorktreeConfig {
   /**
    * 新規ワークツリーの置き場所テンプレート。`${repo}`（メインワークツリーのディレクトリ名）と
@@ -101,4 +119,22 @@ export interface WorktreeConfig {
    * 例: async (ctx) => { if (ctx.created) await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`; }
    */
   onOpen?: WorktreeOpenHook;
+  /**
+   * `niwaterm worktree remove`がワークツリーを削除する直前に走るフック。`docker compose down`や
+   * 開発サーバーの停止など、ワークツリーの中身が残っているうちに行う後始末向け。
+   * `--force`無しでは消せない対象（未コミットの変更等）なら、フックを走らせる前に止まる。
+   * 失敗するとそのワークツリーは削除せずに残し、コマンドは終了コード1で止まる（複数指定時は
+   * 他のワークツリーの削除を続ける）。`--force`付きなら警告を出して削除を続ける。
+   * `onCreate`と同じくグローバル→プロジェクトの順に**両方**走る。
+   * 例: async () => { await Bun.$`docker compose down`; }
+   */
+  onBeforeRemove?: WorktreeRemoveHook;
+  /**
+   * `niwaterm worktree remove`がワークツリー（`--delete-branch`ならブランチも）を削除した直後に
+   * 走るフック。ワークツリーの外に作ったキャッシュ・データベースの掃除向け。
+   * 失敗しても削除は済んでいるので戻さず、コマンドが終了コード1で止まる。
+   * `onCreate`と同じくグローバル→プロジェクトの順に**両方**走る。
+   * 例: async (ctx) => { await Bun.$`dropdb app_${ctx.branch}`; }
+   */
+  onRemove?: WorktreeRemoveHook;
 }

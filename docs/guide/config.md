@@ -1475,6 +1475,8 @@ niwaterm layout apply dev --startup
 | `fetch` | `boolean` | ワークツリーを作る前にリモートをfetchするか（`--fetch`／`--no-fetch`の既定値） | `true` |
 | `onCreate` | `(ctx) => void \| Promise<void>` | ワークツリーを新規作成した直後に走るフック | なし |
 | `onOpen` | `(ctx) => void \| Promise<void>` | ワークツリーのBoardを新規に作った後に走るフック | なし |
+| `onBeforeRemove` | `(ctx) => void \| Promise<void>` | `worktree remove`がワークツリーを削除する直前に走るフック | なし |
+| `onRemove` | `(ctx) => void \| Promise<void>` | `worktree remove`がワークツリーを削除した直後に走るフック | なし |
 
 ```ts
 worktree: {
@@ -1502,9 +1504,11 @@ worktree: {
 
 `onOpen`はBoardを新規に作り、レイアウトプリセットの適用まで済んだ後にawaitされる。`ctx`には`onCreate`と同じ項目に加えて`created`（ワークツリーを新規作成したか）・`workspaceId`・`boardId`・`tabIds`が入るので、CLIでBoardのフェーズやタブ変数を設定できる。既に開いているBoardを使い回したとき・Boardを作らない`--open`では走らない。失敗してもBoardは閉じず、終了コード1で止まる。詳細は`docs/guide/worktree.md`「Boardを開いた後のフック」節。
 
-ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`layout`はリポジトリ固有、という混ぜ方ができる）。ただしフック（`onCreate`・`onOpen`）だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
+`onBeforeRemove`・`onRemove`は`worktree remove`の対象ごとに、削除の直前・直後にawaitされる。`ctx`は`repoRoot`・`worktreePath`・`branch`（detached HEADは`null`）・`force`。カレントディレクトリは`onBeforeRemove`が削除するワークツリー、`onRemove`がメインワークツリー。`onBeforeRemove`が失敗するとそのワークツリーは削除せずに残して終了コード1で止まる（`--force`なら警告を出して削除を続ける）。`onRemove`が失敗しても削除は戻さず、終了コード1で止まる。詳細は`docs/guide/worktree.md`「削除前後のフック」節。
 
-プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節。
+ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`layout`はリポジトリ固有、という混ぜ方ができる）。ただしフック（`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`）だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
+
+プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`・`worktree remove`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
@@ -1539,7 +1543,7 @@ export default {
 
 設定値の一覧より前に、直近の読み込みが失敗していればその理由（「読み込みエラー」）と、既定値へ落とした項目・無視した項目の一覧（「無視した設定」）が出る。不正な値はその項目だけを落として残りは活かす設計のため、「書いたのに効かない」ときはまずここを見る。
 
-キーバインドの個々の割り当てはここには出ない（件数のみ）。一覧は`niwaterm keybind list`で確認する。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`worktree.onOpen`・`niwa.on`のハンドラ）も値として表示できないため含まない。
+キーバインドの個々の割り当てはここには出ない（件数のみ）。一覧は`niwaterm keybind list`で確認する。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`worktree.onOpen`・`worktree.onBeforeRemove`・`worktree.onRemove`・`niwa.on`のハンドラ）も値として表示できないため含まない。
 
 ## 既知の制約
 

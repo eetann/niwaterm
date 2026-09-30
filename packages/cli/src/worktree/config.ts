@@ -1,4 +1,4 @@
-// ワークツリー設定（置き場所テンプレート・開き方・レイアウトプリセット・作成後フック）を、
+// ワークツリー設定（置き場所テンプレート・開き方・レイアウトプリセット・作成／削除フック）を、
 // どの設定から採るか決める層。
 //
 // 優先順位は項目ごとに独立して次のとおり。
@@ -19,8 +19,8 @@
 // リポジトリのTypeScriptがimportだけで走るため、承認はimportの前に取る。未承認ならこのレイヤーごと
 // 無かったものとして扱う。
 //
-// 値（dir・open・layout・fetch）は上書きだが、フック（onCreate・onOpen）は**グローバル→プロジェクトの順に
-// 両方走る**。
+// 値（dir・open・layout・fetch）は上書きだが、フック（onCreate・onOpen・onBeforeRemove・onRemove）は
+// **グローバル→プロジェクトの順に両方走る**。
 // 値は「どれか1つが効く」が自然なのに対し、フックは行動であって上書きが不自然なため
 // （グローバルは自分の習慣、プロジェクトはそのリポジトリの手順、と役割が違う）。
 //
@@ -79,6 +79,10 @@ export interface ResolvedWorktreeSettings {
   onCreate: WorktreeHook[];
   /** Boardを新規に作った後のフック。onCreateと同じく実行順に並ぶ */
   onOpen: WorktreeOpenHook[];
+  /** ワークツリーを削除する直前のフック。onCreateと同じく実行順に並ぶ */
+  onBeforeRemove: WorktreeRemoveHook[];
+  /** ワークツリーを削除した直後のフック。onCreateと同じく実行順に並ぶ */
+  onRemove: WorktreeRemoveHook[];
 }
 
 /** 設定ファイルから読めるworktreeセクションの生の形 */
@@ -89,6 +93,8 @@ export interface WorktreeSettingsInput {
   fetch?: boolean;
   onCreate?: WorktreeHook;
   onOpen?: WorktreeOpenHook;
+  onBeforeRemove?: WorktreeRemoveHook;
+  onRemove?: WorktreeRemoveHook;
 }
 
 /** ワークツリー作成後に走るフック。設定ファイルがdefault exportするTypeScriptの関数 */
@@ -120,6 +126,20 @@ export interface WorktreeOpenHookContext {
   tabIds: string[];
 }
 
+/** ワークツリーの削除前後に走るフック */
+export type WorktreeRemoveHook = (ctx: WorktreeRemoveHookContext) => void | Promise<void>;
+
+export interface WorktreeRemoveHookContext {
+  /** メインワークツリーのパス */
+  repoRoot: string;
+  /** 削除する（した）ワークツリーのパス */
+  worktreePath: string;
+  /** detached HEADのワークツリーはnull */
+  branch: string | null;
+  /** `--force`付きで実行されたか */
+  force: boolean;
+}
+
 /** 1つの設定ソースから読めた値。読めなかった項目はundefinedのまま次のソースへ譲る */
 interface WorktreeConfigLayer {
   source: WorktreeSettingSource;
@@ -129,6 +149,8 @@ interface WorktreeConfigLayer {
   fetch: boolean | undefined;
   onCreate: WorktreeHook | undefined;
   onOpen: WorktreeOpenHook | undefined;
+  onBeforeRemove: WorktreeRemoveHook | undefined;
+  onRemove: WorktreeRemoveHook | undefined;
 }
 
 /** テンプレートを探す先。呼び出し側が明示的に渡す（既定はworktreeDirSourcesFor()で組む） */
@@ -176,6 +198,8 @@ export function pickWorktreeSettings(config: unknown): WorktreeSettingsInput {
     fetch?: unknown;
     onCreate?: unknown;
     onOpen?: unknown;
+    onBeforeRemove?: unknown;
+    onRemove?: unknown;
   };
   const dir = nonEmptyString(raw.dir);
   const layout = nonEmptyString(raw.layout);
@@ -186,6 +210,10 @@ export function pickWorktreeSettings(config: unknown): WorktreeSettingsInput {
     ...(typeof raw.fetch === "boolean" ? { fetch: raw.fetch } : {}),
     ...(typeof raw.onCreate === "function" ? { onCreate: raw.onCreate as WorktreeHook } : {}),
     ...(typeof raw.onOpen === "function" ? { onOpen: raw.onOpen as WorktreeOpenHook } : {}),
+    ...(typeof raw.onBeforeRemove === "function"
+      ? { onBeforeRemove: raw.onBeforeRemove as WorktreeRemoveHook }
+      : {}),
+    ...(typeof raw.onRemove === "function" ? { onRemove: raw.onRemove as WorktreeRemoveHook } : {}),
   };
 }
 
@@ -212,6 +240,8 @@ function toLayer(source: WorktreeSettingSource, input: WorktreeSettingsInput): W
     fetch: input.fetch,
     onCreate: input.onCreate,
     onOpen: input.onOpen,
+    onBeforeRemove: input.onBeforeRemove,
+    onRemove: input.onRemove,
   };
 }
 
@@ -282,6 +312,8 @@ export async function resolveWorktreeSettings(
     fetch: pickLayer(layers, (layer) => layer.fetch, DEFAULT_WORKTREE_FETCH),
     onCreate: stackHooks(layers, (layer) => layer.onCreate),
     onOpen: stackHooks(layers, (layer) => layer.onOpen),
+    onBeforeRemove: stackHooks(layers, (layer) => layer.onBeforeRemove),
+    onRemove: stackHooks(layers, (layer) => layer.onRemove),
   };
 }
 

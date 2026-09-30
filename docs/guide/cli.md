@@ -417,7 +417,7 @@ direct             0件 (prefix不要で即時発火するバインド)
 
 表示されるのは**マージ後の実際に効いている値**で、設定ファイルに書いていない項目は既定値が出る。未設定でも既定値で動く項目（`shell.default`等）は`(未設定)`とフォールバック先を併記する。`fontSize`・`lineHeight`は設定ファイルを見ても今の値が分からない（キーバインド・`font-size`コマンドのズームは設定ファイルを書き換えない）ため、実効値に加えて設定ファイル上の値（`fontSize`はズーム量も）を添える。
 
-値として出せない設定は含まない。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`worktree.onOpen`・`niwa.on`のハンドラ）、キーバインドの個々の割り当て（件数のみ。一覧は`keybind list`）、`worktree`設定（実行するディレクトリとプロジェクトローカル設定に依存するため、アプリ側に「現在の値」が無い）が該当する。`layouts`もアプリが保持しているグローバル設定のプリセット名だけで、プロジェクトローカル分は`layout list`で確認する。
+値として出せない設定は含まない。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`worktree.onOpen`・`worktree.onBeforeRemove`・`worktree.onRemove`・`niwa.on`のハンドラ）、キーバインドの個々の割り当て（件数のみ。一覧は`keybind list`）、`worktree`設定（実行するディレクトリとプロジェクトローカル設定に依存するため、アプリ側に「現在の値」が無い）が該当する。`layouts`もアプリが保持しているグローバル設定のプリセット名だけで、プロジェクトローカル分は`layout list`で確認する。
 
 同じ内容はアプリ内のモーダルでも見られる（キーバインド既定: prefix `ctrl+b` → `i`、コマンドパレットの「Show Settings」）。こちらは色の項目にスウォッチが付く。
 
@@ -466,7 +466,7 @@ niwaterm tab hover hide [--tab <tabId>]
 niwaterm worktree list [--cwd <dir>]
 niwaterm worktree new <branch> [--track <mode>] [--remote <name>] [--fetch|--no-fetch] [--from <ref>] [--path <dir>] [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
 niwaterm worktree open <worktree> [--open <mode>] [--layout <name>] [--workspace <workspaceId>] [--name <name>] [--trust] [--cwd <dir>]
-niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--cwd <dir>]
+niwaterm worktree remove <worktree>... [--force] [--delete-branch] [--keep-board] [--trust] [--cwd <dir>]
 ```
 
 gitのワークツリーを一覧・作成・削除し、それぞれをBoardとして開くコマンド。`list`はワークツリー一覧をTSVで表示するだけ、`new`／`open`は対象のワークツリーをBoardとして開き（`--open`で開き方を選ぶ）、`remove`はワークツリーをディレクトリごと削除してそのBoardを閉じる。`<worktree>`はブランチ名・パス・ディレクトリ名のいずれでも指定でき、`remove`だけはスペース区切りで複数渡せる。
@@ -475,7 +475,7 @@ gitのワークツリーを一覧・作成・削除し、それぞれをBoardと
 
 `list`と`new --open none`はniwatermアプリへ接続しないため、アプリが起動していない普通のターミナルからも使える。
 
-置き場所の決め方・リモートのブランチからの作成・作成後フック・レイアウトプリセットの適用・プロジェクトローカル設定の承認と、Boardとの紐づけ（`board worktree`）を含めた全体は`docs/guide/worktree.md`（`niwaterm docs show worktree`）を参照。
+置き場所の決め方・リモートのブランチからの作成・作成後／削除前後のフック・レイアウトプリセットの適用・プロジェクトローカル設定の承認と、Boardとの紐づけ（`board worktree`）を含めた全体は`docs/guide/worktree.md`（`niwaterm docs show worktree`）を参照。
 
 ## 対象IDの省略
 

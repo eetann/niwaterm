@@ -132,6 +132,8 @@ export {
   type WorktreeOpenHook,
   type WorktreeOpenHookContext,
   type WorktreeOpenMode,
+  type WorktreeRemoveHook,
+  type WorktreeRemoveHookContext,
 } from "./worktree";
 export {
   canonicalizeParsed,

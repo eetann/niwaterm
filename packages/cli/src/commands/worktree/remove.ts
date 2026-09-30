@@ -8,6 +8,7 @@ import {
   toAppAccessiblePath,
 } from "../../ipc-client";
 import { findWorktreeBoards } from "../../worktree/board";
+import { resolveWorktreeSettings, worktreeDirSourcesFor } from "../../worktree/config";
 import {
   deleteBranch,
   listWorktrees,
@@ -20,7 +21,9 @@ import {
   isInsideWorktree,
   removalBlockers,
   resolveRemovalTargets,
+  runRemoveHooks,
 } from "../../worktree/remove";
+import { ensureProjectTrust } from "../../worktree/trust";
 
 /** 複数行の理由を箇条書きの1項目へ畳む。2行目以降は先頭のマーカー分だけ下げる */
 function bullet(reason: string): string {
@@ -140,6 +143,11 @@ export default define({
       description:
         "そのワークツリーで開いたBoardを閉じずに残す（省略時は閉じる。cwdが消えたタブが残る）",
     },
+    trust: {
+      type: "boolean",
+      description:
+        "プロジェクトローカル設定（<repoRoot>/.niwaterm/config.ts）の確認を省いて信頼する",
+    },
     cwd: {
       type: "string",
       description:
@@ -169,6 +177,13 @@ export default define({
       }
     }
 
+    // プロジェクトローカル設定はimportした時点でコードが走るため、読む前に承認を取る。
+    // 消せない対象があるときに確認を出さずに済むよう、ガード判定の後で取る
+    const trust = await ensureProjectTrust(repoRoot, { assumeTrusted: ctx.values.trust === true });
+    const settings = await resolveWorktreeSettings(worktreeDirSourcesFor(repoRoot), {
+      includeProject: trust === "trusted",
+    });
+
     // Windowsはカレントディレクトリにしているプロセスがあるとディレクトリを消せないため、
     // 自分のcwdだけでも先に外しておく（同じワークツリーで動いている他のシェルまでは面倒を見られない）
     if (targets.some((entry) => isInsideWorktree(entry.path, process.cwd()))) {
@@ -178,7 +193,33 @@ export default define({
     const removedPaths: string[] = [];
     const failures: string[] = [];
     let branchFailed = false;
+    let beforeHookFailed = false;
     for (const entry of targets) {
+      const hookCtx = { repoRoot, worktreePath: entry.path, branch: entry.branch, force };
+      if (settings.onBeforeRemove.length > 0) {
+        console.log(
+          `running worktree onBeforeRemove hook (${settings.onBeforeRemove.length}): ${entry.path}`,
+        );
+      }
+      // 実体ディレクトリが無いワークツリーへはchdirできないので、メインワークツリーで走らせる
+      const beforeError = await runRemoveHooks(
+        settings.onBeforeRemove,
+        hookCtx,
+        entry.prunable ? repoRoot : entry.path,
+      );
+      if (beforeError !== null) {
+        if (!force) {
+          beforeHookFailed = true;
+          failures.push(
+            `${entry.path} は削除しませんでした: 削除前フックが失敗しました: ${beforeError}`,
+          );
+          continue;
+        }
+        console.error(
+          `warning: ${entry.path} の削除前フックが失敗しましたが、--forceのため削除を続けます: ${beforeError}`,
+        );
+      }
+
       const removed = await removeWorktree({ repoRoot, path: entry.path, force });
       if (!removed.ok) {
         failures.push(`${entry.path} を削除できませんでした: ${removed.error}`);
@@ -186,13 +227,25 @@ export default define({
       }
       console.log(`removed: ${entry.path}`);
       removedPaths.push(entry.path);
-      if (ctx.values["delete-branch"] !== true) continue;
-      const branchError = await removeBranch(repoRoot, entry, force);
-      if (branchError === null) continue;
-      branchFailed = true;
-      failures.push(
-        `ブランチ ${entry.branch} を削除できませんでした（ワークツリー ${entry.path} は削除済みです）: ${branchError}`,
-      );
+      if (ctx.values["delete-branch"] === true) {
+        const branchError = await removeBranch(repoRoot, entry, force);
+        if (branchError !== null) {
+          branchFailed = true;
+          failures.push(
+            `ブランチ ${entry.branch} を削除できませんでした（ワークツリー ${entry.path} は削除済みです）: ${branchError}`,
+          );
+        }
+      }
+
+      if (settings.onRemove.length > 0) {
+        console.log(`running worktree onRemove hook (${settings.onRemove.length}): ${entry.path}`);
+      }
+      const afterError = await runRemoveHooks(settings.onRemove, hookCtx, repoRoot);
+      if (afterError !== null) {
+        failures.push(
+          `${entry.path} の削除後フックが失敗しました（ワークツリーは削除済みです）: ${afterError}`,
+        );
+      }
     }
 
     if (ctx.values["keep-board"] !== true && removedPaths.length > 0) {
@@ -200,10 +253,15 @@ export default define({
     }
 
     if (failures.length > 0) {
-      failWithReasons(
-        failures,
-        branchFailed && !force ? "\n未マージのブランチも削除するには--forceを付けてください" : "",
-      );
+      const hints = [
+        ...(branchFailed && !force
+          ? ["未マージのブランチも削除するには--forceを付けてください"]
+          : []),
+        ...(beforeHookFailed
+          ? ["削除前フックの失敗を無視して削除するには--forceを付けてください"]
+          : []),
+      ];
+      failWithReasons(failures, hints.map((hint) => `\n${hint}`).join(""));
     }
   },
 });

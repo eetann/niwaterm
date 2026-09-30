@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { realpathSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
@@ -17,6 +18,7 @@ import {
   NO_REMOTE,
   removalBlockers,
   resolveRemovalTargets,
+  runRemoveHooks,
   UNKNOWN,
 } from "./remove";
 
@@ -305,5 +307,55 @@ describe("deleteBranch", () => {
       const result = await deleteBranch({ repoRoot: repo, branch: "feature", force: true });
       expect(result.ok).toBe(false);
     });
+  });
+});
+
+describe("runRemoveHooks", () => {
+  const original = process.cwd();
+  afterEach(() => process.chdir(original));
+
+  const ctx = { repoRoot: "/repo", worktreePath: "/repo@feature", branch: "feature", force: false };
+
+  test("フックを順に渡したcwdで実行し、全部成功ならnull", async () => {
+    const dir = realpathSync(await mkdtemp(join(tmpdir(), "niwaterm-remove-hook-")));
+    try {
+      const calls: string[] = [];
+      const result = await runRemoveHooks(
+        [
+          (received) => {
+            calls.push(`first:${process.cwd()}:${received.branch}`);
+          },
+          async () => {
+            calls.push(`second:${process.cwd()}`);
+          },
+        ],
+        ctx,
+        dir,
+      );
+      expect(result).toBeNull();
+      expect(calls).toEqual([`first:${dir}:feature`, `second:${dir}`]);
+      expect(process.cwd()).toBe(original);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("最初に失敗したフックで止め、その理由を返す", async () => {
+    const calls: string[] = [];
+    const result = await runRemoveHooks(
+      [
+        () => {
+          throw new Error("boom");
+        },
+        () => {
+          calls.push("second");
+        },
+      ],
+      ctx,
+      original,
+    );
+    expect(result).toBe("boom");
+    expect(calls).toEqual([]);
+    expect(process.cwd()).toBe(original);
   });
 });

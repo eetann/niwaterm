@@ -1,10 +1,11 @@
-// ワークツリー削除の対象解決とガード判定。
+// ワークツリー削除の対象解決・ガード判定・削除前後フックの実行。
 //
 // `git worktree remove`自体は未コミットの変更とロックしか見ず、未pushのコミットは黙って消す
 // （ワークツリーを消してもブランチは残るが、--delete-branchと組み合わせると取り返しがつかない）。
 // 消えて困るものを一通り数え、何が引っかかっているかを並べてから--forceを要求する。
 
 import { resolve, sep } from "node:path";
+import type { WorktreeRemoveHook, WorktreeRemoveHookContext } from "./config";
 import {
   countUncommittedChanges,
   countUnpushedCommits,
@@ -12,6 +13,7 @@ import {
   hasRemotes,
   type WorktreeEntry,
 } from "./git";
+import { runInWorktree } from "./hook-cwd";
 
 /** 数えられなかった観点。ガード側では「安全側に倒して止める」として扱う */
 export const UNKNOWN = "unknown";
@@ -129,4 +131,24 @@ export function resolveRemovalTargets(
     targets.push(found.worktree);
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, targets };
+}
+
+/**
+ * 削除前後のフックを順に実行する。最初に失敗したフックで止め、その理由を返す（全部成功ならnull）。
+ * 削除を続けるかどうかは前後で判断が違うので、ここでは終了させず呼び出し側へ任せる。
+ * cwdは削除前ならワークツリー、削除後はメインワークツリーを渡す
+ */
+export async function runRemoveHooks(
+  hooks: WorktreeRemoveHook[],
+  ctx: WorktreeRemoveHookContext,
+  cwd: string,
+): Promise<string | null> {
+  for (const hook of hooks) {
+    try {
+      await runInWorktree(cwd, () => hook(ctx));
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }
+  return null;
 }

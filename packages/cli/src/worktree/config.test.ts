@@ -140,6 +140,8 @@ describe("resolveWorktreeSettings", () => {
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
         onOpen: [],
+        onBeforeRemove: [],
+        onRemove: [],
       });
     });
   });
@@ -159,6 +161,8 @@ describe("resolveWorktreeSettings", () => {
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
         onOpen: [],
+        onBeforeRemove: [],
+        onRemove: [],
       });
     });
   });
@@ -205,6 +209,8 @@ describe("resolveWorktreeSettings", () => {
         fetch: { value: DEFAULT_WORKTREE_FETCH, source: "default" },
         onCreate: [],
         onOpen: [],
+        onBeforeRemove: [],
+        onRemove: [],
       });
     });
   });
@@ -301,7 +307,7 @@ describe("worktreeDirSourcesFor", () => {
   });
 });
 
-describe("フック（onCreate・onOpen）の解決", () => {
+describe("フック（onCreate・onOpen・onBeforeRemove・onRemove）の解決", () => {
   async function withTempDir(fn: (root: string) => Promise<void>): Promise<void> {
     const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-hook-test-"));
     try {
@@ -402,6 +408,35 @@ describe("フック（onCreate・onOpen）の解決", () => {
         calls.push(await Bun.file(markerFile).text());
       }
       expect(calls).toEqual(["global:board-1", "project:board-1"]);
+    });
+  });
+
+  test("onBeforeRemove・onRemoveもグローバル→プロジェクトの順に並び、互いに別に解決する", async () => {
+    await withTempDir(async (root) => {
+      const removeHooks = (marker: string) =>
+        `export default { worktree: {` +
+        ` onBeforeRemove: async (ctx) => { await Bun.write(ctx.worktreePath, "before:" + ${JSON.stringify(marker)}); },` +
+        ` onRemove: async (ctx) => { await Bun.write(ctx.worktreePath, "after:" + ${JSON.stringify(marker)}); },` +
+        ` } };\n`;
+      const resolved = await resolveWorktreeSettings(
+        await sources(root, { global: removeHooks("global"), project: removeHooks("project") }),
+        { includeProject: true },
+      );
+      expect(resolved.onCreate).toEqual([]);
+
+      const calls: string[] = [];
+      const markerFile = join(root, "marker");
+      const ctx = {
+        repoRoot: join(root, "repo"),
+        worktreePath: markerFile,
+        branch: "x",
+        force: false,
+      };
+      for (const hook of [...resolved.onBeforeRemove, ...resolved.onRemove]) {
+        await hook(ctx);
+        calls.push(await Bun.file(markerFile).text());
+      }
+      expect(calls).toEqual(["before:global", "before:project", "after:global", "after:project"]);
     });
   });
 
