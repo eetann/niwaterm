@@ -29,7 +29,7 @@ niwatermを使うユーザー向けのドキュメント（CLI・設定ファイ
 
 - frontmatterはフレームワークの規約に従い、`title`と`description`を必ず書く（`description`は`niwaterm docs list`の説明に使われる）
 - 本文は`.md`で書く。フレームワークのコンポーネントが必要なページだけ`.mdx`にする（`niwaterm docs show`がファイルをそのまま出力するため）。`.mdx`のページは`docs list`に載らない
-- `docs show`のトピック名は、contentディレクトリ（`website/src/content/docs/`）からの相対パスから拡張子を除いたものになる（`config/keybindings.md`なら`config/keybindings`）。ファイルを移したり名前を変えたりするとトピック名も変わるので、`niwaterm docs show <旧名>`を書いている箇所をgrepで探して直す
+- `docs show`のトピック名は、contentディレクトリ（`website/src/content/docs/`）からの相対パスから拡張子を除いたものになる（`keybindings/api.md`なら`keybindings/api`）。ファイルを移したり名前を変えたりするとトピック名も変わるので、`niwaterm docs show <旧名>`を書いている箇所をgrepで探して直す
 - ページ間のリンクは`/niwaterm/<トピック名>/#<見出し>`の絶対パスで書く（`base`が`/niwaterm/`のため）。見出しのアンカーはgithub-sluggerの規則で作られ、英字は小文字になり全角括弧などの記号は消える。書いたら`mise run docs:build`の出力（`website/dist/`）で`id`が実在するか確かめる
 
 ## 新規ドキュメントを書くとき

@@ -6,7 +6,7 @@ import { failAndExit } from "../cli-error";
 
 /**
  * ドキュメントサイトのMarkdown1件分。nameはcontentディレクトリからの相対パスから拡張子を除いたもの
- * （サブディレクトリ内なら`config/keybindings`のように`/`区切り）で、サイトのURLのパスに対応する
+ * （サブディレクトリ内なら`keybindings/api`のように`/`区切り）で、サイトのURLのパスに対応する
  */
 export interface DocTopic {
   name: string;
@@ -62,15 +62,15 @@ export async function loadTopics(dir: string = CONTENT_DIR): Promise<DocTopic[]>
   const files = (await readdir(dir, { recursive: true }))
     .filter((file) => file.endsWith(".md"))
     // Windowsではreaddirがバックスラッシュ区切りのパスを返すので、トピック名はOSによらず`/`へ揃える
-    .map((file) => file.split(sep).join("/"))
-    .sort();
+    .map((file) => file.split(sep).join("/"));
   const topics: DocTopic[] = [];
   for (const file of files) {
     const path = join(dir, file);
     const description = parseFrontmatterDescription(await Bun.file(path).text());
     topics.push({ name: file.slice(0, -".md".length), description: description ?? "", path });
   }
-  return topics;
+  // 拡張子付きのまま並べると`-`が`.`より前に来て、`shell-integration`が`shell`より先に並ぶ
+  return topics.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 const listCommand = define({

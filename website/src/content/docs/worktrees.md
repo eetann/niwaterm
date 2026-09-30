@@ -1,6 +1,6 @@
 ---
-title: ワークツリー管理
-description: niwatermからgitワークツリーを作成・開閉・削除する仕組みと、置き場所・作成後フック・Boardを開いた後のフック・レイアウト適用の設定
+title: ワークツリー
+description: gitワークツリーをBoardとして作成・開閉・削除するコマンドと、置き場所・設定の書き方
 ---
 
 `niwaterm worktree`系コマンドで、gitのワークツリーを作成・一覧・削除し、それぞれをniwatermのBoardとして開ける。**1つのワークツリーが1つのBoard**（1ワークスペース内で持てる独立したTileレイアウト、tmuxのWindow相当。詳細: `docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）に対応し、ブランチごとの作業場所をアプリ内で切り替えながら使う。
@@ -15,7 +15,7 @@ niwaterm board worktree clear [--board <boardId>]
 niwaterm board worktree show [--board <boardId>]
 ```
 
-`worktree list`と`worktree new --open none`はniwatermアプリへ接続しないため、アプリが起動していない普通のターミナルからも使える（`worktree remove`も削除までは進み、Boardを閉じられない旨の警告だけ出す）。設定ファイル側（`worktree`）の書き方は[設定ファイルの「ワークツリー」節](/niwaterm/config/#ワークツリー)を参照。
+`worktree list`と`worktree new --open none`はniwatermアプリへ接続しないため、アプリが起動していない普通のターミナルからも使える（`worktree remove`も削除までは進み、Boardを閉じられない旨の警告だけ出す）。設定ファイル側（`worktree`）の書き方は[「ワークツリー」節](/niwaterm/worktrees/#設定worktree)を参照。
 
 ## Boardに紐づくワークツリー
 
@@ -34,7 +34,7 @@ niwaterm board worktree clear
 
 - **`worktree open`の付け替え防止** — 「そのワークツリーのBoardが既に開いているか」の判定にこの値を使う（「ワークツリーを開く」節）。タブのcwdは見ないので、`cd`で別ディレクトリへ移っても判定は変わらない
 - **消えたディレクトリの警告** — 紐づけ先が見つからなくなるとサイドバーのBoard行に警告アイコンが出る。ワークツリーを`git worktree remove`した後のBoardを見分けるためのもの
-- **新しいタブのcwd** — `board.newTabCwd: "worktree"`を設定していれば、タブ追加・タイル分割・ポップアップのcwdが今のタブの引き継ぎではなく紐づけ先になる（[設定ファイルの「Board設定」節](/niwaterm/config/#board設定)）
+- **新しいタブのcwd** — `board.newTabCwd: "worktree"`を設定していれば、タブ追加・タイル分割・ポップアップのcwdが今のタブの引き継ぎではなく紐づけ先になる（[「Board設定」節](/niwaterm/boards/#board設定)）
 
 GUIからはサイドバーのBoard行を右クリック →「ワークツリーを設定」、またはコマンドパレットの`Set Board Worktree Directory`で変更できる。入力欄にはそのBoardのカレントディレクトリが入った状態で開くので、そのまま確定すれば「今いるディレクトリを紐づける」になる。空のまま確定すると紐づけを解除する。既定のキーバインドは持たないので、キーから使いたい場合は`set-board-worktree`アクションを設定ファイルで割り当てる。
 
@@ -190,7 +190,7 @@ Boardは既定で閉じる。ワークツリーを消した後もBoardが残る�
 
 Boardを閉じるのはワークツリーを消し終えた後。複数のワークツリーを指定した場合も、全部消し終えてから対応するBoardをまとめて閉じる。
 
-削除の直前・直後に自分の後始末を走らせたい場合は`worktree.onBeforeRemove`・`worktree.onRemove`を使う（「削除前後のフック」節）。
+削除の直前・直後に自分の後始末を走らせたい場合は`worktree.onBeforeRemove`・`worktree.onRemove`を使う（[「削除前後のフック」節](/niwaterm/worktrees/hooks/#削除前後のフック)）。
 
 Windowsは**カレントディレクトリにしているプロセスがあるとディレクトリを削除できない**ので、そのワークツリーで動いている別のシェル・エディタがあると`git worktree remove`が失敗する（CLI自身のcwdは削除前に退避する）。
 
@@ -217,160 +217,74 @@ git config niwaterm.worktree.open board-switch
 git config niwaterm.worktree.fetch false
 ```
 
-テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は[設定ファイルの「ワークツリー」節](/niwaterm/config/#ワークツリー)を参照。
+テンプレートは`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。設定ファイル側の書き方は[「ワークツリー」節](/niwaterm/worktrees/#設定worktree)を参照。
 
 プロジェクトローカル設定は、レイアウトプリセットと違って**cwdから上向きに探さず、メインワークツリー直下の`.niwaterm/config.ts`だけを見る**。置き場所はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
 
-## 作成後フック
+## 設定（`worktree`）
 
-ワークツリーを**新規作成した直後**に走るフックを設定できる（`bun install`・`.env`のコピー・`direnv allow`あたりを想定）。既存のワークツリーを開き直した場合は走らない。
+`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。
+
+| フィールド       | 型                                                           | 意味                                                                           | 未指定時               |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------- |
+| `dir`            | `string`                                                     | 新規ワークツリーの置き場所テンプレート                                         | `../${repo}@${branch}` |
+| `open`           | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値                                               | `"board"`              |
+| `layout`         | `string`                                                     | Boardへ適用するレイアウトプリセット名（`--layout`の既定値）                    | なし（適用しない）     |
+| `fetch`          | `boolean`                                                    | ワークツリーを作る前にリモートをfetchするか（`--fetch`／`--no-fetch`の既定値） | `true`                 |
+| `onCreate`       | `(ctx) => void \| Promise<void>`                             | ワークツリーを新規作成した直後に走るフック                                     | なし                   |
+| `onOpen`         | `(ctx) => void \| Promise<void>`                             | ワークツリーのBoardを新規に作った後に走るフック                                | なし                   |
+| `onBeforeRemove` | `(ctx) => void \| Promise<void>`                             | `worktree remove`がワークツリーを削除する直前に走るフック                      | なし                   |
+| `onRemove`       | `(ctx) => void \| Promise<void>`                             | `worktree remove`がワークツリーを削除した直後に走るフック                      | なし                   |
 
 ```ts
-// ~/.config/niwaterm/niwaterm.config.ts
 worktree: {
+  dir: ".worktrees/${branch}",
+  open: "board-switch",
+  layout: "dev",
   onCreate: async () => {
     await Bun.$`bun install`;
   },
-},
-```
-
-フックの実行中は**カレントディレクトリが作ったワークツリーになる**ので、`Bun.$`・`Bun.spawn`はそのワークツリーで走る（コマンドを実行したディレクトリには、フックが終わった後で戻る）。`ctx`には`repoRoot`（メインワークツリー）・`worktreePath`（作ったワークツリー）・`branch`が入る。宣言的なコピー・リンクのDSLは用意していない。設定がTypeScriptなので、条件分岐もファイル操作も素のコードで書けるため（キーバインドの関数ハンドラと同じ方針）。
-
-**niwaterm CLIのプロセスで、Boardを開く前にawaitされる**。タブが立ち上がる時点でセットアップが済んでいるので、`--open`のどのモード（`none`・`current-tab`含む）でも同じように走る。標準出力はコマンドを実行したターミナルへそのまま流れるため、完了するまでプロンプトは戻らない。
-
-フックが例外を投げた場合は**ワークツリーを残したまま終了コード1で止まり、Boardは開かない**。準備できていないワークツリーで作業を始めてしまうより、直して開き直せるほうがよいため。残ったワークツリーは`worktree new`を再実行すれば開けるが、そのときフックは走らない（新規作成ではないため）。
-
-Boardのフェーズ・タブ変数のように、Boardができてから行う操作は`onOpen`（「Boardを開いた後のフック」節）に書く。
-
-## レイアウトプリセットの適用
-
-```sh
-niwaterm worktree new feat/x --layout dev
-niwaterm worktree open feat/x --layout dev
-```
-
-ワークツリーのBoardへ、`layouts`のレイアウトプリセット（[設定ファイルの「レイアウト」節](/niwaterm/config/#レイアウト)参照）を適用する。省略時は設定の`worktree.layout`が使われる（置き場所と同じ優先順位で解決する）。
-
-適用されるのは**Boardを新規に作ったときだけ**。既にそのワークツリーのBoardが開いている場合・`--open none`／`current-tab`の場合は適用せず、効いていない旨の警告を出す。レイアウトの適用は既存タブ・PTYをすべて閉じる破壊的操作なので、作業中のBoardを奪わないため。作りたてのBoardは単一タイル・単一タブなので、失われるものは無い。
-
-プリセットは**メインワークツリーの`.niwaterm/`から引き**、タブは**そのワークツリーで開く**。解決起点をメインワークツリーに揃えているのは`worktree.*`の設定と同じ理由（置き場所・開き方はリポジトリ全体の方針）で、`.niwaterm/`をリンクされたワークツリーへコミットしていない運用でもプロジェクトローカルのプリセットが引ける。`layout apply`はプリセットの解決元をタブのcwdの基準にするが、ここでは解決元と開く場所が別になるため分けている（プリセット側で`cwd: "./packages/cli"`のように書いた相対パスも、ワークツリー基準で解決される）。
-
-適用したプリセットは、そのBoardの**起動時レイアウトとしても紐づく**（`layout apply <name> --startup`相当。[CLIからの操作の「起動時レイアウト」節](/niwaterm/cli/#起動時レイアウト)参照）。ワークツリーのBoardの中身はプリセットが決めているので、次回の起動でも保存した骨格を復元するのではなくプリセットで組み直す（タブの`command`も改めて実行される）。組み直しの際もタブが開くのは**そのワークツリー**で、プリセットの解決元（メインワークツリー）ではない。
-
-骨格の復元に戻したい・紐づけを外したいBoardは`board startup restore`／`board startup clear`を使う。
-
-プロジェクトローカルのプリセットを使う場合は、**プロジェクトローカル設定の承認（下記）が必要**。プリセットの解決でそのリポジトリの`.niwaterm/config.ts`が評価されるためで、未承認のままレイアウトを指定すると終了コード1で止まる（`--trust`で承認できる）。グローバル設定の`layouts`だけを使う場合も、プロジェクトローカル設定を持つリポジトリでは同じ理由で承認が要る。
-
-## Boardを開いた後のフック
-
-ワークツリーのBoardを**新規に作った後**に走るフックを設定できる。Boardの作業フェーズ・タブ変数の設定など、Boardができていないとできない操作を想定している。`onCreate`はBoardを開く前に走るため、そこから`niwaterm board phase set`を叩いても対象のBoardがまだ無い。
-
-```ts
-// ~/.config/niwaterm/niwaterm.config.ts
-worktree: {
   onOpen: async (ctx) => {
-    if (ctx.created) {
-      await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`;
-    }
-    await Bun.$`niwaterm tab var set --tab ${ctx.tabIds[0]} role main`;
+    if (ctx.created) await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`;
   },
 },
 ```
 
-`ctx`の中身は次のとおり。
+`open`は作成したワークツリーをniwatermのどこで開くか。`board`は新規Boardとして開くが遷移せず、`board-switch`は遷移まで行う。`current-tab`はコマンドを実行したタブをそのワークツリーへ`cd`し、`none`は開かない。既定を`board`にしているのは、作業中のBoardを奪わずに次のブランチを仕込めるようにするため。
 
-| フィールド     | 意味                                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------ |
-| `repoRoot`     | メインワークツリーのパス                                                                               |
-| `worktreePath` | 開いたワークツリーのパス                                                                               |
-| `branch`       | ブランチ名（detached HEADのワークツリーは`null`）                                                      |
-| `created`      | 今回の`worktree new`でワークツリーを新規作成したか。`worktree open`・作成済みのワークツリーでは`false` |
-| `workspaceId`  | Boardが属するワークスペース                                                                            |
-| `boardId`      | 作ったBoard                                                                                            |
-| `tabIds`       | Boardのタブ（レイアウトプリセット適用後）。タイルの並び順                                              |
+テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
-Boardの操作用の関数は`ctx`に生やしていない。IDを受け取ってCLIを叩けば何でも書けるため、同じ操作の口を二重に持たないようにしている。フックの中で`--board`・`--tab`を省略すると、フックではなく**コマンドを実行したタブ**が対象になるので、必ずIDを渡す。
+`layout`は`layouts`のキー（[レイアウトプリセット](/niwaterm/layouts/)参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は[「レイアウトプリセットの適用」節](/niwaterm/worktrees/hooks/#レイアウトプリセットの適用)。
 
-走るのは**Boardを新規に作ったときだけ**で、条件はレイアウトプリセットの適用と同じ。既にそのワークツリーのBoardが開いていて使い回した場合・`--open none`／`current-tab`の場合は走らない。作業中のBoardのフェーズや変数を勝手に上書きしないため。`worktree new`でも`worktree open`でも走るので、ワークツリーを作ったときだけの処理は`ctx.created`で分ける。
+`fetch`は、リモートのブランチをワークツリーとして開くときに手元のリモート追跡ブランチが古いままにならないよう、**ワークツリーを新規に作る前**に`git fetch`を打つかどうか。既存のワークツリーを開き直すだけのときと`--track local`のときは、`true`でもfetchしない。作成のたびのネットワーク待ちが気になる場合は`false`にして、必要なときだけ`--fetch`を付ける。詳細は[「リモートのブランチから作る」節](/niwaterm/worktrees/#リモートのブランチから作る)。
 
-**niwaterm CLIのプロセスで、レイアウトプリセットの適用まで済んでから**awaitされる（`board: <boardId>`の出力の後）。`onCreate`と同じく、実行中のカレントディレクトリは開いたワークツリーになる。niwatermの起動時にプリセットでBoardを組み直すときは走らない。起動のたびに走らせたい処理はプリセットのタブの`command`に書く。
+`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。`onCreate`・`onOpen`とも、実行中のカレントディレクトリはそのワークツリーになる（`Bun.$`に`.cwd()`を付けなくてよい）。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は[「作成後フック」節](/niwaterm/worktrees/hooks/#作成後フック)。
 
-フックが例外を投げても**Boardは閉じず**、終了コード1で止まる。Boardは作業できる状態になっているので、捨てるより足りない操作を手で補えるほうがよいため。
+`onOpen`はBoardを新規に作り、レイアウトプリセットの適用まで済んだ後にawaitされる。`ctx`には`onCreate`と同じ項目に加えて`created`（ワークツリーを新規作成したか）・`workspaceId`・`boardId`・`tabIds`が入るので、CLIでBoardのフェーズやタブ変数を設定できる。既に開いているBoardを使い回したとき・Boardを作らない`--open`では走らない。失敗してもBoardは閉じず、終了コード1で止まる。詳細は[「Boardを開いた後のフック」節](/niwaterm/worktrees/hooks/#boardを開いた後のフック)。
 
-`onCreate`と同じく、グローバル設定とプロジェクトローカル設定の両方に書くとグローバル→プロジェクトの順に**両方**走る。プロジェクトローカル側のフックは承認（下記）したリポジトリでだけ読む。
+`onBeforeRemove`・`onRemove`は`worktree remove`の対象ごとに、削除の直前・直後にawaitされる。`ctx`は`repoRoot`・`worktreePath`・`branch`（detached HEADは`null`）・`force`。カレントディレクトリは`onBeforeRemove`が削除するワークツリー、`onRemove`がメインワークツリー。`onBeforeRemove`が失敗するとそのワークツリーは削除せずに残して終了コード1で止まる（`--force`なら警告を出して削除を続ける）。`onRemove`が失敗しても削除は戻さず、終了コード1で止まる。詳細は[「削除前後のフック」節](/niwaterm/worktrees/hooks/#削除前後のフック)。
 
-## 削除前後のフック
+ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`layout`はリポジトリ固有、という混ぜ方ができる）。ただしフック（`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`）だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
 
-`worktree remove`でワークツリーを削除する**直前**（`onBeforeRemove`）と**直後**（`onRemove`）に走るフックを設定できる。
+プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`・`worktree remove`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は[「プロジェクトローカル設定の承認」節](/niwaterm/worktrees/hooks/#プロジェクトローカル設定の承認)。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
-worktree: {
-  // ワークツリーの中身が残っているうちに行う後始末
-  onBeforeRemove: async () => {
-    await Bun.$`docker compose down`;
-  },
-  // ワークツリーの外に作ったものの掃除
-  onRemove: async (ctx) => {
-    if (ctx.branch !== null) await Bun.$`dropdb --if-exists app_${ctx.branch}`;
-  },
-},
+import type { NiwatermProjectConfig } from "@niwaterm/config";
+
+export default {
+  worktree: { dir: ".worktrees/${branch}" },
+} satisfies NiwatermProjectConfig;
 ```
 
-`ctx`の中身は次のとおり（両フック共通）。
+どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は[「ワークツリーの置き場所」節](/niwaterm/worktrees/#ワークツリーの置き場所)を参照。
 
-| フィールド     | 意味                                              |
-| -------------- | ------------------------------------------------- |
-| `repoRoot`     | メインワークツリーのパス                          |
-| `worktreePath` | 削除する（した）ワークツリーのパス                |
-| `branch`       | ブランチ名（detached HEADのワークツリーは`null`） |
-| `force`        | `--force`付きで実行されたか                       |
-
-**niwaterm CLIのプロセスで、対象のワークツリーごとに**awaitされる。複数指定した場合は、1つ目の`onBeforeRemove`→削除→`onRemove`→2つ目の`onBeforeRemove`…の順に進む。実行中のカレントディレクトリは次のとおり。
-
-- `onBeforeRemove`: 削除するワークツリー。実体ディレクトリが既に無いワークツリー（`prunable`）はchdirできないのでメインワークツリーになる
-- `onRemove`: メインワークツリー（削除したワークツリーはもう無いため）
-
-`onBeforeRemove`が走るのは**ガード判定（「ワークツリーの削除」節）を抜けた後**。未コミットの変更等で止まる場合は、どの対象のフックも走らない。
-
-`onBeforeRemove`が例外を投げた場合、**そのワークツリーは削除せずに残し**、残りの対象の処理を続けてから終了コード1で止まる。後始末が済んでいない（コンテナが動いたまま等）ワークツリーを消すと、手で片付ける手がかりまで失われるため。`--force`付きなら警告を出して削除を続ける。
-
-`onRemove`が例外を投げても、ワークツリー（`--delete-branch`ならブランチも）は削除済みなので戻さず、終了コード1で止まる。`--delete-branch`のブランチ削除が失敗した場合も`onRemove`は走る。
-
-`onCreate`と同じく、グローバル設定とプロジェクトローカル設定の両方に書くとグローバル→プロジェクトの順に**両方**走る。プロジェクトローカル側のフックは承認（下記）したリポジトリでだけ読むので、プロジェクトローカル設定を持つリポジトリでは`worktree remove`でも承認の確認が出る（`--trust`で省ける）。確認はガード判定を抜けた後に出るので、何も消せない場合には出ない。
-
-## プロジェクトローカル設定の承認
-
-`worktree.*`の設定は`<repoRoot>/.niwaterm/config.ts`にも書ける（チームで置き場所やセットアップ手順を共有する用途）。ただしこれはリポジトリにコミットされるファイルなので、cloneしてきたリポジトリで`worktree new`・`worktree remove`を叩くと、`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`のフックやレイアウトプリセットの`command`に書かれた他人のコードがこちらのマシンで動くことになる。そのため**承認していないリポジトリではプロジェクトローカル設定を一切読まない**。
-
-```
-$ niwaterm worktree new feat/x
-このリポジトリはniwatermのプロジェクトローカル設定を持っています:
-  /path/to/repo/.niwaterm/config.ts
-ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpen・onBeforeRemove・onRemoveのフックやlayoutsのプリセットに書かれたコマンドが実行されます。
-レイアウトプリセットを適用したBoardは起動時レイアウトとしても紐づくため、以後niwatermを起動するたびにも実行されます。
-信頼できるリポジトリでのみ許可してください。
-このリポジトリを信頼しますか？ (y/N)
-```
-
-承認は`~/.config/niwaterm/trusted-projects/`へ記録され、次回以降は確認なしで読まれる。記録の鍵は**リポジトリのパスと`.niwaterm/`配下の内容のハッシュ**なので、承認後にフックを書き換えられても黙って実行されることはない（改めて確認が出る）。`.niwaterm/`の外をimportしている場合（`../scripts/setup.ts`等）、その変更までは検出できない。
-
-`--trust`を付けると確認を省いて承認する（非対話環境向け）。非対話環境で`--trust`も無い場合は、確認できない旨を表示してプロジェクトローカル設定を無視したまま続行する（ハングもエラーもしない）。
-
-承認は**設定を読むこと自体**にかかる。importした時点でファイルのトップレベルのコードが走るため、フック（`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`）の呼び出しだけを止めても意味がないため。したがって未承認のリポジトリでは`worktree.dir`・`worktree.open`・`worktree.layout`もプロジェクトローカル側が効かず、グローバル設定とgit configだけで解決される。
-
-`--layout`（「レイアウトプリセットの適用」節）も同じ承認で門番する。プリセットの解決はアプリ側が`<repoRoot>/.niwaterm/config.ts`を評価して行うため、CLIがimportしなくてもそこでコードが走るためで、未承認のままレイアウトを指定すると終了コード1で止まる。
-
-起動時レイアウトへの紐づけ（`layout apply --startup`と同じ操作）にも本来は専用の確認があるが、`worktree new`／`worktree open`ではこの承認がそれを兼ねる（確認文で起動のたびに実行されることまで断っているため、同じリポジトリのプリセットで確認が二重に出ることはない）。プリセットの解決元がこのリポジトリの外（親ディレクトリの`.niwaterm/`等）だった場合だけは承認の範囲外なので、改めて紐づけの確認が出る。断ると紐づけを作らず、今回の適用だけを行う。
-
-確認が出るのは、実際にプロジェクトローカル設定を読む必要があるときだけ。`worktree open`で既に開いているBoardへ切り替えるだけの場合は設定を読まないので、確認も出ない。
-
-> **note**: レイアウトプリセットのプロジェクトローカル設定を`layout list`／`layout apply`から使う場合は、この承認を通らず従来どおり読まれる。あちらの確認は「起動時レイアウトへの紐づけ」にかかっていて、設定を読むこと自体は素通しになっている（[CLIからの操作の「プロジェクトローカルのレイアウト」節](/niwaterm/cli/#プロジェクトローカルのレイアウト)）。
+レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所・開き方はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
 
 ## GUIから使う
 
 Boardへのワークツリーの紐づけは、サイドバーのBoard行の右クリックとコマンドパレットから変更できる（「Boardに紐づくワークツリー」節）。
 
-ワークツリーの一覧・絞り込み・作成をniwaterm内のUIで行いたい場合は、ユーザー定義HTML UI（`customViews`）のサンプルが`contrib/custom-views/worktrees/`にある。サイドバーへ一覧を出し、行のクリックで`worktree open`、入力欄へ入れたブランチ名で`worktree new`を実行する。導入手順と変更しどころは同ディレクトリのREADME、`customViews`自体の仕様は[設定ファイルの「ユーザー定義HTML UI（customViews）」節](/niwaterm/config/#ユーザー定義html-uicustomviews)を参照。
+ワークツリーの一覧・絞り込み・作成をniwaterm内のUIで行いたい場合は、ユーザー定義HTML UI（`customViews`）のサンプルが`contrib/custom-views/worktrees/`にある。サイドバーへ一覧を出し、行のクリックで`worktree open`、入力欄へ入れたブランチ名で`worktree new`を実行する。導入手順と変更しどころは同ディレクトリのREADME、`customViews`自体の仕様は[カスタムビュー](/niwaterm/custom-views/)を参照。
 
-このサンプルが一覧するリポジトリは、一覧を取った時点でフォーカス中タイルのアクティブタブがいたディレクトリで決まる。タブのcwdの報告にはシェル統合（[CLIからの操作の「シェル統合」節](/niwaterm/cli/#シェル統合)）が要るので、先に入れておく。
+このサンプルが一覧するリポジトリは、一覧を取った時点でフォーカス中タイルのアクティブタブがいたディレクトリで決まる。タブのcwdの報告にはシェル統合（[「シェル統合」節](/niwaterm/shell-integration/#シェル統合)）が要るので、先に入れておく。

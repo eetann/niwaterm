@@ -136,7 +136,7 @@ niwaterm claude prompt list            # そのタブで打ったプロンプト
 niwaterm claude prompt show --prompt 3 # 3番目のプロンプトからのやりとり
 ```
 
-詳細は[website/src/content/docs/cli.md](../../../../website/src/content/docs/cli.md)の「Claude Codeのセッション参照」節を参照。
+詳細は[website/src/content/docs/agents.md](../../../../website/src/content/docs/agents.md)の「Claude Codeのセッション参照」節を参照。
 
 ## 削除
 

@@ -22,4 +22,4 @@ export default defineConfig({
 
 設定ファイルの変更は再起動なしで反映される（ホットリロード）。
 
-セットアップ手順・DSL仕様は[website/src/content/docs/config.md](../../website/src/content/docs/config.md)を参照。
+セットアップ手順は[website/src/content/docs/getting-started.md](../../website/src/content/docs/getting-started.md)、設定項目ごとの書き方は[website/src/content/docs/](../../website/src/content/docs/)配下の各ページを参照。

@@ -73,4 +73,4 @@ niwatermでは`src/native/winwindow.c`（`niwa_win_enable_window_transparency`�
 
 ## 関連
 
-- 設定の使い方: website/src/content/docs/config.md「背景の透過・グラデーション・画像」
+- 設定の使い方: website/src/content/docs/appearance.md「背景の透過・グラデーション・画像」

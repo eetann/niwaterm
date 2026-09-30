@@ -23,8 +23,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 **`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwaterm docs show cli`の「対象IDの省略」節を参照。
 
-- `agent setup <codex-cli|claude-code>` — AIエージェントのhooksを追加・更新する（アプリの起動は不要）。詳細は`niwaterm docs show cli`の「エージェント統合」を参照。`_hook`はhooks専用の内部コマンドで、通常の操作では使わない
-- `claude prompt list` / `show` — そのタブで動いているClaude Codeのtranscript（jsonl）から、打ったプロンプトの一覧と、選んだプロンプトからのやりとりを読む。**Claude Codeはalternate screenで動くので`tab capture`では会話が取れない**（画面に出ている分すら読めない）代わりの手段で、コンテキスト圧縮で消えたやりとりも辿れる。エージェント統合のhooksが要る（未導入なら`--transcript <path>`で直接指定）。詳細は`niwaterm docs show cli`の「Claude Codeのセッション参照」を参照
+- `agent setup <codex-cli|claude-code>` — AIエージェントのhooksを追加・更新する（アプリの起動は不要）。詳細は`niwaterm docs show agents`の「エージェント統合」を参照。`_hook`はhooks専用の内部コマンドで、通常の操作では使わない
+- `claude prompt list` / `show` — そのタブで動いているClaude Codeのtranscript（jsonl）から、打ったプロンプトの一覧と、選んだプロンプトからのやりとりを読む。**Claude Codeはalternate screenで動くので`tab capture`では会話が取れない**（画面に出ている分すら読めない）代わりの手段で、コンテキスト圧縮で消えたやりとりも辿れる。エージェント統合のhooksが要る（未導入なら`--transcript <path>`で直接指定）。詳細は`niwaterm docs show agents`の「Claude Codeのセッション参照」を参照
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`、`NIWATERM_CONFIG_DIR`で変更可)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）。**実行しているタブが載っているOSウィンドウのぶんだけ**表示される
 - `tab new` / `switch` / `close` / `restart` / `focus` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
@@ -42,27 +42,30 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 - `status-bar refresh [--item <id>]` / `status-bar toggle [--visible on|off]` — ステータスバーの部品の評価し直し・表示切り替え（全ウィンドウ共通。部品のidは`config show`で確認）
 - `layout list` / `apply <name>` — niwaterm.config.tsまたはプロジェクトローカルの`.niwaterm/config.ts`で定義したレイアウトプリセットの一覧・適用(vde-layoutライク)。`--replace`は既存タブ・PTYを無条件でcloseするためy/n確認プロンプトが挟まる（非TTY実行だとエラーで終了する）。AIエージェントから確認なしで実行したい場合は`--replace-force`を使う。`--startup`を付けるとそのBoardが次回起動時も同じプリセットで組み直される（`board startup`で後から切替・解除可）
   - ビルトインの`empty`は設定不要で使える。`layout apply empty --replace`でBoardをタイル1つ・タブ1つへ畳み、残る1タブもシェルを起動し直す（動いていたプロセスは全部止まる。引き継ぐのは作業ディレクトリだけ）。同名を設定に定義すればそちらが優先される
-  - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show cli`の「プロジェクトローカルのレイアウト」節
+  - プロジェクトローカルのプリセットは実行したディレクトリから上向きに`.niwaterm/`を探して解決され、同名ならグローバル設定より優先される（`layout list`の解決元列で確認できる）。**プロジェクトローカル由来のプリセットを`--startup`で紐づけるときだけy/n確認プロンプトが挟まる**（起動のたびにそのリポジトリのcommandが自動実行されるため）。非TTYではエラーになるので、確認なしで実行するには`--trust`を付ける。詳細は`niwaterm docs show layouts/project-local`
 - `worktree list` / `new` / `open` / `remove` — gitワークツリーの一覧・作成・表示・削除。`list`は`path`／`branch`／`HEAD`／フラグのTSVで、先頭行は必ずメインワークツリー（アプリへ接続せず直接gitを呼ぶ）。`new <branch>`はワークツリーを作ってniwatermのBoardとして開き（`--open`は`board`が既定＝Boardを作るが遷移しない。`board-switch`／`current-tab`／`none`も選べる）、`open <worktree>`は既にあるものをブランチ名・パス・ディレクトリ名のいずれかで開く（既定は`board-switch`）。**同じワークツリーのBoardが既に開いていればそれを使い回す**ため、同じコマンドを何度叩いてもBoardが増えず、「あれば使う、無ければ作る」を分岐なしで書ける。`--name`でBoard名、`--layout`でレイアウトプリセットも指定できる（`--layout`で適用したプリセットはそのBoardの起動時レイアウトとしても紐づく）
   - `new <branch>`のブランチはローカル → リモート → 新規作成の順に探す。`origin/feat/x`のようにリモート名を付ければリモートからの作成を明示でき、`--track auto|remote|local|new`で固定もできる（リモートが複数あるなら`--remote`）。作る前に`git fetch`が1回走る（`--no-fetch`で抑止）
   - `remove <worktree>`はワークツリーをディレクトリごと削除し、そのBoardも閉じる（`--keep-board`で残せる）。**未コミットの変更・未pushのコミット・ロックがあると何も消さずに終了コード1で止まる**ので、意図して消すなら`--force`を付ける。ブランチは既定で残り、`--delete-branch`で消せる（未マージなら`--force`も要る）。削除の直前・直後に`worktree.onBeforeRemove`・`worktree.onRemove`フックが走る
-  - **プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるので、非対話で叩くなら`--trust`を付ける**（付けないとその設定を無視して続行し、`--layout`を指定していれば終了コード1で止まる）。置き場所・作成後フック・Boardとの紐づけを含む詳細は`niwaterm docs show worktree`
+  - **プロジェクトローカル設定（`<repoRoot>/.niwaterm/config.ts`）を持つリポジトリでは初回にy/n確認が挟まるので、非対話で叩くなら`--trust`を付ける**（付けないとその設定を無視して続行し、`--layout`を指定していれば終了コード1で止まる）。置き場所・Boardとの紐づけは`niwaterm docs show worktrees`、作成後フック・承認は`niwaterm docs show worktrees/hooks`
 - `keybind list` — 現在有効なキーバインドの一覧（tmuxの`list-keys`相当。prefix経由のバインドと即時発火のdirectを分けて表示。設定が反映されているかの確認に使う）
 - `config show` — 現在有効な設定値の一覧（設定ファイルのトップレベルキーごとに、マージ後の実際に効いている値。ズーム中のフォントサイズもここで分かる。関数で書く設定・キーバインドの個々の割り当ては含まない）。設定が効かないときは一覧より前に出る`[読み込みエラー]`・`[無視した設定]`を見る
 - `shell-profile list` — 利用可能なシェルプロファイルの一覧（`tab new --shell`・`tab restart --shell`・レイアウトプリセットの`shellProfile`に指定するidをここで確認する）
 - `font-size increase|decrease|reset` — フォントサイズの拡大・縮小・リセット（configファイルは変更しない実行時ズーム）
 - `notify --title <title> [--body] [--subtitle] [--silent] [--tab]` — OSのデスクトップ通知を出す（タスク完了等をユーザーへ知らせる用途。macOSではクリックで通知元タブへ遷移する）
-- `complete <bash|zsh|fish|powershell>` — シェルの補完スクリプトを出力する。コマンド名・オプション名に加えてtabId・レイアウトプリセット名などの値も補完される。設置手順は`niwaterm docs show cli`の「シェル補完」節
+- `complete <bash|zsh|fish|powershell>` — シェルの補完スクリプトを出力する。コマンド名・オプション名に加えてtabId・レイアウトプリセット名などの値も補完される。設置手順は`niwaterm docs show shell-integration`の「シェル補完」節
 
 ## 詳しい使い方
 
-コマンドの全オプション・使用例・終了コード・IPCサーバー仕様は次のコマンドで確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
+コマンドの全オプション・使用例・終了コード・設定ファイルの書き方は`niwaterm docs show <topic>`で確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
 
-    niwaterm docs show cli        # コマンド全体
-    niwaterm docs show config     # 設定ファイル（キーバインド・外観・レイアウト等）の書き方
-    niwaterm docs show worktree   # ワークツリー管理（置き場所・フック・レイアウト・Boardとの紐づけ）
+    niwaterm docs show cli              # 汎用的なコマンド（tab・tile・board・workspace・popup等）
+    niwaterm docs show getting-started  # CLIのリンク・設定ディレクトリの作成・設定値の確認
+    niwaterm docs show keybindings      # キーバインドの書き方（niwa APIの一覧はkeybindings/api）
+    niwaterm docs show layouts          # レイアウトプリセットの定義と適用
+    niwaterm docs show worktrees        # ワークツリー管理（置き場所・Boardとの紐づけ）
+    niwaterm docs show agents           # エージェント統合・Claude Codeのセッション参照
 
-トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックはドキュメントサイトのページ（`website/src/content/docs/`）から自動で列挙されるので、ここに挙げた以外が増えていることもある。サブディレクトリ内のページは`config/keybindings`のように`/`区切りのトピック名になる。
+トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックはドキュメントサイトのページ（`website/src/content/docs/`）から自動で列挙されるので、ここに挙げた以外が増えていることもある。サブディレクトリ内のページは`keybindings/api`のように`/`区切りのトピック名になる。ドキュメントは機能ごとのページに分かれていて、その機能の設定とCLIコマンドは同じページにある。どのページか分からなければ、まず`docs list`で説明を見て選ぶ。
 
 ## 典型的な流れ
 

@@ -15,7 +15,7 @@ const TOPICS: DocTopic[] = [
   {
     name: "worktree",
     description: "ワークツリー管理",
-    path: "/website/src/content/docs/worktree.md",
+    path: "/website/src/content/docs/worktrees.md",
   },
 ];
 
@@ -70,8 +70,13 @@ describe("formatTopicsJson", () => {
 describe("loadTopics", () => {
   test("サイトのcontentディレクトリの.mdをパス昇順で列挙し、descriptionを埋める", async () => {
     const topics = await loadTopics();
+    const names = topics.map((t) => t.name);
+    // ページは増減するので一覧全体は固定しない。cliはAIエージェントの入口として参照されている
+    expect(names).toContain("cli");
+    expect(names).toContain("keybindings/api");
     // トップページのindex.mdxはターミナルで読む前提のページではないので含めない
-    expect(topics.map((t) => t.name)).toEqual(["cli", "config", "worktree"]);
+    expect(names).not.toContain("index");
+    expect(names).toEqual([...names].sort());
     for (const topic of topics) {
       expect(topic.description).not.toBe("");
     }

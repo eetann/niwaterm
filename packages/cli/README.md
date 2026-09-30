@@ -11,7 +11,7 @@ bun link
 
 `bin`フィールド経由で`niwaterm`コマンドと`fzf-niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。npm registryへの公開は現状スコープ外。
 
-続けて`niwaterm init`を実行すると、設定ファイル（キーバインド・外観等）のディレクトリ`~/.config/niwaterm/`を生成できる。詳細は[website/src/content/docs/config.md](../../website/src/content/docs/config.md)参照。
+続けて`niwaterm init`を実行すると、設定ファイル（キーバインド・外観等）のディレクトリ`~/.config/niwaterm/`を生成できる。詳細は[website/src/content/docs/getting-started.md](../../website/src/content/docs/getting-started.md)参照。
 
 ## 使い方
 

@@ -13,6 +13,27 @@ export default defineConfig({
       locales: {
         root: { label: "日本語", lang: "ja" },
       },
+      sidebar: [
+        {
+          label: "はじめる",
+          items: ["getting-started", "shell-integration"],
+        },
+        {
+          label: "キーボード",
+          items: ["keybindings", "keybindings/api", "keybindings/object-format", "jump-and-copy"],
+        },
+        { label: "見た目", items: ["appearance"] },
+        {
+          label: "Boardと画面",
+          items: ["boards", "status-bar", "layouts", "layouts/project-local"],
+        },
+        { label: "ワークツリー", items: ["worktrees", "worktrees/hooks"] },
+        { label: "マウスとリンク", items: ["mouse-and-links", "browser"] },
+        { label: "拡張", items: ["custom-views", "hover-buttons", "bell"] },
+        { label: "シェル", items: ["shell"] },
+        { label: "AIエージェント", items: ["agents"] },
+        { label: "CLI", items: ["cli"] },
+      ],
       logo: {
         light: "../docs/brand/logo.svg",
         dark: "../docs/brand/logo-dark.svg",
