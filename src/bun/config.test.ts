@@ -758,9 +758,9 @@ describe("resolveBoard", () => {
     expect(resolveBoard({ board: { newTabCwd: "worktree" } }).newTabCwd).toBe("worktree");
   });
 
-  test("namingに自動命名の方式を指定できる（既定はdirectory）", () => {
-    expect(defaultBoardConfig.naming).toBe("directory");
-    expect(resolveBoard({ board: { naming: "directory-follow" } }).naming).toBe("directory-follow");
+  test("namingに自動命名の方式を指定できる（既定はdirectory-follow）", () => {
+    expect(defaultBoardConfig.naming).toBe("directory-follow");
+    expect(resolveBoard({ board: { naming: "directory" } }).naming).toBe("directory");
     expect(resolveBoard({ board: { naming: "sequential" } }).naming).toBe("sequential");
   });
 
@@ -774,7 +774,7 @@ describe("resolveBoard", () => {
         },
       });
       expect(resolved.newTabCwd).toBe("inherit");
-      expect(resolved.naming).toBe("directory");
+      expect(resolved.naming).toBe("directory-follow");
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();

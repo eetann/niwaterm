@@ -499,7 +499,11 @@ describe("Board名の自動命名(board.naming)", () => {
   test("directoryはBoardを開いた後にcwdが変わっても自動名を変えない", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWorkspaceManager(
-      baseOpts({ createSession: factory, initialCwd: "/home/eetann/ghq/niwaterm" }),
+      baseOpts({
+        createSession: factory,
+        initialCwd: "/home/eetann/ghq/niwaterm",
+        getBoardNaming: () => "directory",
+      }),
     );
     mgr.setTabVar(activeTabIdOf(mgr), "cwd", "/home/eetann/docs/roadmap");
 
@@ -508,7 +512,9 @@ describe("Board名の自動命名(board.naming)", () => {
 
   test("cwdを指定せず開いたBoardは、タブがcwdを報告した時点でdirectoryの名前が決まる", () => {
     const { factory } = createFakeSessionFactory();
-    const mgr = createWorkspaceManager(baseOpts({ createSession: factory }));
+    const mgr = createWorkspaceManager(
+      baseOpts({ createSession: factory, getBoardNaming: () => "directory" }),
+    );
     const workspaceId = mgr.snapshot().activeWorkspaceId;
     mgr.newBoard(workspaceId);
     // どこで起動したか分からない間は名前を決められない（表示側が連番へフォールバックする）

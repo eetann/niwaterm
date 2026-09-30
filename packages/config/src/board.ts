@@ -63,7 +63,7 @@ export interface BoardConfig {
    */
   newTabCwd?: NewTabCwdMode;
   /**
-   * 名前を付けていないBoardの自動命名。既定は"directory"（開いた時点のディレクトリ名で固定）。
+   * 名前を付けていないBoardの自動命名。既定は"directory-follow"（フォーカス中タブのcwdへ追従）。
    * "directory-follow"はcwdをOSC 7で報告するシェルでのみ追従できる。
    */
   naming?: BoardNaming;
@@ -82,7 +82,7 @@ export interface ResolvedBoardConfig {
 
 export const defaultBoardConfig: ResolvedBoardConfig = {
   newTabCwd: "inherit",
-  naming: "directory",
+  naming: "directory-follow",
   phases: [],
 };
 

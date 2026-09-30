@@ -156,7 +156,7 @@ export interface WorkspaceOptions {
    * ディレクトリの存在確認はここを渡す側（index.ts）の責務
    */
   getNewTabCwd?: (worktreePath: string | undefined) => string | undefined;
-  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory" */
+  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory-follow" */
   getBoardNaming?: () => BoardNaming;
   getMaxScrollback?: BoardOptions["getMaxScrollback"];
   onBell?: BoardOptions["onBell"];
@@ -479,7 +479,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
   }
 
   function namingMode(): BoardNaming {
-    return opts.getBoardNaming?.() ?? "directory";
+    return opts.getBoardNaming?.() ?? "directory-follow";
   }
 
   /**

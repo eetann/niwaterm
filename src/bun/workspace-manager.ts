@@ -108,7 +108,7 @@ export interface WorkspaceManagerOptions {
   getDefaultCwd?: WorkspaceOptions["getDefaultCwd"];
   /** 新しいタブのcwdをBoardの紐づけワークツリーから決める（省略時は今のタブのcwdを引き継ぐ） */
   getNewTabCwd?: WorkspaceOptions["getNewTabCwd"];
-  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory" */
+  /** 名前を付けていないBoardの自動命名の方式（設定のboard.naming）。省略時は"directory-follow" */
   getBoardNaming?: WorkspaceOptions["getBoardNaming"];
   /**
    * 紐づけワークツリーが消えているかの判定。listWorkspacesのworktreeMissingに載る。
