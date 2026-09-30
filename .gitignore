@@ -28,3 +28,6 @@ storybook-static/
 
 # playwright-cliのセッション出力（スナップショット・コンソールログ等）
 .playwright-cli/
+
+# ドキュメントサイト（Astro）が生成する型定義・キャッシュ。ビルド成果物のwebsite/dist/は上のdist/で除外済み
+/website/.astro/

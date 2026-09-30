@@ -32,6 +32,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - `bun run lint` / `bun run lint:fix` — oxlintによる静的解析（チェックのみ / 自動修正あり）
 - `bun run format` / `bun run format:check` — oxfmtによるフォーマット（書き込みあり / チェックのみ）
 - `bun run storybook` — src/mainview/react/のコンポーネントを状態別に確認するStorybookを起動する。ストーリーはコンポーネントの隣に`*.stories.tsx`で置く（詳細: docs/build/storybook.md）
+- `mise run docs:dev` / `mise run docs:build` — ユーザー向けドキュメントサイト（website/、Astro Starlight）の開発サーバー起動 / 静的ビルド。依存はwebsite/側で別に持つ。配色・書体はdocs/brand/brand-guide.mdに従う
 - `vendor/libghostty/` はgitignore。再現手順・vendorの更新が必要かの見分け方: docs/build/macos-build.md（**Zig 0.16.0以上が必要**）
 
 ## アーキテクチャ

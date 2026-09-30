@@ -1,0 +1,114 @@
+/*
+ * docs/brand/brand-guide.md の配色・書体をStarlightの変数へ割り当てる。
+ * Starlightは:rootがダーク、[data-theme="light"]がライトで、ライトではgray-1〜black の
+ * 明暗が反転する（white=文字、black=地）。
+ */
+
+/* ダーク: 苔庭 */
+:root {
+  --sl-color-white: #e4e2d6;
+  --sl-color-gray-1: #d4d3c7;
+  --sl-color-gray-2: #c3c5b8;
+  --sl-color-gray-3: #a9ae9f;
+  --sl-color-gray-4: #6f786c;
+  --sl-color-gray-5: #2c372d;
+  --sl-color-gray-6: #1e261f;
+  --sl-color-black: #141a15;
+
+  --sl-color-accent-low: #223020;
+  --sl-color-accent: #6f8f58;
+  --sl-color-accent-high: #93b87a;
+
+  --sl-color-orange-low: #3a2d17;
+  --sl-color-orange: #e2ae62;
+  --sl-color-orange-high: #f0cf9c;
+
+  --niwa-code-bg: #0e120f;
+  --niwa-hairline: #2c372d;
+  --niwa-action: #93b87a;
+  --niwa-action-ink: #141a15;
+
+  --sl-font: "Zen Kaku Gothic Antique", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --sl-font-mono: "Spline Sans Mono", "BIZ UDGothic", "Osaka-Mono", monospace;
+  /* 日本語が主なので英文向けの既定(1.75)より少し広く取る */
+  --sl-line-height: 1.8;
+}
+
+/* ライト: 枯山水 */
+:root[data-theme="light"] {
+  --sl-color-white: #1f1f1c;
+  --sl-color-gray-1: #2a2926;
+  --sl-color-gray-2: #3a3833;
+  --sl-color-gray-3: #5e5c55;
+  --sl-color-gray-4: #8a877e;
+  --sl-color-gray-5: #d5cfc1;
+  --sl-color-gray-6: #e3ded2;
+  --sl-color-gray-7: #e8e4da;
+  --sl-color-black: #ece8df;
+
+  --sl-color-accent-low: #d3d8df;
+  --sl-color-accent: #2c4770;
+  --sl-color-accent-high: #1c3050;
+
+  --sl-color-orange-low: #efdcbc;
+  --sl-color-orange: #87560f;
+  --sl-color-orange-high: #5e3c0a;
+
+  --niwa-code-bg: #1f1f1c;
+  --niwa-hairline: #d5cfc1;
+  --niwa-action: #1f1f1c;
+  --niwa-action-ink: #ece8df;
+}
+
+h1,
+.sl-markdown-content :is(h1, h2) {
+  font-weight: 900;
+}
+
+/* 角を立てる。Starlightはボタンを999remの丸にしている */
+.sl-link-button,
+.pagination-links a,
+.card,
+.link-card {
+  border-radius: 0;
+}
+
+/* 主ボタンはライトで墨、ダークで苔。Starlight既定のリンク色（ライトでは藍）とは分ける */
+.sl-link-button.primary {
+  background: var(--niwa-action);
+  border-color: var(--niwa-action);
+  color: var(--niwa-action-ink);
+}
+.sl-link-button.primary:hover {
+  color: var(--niwa-action-ink);
+}
+
+/* 砂紋。トップページのヒーロー下端にだけ敷く */
+.hero {
+  padding-bottom: 4rem;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 11px,
+    var(--niwa-hairline) 11px 12px
+  );
+  background-position: bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 48px;
+}
+
+/* Starlightはダークのヘッダーをgray-6（surface）で塗るが、ロゴのダーク用タイルも同じ色で溶けるため地に揃える */
+:root:not([data-theme="light"]) {
+  --sl-color-bg-nav: var(--sl-color-black);
+}
+
+/* サイト名はリンク色ではなく本文色にする */
+.site-title {
+  color: var(--sl-color-white);
+}
+
+/* 日本語の見出し・キャッチコピーが1〜2文字だけ次の行へ落ちないよう、文節で折り返す */
+h1,
+h2,
+.hero .tagline {
+  word-break: auto-phrase;
+}

@@ -385,3 +385,15 @@ EOF
   echo "niwaterm-dev をリンクしました: $ENTRY"
 fi
 '''
+
+# ドキュメントサイト（website/、Astro Starlight）。依存はアプリ本体と分けてwebsite/側で持つ
+# （ルートのworkspacesに入れるとAstroの依存がアプリ本体のlockfileへ混ざるため）
+[tasks."docs:dev"]
+description = "ドキュメントサイト（website/）の開発サーバーを起動する"
+dir = "website"
+run = "bun install && bun run dev"
+
+[tasks."docs:build"]
+description = "ドキュメントサイト（website/）を静的ビルドする（出力先はwebsite/dist/）"
+dir = "website"
+run = "bun install && bun run build"

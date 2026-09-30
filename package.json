@@ -4,10 +4,10 @@
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
 	"workspaces": ["packages/*"],
 	"scripts": {
-		"lint": "oxlint src packages .storybook",
-		"lint:fix": "oxlint --fix src packages .storybook",
-		"format": "oxfmt src packages .storybook",
-		"format:check": "oxfmt --check src packages .storybook",
+		"lint": "oxlint src packages .storybook website",
+		"lint:fix": "oxlint --fix src packages .storybook website",
+		"format": "oxfmt src packages .storybook website",
+		"format:check": "oxfmt --check src packages .storybook website",
 		"test": "bun test",
 		"storybook": "storybook dev -p 6006",
 		"build-storybook": "storybook build"
