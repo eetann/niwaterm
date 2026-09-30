@@ -10,6 +10,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "niwaterm",
+      components: {
+        Hero: "./src/components/Hero.astro",
+      },
       locales: {
         root: { label: "日本語", lang: "ja" },
       },

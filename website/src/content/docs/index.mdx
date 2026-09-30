@@ -1,10 +1,81 @@
 ---
 title: niwaterm
-description: ターミナル・マルチプレクサ・ワークスペースを統合したデスクトップアプリ
+description: 設定をTypeScriptで書き、キーバインドや画面の部品まで作り込めるターミナル
 template: splash
 hero:
-  tagline: ターミナル・マルチプレクサ・ワークスペースをひとつに。
-  image:
-    light: ../../../../docs/brand/logo.svg
-    dark: ../../../../docs/brand/logo-dark.svg
+  title: ターミナルを、<br>TypeScriptで作り込む。
+  tagline: キーバインド・ステータスバー・サイドバーの表示まで、設定ファイルに関数で書ける。画面分割やワークスペース、内蔵ブラウザといった土台はそろっている。
+  actions:
+    - text: セットアップ
+      link: /niwaterm/getting-started/
+      icon: right-arrow
+    - text: 機能を見る
+      link: "#features"
+      variant: secondary
 ---
+
+import Features from "../../components/home/Features.astro";
+import FeatureCard from "../../components/home/FeatureCard.astro";
+import GetStarted from "../../components/home/GetStarted.astro";
+
+<Features>
+  <FeatureCard
+    title="TypeScriptで書く設定"
+    feature="config"
+    alt="nvimでniwatermの設定ファイル（TypeScript）を開いた画面"
+    href="/niwaterm/keybindings/"
+    linkLabel="キーバインド"
+  >
+    設定ファイルはTypeScript。キーバインドにはアクション名のほか関数も渡せる。保存すると再起動なしで反映される。
+  </FeatureCard>
+  <FeatureCard
+    title="画面の部品をコードで足せる"
+    feature="extend"
+    alt="Claude Codeのタブの右端に、そのセッションで打ったプロンプトの目次を開いた画面"
+    href="/niwaterm/hover-buttons/"
+    linkLabel="ホバーボタン"
+  >
+    ステータスバー・タブの端のボタン・サイドバーのHTMLを、設定ファイルに関数で書ける。たとえばClaude
+    Codeで打ったプロンプトの目次を出し、選んだ位置へ飛べる。
+  </FeatureCard>
+  <FeatureCard
+    title="CLIからすべて操作できる"
+    feature="cli"
+    alt="niwaterm listで構成を確かめ、tile splitで分割した画面へtab send-keysでテストの実行を送った画面"
+    href="/niwaterm/cli/"
+    linkLabel="CLIからの操作"
+  >
+    画面の分割、タブへのキー送信、ブラウザのスクリーンショットまで<code>niwaterm</code>
+    コマンドで行える。スクリプトやAIエージェントからも同じように呼べる。
+  </FeatureCard>
+  <FeatureCard
+    title="AIエージェントの状態が見える"
+    feature="agent"
+    alt="サイドバーのBoard一覧に、Claude Codeの承認待ちと作業後の要約が出ている画面"
+    href="/niwaterm/agents/"
+    linkLabel="AIエージェント連携"
+  >
+    Claude Code・Codex
+    CLIのhooksを入れると、作業中・承認待ちがサイドバーに出る。承認待ちのBoardへすぐ移れる。
+  </FeatureCard>
+  <FeatureCard
+    title="内蔵ブラウザとHTMLのUI"
+    feature="browser"
+    alt="左でnvimを開き、右に分割した画面のブラウザタブでドキュメントサイトを表示した画面"
+    href="/niwaterm/browser/"
+    linkLabel="ブラウザタブ"
+  >
+    分割した画面の中でWebページを開ける。自作のHTMLをサイドバーやタブに置き、そのボタンからniwatermを操作できる。
+  </FeatureCard>
+  <FeatureCard
+    title="画面分割・ワークスペース・ポップアップ"
+    feature="workspace"
+    alt="3つに分割した画面の上に、lazygitをポップアップで重ねて開いたniwatermの画面"
+    href="/niwaterm/boards/"
+    linkLabel="ワークスペースとBoard"
+  >
+    画面分割・タブ・ワークスペースを1つのアプリで扱う。lazygitのようなTUIは、ポップアップで画面に重ねて開ける。
+  </FeatureCard>
+</Features>
+
+<GetStarted />

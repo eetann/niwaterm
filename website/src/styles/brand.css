@@ -27,6 +27,10 @@
   --niwa-hairline: #2c372d;
   --niwa-action: #93b87a;
   --niwa-action-ink: #141a15;
+  --niwa-rule: #6f786c;
+  --niwa-code-ink: #e4e2d6;
+  --niwa-code-frame: #2c372d;
+  --niwa-prompt: #93b87a;
 
   --sl-font: "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-font-mono: "Spline Sans Mono", "BIZ UDGothic", "Osaka-Mono", monospace;
@@ -58,6 +62,10 @@
   --niwa-hairline: #d5cfc1;
   --niwa-action: #1f1f1c;
   --niwa-action-ink: #ece8df;
+  --niwa-rule: #1f1f1c;
+  --niwa-code-ink: #ece8df;
+  --niwa-code-frame: #3a3a35;
+  --niwa-prompt: #a9c08f;
 }
 
 h1,
@@ -83,9 +91,14 @@ h1,
   color: var(--niwa-action-ink);
 }
 
+/* 二次ボタンは操作できる要素の枠線（rule）で囲む */
+.sl-link-button.secondary {
+  border-color: var(--niwa-rule);
+}
+
 /* 砂紋。トップページのヒーロー下端にだけ敷く */
 .hero {
-  padding-bottom: 4rem;
+  padding-bottom: 6.5rem;
   background-image: repeating-linear-gradient(
     0deg,
     transparent 0 11px,

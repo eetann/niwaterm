@@ -1,0 +1,68 @@
+---
+/* トップページの「できること」節。中身のFeatureCardはindex.mdxに並べる */
+---
+
+<section id="features" class="features not-content">
+  <div class="intro">
+    <p class="label">FEATURES</p>
+    <h2>できること</h2>
+    <p class="lead">
+      設定ファイルから作り込める部分と、それを支えるターミナルの機能。
+    </p>
+  </div>
+  <div class="grid">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    padding-block: 4rem;
+  }
+
+  .intro {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 40rem;
+  }
+
+  .label {
+    margin: 0;
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--sl-color-gray-3);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 2.25rem;
+    line-height: 1.35;
+    font-weight: 900;
+    color: var(--sl-color-white);
+  }
+
+  .lead {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--sl-color-gray-3);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 50rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

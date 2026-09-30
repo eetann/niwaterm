@@ -1,0 +1,123 @@
+---
+/*
+ * Starlight既定のHeroの差し替え。見出し・タグライン・ボタンはindex.mdxのfrontmatter（hero）から読み、
+ * 右にはアプリ全景のスクリーンショットを置く（public/から配る理由はhome/FeatureCard.astro参照）。
+ */
+import { LinkButton } from "@astrojs/starlight/components";
+
+const { data } = Astro.locals.starlightRoute.entry;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+---
+
+<div class="hero not-content">
+  <div class="copy">
+    <p class="label">TERMINAL · MULTIPLEXER · WORKSPACE</p>
+    {/* 見出しへのスキップリンクがこのidを指す（Starlightの既定のHeroと同じ） */}
+    <h1 id="_top" data-page-title set:html={title} />
+    {tagline && <p class="tagline" set:html={tagline} />}
+    {
+      actions.length > 0 && (
+        <div class="actions">
+          {actions.map(({ attrs = {}, icon, link: href, text, variant }) => (
+            <LinkButton {href} {variant} icon={icon?.name} {...attrs}>
+              {text}
+            </LinkButton>
+          ))}
+        </div>
+      )
+    }
+    <p class="platforms">macOS · Windows (x64)</p>
+  </div>
+  <img
+    class="shot"
+    src={`${import.meta.env.BASE_URL}screenshots/hero.png`}
+    alt="サイドバーにBoardが並び、nvim・テスト結果・git logの3つに分割したniwatermの画面"
+    width="1486"
+    height="902"
+    decoding="async"
+  />
+</div>
+
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3rem;
+    padding-top: 2.5rem;
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .label,
+  .platforms {
+    margin: 0;
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: var(--sl-color-gray-3);
+  }
+
+  .label {
+    font-weight: 500;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(2.25rem, calc(1rem + 4vw), 3.5rem);
+    line-height: 1.2;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+
+  .tagline {
+    margin: 0;
+    font-size: 1.0625rem;
+    line-height: 1.9;
+    color: var(--sl-color-gray-3);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .actions :global(.sl-link-button) {
+    min-height: 3rem;
+    padding-inline: 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .shot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--niwa-code-frame);
+  }
+
+  @media (max-width: 50rem) {
+    .actions {
+      flex-direction: column;
+    }
+    .actions :global(.sl-link-button) {
+      justify-content: center;
+    }
+  }
+
+  @media (min-width: 50rem) {
+    /* スクリーンショットは細部が読めるよう、横に並べず本文の幅いっぱいに置く */
+    .hero {
+      gap: 3.5rem;
+      padding-top: clamp(2.5rem, calc(1rem + 8vmin), 6rem);
+    }
+    .copy {
+      max-width: 40rem;
+    }
+  }
+</style>

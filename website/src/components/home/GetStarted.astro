@@ -1,0 +1,79 @@
+---
+import { LinkButton } from "@astrojs/starlight/components";
+---
+
+<section class="get-started not-content">
+  <div class="text">
+    <h2>はじめる</h2>
+    <p>CLIをリンクし、設定ディレクトリを作るところから。ドキュメントはCLIからも読める。</p>
+    {/* 主ボタンは1画面に1つ（ヒーローのセットアップ）なので、ここは二次ボタンにする */}
+    <LinkButton href="/niwaterm/getting-started/" variant="secondary" icon="right-arrow">
+      セットアップ手順を読む
+    </LinkButton>
+  </div>
+  <pre
+    set:html={`<span class="prompt">$</span> niwaterm docs list
+<span class="prompt">$</span> niwaterm docs show getting-started`}
+  />
+</section>
+
+<style>
+  .get-started {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    padding-block: 3.5rem 4rem;
+    border-top: 1px solid var(--niwa-rule);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 2rem;
+    line-height: 1.4;
+    font-weight: 900;
+    color: var(--sl-color-white);
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.8;
+    color: var(--sl-color-gray-3);
+  }
+
+  .text :global(.sl-link-button) {
+    min-height: 2.75rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+  }
+
+  pre {
+    margin: 0;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    background: var(--niwa-code-bg);
+    color: var(--niwa-code-ink);
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.8;
+  }
+
+  pre :global(.prompt) {
+    color: var(--niwa-prompt);
+  }
+
+  @media (min-width: 50rem) {
+    .get-started {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+      align-items: center;
+      gap: 4rem;
+      padding-inline: 4rem;
+    }
+  }
+</style>
