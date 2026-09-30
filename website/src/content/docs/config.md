@@ -1,10 +1,7 @@
 ---
-type: Reference
 title: 設定ファイル
 description: niwatermのTypeScript設定ファイル（キーバインド・外観など）のセットアップと書き方
 ---
-
-# 設定ファイル
 
 niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`@niwaterm/config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
 
@@ -12,7 +9,7 @@ niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/
 
 ## セットアップ
 
-CLI（`docs/guide/cli.md`参照）から`niwaterm init`を実行する。
+CLI（[CLIからの操作](/niwaterm/cli/)参照）から`niwaterm init`を実行する。
 
 ```sh
 niwaterm init
@@ -86,41 +83,41 @@ export default defineConfig({
 
 #### niwa API
 
-| API | 意味 |
-|---|---|
-| `niwa.prefix(binding)` | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")` |
-| `niwa.repeatTimeout(ms)` | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms |
-| `niwa.keybind(key, action, opts?)` | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない）。`opts.description`で一覧表示（`niwaterm keybind list`）用の説明を付けられる |
-| `niwa.unbind(key, opts?)` | `niwa.keybind`で割り当てたバインドを解除する |
-| `niwa.sleep(ms)` | 明示的な待ち時間(ms)。下記「非同期処理について」参照 |
-| `niwa.notify(opts)` | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent?, tabId? }`（`title`のみ必須）。macOSでは`tabId`を渡すと、通知のクリックでそのタブへ遷移する（Windowsはクリックしても遷移しない） |
-| `niwa.reloadConfig()` | 設定ファイルを再読み込みする（ファイル監視での自動リロード・`reload-config`キーバインドと同じ処理）。完了を`await`できるため、`niwa.keybind`の関数ハンドラ内で「リロード→完了後に`niwa.notify`で知らせる」のような組み立てができる |
-| `niwa.tile.current()` | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined` |
-| `niwa.tile.split(opts)` | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }` |
-| `niwa.tile.focus(direction)` | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"` |
-| `niwa.tile.resize(opts)` | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false` |
-| `niwa.tile.zoom()` | フォーカス中タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠し画面全体に表示し、再度呼ぶと解除する。戻り値はトグル後の状態（`true`=ズーム中） |
-| `niwa.tile.close()` | フォーカス中タイルのアクティブタブを閉じる |
-| `niwa.tab.current()` | フォーカス中タイルのアクティブタブの情報（`{ tabId }`）を返す。アクティブタブが無い場合は`null` |
-| `niwa.tab.create(opts?)` | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル） |
-| `niwa.tab.respawn(tabId, opts?)` | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false` |
-| `niwa.tab.sendKeys(tabId, ...keys)` | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる |
-| `niwa.tab.show(tabId)` | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合は`false` |
-| `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当） |
-| `niwa.tab.var.find(key, value)` | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当） |
-| `niwa.popup.open(opts?)` | ポップアップを開く。`opts: { cwd?, command?, width?, height? }` |
-| `niwa.popup.run(command, opts?)` | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列 |
-| `niwa.board.create(cwd?)` | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない） |
-| `niwa.board.move(boardId, index)` | Boardを所属ワークスペース内の表示順（サイドバーの並び）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え） |
-| `niwa.board.moveToWorkspace(boardId, workspaceId, index?)` | Boardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`、サイドバーで別ワークスペースへドラッグ&ドロップするのと同じ）。レイアウト・タブ・実行中のプロセスはそのまま移る。`index`は移動先での挿入位置（0始まり）で、省略・範囲外は末尾。アクティブなBoardは移動元・移動先とも変更しない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる） |
-| `niwa.workspace.create(cwd?)` | 新規ワークスペースを作成し、そのidを返す |
-| `niwa.workspace.switch(workspaceId)` | ワークスペースを切り替える |
-| `niwa.workspace.move(workspaceId, index)` | ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなワークスペースは変更しない（CLIの`niwaterm workspace move`、サイドバーのドラッグ&ドロップと同じ並び替え） |
-| `niwa.workspace.swap(workspaceIdA, workspaceIdB)` | 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える（tmuxの`swap-window`相当）。中身は変更しない |
-| `niwa.workspace.list()` | 全ワークスペースを表示順で`{ id, name, active }[]`として返す。`name`は未設定なら`null` |
-| `niwa.workspace.current()` | 現在アクティブなワークスペースのidを返す（tmuxの`switch-client`が参照する`current-window`相当） |
-| `niwa.clipboard.write(text)` / `niwa.clipboard.read()` | クリップボードの読み書き |
-| `niwa.shell.run(command, opts?)` | 現在のシェルプロファイル設定（wsl.exe/powershell.exe/zsh等）に従ってログイン・インタラクティブシェル経由でコマンドを実行し、結果（`{ exitCode, stdout, stderr }`）を返す（tmuxの`run-shell`相当）。`opts: { shellProfile?, cwd?, env? }`（`shellProfile`省略時はdefaultShell）。PTYを使わないワンショット実行でGUI上にタブ・ポップアップは作らない。対話的な出力を見せたい場合は`popup.open({ command })`を使う。`-i`（インタラクティブ）指定の副作用でシェルが「no job control」等の警告をstderrへ出すことがあるため、判定にはexitCodeを使い、stderrの完全一致は避けること |
+| API                                                                    | 意味                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `niwa.prefix(binding)`                                                 | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `niwa.repeatTimeout(ms)`                                               | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `niwa.keybind(key, action, opts?)`                                     | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない）。`opts.description`で一覧表示（`niwaterm keybind list`）用の説明を付けられる                                                                           |
+| `niwa.unbind(key, opts?)`                                              | `niwa.keybind`で割り当てたバインドを解除する                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `niwa.sleep(ms)`                                                       | 明示的な待ち時間(ms)。下記「非同期処理について」参照                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `niwa.notify(opts)`                                                    | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent?, tabId? }`（`title`のみ必須）。macOSでは`tabId`を渡すと、通知のクリックでそのタブへ遷移する（Windowsはクリックしても遷移しない）                                                                                                                                                                                                                                                                                                                                                                      |
+| `niwa.reloadConfig()`                                                  | 設定ファイルを再読み込みする（ファイル監視での自動リロード・`reload-config`キーバインドと同じ処理）。完了を`await`できるため、`niwa.keybind`の関数ハンドラ内で「リロード→完了後に`niwa.notify`で知らせる」のような組み立てができる                                                                                                                                                                                                                                                                                                                                          |
+| `niwa.tile.current()`                                                  | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `niwa.tile.split(opts)`                                                | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `niwa.tile.focus(direction)`                                           | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `niwa.tile.resize(opts)`                                               | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false`                                                                                                                                                                                                                                                                                                                            |
+| `niwa.tile.zoom()`                                                     | フォーカス中タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠し画面全体に表示し、再度呼ぶと解除する。戻り値はトグル後の状態（`true`=ズーム中）                                                                                                                                                                                                                                                                                                                                                                                           |
+| `niwa.tile.close()`                                                    | フォーカス中タイルのアクティブタブを閉じる                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `niwa.tab.current()`                                                   | フォーカス中タイルのアクティブタブの情報（`{ tabId }`）を返す。アクティブタブが無い場合は`null`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `niwa.tab.create(opts?)`                                               | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル）                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `niwa.tab.respawn(tabId, opts?)`                                       | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false`                                                                                                                                                                                                                                                                                                                                         |
+| `niwa.tab.sendKeys(tabId, ...keys)`                                    | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `niwa.tab.show(tabId)`                                                 | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合は`false`                                                                                                                                                                                                                                                                                                                                                                         |
+| `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `niwa.tab.var.find(key, value)`                                        | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当）                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `niwa.popup.open(opts?)`                                               | ポップアップを開く。`opts: { cwd?, command?, width?, height? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `niwa.popup.run(command, opts?)`                                       | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列                                                                                                                                                                                                                                                       |
+| `niwa.board.create(cwd?)`                                              | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない）                                                                                                                                                                                                                                                               |
+| `niwa.board.move(boardId, index)`                                      | Boardを所属ワークスペース内の表示順（サイドバーの並び）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え）                                                                                                                                                                                                                                                    |
+| `niwa.board.moveToWorkspace(boardId, workspaceId, index?)`             | Boardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`、サイドバーで別ワークスペースへドラッグ&ドロップするのと同じ）。レイアウト・タブ・実行中のプロセスはそのまま移る。`index`は移動先での挿入位置（0始まり）で、省略・範囲外は末尾。アクティブなBoardは移動元・移動先とも変更しない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる）                                                                                                                                     |
+| `niwa.workspace.create(cwd?)`                                          | 新規ワークスペースを作成し、そのidを返す                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `niwa.workspace.switch(workspaceId)`                                   | ワークスペースを切り替える                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `niwa.workspace.move(workspaceId, index)`                              | ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなワークスペースは変更しない（CLIの`niwaterm workspace move`、サイドバーのドラッグ&ドロップと同じ並び替え）                                                                                                                                                                                                                                                                                                      |
+| `niwa.workspace.swap(workspaceIdA, workspaceIdB)`                      | 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える（tmuxの`swap-window`相当）。中身は変更しない                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `niwa.workspace.list()`                                                | 全ワークスペースを表示順で`{ id, name, active }[]`として返す。`name`は未設定なら`null`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `niwa.workspace.current()`                                             | 現在アクティブなワークスペースのidを返す（tmuxの`switch-client`が参照する`current-window`相当）                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `niwa.clipboard.write(text)` / `niwa.clipboard.read()`                 | クリップボードの読み書き                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `niwa.shell.run(command, opts?)`                                       | 現在のシェルプロファイル設定（wsl.exe/powershell.exe/zsh等）に従ってログイン・インタラクティブシェル経由でコマンドを実行し、結果（`{ exitCode, stdout, stderr }`）を返す（tmuxの`run-shell`相当）。`opts: { shellProfile?, cwd?, env? }`（`shellProfile`省略時はdefaultShell）。PTYを使わないワンショット実行でGUI上にタブ・ポップアップは作らない。対話的な出力を見せたい場合は`popup.open({ command })`を使う。`-i`（インタラクティブ）指定の副作用でシェルが「no job control」等の警告をstderrへ出すことがあるため、判定にはexitCodeを使い、stderrの完全一致は避けること |
 
 **非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
 
@@ -181,7 +178,7 @@ keybindings: (niwa) => {
 
 #### 一覧での説明表示
 
-現在有効なキーバインドは`niwaterm keybind list`（詳細: `docs/guide/cli.md`）で確認できる。一覧に出るのは既定ではアクション名（文字列アクション）または`function`（関数ハンドラ）のため、関数ハンドラには`opts.description`で何をするバインドなのかを添えておくと読める一覧になる。
+現在有効なキーバインドは`niwaterm keybind list`（詳細: [CLIからの操作](/niwaterm/cli/)）で確認できる。一覧に出るのは既定ではアクション名（文字列アクション）または`function`（関数ハンドラ）のため、関数ハンドラには`opts.description`で何をするバインドなのかを添えておくと読める一覧になる。
 
 ```ts
 niwa.keybind(
@@ -227,12 +224,12 @@ export default defineConfig({
 
 `keybindings`に次の4フィールドを持つオブジェクトを直接渡すこともできる。未指定のフィールドは`defaultKeybindings`の値のまま有効（`defaultKeybindings`をspreadしてから一部だけ上書きするのが基本の書き方）。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `prefix` | `KeyBindingString` | prefixキー本体。既定は`"ctrl+b"`（tmux標準を踏襲。macOS/Windowsで共通） |
-| `bindings` | `Record<string, KeybindAction \| { target: KeybindAction, repeat: boolean }>` | prefix入力後に押す2打目キー→アクションのマップ。`{ target, repeat: true }`の形で指定するとrepeat連打が有効になる（上記「repeatによる連打」参照） |
-| `direct` | `Record<KeyBindingString, KeybindAction \| { target: KeybindAction, repeat: boolean }>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空）。`repeat`はここでは効果を持たない |
-| `repeatTimeoutMs` | `number` | `repeat: true`なバインドが連打とみなす間隔(ms)。既定500 |
+| フィールド        | 型                                                                                      | 意味                                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `prefix`          | `KeyBindingString`                                                                      | prefixキー本体。既定は`"ctrl+b"`（tmux標準を踏襲。macOS/Windowsで共通）                                                                                                                    |
+| `bindings`        | `Record<string, KeybindAction \| { target: KeybindAction, repeat: boolean }>`           | prefix入力後に押す2打目キー→アクションのマップ。`{ target, repeat: true }`の形で指定するとrepeat連打が有効になる（上記「repeatによる連打」参照）                                           |
+| `direct`          | `Record<KeyBindingString, KeybindAction \| { target: KeybindAction, repeat: boolean }>` | prefixを介さず即座に発火する直接ショートカット。既定はWindowsのみコピー・ペーストが入っている（macOSはApplicationMenu経由でCmd+C/Vが既に機能するため空）。`repeat`はここでは効果を持たない |
+| `repeatTimeoutMs` | `number`                                                                                | `repeat: true`なバインドが連打とみなす間隔(ms)。既定500                                                                                                                                    |
 
 ```ts
 keybindings: {
@@ -261,57 +258,57 @@ keybindings: {
 
 **既定の2打目キー一覧**（prefix `ctrl+b` の後に押す）:
 
-| キー | アクション |
-|---|---|
-| `d` / `shift+d` | split-vertical / split-horizontal |
-| `w` | close-tile |
-| `up` / `down` / `left` / `right` | focus-up / focus-down / focus-left / focus-right |
-| `z` | toggle-zoom |
-| `c` | new-board |
-| `t` | new-tab |
-| `shift+t` | new-browser-tab |
-| `u` | focus-url-bar |
-| `n` / `p` | next-tab / prev-tab |
-| `r` | rename-tab |
-| `,` | rename-board |
-| `shift+n` | new-workspace |
-| `shift+w` | new-window |
-| `]` / `[` | next-workspace / prev-workspace |
-| `b` | toggle-sidebar |
-| `shift+b` | next-sidebar-view |
-| `f` | jump-hint |
-| `v` | copy-mode |
-| `` ` `` | toggle-popup |
-| `i` | show-config |
-| `:` | command-palette |
-| `=` / `-` / `0` | increase-font-size / decrease-font-size / reset-font-size |
-| `pageup` / `pagedown` | scroll-page-up / scroll-page-down |
-| `home` / `end` | scroll-to-top / scroll-to-bottom |
-| `shift+up` / `shift+down` | jump-prompt-up / jump-prompt-down |
+| キー                             | アクション                                                |
+| -------------------------------- | --------------------------------------------------------- |
+| `d` / `shift+d`                  | split-vertical / split-horizontal                         |
+| `w`                              | close-tile                                                |
+| `up` / `down` / `left` / `right` | focus-up / focus-down / focus-left / focus-right          |
+| `z`                              | toggle-zoom                                               |
+| `c`                              | new-board                                                 |
+| `t`                              | new-tab                                                   |
+| `shift+t`                        | new-browser-tab                                           |
+| `u`                              | focus-url-bar                                             |
+| `n` / `p`                        | next-tab / prev-tab                                       |
+| `r`                              | rename-tab                                                |
+| `,`                              | rename-board                                              |
+| `shift+n`                        | new-workspace                                             |
+| `shift+w`                        | new-window                                                |
+| `]` / `[`                        | next-workspace / prev-workspace                           |
+| `b`                              | toggle-sidebar                                            |
+| `shift+b`                        | next-sidebar-view                                         |
+| `f`                              | jump-hint                                                 |
+| `v`                              | copy-mode                                                 |
+| `` ` ``                          | toggle-popup                                              |
+| `i`                              | show-config                                               |
+| `:`                              | command-palette                                           |
+| `=` / `-` / `0`                  | increase-font-size / decrease-font-size / reset-font-size |
+| `pageup` / `pagedown`            | scroll-page-up / scroll-page-down                         |
+| `home` / `end`                   | scroll-to-top / scroll-to-bottom                          |
+| `shift+up` / `shift+down`        | jump-prompt-up / jump-prompt-down                         |
 
 **KeybindAction の一覧**（64種類。関数ベースAPIでは`niwa.keybind(key, "アクション名")`のように文字列そのまま渡せる）:
 
-| アクション | 意味 |
-|---|---|
-| `split-vertical` / `split-horizontal` | タイルを垂直/水平分割 |
-| `close-tile` | フォーカス中のタブ/タイルを閉じる |
-| `focus-up` / `focus-down` / `focus-left` / `focus-right` | 隣接タイルへフォーカス移動 |
-| `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照） |
-| `toggle-zoom` | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除。タブを右クリックして「ズーム表示」／「ズームを解除」を選んでも同じことができる） |
-| `new-tab` | 新規タブ作成（既定は prefix + `t`。ブラウザタブの`shift+t`と対になる） |
-| `new-browser-tab` | 新規ブラウザタブ作成（既定は prefix + `shift+t`。表示URLは`browser.defaultUrl`を参照）。開いた直後はURL欄にフォーカスが入り全選択されるので、URLを打ってEnterするだけで遷移できる（Escapeで元のURLへ戻す） |
-| `new-custom-view-tab` | `customViews`の先頭のビューを開くタブを作成（`customViews`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある。ビューを選んで開くにはCLIの`niwaterm tab new --custom-view --view <id>`を使う） |
-| `focus-url-bar` | 表示中のブラウザタブのURL欄へフォーカスし、全選択して打ち替えられる状態にする（既定は prefix + `u`。ブラウザのCmd+L相当だが、`l`をhjklのタイル移動に充てる設定と衝突しないようURLの頭文字にしている。Enterで遷移、Escapeで元のURLへ戻してターミナルへフォーカスを返す。ターミナルタブでは何もしない） |
-| `next-tab` / `prev-tab` | タブ切替 |
-| `rename-tab` | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる） |
-| `restart-tab` | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある） |
-| `new-board` | アクティブなワークスペースにBoardを追加する（既定は prefix + `c`。tmuxの`new-window`相当で、キーも`bind-key c`を踏襲する。CLIの`niwaterm board new`と同じ）。サイドバーのワークスペース見出しを右クリックしても同じことができる |
-| `close-board` | アクティブなBoardを中のタブごと削除する（CLIの`niwaterm board close`と同じ。実行前にy/nの確認ダイアログを挟む。ワークスペースが1つだけのときの最後の1つは閉じられない。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `next-board` / `prev-board` | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `rename-board` | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる） |
-| `set-board-worktree` | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
-| `set-board-phase` | アクティブなBoardの作業フェーズを、候補（下記「Board設定」の`board.phases`）から選ぶピッカーを開く。色付きの候補が並び、今のフェーズにはチェックが付く。↑↓のほかTab / Shift+Tabでも候補を移動でき、Enterで確定、Escapeでキャンセル。フェーズが付いているBoardでは末尾に「フェーズを解除」も並ぶ。既定キーは無いため使うには自分で割り当てる必要がある |
-| `set-board-phase:<id>` | アクティブなBoardに作業フェーズを直接設定する（`<id>`は下記「Board設定」の`board.phases`のid）。ピッカーを挟まず1打で切り替えたいとき向けで、設定側にしか書けないアクションなので既定キーは無い |
+| アクション                                                   | 意味                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `split-vertical` / `split-horizontal`                        | タイルを垂直/水平分割                                                                                                                                                                                                                                                                                                                                 |
+| `close-tile`                                                 | フォーカス中のタブ/タイルを閉じる                                                                                                                                                                                                                                                                                                                     |
+| `focus-up` / `focus-down` / `focus-left` / `focus-right`     | 隣接タイルへフォーカス移動                                                                                                                                                                                                                                                                                                                            |
+| `resize-up` / `resize-down` / `resize-left` / `resize-right` | フォーカス中タイルを既定の1ステップ分拡大（`niwa.tile.resize`相当）。既定キーは無いため使うには自分で割り当てる必要がある。`repeat: true`と組み合わせるとtmuxの`-r`風に連打できる（上記「repeatによる連打」参照）                                                                                                                                     |
+| `toggle-zoom`                                                | フォーカス中タイルの一時的なズーム表示を切り替える（`niwa.tile.zoom()`相当。tmuxの`resize-pane -Z`相当。他のタイルを隠し画面全体に表示、再実行で解除。タブを右クリックして「ズーム表示」／「ズームを解除」を選んでも同じことができる）                                                                                                                |
+| `new-tab`                                                    | 新規タブ作成（既定は prefix + `t`。ブラウザタブの`shift+t`と対になる）                                                                                                                                                                                                                                                                                |
+| `new-browser-tab`                                            | 新規ブラウザタブ作成（既定は prefix + `shift+t`。表示URLは`browser.defaultUrl`を参照）。開いた直後はURL欄にフォーカスが入り全選択されるので、URLを打ってEnterするだけで遷移できる（Escapeで元のURLへ戻す）                                                                                                                                            |
+| `new-custom-view-tab`                                        | `customViews`の先頭のビューを開くタブを作成（`customViews`未設定時は何もしない。既定キーは無いため使うには自分で割り当てる必要がある。ビューを選んで開くにはCLIの`niwaterm tab new --custom-view --view <id>`を使う）                                                                                                                                 |
+| `focus-url-bar`                                              | 表示中のブラウザタブのURL欄へフォーカスし、全選択して打ち替えられる状態にする（既定は prefix + `u`。ブラウザのCmd+L相当だが、`l`をhjklのタイル移動に充てる設定と衝突しないようURLの頭文字にしている。Enterで遷移、Escapeで元のURLへ戻してターミナルへフォーカスを返す。ターミナルタブでは何もしない）                                                 |
+| `next-tab` / `prev-tab`                                      | タブ切替                                                                                                                                                                                                                                                                                                                                              |
+| `rename-tab`                                                 | フォーカス中タブの名前を入力ダイアログで変更する（既定は prefix + `r`。Enterで確定、Escapeでキャンセル。空のまま確定すると既定の連番ラベルへ戻る。タブバーのタブを右クリックして「名前を変更」を選んでも同じことができる）                                                                                                                            |
+| `restart-tab`                                                | フォーカス中タブのプロセスを強制終了し、同じ`tabId`のまま再起動する（`niwa.tab.respawn`相当。tmuxの`respawn-pane -k`相当だが既定バインドは無く、実行前にy/nの確認ダイアログを挟む。使うには自分で割り当てる必要がある）                                                                                                                               |
+| `new-board`                                                  | アクティブなワークスペースにBoardを追加する（既定は prefix + `c`。tmuxの`new-window`相当で、キーも`bind-key c`を踏襲する。CLIの`niwaterm board new`と同じ）。サイドバーのワークスペース見出しを右クリックしても同じことができる                                                                                                                       |
+| `close-board`                                                | アクティブなBoardを中のタブごと削除する（CLIの`niwaterm board close`と同じ。実行前にy/nの確認ダイアログを挟む。ワークスペースが1つだけのときの最後の1つは閉じられない。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある                                                                  |
+| `next-board` / `prev-board`                                  | 同じワークスペース内のBoard切替（tmuxの`next-window` / `previous-window`相当）。既定キーは無いため使うには自分で割り当てる必要がある                                                                                                                                                                                                                  |
+| `rename-board`                                               | アクティブなBoardの名前を入力ダイアログで変更する（tmuxの`rename-window`相当。既定は prefix + `,`。Enterで確定、Escapeでキャンセル。空のまま確定すると自動で付く名前（下記「Board設定」の`board.naming`）へ戻る。サイドバーのBoard行をダブルクリック・右クリックしても同じことができる）                                                              |
+| `set-board-worktree`                                         | アクティブなBoardに紐づくワークツリーを入力ダイアログで設定する（CLIの`niwaterm board worktree set`と同じ。入力欄にはそのBoardのカレントディレクトリが入った状態で開き、空のまま確定すると紐づけを解除する。サイドバーのBoard行を右クリックしても同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある                             |
+| `set-board-phase`                                            | アクティブなBoardの作業フェーズを、候補（下記「Board設定」の`board.phases`）から選ぶピッカーを開く。色付きの候補が並び、今のフェーズにはチェックが付く。↑↓のほかTab / Shift+Tabでも候補を移動でき、Enterで確定、Escapeでキャンセル。フェーズが付いているBoardでは末尾に「フェーズを解除」も並ぶ。既定キーは無いため使うには自分で割り当てる必要がある |
+| `set-board-phase:<id>`                                       | アクティブなBoardに作業フェーズを直接設定する（`<id>`は下記「Board設定」の`board.phases`のid）。ピッカーを挟まず1打で切り替えたいとき向けで、設定側にしか書けないアクションなので既定キーは無い                                                                                                                                                       |
 
 | `clear-board-phase` | アクティブなBoardの作業フェーズを解除する（既定キーは無いため使うには自分で割り当てる必要がある） |
 | `clear-board-startup` | アクティブなBoardの起動時レイアウトの紐づけを解除する（CLIの`niwaterm board startup clear`と同じ。今のレイアウトはそのまま残り、次回起動時は保存した骨格を復元する既定の挙動に戻る。サイドバーのBoard行を右クリック →「起動時レイアウト」からも同じことができる）。既定キーは無いため使うには自分で割り当てる必要がある |
@@ -350,12 +347,12 @@ prefix + `f`（`jump-hint`アクション）で、ジャンプできる場所に
 
 ラベルが出る対象は次の4つ。
 
-| 対象 | 打ったときの動き |
-|---|---|
-| タイル（ラベルは中央） | そのタイルへフォーカスを移す。表示中のタブはそのまま |
-| タブバーのタブ | そのタブへ切り替える（タイルのフォーカスもそのタイルへ移る） |
-| サイドバーのBoard行 | そのBoardへ切り替える。別ワークスペースのBoardならワークスペースごと切り替わる |
-| サイドバーのワークスペース見出し・ポップアップ | そのワークスペースへ切り替える／ポップアップを出す |
+| 対象                                           | 打ったときの動き                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| タイル（ラベルは中央）                         | そのタイルへフォーカスを移す。表示中のタブはそのまま                           |
+| タブバーのタブ                                 | そのタブへ切り替える（タイルのフォーカスもそのタイルへ移る）                   |
+| サイドバーのBoard行                            | そのBoardへ切り替える。別ワークスペースのBoardならワークスペースごと切り替わる |
+| サイドバーのワークスペース見出し・ポップアップ | そのワークスペースへ切り替える／ポップアップを出す                             |
 
 - ラベルは`asdfghjkl`（ホームロー）で、対象が9個までなら1文字、超えると一部が2文字になる。2文字ラベルは1文字打った時点で候補が絞り込まれ、打った分は薄く表示される
 - **画面に出ているものにだけラベルが出る**。サイドバーを閉じていればBoard行は対象外（`toggle-sidebar`で開いてから使う）、ズーム表示中は隠れているタイルも対象外になる
@@ -385,22 +382,22 @@ prefix + `v`（`copy-mode`アクション）でコピーモードに入る。マ
 
 コピーモード中のキーはniwatermが受け取り、ターミナルへは送られない（prefixキーは通常どおり効くため、prefix経由のタイル操作はコピーモード中もできる）。
 
-| キー | 動作 |
-|---|---|
-| `h` / `j` / `k` / `l`、矢印キー | カーソル移動 |
-| `w` / `b` / `e` | 単語単位の移動（次の単語の先頭 / 前の単語の先頭 / 単語の末尾） |
-| `0` / `^` / `$` | 行頭 / 行の最初の非空白 / 行の最後の非空白 |
-| `gg` / `G` | スクロールバックの先頭 / 最新行 |
-| `ctrl+u` / `ctrl+d` | 半画面ずつ上下へ |
-| `ctrl+b` / `ctrl+f`、`pageup` / `pagedown` | 1画面ずつ上下へ（`ctrl+b`はprefixが優先されるため、実際にはprefixとして解釈される点に注意） |
-| `H` / `M` / `L` | 画面の上端 / 中央 / 下端へ |
-| `/` / `?` | 前方 / 後方へのインクリメンタル検索を開始する（打った文字列がその場でハイライトされ、`Enter`で最初の一致へジャンプ、`Escape`で取りやめ） |
-| `n` / `N` | 直前の検索を同じ向き / 逆向きで繰り返す |
-| `{` / `}` | 1つ前 / 次のシェルプロンプトへジャンプする（下記「プロンプトジャンプ」参照） |
-| `v` / `V` | 文字選択 / 行選択の開始・解除（選択中に押すと切り替え） |
-| `y`、`Enter` | 選択範囲をクリップボードへコピーしてコピーモードを抜ける（選択していなければカーソル行をコピー） |
-| `Escape` | 選択中なら選択解除、選択していなければコピーモードを抜ける |
-| `q` / `ctrl+c` | コピーモードを抜ける |
+| キー                                       | 動作                                                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `h` / `j` / `k` / `l`、矢印キー            | カーソル移動                                                                                                                             |
+| `w` / `b` / `e`                            | 単語単位の移動（次の単語の先頭 / 前の単語の先頭 / 単語の末尾）                                                                           |
+| `0` / `^` / `$`                            | 行頭 / 行の最初の非空白 / 行の最後の非空白                                                                                               |
+| `gg` / `G`                                 | スクロールバックの先頭 / 最新行                                                                                                          |
+| `ctrl+u` / `ctrl+d`                        | 半画面ずつ上下へ                                                                                                                         |
+| `ctrl+b` / `ctrl+f`、`pageup` / `pagedown` | 1画面ずつ上下へ（`ctrl+b`はprefixが優先されるため、実際にはprefixとして解釈される点に注意）                                              |
+| `H` / `M` / `L`                            | 画面の上端 / 中央 / 下端へ                                                                                                               |
+| `/` / `?`                                  | 前方 / 後方へのインクリメンタル検索を開始する（打った文字列がその場でハイライトされ、`Enter`で最初の一致へジャンプ、`Escape`で取りやめ） |
+| `n` / `N`                                  | 直前の検索を同じ向き / 逆向きで繰り返す                                                                                                  |
+| `{` / `}`                                  | 1つ前 / 次のシェルプロンプトへジャンプする（下記「プロンプトジャンプ」参照）                                                             |
+| `v` / `V`                                  | 文字選択 / 行選択の開始・解除（選択中に押すと切り替え）                                                                                  |
+| `y`、`Enter`                               | 選択範囲をクリップボードへコピーしてコピーモードを抜ける（選択していなければカーソル行をコピー）                                         |
+| `Escape`                                   | 選択中なら選択解除、選択していなければコピーモードを抜ける                                                                               |
+| `q` / `ctrl+c`                             | コピーモードを抜ける                                                                                                                     |
 
 コピー時は折り返された行を1行に連結し（unwrap）、行末の空白を落とす（trim）。全角文字は2桁として扱うため、日本語を含む行でも桁がずれない。
 
@@ -460,46 +457,46 @@ niwa.on("bell", (event) => {
 
 ### ハンドラに渡る値（`NiwaBellEvent`）
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `tabId` | `string` | ベルが鳴ったタブ |
-| `tabName` | `string \| null` | サイドバーから設定したタブ名。未設定は`null` |
-| `tileId` / `boardId` / `workspaceId` | `string` | そのタブの所在 |
-| `windowFocused` | `boolean` | 鳴った時点でniwatermのウィンドウがフォーカスされていたか |
-| `visible` | `boolean` | 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブなら`false`） |
-| `agentStatus` | `string \| null` | 鳴った時点のタブ変数`agent_status`（`idle` / `working` / `blocked`）。エージェントが動いていないタブは`null` |
+| フィールド                           | 型               | 意味                                                                                                         |
+| ------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `tabId`                              | `string`         | ベルが鳴ったタブ                                                                                             |
+| `tabName`                            | `string \| null` | サイドバーから設定したタブ名。未設定は`null`                                                                 |
+| `tileId` / `boardId` / `workspaceId` | `string`         | そのタブの所在                                                                                               |
+| `windowFocused`                      | `boolean`        | 鳴った時点でniwatermのウィンドウがフォーカスされていたか                                                     |
+| `visible`                            | `boolean`        | 鳴った時点でそのタブが画面に出ていたか（別Board・別ワークスペース・非アクティブタブなら`false`）             |
+| `agentStatus`                        | `string \| null` | 鳴った時点のタブ変数`agent_status`（`idle` / `working` / `blocked`）。エージェントが動いていないタブは`null` |
 
 `agentStatus`を見れば、既定の処理と同じ間引きを自前のハンドラでも書ける。逆に作業中のベルも拾いたい場合は、`niwa.bell.default(event)`を呼ばず`niwa.bell.mark(event.tabId)`を直接呼ぶ。
 
 ### `niwa.bell`
 
-| メソッド | 意味 |
-|---|---|
+| メソッド         | 意味                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
 | `default(event)` | 既定の処理（マーク＋画面に出ていないタブなら通知。`agentStatus`が`working`なら何もしない）を実行する |
-| `mark(tabId)` | タブにマークを付ける。マークはそのタブが画面に出た時点で自動的に消える |
-| `clear(tabId)` | タブのマークを消す |
+| `mark(tabId)`    | タブにマークを付ける。マークはそのタブが画面に出た時点で自動的に消える                               |
+| `clear(tabId)`   | タブのマークを消す                                                                                   |
 
 ## 外観設定
 
 `appearance`はフォント・カラーテーマを指定するオブジェクト。全フィールドoptionalで、指定しなかったフィールドは`defaultAppearance`の値のまま有効（`defaultAppearance`をspreadしてから一部だけ上書きするのが基本の書き方）。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `fontFamily` | `string` | CSSの`font-family`値をそのまま文字列で指定する（複数フォント列挙・クォートはユーザー側の責務） |
-| `fontSize` | `number` | フォントサイズ（px） |
-| `lineHeight` | `number` | 行高（px）。`font-size`コマンド・キーバインドでのズームでは、`fontSize`との比率を保ったままこの値も拡大・縮小される |
-| `foreground` | `string` | 前景色（CSSカラー値） |
-| `background` | `string` | 背景色（CSSカラー値） |
-| `backgroundOpacity` | `number` | 背景の不透明度（0〜1、既定`1`）。1未満にすると背後のウィンドウが透ける |
-| `backgroundImage` | `string` | 背景画像（既定`"none"`）。CSSの`background-image`値か、画像ファイルのパス |
-| `ansiColors` | `readonly string[]` | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる |
-| `tabBar` | `"auto"` / `"always"` | タブが1つだけのタイルでのタブバーの出し方（既定`"auto"`）。下記「タブバーの出し方」参照 |
-| `titleBar` | `"default"` / `"hidden"` | ネイティブのタイトルバーを出すか隠すか（既定`"default"`）。下記「タイトルバーを隠す」参照 |
-| `tileBorderRadius` | `number` | タイルの角の丸み（px、既定`6`）。各タイルの枠（フォーカス中・ズーム中の枠を含む）がこの丸みで引かれる。`0`で角張った四角になる。丸みを大きくすると、角に中身が食い込まないようタイル内側の余白も広がる |
-| `tileGap` | `number` | タイル同士の間と、タイルと画面の端の間の隙間（px、既定`4`） |
-| `inactiveTileDim` | `number` | フォーカスしていないタイルを暗くする度合い（0〜1、既定`0`＝暗くしない） |
-| `tileShadow` | `string` | タイルに付ける影。CSSの`box-shadow`値（既定`"none"`＝影なし） |
-| `ui` | `UiColorsConfig` | ターミナル本体以外のUI（枠線・バッジ等）の配色。下記「UIの配色（`appearance.ui`）」参照 |
+| フィールド          | 型                       | 意味                                                                                                                                                                                                   |
+| ------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fontFamily`        | `string`                 | CSSの`font-family`値をそのまま文字列で指定する（複数フォント列挙・クォートはユーザー側の責務）                                                                                                         |
+| `fontSize`          | `number`                 | フォントサイズ（px）                                                                                                                                                                                   |
+| `lineHeight`        | `number`                 | 行高（px）。`font-size`コマンド・キーバインドでのズームでは、`fontSize`との比率を保ったままこの値も拡大・縮小される                                                                                    |
+| `foreground`        | `string`                 | 前景色（CSSカラー値）                                                                                                                                                                                  |
+| `background`        | `string`                 | 背景色（CSSカラー値）                                                                                                                                                                                  |
+| `backgroundOpacity` | `number`                 | 背景の不透明度（0〜1、既定`1`）。1未満にすると背後のウィンドウが透ける                                                                                                                                 |
+| `backgroundImage`   | `string`                 | 背景画像（既定`"none"`）。CSSの`background-image`値か、画像ファイルのパス                                                                                                                              |
+| `ansiColors`        | `readonly string[]`      | ANSI標準16色（index 0-7:通常、8-15:bright）。16色すべてを書く必要はなく、書いたindexだけ上書きされる                                                                                                   |
+| `tabBar`            | `"auto"` / `"always"`    | タブが1つだけのタイルでのタブバーの出し方（既定`"auto"`）。下記「タブバーの出し方」参照                                                                                                                |
+| `titleBar`          | `"default"` / `"hidden"` | ネイティブのタイトルバーを出すか隠すか（既定`"default"`）。下記「タイトルバーを隠す」参照                                                                                                              |
+| `tileBorderRadius`  | `number`                 | タイルの角の丸み（px、既定`6`）。各タイルの枠（フォーカス中・ズーム中の枠を含む）がこの丸みで引かれる。`0`で角張った四角になる。丸みを大きくすると、角に中身が食い込まないようタイル内側の余白も広がる |
+| `tileGap`           | `number`                 | タイル同士の間と、タイルと画面の端の間の隙間（px、既定`4`）                                                                                                                                            |
+| `inactiveTileDim`   | `number`                 | フォーカスしていないタイルを暗くする度合い（0〜1、既定`0`＝暗くしない）                                                                                                                                |
+| `tileShadow`        | `string`                 | タイルに付ける影。CSSの`box-shadow`値（既定`"none"`＝影なし）                                                                                                                                          |
+| `ui`                | `UiColorsConfig`         | ターミナル本体以外のUI（枠線・バッジ等）の配色。下記「UIの配色（`appearance.ui`）」参照                                                                                                                |
 
 ```ts
 appearance: {
@@ -518,15 +515,15 @@ appearance: {
 
 タイルの枠・境界線・各種バッジといった、ターミナルの文字以外の配色。部品ごとではなく役割ごとに色を持ち、同じ役割の部品は同じ色を共有する。
 
-| フィールド | 既定値 | 使われる場所 |
-|---|---|---|
-| `border` | `#313244` | サイドバー・タブバー・ブラウザツールバー・ポップアップの境界線、フォーカスしていないタイルの枠 |
-| `accent` | `#89b4fa` | フォーカス中タイルの枠、タブD&Dのドロップ先、コピーモードの選択範囲、コピーモードのバッジ・検索プロンプト |
-| `warning` | `#f9e2af` | ズーム中タイルの枠、検索の一致箇所、コピーモードのカーソル、スクロールバックのバッジ、ジャンプヒントのラベル |
-| `success` | `#a6e3a1` | コピー完了のバッジ |
-| `danger` | `#f38ba8` | 検索失敗などのエラーメッセージ |
-| `badgeForeground` | `#1e1e2e` | 上記4色を地に敷くバッジ・メッセージの文字色 |
-| `scrollbar` | `#45475a` | スクロールバーのつまみ |
+| フィールド        | 既定値    | 使われる場所                                                                                                 |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `border`          | `#313244` | サイドバー・タブバー・ブラウザツールバー・ポップアップの境界線、フォーカスしていないタイルの枠               |
+| `accent`          | `#89b4fa` | フォーカス中タイルの枠、タブD&Dのドロップ先、コピーモードの選択範囲、コピーモードのバッジ・検索プロンプト    |
+| `warning`         | `#f9e2af` | ズーム中タイルの枠、検索の一致箇所、コピーモードのカーソル、スクロールバックのバッジ、ジャンプヒントのラベル |
+| `success`         | `#a6e3a1` | コピー完了のバッジ                                                                                           |
+| `danger`          | `#f38ba8` | 検索失敗などのエラーメッセージ                                                                               |
+| `badgeForeground` | `#1e1e2e` | 上記4色を地に敷くバッジ・メッセージの文字色                                                                  |
+| `scrollbar`       | `#45475a` | スクロールバーのつまみ                                                                                       |
 
 ```ts
 appearance: {
@@ -633,8 +630,8 @@ OSのタイトルバーを隠し、その高さぶんを画面に回す。背景
 
 `browser`は新規ブラウザタブ（`new-browser-tab`キーバインド、または`niwaterm tab new`のCLIで`--url`省略時）を開いた際のデフォルトURLを指定するオブジェクト。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
+| フィールド   | 型       | 意味                                                   |
+| ------------ | -------- | ------------------------------------------------------ |
 | `defaultUrl` | `string` | 新規ブラウザタブの初期表示URL。未指定時は`about:blank` |
 
 ```ts
@@ -651,9 +648,9 @@ browser: {
 
 `mouse`はマウス操作の挙動を指定するオブジェクト。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `copyOnSelect` | `boolean` | マウスでのテキスト選択が終わった時点で、選択範囲をクリップボードへ自動コピーする。未指定時は`false` |
+| フィールド      | 型         | 意味                                                                                                   |
+| --------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| `copyOnSelect`  | `boolean`  | マウスでのテキスト選択が終わった時点で、選択範囲をクリップボードへ自動コピーする。未指定時は`false`    |
 | `selectionMenu` | `function` | 選択範囲を右クリックした時のメニューに並べる項目を組み立てる。未指定時は組み込みの「コピー」だけが出る |
 
 ```ts
@@ -699,11 +696,11 @@ mouse: {
 
 第1引数には選択範囲の情報が渡る。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `text` | `string` | 選択されているテキスト |
-| `tabId` | `string` | 選択があるタブのid |
-| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
+| フィールド | 型                    | 意味                                                                                         |
+| ---------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| `text`     | `string`              | 選択されているテキスト                                                                       |
+| `tabId`    | `string`              | 選択があるタブのid                                                                           |
+| `cwd`      | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
 
 第2引数は[キーバインドの関数ハンドラ](#キーバインド)と同じ`niwa`で、`niwa.shell.run`・`niwa.popup.open`・`niwa.tab.create`・`niwa.notify`等をそのまま呼べる。返す項目は`label`（メニューの表示名）と`run`（選んだ時の処理）を持つオブジェクトで、`run`は非同期でもよい。空配列を返せば組み込みの「コピー」だけのメニューになる。
 
@@ -724,11 +721,11 @@ mouse: {
 
 修飾キーを要求するのは、TUIアプリへのマウス操作の転送・テキスト選択と同じ左クリックを取り合わないため。修飾キーを押しながらのクリックはリンクの上でだけ横取りされ、リンクが無い場所ではこれまで通りアプリ側・選択側へ渡る。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `modifier` | `"cmd" \| "ctrl" \| "alt" \| "shift"` | リンクを開くのに押しておく修飾キー。未指定時はmacOSが`cmd`、Windowsが`ctrl` |
-| `open` | `"external" \| "browser-tab"` | 開き先。`external`はOS既定のブラウザ、`browser-tab`はniwaterm内のブラウザタブ。未指定時は`external` |
-| `rules` | `LinkRule[]` | 素のURLとみなすパターン。指定すると既定のルールを**置き換える**（追加ではない） |
+| フィールド | 型                                    | 意味                                                                                                |
+| ---------- | ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `modifier` | `"cmd" \| "ctrl" \| "alt" \| "shift"` | リンクを開くのに押しておく修飾キー。未指定時はmacOSが`cmd`、Windowsが`ctrl`                         |
+| `open`     | `"external" \| "browser-tab"`         | 開き先。`external`はOS既定のブラウザ、`browser-tab`はniwaterm内のブラウザタブ。未指定時は`external` |
+| `rules`    | `LinkRule[]`                          | 素のURLとみなすパターン。指定すると既定のルールを**置き換える**（追加ではない）                     |
 
 ```ts
 link: {
@@ -747,10 +744,10 @@ macOSの既定が`cmd`なのは、macOSではctrl+クリックがOSレベルで�
 
 既定では次の3つが有効。
 
-| パターン | 開くURL |
-|---|---|
-| `https?://...` | マッチした文字列そのもの |
-| `mailto:...` | マッチした文字列そのもの |
+| パターン                             | 開くURL                   |
+| ------------------------------------ | ------------------------- |
+| `https?://...`                       | マッチした文字列そのもの  |
+| `mailto:...`                         | マッチした文字列そのもの  |
 | メールアドレス（`user@example.com`） | `mailto:`を頭に付けたもの |
 
 URLの直後に置かれただけの句読点・閉じ括弧（`.` `,` `)` 等）はマッチに含めない。
@@ -807,31 +804,31 @@ export default defineConfig({
 
 ハンドラに渡る値（`NiwaLinkEvent`）は次の通り。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `url` | `string` | 開こうとしているURL（`format`を適用した後の値） |
-| `text` | `string` | 画面上でマッチした文字列そのもの。`format`でURLへ組み替えた場合は元の見た目が残る |
-| `tabId` / `tileId` | `string` | クリックされたタブとその所在 |
-| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
+| フィールド         | 型                    | 意味                                                                                         |
+| ------------------ | --------------------- | -------------------------------------------------------------------------------------------- |
+| `url`              | `string`              | 開こうとしているURL（`format`を適用した後の値）                                              |
+| `text`             | `string`              | 画面上でマッチした文字列そのもの。`format`でURLへ組み替えた場合は元の見た目が残る            |
+| `tabId` / `tileId` | `string`              | クリックされたタブとその所在                                                                 |
+| `cwd`              | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
 
 `niwa.link`のメソッドは2つ。
 
-| メソッド | 意味 |
-|---|---|
-| `default(event)` | `link.open`の設定に従って開く（既定の処理と同じもの） |
-| `openExternal(url)` | `link.open`の設定に関わらずOS既定のブラウザで開く |
+| メソッド            | 意味                                                  |
+| ------------------- | ----------------------------------------------------- |
+| `default(event)`    | `link.open`の設定に従って開く（既定の処理と同じもの） |
+| `openExternal(url)` | `link.open`の設定に関わらずOS既定のブラウザで開く     |
 
 ## ユーザー定義HTML UI（customViews）
 
 `customViews`は、ユーザーが用意したHTMLをniwaterm内（サイドバー・タブ）に表示するための設定。配列に並べた順でサイドバーのビュー切替に並ぶ。**未指定・空配列なら機能自体がオフ**になり、サイドバーの見た目・挙動は変化しない。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `id` | `string` | キーバインド（`show-sidebar-view:<id>`）・CLI（`niwaterm sidebar switch --view <id>`）から指すためのid。未指定時は`name`から作られる（小文字化し、英数字以外は`-`へ。`Worktrees` → `worktrees`） |
-| `name` | `string` | サイドバーの切替タブに表示する名前。未指定時は`"Custom View 1"`のような並び順の連番 |
-| `path` | `string` | ローカルHTMLファイルへのパス。`~/.config/niwaterm/`（設定ファイルのあるディレクトリ）からの相対 or 絶対パス。`file://`として読み込む |
-| `url` | `string` | 任意URL。`path`未指定時のみ使われる（`path`優先） |
-| `handlers` | `Record<string, (payload, niwa) => unknown>` | HTML側から`niwaterm.call`で呼べる関数。後述 |
+| フィールド | 型                                           | 意味                                                                                                                                                                                             |
+| ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`       | `string`                                     | キーバインド（`show-sidebar-view:<id>`）・CLI（`niwaterm sidebar switch --view <id>`）から指すためのid。未指定時は`name`から作られる（小文字化し、英数字以外は`-`へ。`Worktrees` → `worktrees`） |
+| `name`     | `string`                                     | サイドバーの切替タブに表示する名前。未指定時は`"Custom View 1"`のような並び順の連番                                                                                                              |
+| `path`     | `string`                                     | ローカルHTMLファイルへのパス。`~/.config/niwaterm/`（設定ファイルのあるディレクトリ）からの相対 or 絶対パス。`file://`として読み込む                                                             |
+| `url`      | `string`                                     | 任意URL。`path`未指定時のみ使われる（`path`優先）                                                                                                                                                |
+| `handlers` | `Record<string, (payload, niwa) => unknown>` | HTML側から`niwaterm.call`で呼べる関数。後述                                                                                                                                                      |
 
 `path`と`url`のどちらも指定しなかった要素は、警告付きで飛ばされる（他の要素は有効なまま）。`path`が実在しないファイルを指している場合は、ビューは残したまま警告だけが出る（サイドバーには空白のビューが出る）。飛ばさないのは、ファイルの有無でid採番が変わると、HTMLを置いた途端にキーバインド・CLIから指す`id`がずれてしまうため。
 
@@ -961,15 +958,15 @@ hoverButtons: [
 ],
 ```
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `id` | `string` | CLI（`niwaterm tab hover reveal`）から指すためのid。省略時は`position`（重複時は`right-2`のような連番付き） |
-| `position` | `string` | 置く位置。`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right`（省略時） |
-| `show` | `function` | そのタブに出すかの判定。省略時は全てのターミナルタブに出る |
-| `items` | `function` | 枠を開いた時に並べる項目を組み立てる |
-| `css` | `string` | `items`の`html`・取っ手の見た目を変えるCSS |
-| `handle` | `object \| false` | 取っ手の見た目（後述）。`false`なら取っ手を出さず、端へマウスを寄せた間だけ枠を出す |
-| `trigger` | `number` | `handle: false`のときの呼び出しの帯の太さ(px)。省略時は24。2〜200へ丸める |
+| フィールド | 型                | 意味                                                                                                                |
+| ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `id`       | `string`          | CLI（`niwaterm tab hover reveal`）から指すためのid。省略時は`position`（重複時は`right-2`のような連番付き）         |
+| `position` | `string`          | 置く位置。`top-left` / `top` / `top-right` / `left` / `right` / `bottom-left` / `bottom` / `bottom-right`（省略時） |
+| `show`     | `function`        | そのタブに出すかの判定。省略時は全てのターミナルタブに出る                                                          |
+| `items`    | `function`        | 枠を開いた時に並べる項目を組み立てる                                                                                |
+| `css`      | `string`          | `items`の`html`・取っ手の見た目を変えるCSS                                                                          |
+| `handle`   | `object \| false` | 取っ手の見た目（後述）。`false`なら取っ手を出さず、端へマウスを寄せた間だけ枠を出す                                 |
+| `trigger`  | `number`          | `handle: false`のときの呼び出しの帯の太さ(px)。省略時は24。2〜200へ丸める                                           |
 
 基準は**タブの表示領域**（タイルの内側）で、ウィンドウ全体ではない。タイルを分割していれば、それぞれのタイルの端に出る。同じ位置に複数の枠を置いた場合は設定に並べた順に繋がって出る。上下の辺・四隅に置いた枠は横並び、左右の辺に置いた枠は縦並びになる（変えたい場合は`css`で`.hover-panel`の`flex-direction`を上書きする）。
 
@@ -977,19 +974,19 @@ hoverButtons: [
 
 取っ手は常に出ていて、押すと枠が開く。もう一度取っ手を押す・枠の外を押す・Escのどれかで閉じる。取っ手のぶんだけターミナルの端が隠れるので、邪魔なら`position`で置き場所を変えるか`handle: false`にする。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `style` | `string` | `"edge"`（端に貼り付く形。省略時） / `"floating"`（端から少し離れて浮く丸いアイコンボタン） |
-| `shape` | `string` | `"edge"`の形。`"round"` / `"rect"` / `"diamond"`（省略時） |
-| `icon` | `string` | `"floating"`のボタンに差し込むHTML。省略時は`☰` |
+| フィールド | 型       | 意味                                                                                        |
+| ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `style`    | `string` | `"edge"`（端に貼り付く形。省略時） / `"floating"`（端から少し離れて浮く丸いアイコンボタン） |
+| `shape`    | `string` | `"edge"`の形。`"round"` / `"rect"` / `"diamond"`（省略時）                                  |
+| `icon`     | `string` | `"floating"`のボタンに差し込むHTML。省略時は`☰`                                            |
 
 `"edge"`の形は置いた位置に合わせて切り取られる。
 
-| `shape` | 辺（`right`・`top`等） | 角（`bottom-right`等） |
-|---|---|---|
-| `round` | 内側へ膨らむ半円 | 1/4円 |
-| `rect` | 細長い長方形 | 正方形 |
-| `diamond` | 三角（ひし形の半分） | 直角三角形（ひし形の1/4） |
+| `shape`   | 辺（`right`・`top`等） | 角（`bottom-right`等）    |
+| --------- | ---------------------- | ------------------------- |
+| `round`   | 内側へ膨らむ半円       | 1/4円                     |
+| `rect`    | 細長い長方形           | 正方形                    |
+| `diamond` | 三角（ひし形の半分）   | 直角三角形（ひし形の1/4） |
 
 ```ts
 {
@@ -1028,12 +1025,12 @@ css: `
 
 `show`・`items`の第1引数には、そのタブの状況が渡る。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `tabId` | `string` | そのタブのid |
-| `cwd` | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
-| `vars` | `Record<string, string>` | そのタブのタブ変数（`niwaterm tab var set`・シェル統合・エージェント統合のhookが書き込む）。`cwd`もこの中の`"cwd"`に入っている |
-| `tabName` | `string \| undefined` | サイドバーから設定したタブ名。未設定は`undefined` |
+| フィールド | 型                       | 意味                                                                                                                           |
+| ---------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `tabId`    | `string`                 | そのタブのid                                                                                                                   |
+| `cwd`      | `string \| undefined`    | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined`                                   |
+| `vars`     | `Record<string, string>` | そのタブのタブ変数（`niwaterm tab var set`・シェル統合・エージェント統合のhookが書き込む）。`cwd`もこの中の`"cwd"`に入っている |
+| `tabName`  | `string \| undefined`    | サイドバーから設定したタブ名。未設定は`undefined`                                                                              |
 
 `show`を使わずタブを絞りたい場合は、`niwaterm tab var set`で目印の変数を立てて`show`から読むのが手軽（シェルのフック・エージェントのhookから叩ける）。
 
@@ -1041,12 +1038,12 @@ css: `
 
 `items`は枠を開くたびに呼ばれるので、ファイルの読み直し・コマンド実行を伴う動的な項目も書ける。第2引数は[キーバインドの関数ハンドラ](#キーバインド)と同じ`niwa`。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `label` | `string` | 表示するテキスト |
-| `html` | `string` | `label`の代わりに差し込むHTML |
-| `tooltip` | `string` | マウスを載せた時に出る説明。省略時は`label` |
-| `run` | `function` | 押した時の処理。非同期でもよい |
+| フィールド | 型         | 意味                                        |
+| ---------- | ---------- | ------------------------------------------- |
+| `label`    | `string`   | 表示するテキスト                            |
+| `html`     | `string`   | `label`の代わりに差し込むHTML               |
+| `tooltip`  | `string`   | マウスを載せた時に出る説明。省略時は`label` |
+| `run`      | `function` | 押した時の処理。非同期でもよい              |
 
 `html`を使うと、文字ではなく印だけを並べるような見た目も作れる。クリックの拾い方・並べ方はniwaterm側が持つので、`a`要素や`button`要素にする必要はない。
 
@@ -1083,10 +1080,10 @@ css: `
 
 `shell`は新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイルを指定するオブジェクト。**未指定なら機能オフ**で、OS標準シェル（macOS/Linux: `/bin/zsh -il`、Windows: `powershell.exe -NoLogo`）が使われる。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `default` | `string` | 新規タブ作成時に使うシェルの実行コマンド（PATHから解決される） |
-| `profiles` | `ShellProfile[]` | 追加のシェルプロファイル一覧（後述） |
+| フィールド | 型               | 意味                                                           |
+| ---------- | ---------------- | -------------------------------------------------------------- |
+| `default`  | `string`         | 新規タブ作成時に使うシェルの実行コマンド（PATHから解決される） |
+| `profiles` | `ShellProfile[]` | 追加のシェルプロファイル一覧（後述）                           |
 
 ```ts
 shell: {
@@ -1103,11 +1100,11 @@ shell: {
 
 Windows TerminalやWeztermのように、新規タブ作成時に起動するシェルを「+」ボタン横の「⌄」ドロップダウンから選べる。各プロファイルは以下の3フィールドを持つ。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `id` | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm tab new --shell <id>`やRPCでの指定に使う |
-| `name` | `string` | ドロップダウン・`niwaterm shell-profile list`に表示する名前 |
-| `command` | `string` | 実行コマンド（PATHから解決される。スペース区切りで単純分割） |
+| フィールド | 型       | 意味                                                                                                      |
+| ---------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `id`       | `string` | 一意識別子。英数字・`_`・`-`・`.`のみ、1〜64文字。CLIの`niwaterm tab new --shell <id>`やRPCでの指定に使う |
+| `name`     | `string` | ドロップダウン・`niwaterm shell-profile list`に表示する名前                                               |
+| `command`  | `string` | 実行コマンド（PATHから解決される。スペース区切りで単純分割）                                              |
 
 Windows環境では起動時に`wsl.exe --list --quiet`相当でインストール済みのWSLディストロを自動検出し、`id: "wsl-<ディストロ名>"`のプロファイルとして追加する（PowerShellは`id: "powershell"`の固定プロファイルとして常に追加される）。macOS/Linuxでは自動検出は行われず、`shell.profiles`で指定した分のみが有効。
 
@@ -1115,14 +1112,14 @@ Windows環境では起動時に`wsl.exe --list --quiet`相当でインストー�
 
 コマンドパレット（既定 prefix + `:`）にもプロファイルごとに`New Tab: <name>`という項目が並ぶため、ドロップダウンを開かずキーボードだけでも同じ操作ができる。
 
-利用可能なプロファイル一覧はCLIの`niwaterm shell-profile list`で確認できる（詳細: `docs/guide/cli.md`）。
+利用可能なプロファイル一覧はCLIの`niwaterm shell-profile list`で確認できる（詳細: [CLIからの操作](/niwaterm/cli/)）。
 
 ## ターミナル設定
 
 `terminal`は、ターミナル本体の挙動を指定するオブジェクト。現在はスクロールバック（画面から流れた行をどれだけ遡れるか）の保持行数のみを持つ。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
+| フィールド   | 型       | 意味                                                    |
+| ------------ | -------- | ------------------------------------------------------- |
 | `scrollback` | `number` | スクロールバックとして保持する行数の上限（既定`10000`） |
 
 ```ts
@@ -1141,8 +1138,8 @@ terminal: {
 
 `workspace`は、新規ワークスペース作成時（アプリ起動時の最初のワークスペース・`niwaterm workspace new`）の最初のタブに使うデフォルトcwdを指定するオブジェクト。**未指定ならOS標準のホームディレクトリ**が使われる（niwaterm自体をWSL/Linux環境で動かしている場合は、そのホームディレクトリが自然にデフォルトになる）。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
+| フィールド   | 型       | 意味                                                                   |
+| ------------ | -------- | ---------------------------------------------------------------------- |
 | `defaultCwd` | `string` | 新規ワークスペース作成時、最初のタブに使う作業ディレクトリ（絶対パス） |
 
 ```ts
@@ -1157,10 +1154,10 @@ workspace: {
 
 `board`は、新しいタブを開くときのcwdの決め方、名前を付けていないBoardに自動で付く名前、Boardへ付けられる作業フェーズの候補を指定するオブジェクト。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `newTabCwd` | `"inherit"` \| `"worktree"` | 新しいタブのcwd。`"inherit"`（既定）は今のタブのcwdを引き継ぐ、`"worktree"`はそのBoardに紐づくワークツリーを使う |
-| `naming` | `"directory"` \| `"directory-follow"` \| `"sequential"` | 名前を付けていないBoardの自動命名。`"directory"`（既定）は開いた時点のディレクトリ名で固定、`"directory-follow"`はフォーカス中タブのcwdへ追従、`"sequential"`は`Board 1`のような連番 |
+| フィールド  | 型                                                      | 意味                                                                                                                                                                                 |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `newTabCwd` | `"inherit"` \| `"worktree"`                             | 新しいタブのcwd。`"inherit"`（既定）は今のタブのcwdを引き継ぐ、`"worktree"`はそのBoardに紐づくワークツリーを使う                                                                     |
+| `naming`    | `"directory"` \| `"directory-follow"` \| `"sequential"` | 名前を付けていないBoardの自動命名。`"directory"`（既定）は開いた時点のディレクトリ名で固定、`"directory-follow"`はフォーカス中タブのcwdへ追従、`"sequential"`は`Board 1`のような連番 |
 
 ```ts
 board: {
@@ -1168,7 +1165,7 @@ board: {
 },
 ```
 
-`"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照。
+`"worktree"`が効くのはタブ追加・タイル分割・ポップアップの3つ。CLI・設定APIで`cwd`を明示した場合はそちらが優先される。Boardにワークツリーが紐づいていない場合と、紐づけ先のディレクトリが存在しない場合は`"inherit"`と同じ挙動になる（存在しないcwdではPTYの起動自体が失敗するため）。紐づけの付け方は[ワークツリー管理の「Boardに紐づくワークツリー」節](/niwaterm/worktree/#boardに紐づくワークツリー)を参照。
 
 ### 自動命名（`board.naming`）
 
@@ -1200,11 +1197,11 @@ cwdの出どころは2つある。`niwaterm board new --cwd`や`worktree open`�
 「このワークツリーは今どの段階か」を一覧のまま把握できる。**未指定なら候補なし**で、
 サイドバーの右クリックメニューは候補を定義する旨の案内だけを出す。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `id` | `string` | CLI（`niwaterm board phase set <id>`）・キーバインド（`set-board-phase:<id>`）から指す識別子。英数字と`_` `-` `.` `:`のみ、1〜64文字 |
-| `label` | `string` | バッジ・メニューに出す表示名（省略時は`id`をそのまま表示） |
-| `color` | `string` | バッジの地の色（CSSカラー）。省略時は`appearance.ui.accent`と同じ色 |
+| フィールド | 型       | 意味                                                                                                                                 |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`       | `string` | CLI（`niwaterm board phase set <id>`）・キーバインド（`set-board-phase:<id>`）から指す識別子。英数字と`_` `-` `.` `:`のみ、1〜64文字 |
+| `label`    | `string` | バッジ・メニューに出す表示名（省略時は`id`をそのまま表示）                                                                           |
+| `color`    | `string` | バッジの地の色（CSSカラー）。省略時は`appearance.ui.accent`と同じ色                                                                  |
 
 ```ts
 board: {
@@ -1235,22 +1232,22 @@ CLIの`niwaterm board phase`（[CLIガイド](/guide/cli.md)の「Board」節）
 
 `boardStatus`は、ステータスラインへ並べる項目の配列。**並べた順にそのまま上から出て、書かなかった項目は出ない**。未指定時は`["builtin:phase", "builtin:branch", "builtin:agent"]`と同じ（フェーズのバッジ・`on <branch>`・エージェントの状態テキスト）。空配列`[]`にするとステータスラインごと消え、Board行はBoard名だけの1行になる。
 
-| 値 | 出るもの |
-|---|---|
-| `"builtin:phase"` | 作業フェーズのバッジ（上記「作業フェーズ」節） |
+| 値                 | 出るもの                                                      |
+| ------------------ | ------------------------------------------------------------- |
+| `"builtin:phase"`  | 作業フェーズのバッジ（上記「作業フェーズ」節）                |
 | `"builtin:branch"` | タブ変数`branch`（既定では`on main`のように接頭辞付きで出る） |
-| `"builtin:agent"` | エージェントの状態テキスト（タブ変数`agent_status_text`） |
-| `"tab-var:<name>"` | 任意のタブ変数の値をそのまま1行 |
+| `"builtin:agent"`  | エージェントの状態テキスト（タブ変数`agent_status_text`）     |
+| `"tab-var:<name>"` | 任意のタブ変数の値をそのまま1行                               |
 
 出す値が無い項目は行を作らずに詰める。フェーズを付けていないBoard・変数が空のBoardで空行が空くことはない。
 
 文字列の代わりにオブジェクトを書くと、値の前に出すラベルと文字色を指定できる。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `source` | `string` | 上の表の値 |
-| `prefix` | `string` | 値の前に出す短いラベル。空文字列を指定するとビルトインの既定ラベル（`builtin:branch`の`on`、`builtin:agent`の`❯`）を消せる |
-| `color` | `string` | 値の文字色（CSSカラー） |
+| フィールド | 型       | 意味                                                                                                                       |
+| ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `source`   | `string` | 上の表の値                                                                                                                 |
+| `prefix`   | `string` | 値の前に出す短いラベル。空文字列を指定するとビルトインの既定ラベル（`builtin:branch`の`on`、`builtin:agent`の`❯`）を消せる |
+| `color`    | `string` | 値の文字色（CSSカラー）                                                                                                    |
 
 ```ts
 sidebar: {
@@ -1303,28 +1300,28 @@ statusBar: {
 
 文字列で書いた部品は`source`だけを指定したのと同じ。
 
-| `source` | 出るもの |
-|---|---|
-| `"builtin:mode"` | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押して2打目を待っている間）・`COPY`（コピーモード中）のバッジ。配色は`appearance.ui`の`accent`・`warning`・`success` |
-| `"builtin:cwd"` | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め（WSLのタブはディストロ側のホーム）、マウスを載せると省略前のパスが出る |
-| `"builtin:workspace"` | ワークスペース名（未設定なら`Workspace <n>`） |
-| `"builtin:board"` | Board名（未設定なら自動名・`Board <n>`） |
-| `"tab-var:<name>"` | フォーカス中タブのタブ変数の値（`niwaterm tab var set`で書き込む。ブランチなら`tab-var:branch`） |
+| `source`              | 出るもの                                                                                                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"builtin:mode"`      | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押して2打目を待っている間）・`COPY`（コピーモード中）のバッジ。配色は`appearance.ui`の`accent`・`warning`・`success` |
+| `"builtin:cwd"`       | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め（WSLのタブはディストロ側のホーム）、マウスを載せると省略前のパスが出る                         |
+| `"builtin:workspace"` | ワークスペース名（未設定なら`Workspace <n>`）                                                                                                                          |
+| `"builtin:board"`     | Board名（未設定なら自動名・`Board <n>`）                                                                                                                               |
+| `"tab-var:<name>"`    | フォーカス中タブのタブ変数の値（`niwaterm tab var set`で書き込む。ブランチなら`tab-var:branch`）                                                                       |
 
 値が空の部品は幅を持たずに詰まる。
 
 オブジェクトで書くと次のフィールドを指定できる。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `id` | `string` | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で、部品間で重ねない。省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる） |
-| `source` | `string` | 上の表の値。`render`と同時には書けない（`render`が優先される） |
-| `render` | `(ctx, niwa) => StatusBarSegment \| string \| null` | 中身を組み立てる関数。`async`も可。文字列を返せば`text`だけを指定したのと同じで、`null`・空文字列なら出ない |
-| `interval` | `number` | `render`を呼び直す周期(ms)。250ms未満は250msへ切り上げる。省略時は状況が変わった時だけ呼ぶ |
-| `prefix` | `string` | 値の前に出す短いラベル（値が空なら出ない）。区切りの空白が要るならここへ含める |
-| `color` | `string` | 文字色（CSSカラー） |
-| `tooltip` | `string` | マウスを載せた時に出す説明 |
-| `run` | `(ctx, niwa) => void \| Promise<void>` | 部品を押した時の処理。書いた部品だけが押せる見た目になる |
+| フィールド | 型                                                  | 意味                                                                                                                                                            |
+| ---------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | `string`                                            | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で、部品間で重ねない。省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる） |
+| `source`   | `string`                                            | 上の表の値。`render`と同時には書けない（`render`が優先される）                                                                                                  |
+| `render`   | `(ctx, niwa) => StatusBarSegment \| string \| null` | 中身を組み立てる関数。`async`も可。文字列を返せば`text`だけを指定したのと同じで、`null`・空文字列なら出ない                                                     |
+| `interval` | `number`                                            | `render`を呼び直す周期(ms)。250ms未満は250msへ切り上げる。省略時は状況が変わった時だけ呼ぶ                                                                      |
+| `prefix`   | `string`                                            | 値の前に出す短いラベル（値が空なら出ない）。区切りの空白が要るならここへ含める                                                                                  |
+| `color`    | `string`                                            | 文字色（CSSカラー）                                                                                                                                             |
+| `tooltip`  | `string`                                            | マウスを載せた時に出す説明                                                                                                                                      |
+| `run`      | `(ctx, niwa) => void \| Promise<void>`              | 部品を押した時の処理。書いた部品だけが押せる見た目になる                                                                                                        |
 
 `builtin:mode`には`prefix`・`color`が効かない（モードごとの配色は`appearance.ui`から取る）。
 
@@ -1332,15 +1329,15 @@ statusBar: {
 
 ### render・runへ渡る状況（`StatusBarContext`）
 
-| フィールド | 意味 |
-|---|---|
-| `windowId` | バーを出しているウィンドウ |
-| `workspaceId` / `workspaceName` | アクティブなワークスペースと表示名 |
-| `boardId` / `boardName` | アクティブなBoardと表示名。Boardが無ければ`null` |
-| `tabId` | フォーカス中タイルのアクティブタブ。Boardが無ければ`null` |
-| `cwd` | そのタブの作業ディレクトリ（未報告なら`undefined`） |
-| `vars` | そのタブのタブ変数 |
-| `tabName` | サイドバーから付けたタブ名（未設定なら`undefined`） |
+| フィールド                      | 意味                                                      |
+| ------------------------------- | --------------------------------------------------------- |
+| `windowId`                      | バーを出しているウィンドウ                                |
+| `workspaceId` / `workspaceName` | アクティブなワークスペースと表示名                        |
+| `boardId` / `boardName`         | アクティブなBoardと表示名。Boardが無ければ`null`          |
+| `tabId`                         | フォーカス中タイルのアクティブタブ。Boardが無ければ`null` |
+| `cwd`                           | そのタブの作業ディレクトリ（未報告なら`undefined`）       |
+| `vars`                          | そのタブのタブ変数                                        |
+| `tabName`                       | サイドバーから付けたタブ名（未設定なら`undefined`）       |
 
 `render`はこれらのどれかが変わった時にだけ呼ばれる（ターミナルの出力のたびには呼ばれない）。時計のように状況と無関係に変わる値は`interval`で周期的に呼び直す。`render`が例外を投げた部品は何も出さず、エラーはbun側のログへ出る。
 
@@ -1371,14 +1368,14 @@ niwaterm status-bar refresh --item todo
 
 ## レイアウト
 
-`layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`にはビルトインのプリセット（`empty`。`docs/guide/cli.md`「ビルトインのプリセット」節）だけが並ぶ。ビルトインと同名のプリセットをここで定義すると、そちらが優先されてビルトイン側は隠れる。
+`layouts`は、あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにするプリセット集（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。**未指定なら機能オフ**で、`niwaterm layout list`にはビルトインのプリセット（`empty`。[CLIからの操作の「ビルトインのプリセット」節](/niwaterm/cli/#ビルトインのプリセット)）だけが並ぶ。ビルトインと同名のプリセットをここで定義すると、そちらが優先されてビルトイン側は隠れる。
 
-ここで定義するのは全プロジェクト共通のプリセット。リポジトリ固有のレイアウトは`<projectRoot>/.niwaterm/config.ts`にも置ける（同名ならそちらが優先される。書き方・解決順・trustの扱いは`docs/guide/cli.md`「プロジェクトローカルのレイアウト」節）。プリセットの中身（下の表とタイル構成）はどちらでも同じ。
+ここで定義するのは全プロジェクト共通のプリセット。リポジトリ固有のレイアウトは`<projectRoot>/.niwaterm/config.ts`にも置ける（同名ならそちらが優先される。書き方・解決順・trustの扱いは[CLIからの操作の「プロジェクトローカルのレイアウト」節](/niwaterm/cli/#プロジェクトローカルのレイアウト)）。プリセットの中身（下の表とタイル構成）はどちらでも同じ。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `description` | `string` | `niwaterm layout list`に表示する説明文（省略可） |
-| `layout` | `LayoutNodeConfig` | タイル構成（後述） |
+| フィールド    | 型                 | 意味                                             |
+| ------------- | ------------------ | ------------------------------------------------ |
+| `description` | `string`           | `niwaterm layout list`に表示する説明文（省略可） |
+| `layout`      | `LayoutNodeConfig` | タイル構成（後述）                               |
 
 ```ts
 layouts: {
@@ -1407,21 +1404,21 @@ layouts: {
 
 各タブ（`LayoutTabConfig`）のフィールドはすべて省略可。
 
-| フィールド | 型 | 意味 |
-|---|---|---|
-| `name` | `string` | タブ名（サイドバー・タブバー表示用） |
-| `shellProfile` | `string` | 使用するシェルプロファイルのid（`niwaterm shell-profile list`で確認）。省略時はデフォルトシェル |
-| `cwd` | `string` | 作業ディレクトリ。省略時は`niwaterm layout apply`を実行したディレクトリ（`--cwd`で上書き可） |
-| `command` | `string` | タブ作成後に流し込むコマンド（末尾にEnterを自動送信する）。改行を含む場合は1行ずつ実行される |
-| `delay` | `number` | `command`を送信するまでの追加の待ち時間(ms)。省略時は0。シェルが入力を受け付けられるようになるまでの待ちはniwaterm側が自動で行う（下記）ため、通常は指定不要 |
-| `vars` | `Record<string, string>` | タブ変数（`tab var set`相当で注入） |
-| `focus` | `boolean` | このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる |
+| フィールド     | 型                       | 意味                                                                                                                                                         |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`         | `string`                 | タブ名（サイドバー・タブバー表示用）                                                                                                                         |
+| `shellProfile` | `string`                 | 使用するシェルプロファイルのid（`niwaterm shell-profile list`で確認）。省略時はデフォルトシェル                                                              |
+| `cwd`          | `string`                 | 作業ディレクトリ。省略時は`niwaterm layout apply`を実行したディレクトリ（`--cwd`で上書き可）                                                                 |
+| `command`      | `string`                 | タブ作成後に流し込むコマンド（末尾にEnterを自動送信する）。改行を含む場合は1行ずつ実行される                                                                 |
+| `delay`        | `number`                 | `command`を送信するまでの追加の待ち時間(ms)。省略時は0。シェルが入力を受け付けられるようになるまでの待ちはniwaterm側が自動で行う（下記）ため、通常は指定不要 |
+| `vars`         | `Record<string, string>` | タブ変数（`tab var set`相当で注入）                                                                                                                          |
+| `focus`        | `boolean`                | このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる                                                                                          |
 
 `command`はPTY（シェル）が入力を受け付けられるようになってから送られる。分割で作ったタイルのタブはPTYの起動自体がwebview側の実測サイズ到達まで保留されるうえ、起動直後のシェルは初期化中に流し込まれた入力を取りこぼす（コマンドの先頭が欠けて途中から実行される）ため、niwatermは「PTYが最初の出力を返し、そこから出力が止まった＝プロンプトを出し終えた」時点まで送信を遅らせる。それでも足りない場合（プロンプト表示後も初期化が続くシェル等）は`delay`で追加の待ちを指定する。
 
 `command`はキー入力としてではなく**ペーストとして**流し込まれる。1文字ずつのキー入力で送ると、zshのZLEのような行編集機能が文字ごとにシンタックスハイライト・補完の先読み・スニペット展開を走らせるため、コマンドが長いほど流し込みの完了が遅れる（プラグイン次第で1コマンドに数秒かかる）。ペーストなら行全体が1回の挿入として扱われるので待ち時間はほぼ無くなる代わりに、スニペット展開のような「入力中に働く」機能は`command`には効かない。bracketed paste（DEC 2004）を有効にしないシェルへは従来どおり1文字ずつの入力として送られる。
 
-`command`はそのタブ自身にしか作用せず、vde-layoutの`{{pane_id:name}}`のような「同じプリセット内の別タブを参照するテンプレート構文」は無い（タブIDは適用のたびに再採番されるため、プリセット定義時点では固定できない）。同じプリセット内の別タブ（例: `role`変数で`claude`と印を付けたタブ）へ向けてコマンドを送りたい場合は、`command`の中で`niwaterm tab var find`（`docs/guide/cli.md`「タブ変数」節参照）を使い、実行時に対象タブのtabIdを検索する。`tab var find`は既定で「自分自身が属するBoard」の中だけを検索する。`layout apply`の適用先がBoard単位（ADR 0006）なので、同じプリセットを何度適用しても、同じrole名を持つ別Boardのタブと混線しない。
+`command`はそのタブ自身にしか作用せず、vde-layoutの`{{pane_id:name}}`のような「同じプリセット内の別タブを参照するテンプレート構文」は無い（タブIDは適用のたびに再採番されるため、プリセット定義時点では固定できない）。同じプリセット内の別タブ（例: `role`変数で`claude`と印を付けたタブ）へ向けてコマンドを送りたい場合は、`command`の中で`niwaterm tab var find`（[CLIからの操作](/niwaterm/cli/)の`tab var`の説明を参照）を使い、実行時に対象タブのtabIdを検索する。`tab var find`は既定で「自分自身が属するBoard」の中だけを検索する。`layout apply`の適用先がBoard単位（ADR 0006）なので、同じプリセットを何度適用しても、同じrole名を持つ別Boardのタブと混線しない。
 
 ```ts
 layout: {
@@ -1459,24 +1456,24 @@ niwaterm layout apply dev --replace
 niwaterm layout apply dev --startup
 ```
 
-`niwaterm layout apply <name>`は既定で新規Boardとして適用する（適用先はBoard単位、ADR 0006）。`--replace`を指定すると既存Boardを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**ため、実行前にy/n確認プロンプトが表示される。確認なしで実行したい場合は`--replace-force`を使う）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはBoardに一切手を触れずエラーになる。詳細・エラー時の挙動は`docs/guide/cli.md`参照。
+`niwaterm layout apply <name>`は既定で新規Boardとして適用する（適用先はBoard単位、ADR 0006）。`--replace`を指定すると既存Boardを単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**ため、実行前にy/n確認プロンプトが表示される。確認なしで実行したい場合は`--replace-force`を使う）。`shellProfile`が未知のid・`focus:true`が2つ以上、といった不正なプリセットはBoardに一切手を触れずエラーになる。詳細・エラー時の挙動は[CLIからの操作](/niwaterm/cli/)参照。
 
-`--startup`を付けると、そのBoardは次回以降の**起動時にもこのプリセットで組み直される**。niwatermは通常、終了時のレイアウト骨格（タイル構成・タブ名・シェル・cwd・タブ変数）を保存して復元するが、`command`は再実行しない。起動時レイアウトにしたBoardは骨格の復元ではなくプリセットの再適用になるため、`command`ごと毎回同じ状態で立ち上がる。Boardごとに別のプリセットを紐づけられるので、「開発用Boardは`dev`、メモ用Boardは`notes`」のような使い分けができる。後から切り替える・解除するには`niwaterm board startup layout|restore|clear`を使う（`docs/guide/cli.md`「起動時レイアウト」節）。起動時にタブが開くディレクトリは`--startup`を付けて実行したディレクトリが記録されて使われる（プロジェクトローカルのプリセットならその解決元）。
+`--startup`を付けると、そのBoardは次回以降の**起動時にもこのプリセットで組み直される**。niwatermは通常、終了時のレイアウト骨格（タイル構成・タブ名・シェル・cwd・タブ変数）を保存して復元するが、`command`は再実行しない。起動時レイアウトにしたBoardは骨格の復元ではなくプリセットの再適用になるため、`command`ごと毎回同じ状態で立ち上がる。Boardごとに別のプリセットを紐づけられるので、「開発用Boardは`dev`、メモ用Boardは`notes`」のような使い分けができる。後から切り替える・解除するには`niwaterm board startup layout|restore|clear`を使う（[CLIからの操作の「起動時レイアウト」節](/niwaterm/cli/#起動時レイアウト)）。起動時にタブが開くディレクトリは`--startup`を付けて実行したディレクトリが記録されて使われる（プロジェクトローカルのプリセットならその解決元）。
 
 ## ワークツリー
 
-`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。コマンド側の挙動を含めた全体像は`docs/guide/worktree.md`を参照。
+`worktree`は、`niwaterm worktree`系コマンドの挙動を指定するオブジェクト。コマンド側の挙動を含めた全体像は[ワークツリー管理](/niwaterm/worktree/)を参照。
 
-| フィールド | 型 | 意味 | 未指定時 |
-|---|---|---|---|
-| `dir` | `string` | 新規ワークツリーの置き場所テンプレート | `../${repo}@${branch}` |
-| `open` | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値 | `"board"` |
-| `layout` | `string` | Boardへ適用するレイアウトプリセット名（`--layout`の既定値） | なし（適用しない） |
-| `fetch` | `boolean` | ワークツリーを作る前にリモートをfetchするか（`--fetch`／`--no-fetch`の既定値） | `true` |
-| `onCreate` | `(ctx) => void \| Promise<void>` | ワークツリーを新規作成した直後に走るフック | なし |
-| `onOpen` | `(ctx) => void \| Promise<void>` | ワークツリーのBoardを新規に作った後に走るフック | なし |
-| `onBeforeRemove` | `(ctx) => void \| Promise<void>` | `worktree remove`がワークツリーを削除する直前に走るフック | なし |
-| `onRemove` | `(ctx) => void \| Promise<void>` | `worktree remove`がワークツリーを削除した直後に走るフック | なし |
+| フィールド       | 型                                                           | 意味                                                                           | 未指定時               |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------- |
+| `dir`            | `string`                                                     | 新規ワークツリーの置き場所テンプレート                                         | `../${repo}@${branch}` |
+| `open`           | `"board"` \| `"board-switch"` \| `"current-tab"` \| `"none"` | `worktree new`の`--open`の既定値                                               | `"board"`              |
+| `layout`         | `string`                                                     | Boardへ適用するレイアウトプリセット名（`--layout`の既定値）                    | なし（適用しない）     |
+| `fetch`          | `boolean`                                                    | ワークツリーを作る前にリモートをfetchするか（`--fetch`／`--no-fetch`の既定値） | `true`                 |
+| `onCreate`       | `(ctx) => void \| Promise<void>`                             | ワークツリーを新規作成した直後に走るフック                                     | なし                   |
+| `onOpen`         | `(ctx) => void \| Promise<void>`                             | ワークツリーのBoardを新規に作った後に走るフック                                | なし                   |
+| `onBeforeRemove` | `(ctx) => void \| Promise<void>`                             | `worktree remove`がワークツリーを削除する直前に走るフック                      | なし                   |
+| `onRemove`       | `(ctx) => void \| Promise<void>`                             | `worktree remove`がワークツリーを削除した直後に走るフック                      | なし                   |
 
 ```ts
 worktree: {
@@ -1496,19 +1493,19 @@ worktree: {
 
 テンプレートでは`${repo}`（メインワークツリーのディレクトリ名）と`${branch}`（ブランチ名）が展開される。ブランチ名の`/`は`-`へ潰されるため、`feat/worktree`は意図しない階層にならず`niwaterm@feat-worktree`のような単一のディレクトリ名になる。値は`~/`始まり・絶対パス・メインワークツリー基準の相対パスのいずれでも書ける。
 
-`layout`は`layouts`のキー（「レイアウト」節参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は`docs/guide/worktree.md`「レイアウトプリセットの適用」節。
+`layout`は`layouts`のキー（「レイアウト」節参照）。Boardを**新規に作ったときだけ**適用され、既にそのワークツリーのBoardが開いていれば既存のタブは壊さない。プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。詳細は[ワークツリー管理の「レイアウトプリセットの適用」節](/niwaterm/worktree/#レイアウトプリセットの適用)。
 
-`fetch`は、リモートのブランチをワークツリーとして開くときに手元のリモート追跡ブランチが古いままにならないよう、**ワークツリーを新規に作る前**に`git fetch`を打つかどうか。既存のワークツリーを開き直すだけのときと`--track local`のときは、`true`でもfetchしない。作成のたびのネットワーク待ちが気になる場合は`false`にして、必要なときだけ`--fetch`を付ける。詳細は`docs/guide/worktree.md`「リモートのブランチから作る」節。
+`fetch`は、リモートのブランチをワークツリーとして開くときに手元のリモート追跡ブランチが古いままにならないよう、**ワークツリーを新規に作る前**に`git fetch`を打つかどうか。既存のワークツリーを開き直すだけのときと`--track local`のときは、`true`でもfetchしない。作成のたびのネットワーク待ちが気になる場合は`false`にして、必要なときだけ`--fetch`を付ける。詳細は[ワークツリー管理の「リモートのブランチから作る」節](/niwaterm/worktree/#リモートのブランチから作る)。
 
-`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。`onCreate`・`onOpen`とも、実行中のカレントディレクトリはそのワークツリーになる（`Bun.$`に`.cwd()`を付けなくてよい）。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は`docs/guide/worktree.md`「作成後フック」節。
+`onCreate`は`repoRoot`・`worktreePath`・`branch`を受け取り、niwaterm CLIのプロセスでBoardを開く前にawaitされる。`onCreate`・`onOpen`とも、実行中のカレントディレクトリはそのワークツリーになる（`Bun.$`に`.cwd()`を付けなくてよい）。失敗するとワークツリーを残したままコマンドが終了コード1で止まり、Boardは開かない。既存のワークツリーを開き直した場合は走らない。詳細は[ワークツリー管理の「作成後フック」節](/niwaterm/worktree/#作成後フック)。
 
-`onOpen`はBoardを新規に作り、レイアウトプリセットの適用まで済んだ後にawaitされる。`ctx`には`onCreate`と同じ項目に加えて`created`（ワークツリーを新規作成したか）・`workspaceId`・`boardId`・`tabIds`が入るので、CLIでBoardのフェーズやタブ変数を設定できる。既に開いているBoardを使い回したとき・Boardを作らない`--open`では走らない。失敗してもBoardは閉じず、終了コード1で止まる。詳細は`docs/guide/worktree.md`「Boardを開いた後のフック」節。
+`onOpen`はBoardを新規に作り、レイアウトプリセットの適用まで済んだ後にawaitされる。`ctx`には`onCreate`と同じ項目に加えて`created`（ワークツリーを新規作成したか）・`workspaceId`・`boardId`・`tabIds`が入るので、CLIでBoardのフェーズやタブ変数を設定できる。既に開いているBoardを使い回したとき・Boardを作らない`--open`では走らない。失敗してもBoardは閉じず、終了コード1で止まる。詳細は[ワークツリー管理の「Boardを開いた後のフック」節](/niwaterm/worktree/#boardを開いた後のフック)。
 
-`onBeforeRemove`・`onRemove`は`worktree remove`の対象ごとに、削除の直前・直後にawaitされる。`ctx`は`repoRoot`・`worktreePath`・`branch`（detached HEADは`null`）・`force`。カレントディレクトリは`onBeforeRemove`が削除するワークツリー、`onRemove`がメインワークツリー。`onBeforeRemove`が失敗するとそのワークツリーは削除せずに残して終了コード1で止まる（`--force`なら警告を出して削除を続ける）。`onRemove`が失敗しても削除は戻さず、終了コード1で止まる。詳細は`docs/guide/worktree.md`「削除前後のフック」節。
+`onBeforeRemove`・`onRemove`は`worktree remove`の対象ごとに、削除の直前・直後にawaitされる。`ctx`は`repoRoot`・`worktreePath`・`branch`（detached HEADは`null`）・`force`。カレントディレクトリは`onBeforeRemove`が削除するワークツリー、`onRemove`がメインワークツリー。`onBeforeRemove`が失敗するとそのワークツリーは削除せずに残して終了コード1で止まる（`--force`なら警告を出して削除を続ける）。`onRemove`が失敗しても削除は戻さず、終了コード1で止まる。詳細は[ワークツリー管理の「削除前後のフック」節](/niwaterm/worktree/#削除前後のフック)。
 
 ここで定義するのは全リポジトリ共通の方針。リポジトリ固有の方針は`<repoRoot>/.niwaterm/config.ts`にも書け、**項目ごとに**そちらが優先される（`dir`はグローバル、`layout`はリポジトリ固有、という混ぜ方ができる）。ただしフック（`onCreate`・`onOpen`・`onBeforeRemove`・`onRemove`）だけは上書きではなく、グローバル→プロジェクトの順に**両方**走る（値と違ってフックは行動なので、片方を捨てるのが不自然なため）。
 
-プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`・`worktree remove`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節。
+プロジェクトローカル設定はリポジトリにコミットされることを想定しているため、**承認したリポジトリでしか読まれない**（`worktree new`・`worktree remove`の初回に確認が出る）。レイアウトプリセットの適用も同じ承認で門番する（プリセットの解決でそのリポジトリの設定が評価されるため）。詳細は[ワークツリー管理の「プロジェクトローカル設定の承認」節](/niwaterm/worktree/#プロジェクトローカル設定の承認)。
 
 ```ts
 // <repoRoot>/.niwaterm/config.ts
@@ -1519,7 +1516,7 @@ export default {
 } satisfies NiwatermProjectConfig;
 ```
 
-どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は`docs/guide/worktree.md`「ワークツリーの置き場所」節を参照。
+どちらにも書かれていない項目はgit configの`niwaterm.worktree.*`も見に行く（`git config niwaterm.worktree.dir '.worktrees/${branch}'`）。niwatermを入れていない環境とも設定を共有したい場合の補助口で、優先順位はniwatermの設定より下。解決順の全体像は[ワークツリー管理の「ワークツリーの置き場所」節](/niwaterm/worktree/#ワークツリーの置き場所)を参照。
 
 レイアウトプリセットと違い、プロジェクトローカル設定はcwdから上向きに探さずメインワークツリー直下だけを見る。置き場所・開き方はリポジトリ全体の方針であって、ワークツリーごとに変わるものではないため。
 

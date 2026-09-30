@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type DocTopic,
   formatTopicLines,
@@ -8,15 +11,18 @@ import {
 } from "./docs";
 
 const TOPICS: DocTopic[] = [
-  { name: "cli", description: "CLIの使い方", path: "/docs/guide/cli.md" },
-  { name: "worktree", description: "ワークツリー管理", path: "/docs/guide/worktree.md" },
+  { name: "cli", description: "CLIの使い方", path: "/website/src/content/docs/cli.md" },
+  {
+    name: "worktree",
+    description: "ワークツリー管理",
+    path: "/website/src/content/docs/worktree.md",
+  },
 ];
 
 describe("parseFrontmatterDescription", () => {
   test("frontmatterのdescriptionを取り出す", () => {
     const text = [
       "---",
-      "type: Reference",
       "title: CLIからの操作",
       "description: CLIの使い方",
       "---",
@@ -57,16 +63,37 @@ describe("formatTopicsJson", () => {
   });
 
   test("パス情報は出さない", () => {
-    expect(formatTopicsJson(TOPICS)).not.toContain("/docs/guide/");
+    expect(formatTopicsJson(TOPICS)).not.toContain("/website/");
   });
 });
 
 describe("loadTopics", () => {
-  test("docs/guide/のMarkdownをファイル名昇順で列挙し、descriptionを埋める", async () => {
+  test("サイトのcontentディレクトリの.mdをパス昇順で列挙し、descriptionを埋める", async () => {
     const topics = await loadTopics();
+    // トップページのindex.mdxはターミナルで読む前提のページではないので含めない
     expect(topics.map((t) => t.name)).toEqual(["cli", "config", "worktree"]);
     for (const topic of topics) {
       expect(topic.description).not.toBe("");
+    }
+  });
+});
+
+describe("loadTopics（サブディレクトリ）", () => {
+  test("サブディレクトリの.mdは/区切りの相対パスをトピック名にし、.mdxは含めない", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "niwaterm-docs-"));
+    try {
+      await mkdir(join(dir, "config"));
+      const page = (description: string) => `---\ntitle: t\ndescription: ${description}\n---\n`;
+      await writeFile(join(dir, "cli.md"), page("CLI"));
+      await writeFile(join(dir, "config", "keybindings.md"), page("キーバインド"));
+      await writeFile(join(dir, "index.mdx"), page("トップ"));
+      const topics = await loadTopics(dir);
+      expect(topics.map(({ name, description }) => ({ name, description }))).toEqual([
+        { name: "cli", description: "CLI" },
+        { name: "config/keybindings", description: "キーバインド" },
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });

@@ -11,7 +11,7 @@ bun link
 
 `bin`フィールド経由で`niwaterm`コマンドと`fzf-niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。npm registryへの公開は現状スコープ外。
 
-続けて`niwaterm init`を実行すると、設定ファイル（キーバインド・外観等）のディレクトリ`~/.config/niwaterm/`を生成できる。詳細は[docs/guide/config.md](../../docs/guide/config.md)参照。
+続けて`niwaterm init`を実行すると、設定ファイル（キーバインド・外観等）のディレクトリ`~/.config/niwaterm/`を生成できる。詳細は[website/src/content/docs/config.md](../../website/src/content/docs/config.md)参照。
 
 ## 使い方
 
@@ -26,7 +26,7 @@ niwaterm docs show cli     # 全コマンドの使い方・IPCサーバー仕様
 niwaterm complete zsh      # シェルの補完スクリプトを出力（設置手順はdocs show cliの「シェル補完」）
 ```
 
-コマンド一覧は`niwaterm --help`、個別コマンドの詳細は`niwaterm <command> --help`。全コマンドの詳しい使い方・実行例・IPCサーバー仕様は`niwaterm docs show cli`（またはリポジトリ内の[docs/guide/cli.md](../../docs/guide/cli.md)）を参照。
+コマンド一覧は`niwaterm --help`、個別コマンドの詳細は`niwaterm <command> --help`。全コマンドの詳しい使い方・実行例・IPCサーバー仕様は`niwaterm docs show cli`（またはリポジトリ内の[website/src/content/docs/cli.md](../../website/src/content/docs/cli.md)）を参照。
 
 AIエージェント向けの操作ガイドは[.agents/skills/niwaterm-cli/SKILL.md](../../.agents/skills/niwaterm-cli/SKILL.md)を参照。
 

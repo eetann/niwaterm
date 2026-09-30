@@ -8,6 +8,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - 意思決定記録: docs/adr/
 - ビルド・実行手順（macOS/Windowsのプラットフォーム差分）: docs/build/
 - 既知の問題・ハマりどころの記録: docs/known-issues/（何かに詰まったら先にここをgrepする）
+- ユーザー向けドキュメント（CLI・設定ファイルの使い方）: website/src/content/docs/（ドキュメントサイトのページ。`niwaterm docs list`/`show`でも読める）
 - コード内コメントの書き方: .agents/rules/code-comments.md（タスク番号・経緯を書かない。コメントを書く前に必読）
 
 ## AIエージェント共通の開発環境
@@ -47,7 +48,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはアプリ名(APP_VARIANT)別に分かれ、macOSが`~/Library/Application Support/<APP_VARIANT>/niwaterm.sock`、Windowsが`%APPDATA%\<APP_VARIANT>\niwaterm.sock`（src/bun/app-paths.tsで解決）。**APP_VARIANTはappフォルダ名(`niwaterm-wip-dev`)ではなくelectrobun.config.tsのapp.nameそのもの(`niwaterm-wip`/`niwaterm-daily`)で、"-dev"は付かない**。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: docs/guide/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
+- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: website/src/content/docs/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
 

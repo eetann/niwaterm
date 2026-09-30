@@ -1,17 +1,22 @@
 import { readdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join, sep } from "node:path";
 import { define } from "gunshi";
 import { cliName } from "../agent-hint";
 import { failAndExit } from "../cli-error";
 
-/** docs/guide/配下のMarkdown1件分。nameは拡張子を除いたファイル名 */
+/**
+ * ドキュメントサイトのMarkdown1件分。nameはcontentディレクトリからの相対パスから拡張子を除いたもの
+ * （サブディレクトリ内なら`config/keybindings`のように`/`区切り）で、サイトのURLのパスに対応する
+ */
 export interface DocTopic {
   name: string;
   description: string;
   path: string;
 }
 
-const GUIDE_DIR = join(import.meta.dir, "../../../../docs/guide");
+// ドキュメントサイト（Astro Starlight）のcontentディレクトリ。サイト側の配置規約に依存するので、
+// 場所が変わったらここだけ直す（ADR 0008）
+const CONTENT_DIR = join(import.meta.dir, "../../../../website/src/content/docs");
 
 function nextStepHint(): string {
   return `"${cliName()} docs show <name>" で内容を表示できます。`;
@@ -48,17 +53,22 @@ export function formatTopicsJson(topics: readonly DocTopic[]): string {
 }
 
 /**
- * docs/guide/を走査してトピックを組み立てる。
- * 一覧をハードコードせずファイルから引くことで、guideを増やしたときの載せ忘れと
- * descriptionの二重管理を防ぐ
+ * サイトのcontentディレクトリをサブディレクトリまで走査してトピックを組み立てる。
+ * 一覧をハードコードせずファイルから引くことで、ページを増やしたときの載せ忘れと
+ * descriptionの二重管理を防ぐ。`.mdx`はフレームワークのコンポーネントを含み
+ * ターミナルでは読みにくいので対象にしない
  */
-export async function loadTopics(): Promise<DocTopic[]> {
-  const files = (await readdir(GUIDE_DIR)).filter((file) => file.endsWith(".md")).sort();
+export async function loadTopics(dir: string = CONTENT_DIR): Promise<DocTopic[]> {
+  const files = (await readdir(dir, { recursive: true }))
+    .filter((file) => file.endsWith(".md"))
+    // Windowsではreaddirがバックスラッシュ区切りのパスを返すので、トピック名はOSによらず`/`へ揃える
+    .map((file) => file.split(sep).join("/"))
+    .sort();
   const topics: DocTopic[] = [];
   for (const file of files) {
-    const path = join(GUIDE_DIR, file);
+    const path = join(dir, file);
     const description = parseFrontmatterDescription(await Bun.file(path).text());
-    topics.push({ name: basename(file, ".md"), description: description ?? "", path });
+    topics.push({ name: file.slice(0, -".md".length), description: description ?? "", path });
   }
   return topics;
 }

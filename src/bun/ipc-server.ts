@@ -1688,7 +1688,7 @@ function buildApp(
     // レスポンスを遅らせる。openPopupと同期的に呼ぶことで、待機中にアクティブワークスペースが
     // 切り替わっても開いた時点のポップアップを見続ける（workspace-manager.ts参照）。
     // captureStdout: trueは結果を受け取るのに待機が前提のため、waitが未指定でも待つ
-    // （fzf-tmuxの`fzf ... > $fifo; cat $fifo`相当。詳細: docs/guide/cli.md「popup open」節）
+    // （fzf-tmuxの`fzf ... > $fifo; cat $fifo`相当。詳細: website/src/content/docs/cli.md「popup open」節）
     if (parsed.wait || parsed.captureStdout) {
       const output = await popupOwner.waitForPopupClose();
       if (parsed.captureStdout) return c.json({ ok: true, tabId, stdout: output ?? "" });

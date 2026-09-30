@@ -62,7 +62,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
     niwaterm docs show config     # 設定ファイル（キーバインド・外観・レイアウト等）の書き方
     niwaterm docs show worktree   # ワークツリー管理（置き場所・フック・レイアウト・Boardとの紐づけ）
 
-トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックは`docs/guide/`から自動で列挙されるので、ここに挙げた以外が増えていることもある。
+トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックはドキュメントサイトのページ（`website/src/content/docs/`）から自動で列挙されるので、ここに挙げた以外が増えていることもある。サブディレクトリ内のページは`config/keybindings`のように`/`区切りのトピック名になる。
 
 ## 典型的な流れ
 

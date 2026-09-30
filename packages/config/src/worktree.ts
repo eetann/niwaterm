@@ -2,7 +2,7 @@
 // （<repoRoot>/.niwaterm/config.ts）の両方に書け、項目ごとにプロジェクトローカル側が優先される。
 //
 // ここに書かない項目はgit configの`niwaterm.worktree.*`も見に行く（gtrと同じ流儀の補助口で、
-// 優先順位はniwatermの設定より下）。詳細はdocs/guide/worktree.md。
+// 優先順位はniwatermの設定より下）。詳細はwebsite/src/content/docs/worktree.md。
 
 /** `niwaterm worktree new`が作成後にワークツリーをniwatermのどこで開くか */
 export type WorktreeOpenMode =

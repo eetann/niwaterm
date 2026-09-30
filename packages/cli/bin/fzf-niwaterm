@@ -5,7 +5,7 @@
 # fzf-tmux（fzf付属、$(command -v fzf-tmux)のソース参照）は、標準入力を一時ファイルへ
 # 保存し、tmuxの新paneでfzfを実行し、標準出力だけを呼び出し元へ返す「リレー」に徹していて、
 # tmux固有の処理を呼び出し元（peco/zeno等のfzf連携ツール）に一切露出させない。
-# niwatermの`popup open --capture-stdout`（docs/guide/cli.md参照）もまさに同じ発想で
+# niwatermの`popup open --capture-stdout`（website/src/content/docs/cli.md参照）もまさに同じ発想で
 # 設計されている（「fzf-tmuxが新しいtmux paneでfzfを実行し、標準出力だけをFIFO経由で
 # 呼び出し元へ返す設計と同じ発想」と明記されている）。
 # このスクリプトはfzf-tmuxの役割をniwaterm版に置き換えたもの。

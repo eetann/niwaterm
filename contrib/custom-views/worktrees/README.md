@@ -10,7 +10,7 @@ gitワークツリーの一覧をサイドバーへ出し、絞り込んで開�
 一覧の対象リポジトリは**一覧を取った時点で、フォーカス中タイルのアクティブタブが
 いたディレクトリ**で決まる。別のリポジトリのタブへ移った後は`⟳`で取り直す。
 タブのcwdの報告にはシェル統合が要るので、先に入れておく
-（[docs/guide/cli.md](../../../docs/guide/cli.md)の「シェル統合」節）。
+（[website/src/content/docs/cli.md](../../../website/src/content/docs/cli.md)の「シェル統合」節）。
 
 ## 導入
 
@@ -53,7 +53,7 @@ export default defineConfig({
 
 ワークツリーの作成先ディレクトリ・作成後に走らせるコマンドは、このビューではなく
 niwaterm側の`worktree`設定（`worktree.dir`・`worktree.onCreate`・`worktree.onOpen`）で決まる。
-[docs/guide/config.md](../../../docs/guide/config.md)の「ワークツリー」節を参照。
+[website/src/content/docs/config.md](../../../website/src/content/docs/config.md)の「ワークツリー」節を参照。
 
 ## 削除
 

@@ -2,7 +2,7 @@
 
 `customViews`は、自分で用意したHTMLをniwatermのサイドバー（とタブ）へ表示する設定。複数登録でき、サイドバー上部のタブで切り替える。
 ここにあるのはそのまま使える例で、コピーして自分の設定へ組み込む形を想定している。
-設定項目そのものの説明は[docs/guide/config.md](../../docs/guide/config.md)の「ユーザー定義HTML UI（customViews）」を参照。
+設定項目そのものの説明は[website/src/content/docs/config.md](../../website/src/content/docs/config.md)の「ユーザー定義HTML UI（customViews）」を参照。
 
 | 例 | 内容 |
 |---|---|

@@ -1,5 +1,5 @@
 // 設定ディレクトリ(~/.config/niwaterm/)の初期セットアップ。
-// docs/guide/config.mdの手動セットアップ手順（package.json/tsconfig.json/niwaterm.config.tsの
+// website/src/content/docs/config.mdの手動セットアップ手順（package.json/tsconfig.json/niwaterm.config.tsの
 // 3ファイル配置 + bun install）を自動化する。テンプレートはpackages/config/examples/を実体として使い、
 // 内容の重複を避ける（examplesを更新すればinitにもそのまま反映される）。
 //

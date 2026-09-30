@@ -1,10 +1,7 @@
 ---
-type: Reference
 title: CLIからの操作
 description: niwaterm CLI（niwatermコマンド）のセットアップとサブコマンド一覧
 ---
-
-# CLIからの操作
 
 niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは`niwaterm <resource> <verb>`の形でリソース単位にグループ化されている（命名規則は後述）。サブコマンドの全体像は`niwaterm --help`で確認できる。
 
@@ -25,7 +22,7 @@ bun link
 niwaterm init
 ```
 
-`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる。既存ファイルは上書きしない（実行済みディレクトリへ再実行しても安全）。依存インストールを飛ばしたい場合は`--skip-install`を付ける。生成先は`NIWATERM_CONFIG_DIR`で変えられる（アプリ側の読み込み先と同じ変数）。設定ファイルの書き方の詳細は`docs/guide/config.md`参照。
+`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる。既存ファイルは上書きしない（実行済みディレクトリへ再実行しても安全）。依存インストールを飛ばしたい場合は`--skip-install`を付ける。生成先は`NIWATERM_CONFIG_DIR`で変えられる（アプリ側の読み込み先と同じ変数）。設定ファイルの書き方の詳細は[設定ファイル](/niwaterm/config/)参照。
 
 ## 使い方
 
@@ -206,9 +203,9 @@ Board（1つのワークスペース内で複数持てる独立したTileレイ�
 - `board move` — Boardを動かす。`--up`/`--down`/`--to-workspace`のいずれか1つが必須
   - `--up` / `--down` — 所属ワークスペース内での表示順（サイドバーの並び）を1つ上・1つ下へ移動する。中身（タイル・タブ）とアクティブなBoardは変わらない。既に端にいて動かせない場合は何もせず成功扱いになる。並び順は名前同様アプリ再起動をまたいでも復元される（離れた位置へまとめて動かしたい場合はサイドバーのドラッグ&ドロップ、または設定ファイルの`niwa.board.move(boardId, index)`を使う）
   - `--to-workspace <workspaceId>` — Boardを別のワークスペースへ移す（tmuxの`move-window`相当）。レイアウト・タブ・実行中のプロセスはそのまま移り、移動先ワークスペースの末尾に付く。アクティブなBoardは移動元・移動先とも変わらない。移動元がこれでBoard 0個になっても、そのワークスペースは残る（開いているポップアップだけは閉じる）
-- `board phase` — そのBoardの作業フェーズ（サイドバーのBoard行に出るバッジ）を設定・解除・表示する。`set`に渡す`<phase>`は`niwaterm.config.ts`の`board.phases`で定義したid（未定義の任意の文字列も渡せて、その場合は文字列がそのまま既定色のバッジになる）。`show`は現在の値を1行で表示し（未設定なら空行）、`clear`で解除する。`--board`の省略時の扱いは`board close`と同じなので、エージェントのhookからそのタブのBoardへ付けられる。候補の定義とサイドバー・キーバインドからの切り替えは`docs/guide/config.md`「Board設定」節を参照
+- `board phase` — そのBoardの作業フェーズ（サイドバーのBoard行に出るバッジ）を設定・解除・表示する。`set`に渡す`<phase>`は`niwaterm.config.ts`の`board.phases`で定義したid（未定義の任意の文字列も渡せて、その場合は文字列がそのまま既定色のバッジになる）。`show`は現在の値を1行で表示し（未設定なら空行）、`clear`で解除する。`--board`の省略時の扱いは`board close`と同じなので、エージェントのhookからそのタブのBoardへ付けられる。候補の定義とサイドバー・キーバインドからの切り替えは[設定ファイルの「Board設定」節](/niwaterm/config/#board設定)を参照
 - `board startup` — そのBoardを次回起動時にどう組み直すかを設定する（`--board`省略時は現在アクティブなBoard）。「起動時レイアウト」節を参照
-- `board worktree` — そのBoardに紐づくワークツリーを設定・解除・表示する（`--board`省略時の扱いは`board close`と同じ）。`docs/guide/worktree.md`「Boardに紐づくワークツリー」節を参照
+- `board worktree` — そのBoardに紐づくワークツリーを設定・解除・表示する（`--board`省略時の扱いは`board close`と同じ）。[ワークツリー管理の「Boardに紐づくワークツリー」節](/niwaterm/worktree/#boardに紐づくワークツリー)を参照
 
 いずれも対象の`boardId`（`board new`は`workspaceId`）が存在しない場合、`board close`はさらにワークスペースが1つだけの状態でその最後の1つを指定した場合もエラーメッセージと共に終了コード1を返す。
 
@@ -225,7 +222,7 @@ niwaterm layout list [--cwd <dir>]
 niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup] [--trust]
 ```
 
-`niwaterm.config.ts`の`layouts`（詳細: `docs/guide/config.md`「レイアウト」節）とプロジェクトローカルの`.niwaterm/config.ts`（「プロジェクトローカルのレイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
+`niwaterm.config.ts`の`layouts`（詳細: [設定ファイルの「レイアウト」節](/niwaterm/config/#レイアウト)）とプロジェクトローカルの`.niwaterm/config.ts`（「プロジェクトローカルのレイアウト」節）で定義したプリセットを一覧・適用する（[vde-layout](https://github.com/yuki-yano/vde-layout)ライク）。適用先はBoard単位（ADR 0006、`docs/adr/0006-adopt-board-layer-between-workspace-and-tile.md`）。
 
 - `layout list` — 定義済みプリセットを`name<TAB>解決元<TAB>description`形式で表示する。解決元は`[project: <projectRoot>]`・`[global]`・`[builtin]`のいずれか。`--cwd`はプロジェクトローカルのプリセットを探す起点で、省略時は実行したディレクトリ。ユーザー定義が1件も無い場合はビルトインだけが並び、その旨を併せて表示する
 - `layout apply <name>` — 指定したプリセットを適用する。デフォルトは新規Boardとして適用し（`--workspace`省略時は現在アクティブなワークスペース配下）、成功時にその`boardId`を表示する。`--replace`は既存Board（`--board`省略時は現在アクティブなBoard）を単一タイルへ畳んでから適用し直す（**既存タブ・PTYは無条件でcloseされる**）。`--replace`は実行前に対象を明示したy/n確認プロンプトを表示する（TTYでない場合は確認できないためエラーで終了する）。ただし対象Boardがタイル1つ・タブ1つだけのときは閉じて失われるものが無いため、確認プロンプトは出ない（非対話環境でも実行できる）。`--replace-force`は`--replace`と同じ効果で確認プロンプトを省略する。`--replace`/`--replace-force`と`--workspace`、いずれも未指定時の`--board`は同時指定不可。`--cwd`は各タブの`cwd`未指定時に使う作業ディレクトリで、省略時は`niwaterm layout apply`を実行したディレクトリになる（プロジェクトローカル由来のプリセットでは`--cwd`ではなくプロジェクトルートが基準になる。`--replace`/`--replace-force`時、最初に到達するタイルだけは既存タブを使い回すが、そのタブのPTYも基準cwdで起動し直されるためタイル間でcwdが食い違うことはない）。成功時は`board: <boardId><TAB>preset: <name>`を表示し、プロジェクトローカル由来なら`[project: <projectRoot>]`が付く
@@ -259,7 +256,7 @@ niwaterm board startup clear --board board-12
 
 `layout apply`は成功したBoardに適用したプリセット名を必ず記録する。`--startup`を付けた場合だけそのBoardが起動時の組み直し対象（`restoreMode: "layout"`）になり、付けなければ名前を覚えるだけで従来どおり保存した骨格を復元する。
 
-`worktree new`／`worktree open`の`--layout`だけは`--startup`を付けずとも紐づく。あちらはBoardの中身をプリセットが決めているため（`docs/guide/worktree.md`「レイアウトプリセットの適用」節）。
+`worktree new`／`worktree open`の`--layout`だけは`--startup`を付けずとも紐づく。あちらはBoardの中身をプリセットが決めているため（[ワークツリー管理の「レイアウトプリセットの適用」節](/niwaterm/worktree/#レイアウトプリセットの適用)）。
 
 `board startup <mode>`のmodeは次の3つ。`--preset`を省略すると、そのBoardに既に記録されているプリセット名を（プロジェクトローカル由来ならその解決元ごと）引き継ぐ（一度も`layout apply`していないBoardでは`--preset`が必須）。
 
@@ -292,7 +289,10 @@ export default {
         orientation: "vertical",
         ratio: 0.6,
         first: { kind: "tile", tabs: [{ name: "editor", command: "nvim" }] },
-        second: { kind: "tile", tabs: [{ name: "test", cwd: "./packages/cli", command: "bun test --watch" }] },
+        second: {
+          kind: "tile",
+          tabs: [{ name: "test", cwd: "./packages/cli", command: "bun test --watch" }],
+        },
       },
     },
   },
@@ -327,20 +327,20 @@ Boardが複数のディレクトリのタブを開いていても解決先は曖
 - 確認は「起動時の自動実行を有効にする操作」ごとに出る。`board startup restore`で一度止めてから`board startup layout`で戻す場合も、改めて確認が出る（解決元の記録は残っているが、自動実行を再び有効にするのはガードすべき操作という判断）
 - 信頼の記録は専用のストアを持たない。起動時に自動実行される経路は起動時レイアウトの紐づけ1本だけで、それは必ずこの確認を通ってしか作られないため。紐づけを外す（`board startup restore`／`clear`）と起動時の自動実行も止まる
 - trust後に`git pull`等で`.niwaterm/config.ts`の内容が変わった場合の再確認は行わない（内容ハッシュを持たない）
-- `worktree new`／`worktree open`の`--layout`もプリセットを起動時レイアウトへ紐づけるが、確認はワークツリー側の承認（`docs/guide/worktree.md`「プロジェクトローカル設定の承認」節）が兼ねるため、ここの確認は重ねて出ない。あちらは内容ハッシュ付きの記録を持つので、`.niwaterm/`の中身が変われば改めて確認が出る
+- `worktree new`／`worktree open`の`--layout`もプリセットを起動時レイアウトへ紐づけるが、確認はワークツリー側の承認（[ワークツリー管理の「プロジェクトローカル設定の承認」節](/niwaterm/worktree/#プロジェクトローカル設定の承認)）が兼ねるため、ここの確認は重ねて出ない。あちらは内容ハッシュ付きの記録を持つので、`.niwaterm/`の中身が変われば改めて確認が出る
 
 ```sh
 niwaterm sidebar switch --view <viewId>
 ```
 
-サイドバーに出すビューを切り替える。`<viewId>`はワークスペース一覧の`workspaces`か、`niwaterm.config.ts`の`customViews`のid（どちらも`niwaterm config show`で確認できる）。サイドバーを閉じている場合は開いた上で切り替える。キーバインド（順送りの`next-sidebar-view`・id指定の`show-sidebar-view:<id>`）・コマンドパレットからの操作と同じもので、設定の詳細は`docs/guide/config.md`「ユーザー定義HTML UI（customViews）」節を参照。存在しないidを指定した場合はエラーメッセージと共に終了コード1を返す。
+サイドバーに出すビューを切り替える。`<viewId>`はワークスペース一覧の`workspaces`か、`niwaterm.config.ts`の`customViews`のid（どちらも`niwaterm config show`で確認できる）。サイドバーを閉じている場合は開いた上で切り替える。キーバインド（順送りの`next-sidebar-view`・id指定の`show-sidebar-view:<id>`）・コマンドパレットからの操作と同じもので、設定の詳細は[設定ファイルの「ユーザー定義HTML UI（customViews）」節](/niwaterm/config/#ユーザー定義html-uicustomviews)を参照。存在しないidを指定した場合はエラーメッセージと共に終了コード1を返す。
 
 ```sh
 niwaterm status-bar refresh [--item <id>]
 niwaterm status-bar toggle [--visible on|off]
 ```
 
-ウィンドウ下端のステータスバー（設定の`statusBar`。詳細は`docs/guide/config.md`「ステータスバー（statusBar）」節）を操作する。どちらも全ウィンドウが対象で、呼び出し元のウィンドウは問わない。
+ウィンドウ下端のステータスバー（設定の`statusBar`。詳細は[設定ファイルの「ステータスバー（statusBar）」節](/niwaterm/config/#ステータスバーstatusbar)）を操作する。どちらも全ウィンドウが対象で、呼び出し元のウィンドウは問わない。
 
 - `status-bar refresh` — 部品を状況が変わっていなくても評価し直す。`render`がniwatermの外の状態（gitの状態・ファイル等）を読む場合に、変えた側から変化を知らせるためのもの。`--item`でその部品だけに絞る。`<id>`は部品の`id`フィールド（付けていなければ`left-0`のような区画-番号）で、`niwaterm config show`の`statusBar`で確認できる。存在しないidはエラーメッセージ（今あるidの一覧付き）と共に終了コード1を返す。バーを隠している間は何も評価せず、出し直した時にまとめて評価する
 - `status-bar toggle` — バーの表示/非表示を切り替える。`--visible on`/`off`で向きを指定でき、省略時は今の逆になる。隠した状態は次回起動時にも引き継ぐ（成功時 `status-bar: visible`/`status-bar: hidden` を表示）
@@ -425,7 +425,7 @@ direct             0件 (prefix不要で即時発火するバインド)
 niwaterm shell-profile list
 ```
 
-利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`tab new --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: `docs/guide/config.md`「シェル設定」節）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
+利用可能なシェルプロファイル一覧を`id<TAB>name<TAB>command`形式で表示する。`tab new --shell`に指定する`id`はここで確認する。プロファイルはniwaterm.config.tsの`shell.profiles`（詳細: [設定ファイルの「シェル設定」節](/niwaterm/config/#シェル設定)）と、Windows環境では起動時に自動検出したWSLディストロ・PowerShellから構成される。1件も無い場合はその旨を表示する。
 
 ```sh
 niwaterm tab capture [--tab <tabId>]
@@ -442,7 +442,7 @@ niwaterm tab var find --board <boardId> <key> <value>
 
 タブごとのkey-value変数を設定・取得・一覧・検索する（tmuxのペイン変数、`set-option -p`/`show-options -p`相当）。値は文字列固定、キーは`^[A-Za-z0-9_.-]{1,128}$`（英数字・`_`・`-`・`.`のみ、1〜128文字）のみ許可する。変数はレイアウト・cwd等と共に永続化され、アプリを再起動しても同じ位置のタブへ復元される。**ただしtabId自体は再起動のたびに再採番されるため、`tabId`を保存して次回起動後に使い回すことはできない**。対象タブを閉じるとその場で消える。`tabId`を指定すればどのタブからでも別タブの変数を読み書きできるため、送信元タブが自身の状態を`tab var set`で書き、別タブがその値を`tab var get`で参照しつつ`tab send-keys`で操作する、といったタブ間の自動化に使える。指定した`tabId`が存在しない場合、または`tab var get`で指定した`key`が未設定の場合はエラーメッセージと共に終了コード1を返す。
 
-`tab var find`は`key=value`と一致する変数を持つタブのtabIdを1行ずつ表示する（tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当）。検索範囲は**1つのBoard内だけ**で、他のBoard・他のワークスペースの一致は含まない。`layout apply`の適用先がBoard単位（ADR 0006）であるため、Boardが「同じレイアウトプリセットのインスタンス」の単位になる。同じプリセットを複数回適用して同じrole名（例: `role=claude`）のタブが何枚も並んでも、自分と同じBoardのタブだけを見つけられる。一致するタブが無ければ何も出力せず終了コード0を返す。役割名でタブを探して`tab send-keys`や`--target-pane`のようなオプションへ渡す、といったレイアウト内タブ間連携の起点として使う（レイアウトプリセットの`command`から使う例は`docs/guide/config.md`「レイアウト」節参照）。
+`tab var find`は`key=value`と一致する変数を持つタブのtabIdを1行ずつ表示する（tmuxの`list-panes -F "#{pane_id} #{@role}"` | awk相当）。検索範囲は**1つのBoard内だけ**で、他のBoard・他のワークスペースの一致は含まない。`layout apply`の適用先がBoard単位（ADR 0006）であるため、Boardが「同じレイアウトプリセットのインスタンス」の単位になる。同じプリセットを複数回適用して同じrole名（例: `role=claude`）のタブが何枚も並んでも、自分と同じBoardのタブだけを見つけられる。一致するタブが無ければ何も出力せず終了コード0を返す。役割名でタブを探して`tab send-keys`や`--target-pane`のようなオプションへ渡す、といったレイアウト内タブ間連携の起点として使う（レイアウトプリセットの`command`から使う例は[設定ファイルの「レイアウト」節](/niwaterm/config/#レイアウト)参照）。
 
 検索対象のBoardは`--board <boardId>`で明示できる。省略時は`NIWATERM_TAB_ID`環境変数のタブが属するBoard、それも無ければ（niwaterm外のシェルから実行した等）アクティブなBoardを検索する。**「アクティブなBoard」ではなく「実行しているタブの所属Board」を先に見るのが重要**で、レイアウトプリセットの`command`が実際に走るのはPTY起動・シェル初期化を待った後のため、その時点でユーザーが別のBoardへ切り替えていても自分のBoardを正しく指せる。`--board`は`tab var get/set/list`の`--tab`（操作対象のタブ）とは意味が異なり、検索範囲の指定である点に注意する。存在しないboardId・tabIdを指定した場合はエラーメッセージと共に終了コード1を返す。
 
@@ -475,7 +475,7 @@ gitのワークツリーを一覧・作成・削除し、それぞれをBoardと
 
 `list`と`new --open none`はniwatermアプリへ接続しないため、アプリが起動していない普通のターミナルからも使える。
 
-置き場所の決め方・リモートのブランチからの作成・作成後／削除前後のフック・レイアウトプリセットの適用・プロジェクトローカル設定の承認と、Boardとの紐づけ（`board worktree`）を含めた全体は`docs/guide/worktree.md`（`niwaterm docs show worktree`）を参照。
+置き場所の決め方・リモートのブランチからの作成・作成後／削除前後のフック・レイアウトプリセットの適用・プロジェクトローカル設定の承認と、Boardとの紐づけ（`board worktree`）を含めた全体は[ワークツリー管理](/niwaterm/worktree/)（`niwaterm docs show worktree`）を参照。
 
 ## 対象IDの省略
 
@@ -623,7 +623,7 @@ Codexの質問ツールによる入力待ちは`working`のままで、`blocked`
 `agent` / `agent_status` / `agent_status_text` / `agent_transcript`は予約キーで、通常のセッション終了時にクリアする。アプリ終了時に保存されても、Board復元では読み込まれない。
 エージェント別のイベント対応と導入例は、リポジトリの`contrib/agent-integration/`配下を参照。
 
-`bell`も同じく予約キーで、ターミナルがBEL文字（`0x07`）を出力するとniwatermが`1`をセットし、そのタブが画面に出た時点で自動的に消す（タブバー・サイドバーのベルアイコンの出し分けに使う）。復元で読み込まれない点も`agent`系と同じ。挙動の変更は設定ファイル側（`niwa.on("bell", ...)`、docs/guide/config.md「ベル」参照）で行う。
+`bell`も同じく予約キーで、ターミナルがBEL文字（`0x07`）を出力するとniwatermが`1`をセットし、そのタブが画面に出た時点で自動的に消す（タブバー・サイドバーのベルアイコンの出し分けに使う）。復元で読み込まれない点も`agent`系と同じ。挙動の変更は設定ファイル側（`niwa.on("bell", ...)`、[設定ファイルの「ベル」](/niwaterm/config/#ベル)参照）で行う。
 
 ## Claude Codeのセッション参照
 
@@ -691,7 +691,7 @@ niwaterm docs show <name>
 
 `niwaterm docs list`は利用可能なドキュメントトピックを`name<TAB>description`形式で表示する。`--json`を付けると、トピックの配列と次の操作を示す`help`を持つJSONで出力する。`niwaterm docs show <name>`はそのトピックのドキュメントそのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでドキュメント全体を取得できる。
 
-トピックは`docs/guide/`配下のMarkdownから組み立てられ、`name`は拡張子を除いたファイル名、説明はfrontmatterの`description`をそのまま使う。guideを増やせば一覧にも載るため、CLI側にトピックを登録する必要はない。
+トピックはドキュメントサイトのページ（`website/src/content/docs/`配下の`.md`）から組み立てられる。`name`はそこからの相対パスで拡張子を除いたもの（`config/keybindings.md`なら`config/keybindings`）で、説明にはfrontmatterの`description`をそのまま使う。ページを増やせば一覧にも載るので、CLI側にトピックを登録する必要はない。トップページのような`.mdx`のページは、ターミナルでは読みにくいので一覧に載せない。
 
 ## コマンド命名規則
 

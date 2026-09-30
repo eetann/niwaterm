@@ -2,7 +2,7 @@
 
 `packages/cli`（`niwaterm`コマンド）にサブコマンドを追加・変更する際のルール。
 対象読者はAIエージェント・人間問わず、このCLIにコマンドを生やす全員。
-コマンドの正式なリファレンスは`docs/guide/cli.md`で、ここには**命名の判断基準だけ**を置く。
+コマンドの正式なリファレンスは`website/src/content/docs/cli.md`で、ここには**命名の判断基準だけ**を置く。
 
 ## 基本形: `niwaterm <resource> <verb>`
 
@@ -93,7 +93,7 @@ gunshiの`subCommands`でネストする（実装は既存の`commands/tab/index
 - `tab var`系の`--tab`（`NIWATERM_TAB_ID`のみを見る。シェル統合・エージェント統合のhookがniwaterm外で
   意図しないタブへ書き込むのを避けるため）
 
-オプションの`description`にも省略時の対象を書き、`docs/guide/cli.md`のシグネチャは
+オプションの`description`にも省略時の対象を書き、`website/src/content/docs/cli.md`のシグネチャは
 `[--tile <tileId>]`のように角括弧付きへ揃える。
 
 ## 排他オプションでまとめてよい条件
@@ -106,8 +106,8 @@ gunshiの`subCommands`でネストする（実装は既存の`commands/tab/index
 
 コマンドを追加・変更したら、以下も必ず更新する。
 
-- `docs/guide/cli.md` — コマンドの正式なリファレンス
-- `.agents/skills/niwaterm-cli/SKILL.md` — AIエージェント向けの概要（詳細は書き写さず`docs/guide/cli.md`への導線に留める）
+- `website/src/content/docs/cli.md` — コマンドの正式なリファレンス
+- `.agents/skills/niwaterm-cli/SKILL.md` — AIエージェント向けの概要（詳細は書き写さず`website/src/content/docs/cli.md`への導線に留める）
 - `contrib/shell-integration/*` — シェル統合スクリプト（`niwaterm tab var set branch`を呼ぶ）
 - `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwaterm tab var set agent_status`を呼ぶ）
 
