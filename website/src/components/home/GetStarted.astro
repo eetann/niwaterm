@@ -5,15 +5,15 @@ import { LinkButton } from "@astrojs/starlight/components";
 <section class="get-started not-content">
   <div class="text">
     <h2>はじめる</h2>
-    <p>CLIをリンクし、設定ディレクトリを作るところから。ドキュメントはCLIからも読める。</p>
-    {/* 主ボタンは1画面に1つ（ヒーローのセットアップ）なので、ここは二次ボタンにする */}
-    <LinkButton href="/niwaterm/getting-started/" variant="secondary" icon="right-arrow">
-      セットアップ手順を読む
+    <p>ソースからビルドして起動するところから。CLIを入れたあとは、ドキュメントをターミナルでも読める。</p>
+    {/* 主ボタンは1画面に1つ（ヒーローのインストール）なので、ここは二次ボタンにする */}
+    <LinkButton href="/niwaterm/installation/" variant="secondary" icon="right-arrow">
+      インストール手順を読む
     </LinkButton>
   </div>
   <pre
     set:html={`<span class="prompt">$</span> niwaterm docs list
-<span class="prompt">$</span> niwaterm docs show getting-started`}
+<span class="prompt">$</span> niwaterm docs show concepts`}
   />
 </section>
 

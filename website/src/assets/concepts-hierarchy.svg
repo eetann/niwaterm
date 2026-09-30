@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460" role="img" aria-labelledby="title desc">
+  <title id="title">niwatermの画面の構成</title>
+  <desc id="desc">OSのウィンドウの中に、左のサイドバーとタイルの並ぶ領域がある。サイドバーにはワークスペース「案件A」「案件B」があり、それぞれにBoardが2つずつ並ぶ。選んでいるBoard「repo-a」の中身が右側に出ていて、2つのタイルに分かれ、各タイルの上端にタブが並ぶ。</desc>
+  <style>
+    text { font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif; }
+    .label { fill: #93b87a; font-size: 13px; font-weight: 700; }
+    .chip { fill: #0e120f; }
+    .guide { fill: none; stroke: #93b87a; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .ws { fill: #e4e2d6; font-size: 12px; font-weight: 700; }
+    .board { font-size: 12px; }
+    .tab { font-size: 11px; }
+    .line { fill: #2c372d; }
+  </style>
+
+  <rect width="760" height="460" rx="6" fill="#0e120f"/>
+
+  <!-- Window -->
+  <text class="label" x="24" y="30">Window</text>
+  <rect x="20" y="40" width="720" height="400" rx="8" fill="#141a15" stroke="#6f786c"/>
+  <path d="M28 40h704a8 8 0 0 1 8 8v16H20V48a8 8 0 0 1 8-8z" fill="#1e261f"/>
+  <text x="380" y="57" text-anchor="middle" fill="#a9ae9f" font-size="11">niwaterm</text>
+  <line x1="20" y1="64" x2="740" y2="64" stroke="#2c372d"/>
+
+  <!-- Sidebar -->
+  <rect x="21" y="65" width="179" height="374" fill="#1e261f"/>
+  <line x1="200" y1="64" x2="200" y2="440" stroke="#2c372d"/>
+
+  <text class="ws" x="36" y="96">案件A</text>
+  <rect x="30" y="106" width="160" height="28" rx="4" fill="#223020"/>
+  <rect x="30" y="106" width="3" height="28" fill="#93b87a"/>
+  <text class="board" x="44" y="125" fill="#e4e2d6">repo-a</text>
+  <text class="board" x="44" y="155" fill="#a9ae9f">repo-b</text>
+
+  <text class="ws" x="36" y="200">案件B</text>
+  <text class="board" x="44" y="229" fill="#a9ae9f">web</text>
+  <text class="board" x="44" y="259" fill="#a9ae9f">api</text>
+
+  <rect class="guide" x="26" y="76" width="168" height="94" rx="4"/>
+  <rect class="chip" x="104" y="68" width="84" height="16"/>
+  <text class="label" x="184" y="81" text-anchor="end">Workspace</text>
+
+  <text class="label" x="112" y="155">← Board</text>
+
+  <!-- Board: 選んでいるBoardの中身 -->
+  <rect class="guide" x="208" y="74" width="524" height="358" rx="4"/>
+  <rect class="chip" x="218" y="66" width="130" height="16"/>
+  <text class="label" x="224" y="79">Board「repo-a」</text>
+
+  <!-- Tile 1 -->
+  <rect x="218" y="92" width="252" height="330" rx="3" fill="#0e120f" stroke="#6f786c"/>
+  <rect x="219" y="93" width="250" height="24" fill="#141a15"/>
+  <text class="tab" x="232" y="109" fill="#e4e2d6">nvim</text>
+  <rect x="226" y="114" width="40" height="2" fill="#93b87a"/>
+  <text class="tab" x="282" y="109" fill="#a9ae9f">log</text>
+  <text class="label" x="316" y="110">← Tab</text>
+  <rect class="line" x="232" y="132" width="150" height="6" rx="3"/>
+  <rect class="line" x="232" y="148" width="200" height="6" rx="3"/>
+  <rect class="line" x="248" y="164" width="120" height="6" rx="3"/>
+  <rect class="line" x="248" y="180" width="170" height="6" rx="3"/>
+  <rect class="line" x="232" y="196" width="90" height="6" rx="3"/>
+  <rect class="line" x="232" y="220" width="180" height="6" rx="3"/>
+  <rect class="line" x="248" y="236" width="140" height="6" rx="3"/>
+  <text class="label" x="230" y="410">Tile</text>
+
+  <!-- Tile 2 -->
+  <rect x="478" y="92" width="244" height="330" rx="3" fill="#0e120f" stroke="#2c372d"/>
+  <rect x="479" y="93" width="242" height="24" fill="#141a15"/>
+  <text class="tab" x="492" y="109" fill="#e4e2d6">claude</text>
+  <rect x="486" y="114" width="50" height="2" fill="#93b87a"/>
+  <text class="tab" x="552" y="109" fill="#a9ae9f">server</text>
+  <text class="tab" x="604" y="109" fill="#a9ae9f">+</text>
+  <text x="492" y="140" fill="#93b87a" font-size="11" font-family="monospace">❯</text>
+  <rect class="line" x="506" y="134" width="130" height="6" rx="3"/>
+  <rect class="line" x="492" y="156" width="190" height="6" rx="3"/>
+  <rect class="line" x="492" y="172" width="160" height="6" rx="3"/>
+  <rect class="line" x="492" y="188" width="100" height="6" rx="3"/>
+  <text class="label" x="490" y="410">Tile</text>
+</svg>

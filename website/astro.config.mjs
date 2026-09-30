@@ -19,7 +19,7 @@ export default defineConfig({
       sidebar: [
         {
           label: "はじめる",
-          items: ["getting-started", "shell-integration"],
+          items: ["installation", "getting-started", "concepts", "shell-integration"],
         },
         {
           label: "キーボード",

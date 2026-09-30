@@ -3,9 +3,11 @@ title: セットアップ
 description: niwaterm CLIのリンクと設定ディレクトリの作成、設定ファイルのホットリロードと現在値の確認
 ---
 
-niwatermを使い始めるには、`niwaterm`コマンド（CLI）を使えるようにしてから、設定ファイルを置くディレクトリを作る。
+niwatermを使い始めるには、`niwaterm`コマンド（CLI）を使えるようにしてから、設定ファイルを置くディレクトリを作る。アプリのビルドと起動がまだなら、先に[インストール](/niwaterm/installation/)を済ませる。
 
 ## CLIを使えるようにする
+
+リポジトリのルートで次を実行する。
 
 ```sh
 cd packages/cli
@@ -15,6 +17,14 @@ bun link
 `bin`フィールド経由で`niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。
 
 このリポジトリの絶対パスに依存するシンボリックリンクになるため、リポジトリを移動・削除すると`niwaterm`コマンドは壊れる。
+
+アプリが起動していれば、`niwaterm ping`で繋がるか確かめられる。`pong (pid …)`が返れば使える状態になっている。
+
+### Windowsの場合
+
+Windowsでは、[インストール](/niwaterm/installation/#windows)でコピーした先（`%USERPROFILE%\niwaterm-worktrees\niwaterm`）の`packages\cli`で、PowerShellから`bun link`を実行する。niwatermのタブで開くPowerShellからはこれで使える。
+
+WSLのディストロをタブで開いて使う場合、ディストロの中はWindowsとは別の環境なので、WSL側のリポジトリでも同じように`bun link`する。WSL側からも、Windowsで動いているniwatermへそのまま繋がる。
 
 ## 設定ディレクトリを作る
 

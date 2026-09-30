@@ -61,6 +61,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
     niwaterm docs show cli              # 全コマンドの一覧と、説明のあるページ
     niwaterm docs show cli/commands     # tab・tile・board・workspace・popup等の基本のコマンド
     niwaterm docs show getting-started  # CLIのリンク・設定ディレクトリの作成・設定値の確認
+    niwaterm docs show concepts         # Window・Workspace・Board・Tile・Tabの階層と役割
     niwaterm docs show keybindings      # キーバインドの書き方（niwa APIの一覧はkeybindings/api）
     niwaterm docs show layouts          # レイアウトプリセットの定義と適用
     niwaterm docs show worktrees        # ワークツリー管理（置き場所・Boardとの紐づけ）
