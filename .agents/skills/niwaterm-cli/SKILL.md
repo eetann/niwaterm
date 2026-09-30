@@ -58,7 +58,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 
 コマンドの全オプション・使用例・終了コード・設定ファイルの書き方は`niwaterm docs show <topic>`で確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
 
-    niwaterm docs show cli              # 汎用的なコマンド（tab・tile・board・workspace・popup等）
+    niwaterm docs show cli              # 全コマンドの一覧と、説明のあるページ
+    niwaterm docs show cli/commands     # tab・tile・board・workspace・popup等の基本のコマンド
     niwaterm docs show getting-started  # CLIのリンク・設定ディレクトリの作成・設定値の確認
     niwaterm docs show keybindings      # キーバインドの書き方（niwa APIの一覧はkeybindings/api）
     niwaterm docs show layouts          # レイアウトプリセットの定義と適用

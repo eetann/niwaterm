@@ -63,7 +63,7 @@ mouse: {
 | `tabId`    | `string`              | 選択があるタブのid                                                                           |
 | `cwd`      | `string \| undefined` | そのタブが報告している作業ディレクトリ。シェル統合（OSC 7）を入れていないタブでは`undefined` |
 
-第2引数は[キーバインドの関数ハンドラ](#キーバインド)と同じ`niwa`で、`niwa.shell.run`・`niwa.popup.open`・`niwa.tab.create`・`niwa.notify`等をそのまま呼べる。返す項目は`label`（メニューの表示名）と`run`（選んだ時の処理）を持つオブジェクトで、`run`は非同期でもよい。空配列を返せば組み込みの「コピー」だけのメニューになる。
+第2引数は[キーバインドの関数ハンドラ](/niwaterm/keybindings/#関数ベースapi推奨)と同じ`niwa`で、`niwa.shell.run`・`niwa.popup.open`・`niwa.tab.create`・`niwa.notify`等をそのまま呼べる。返す項目は`label`（メニューの表示名）と`run`（選んだ時の処理）を持つオブジェクトで、`run`は非同期でもよい。空配列を返せば組み込みの「コピー」だけのメニューになる。
 
 関数はniwaterm本体（bun側）で実行されるため、`process.platform`でのOS判定・`Bun.spawn`・`node:fs`の読み書きも書ける。選択テキストは`niwa.shell.run`でシェルへ渡るため、パスに空白や記号が入りうるならクォートする。
 

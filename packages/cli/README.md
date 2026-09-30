@@ -22,11 +22,11 @@ niwaterm list              # ワークスペース・タイル・タブの一覧
 niwaterm worktree list     # gitのワークツリー一覧（アプリ未起動でも動く）
 niwaterm worktree open dev # 既存ワークツリーをBoardとして開く
 niwaterm docs list         # 利用可能なドキュメントトピックの一覧（--jsonでパース向けの出力）
-niwaterm docs show cli     # 全コマンドの使い方・IPCサーバー仕様を表示
-niwaterm complete zsh      # シェルの補完スクリプトを出力（設置手順はdocs show cliの「シェル補完」）
+niwaterm docs show cli     # 全コマンドの一覧と、説明のあるページ
+niwaterm complete zsh      # シェルの補完スクリプトを出力（設置手順はdocs show shell-integrationの「シェル補完」）
 ```
 
-コマンド一覧は`niwaterm --help`、個別コマンドの詳細は`niwaterm <command> --help`。全コマンドの詳しい使い方・実行例・IPCサーバー仕様は`niwaterm docs show cli`（またはリポジトリ内の[website/src/content/docs/cli.md](../../website/src/content/docs/cli.md)）を参照。
+オプションは`niwaterm <command> --help`で確かめられる。使い方の説明は`niwaterm docs show cli`（リポジトリ内なら[website/src/content/docs/cli.md](../../website/src/content/docs/cli.md)）の表から、各コマンドを説明したページへたどる。
 
 AIエージェント向けの操作ガイドは[.agents/skills/niwaterm-cli/SKILL.md](../../.agents/skills/niwaterm-cli/SKILL.md)を参照。
 

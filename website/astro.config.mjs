@@ -32,7 +32,7 @@ export default defineConfig({
         { label: "拡張", items: ["custom-views", "hover-buttons", "bell"] },
         { label: "シェル", items: ["shell"] },
         { label: "AIエージェント", items: ["agents"] },
-        { label: "CLI", items: ["cli"] },
+        { label: "CLI", items: ["cli", "cli/commands"] },
       ],
       logo: {
         light: "../docs/brand/logo.svg",
