@@ -21,7 +21,14 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 ### ドキュメント種別ごとの追加ルール
 
 - **ADR**（`docs/adr/`）: 内容面の基準は adr-creator スキルの「ADR に書かないこと」が正本。実装手順・コード全文・事後追記を書かないこと
-- **Reference / Runbook**（`docs/guide/`・`docs/build/`）: 「今どうすればよいか」に徹する。実施ログ・確認ログのための節は持たない
+- **Runbook**（`docs/build/`）・**ユーザー向けドキュメント**（`website/`）: 「今どうすればよいか」に徹する。実施ログ・確認ログのための節は持たない
+
+## ユーザー向けドキュメント（`website/`）
+
+niwatermを使うユーザー向けのドキュメント（CLI・設定ファイルの書き方など）は`docs/`ではなく`website/`のドキュメントサイトに書く（[ADR 0008](/docs/adr/0008-move-user-docs-from-docs-guide-to-docs-site.md)）。`docs/`の外なのでOKFの対象外で、以下の「新規ドキュメントを書くとき」は適用しない。
+
+- frontmatterはフレームワークの規約に従い、`title`と`description`を必ず書く（`description`は`niwaterm docs list`の説明に使われる）
+- 本文は`.md`で書く。フレームワークのコンポーネントが必要なページだけ`.mdx`にする（`niwaterm docs show`がファイルをそのまま出力するため）
 
 ## 新規ドキュメントを書くとき
 
@@ -29,7 +36,7 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 
    ```yaml
    ---
-   type: Reference
+   type: Runbook
    title: 人間が読める表示名
    description: 1文の要約
    ---
@@ -37,19 +44,19 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 
 2. `type` は下表（ADR 0002 §3 と同じ）から選ぶ。当てはまるものがなければ新しい type 名を作ってよいが、その場合 ADR 0002 の表も更新する（中央レジストリを持たない OKF の思想どおり、type 語彙はプロジェクト内で自由に拡張できる）。
 
-   | type        | 用途                                             | 置き場所         |
-   | ----------- | ------------------------------------------------ | ---------------- |
-   | `Concept`   | プロダクトのコンセプト・思想                     | `docs/planning/` |
-   | `Plan`      | MVPなど                                          | `docs/planning/` |
-   | `ADR`       | 意思決定記録                                     | `docs/adr/`      |
-   | `Reference` | コマンド・設定項目のリファレンス（ユーザー向け） | `docs/guide/`    |
-   | `Runbook`   | 手順書（開発者向け）                             | `docs/build/`    |
+   | type          | 用途                             | 置き場所             |
+   | ------------- | -------------------------------- | -------------------- |
+   | `Concept`     | プロダクトのコンセプト・思想     | `docs/planning/`     |
+   | `Plan`        | MVPなど                          | `docs/planning/`     |
+   | `ADR`         | 意思決定記録                     | `docs/adr/`          |
+   | `Runbook`     | 手順書（開発者向け）             | `docs/build/`        |
+   | `Known Issue` | 既知の不具合の原因調査・対処記録 | `docs/known-issues/` |
 
 3. ADR を新規作成する場合は adr-creator スキルで本文（Status/Context/Decision/Consequences...）を作り、frontmatter は本スキルのルールで追加する。`type: ADR`、`title` は本文見出し `# ADR NNNN: ...` と同じ文字列にする。
 
 4. 他ドキュメントへのリンクはバンドル相対パス（`docs/` ルートからのスラッシュ始まり、例: `/adr/0001-xxx.md`）を第一選択にする。同一ディレクトリ内など近接するファイル同士は `./other.md` でもよい。
 
-5. 上表にない種類の文書で、`docs/planning/` / `docs/guide/` / `docs/build/` / `docs/adr/` のどれにも当てはまらない場合は、新しいディレクトリを切るかどうかも含めて ADR 0002 §7 を更新する。
+5. 上表にない種類の文書で、`docs/planning/` / `docs/build/` / `docs/adr/` / `docs/known-issues/` のどれにも当てはまらない場合は、新しいディレクトリを切るかどうかも含めて ADR 0002 §7 を更新する。
 
 ## 既存ドキュメントを編集するとき
 
