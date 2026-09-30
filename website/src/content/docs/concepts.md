@@ -31,7 +31,7 @@ OSのウィンドウそのもの。起動時にはメインウィンドウが1�
 
 1つの案件の中で、リポジトリやgitのワークツリーごとに分けた画面1枚。サイドバーでワークスペースの見出しの下に並び、選ぶと右側のタイル配置がまるごと入れ替わる。tmuxのwindowにあたる。prefix + `c`（`niwaterm board new`）で作る。
 
-Boardが1つしかないワークスペースでは、サイドバーのBoard行を省略して見出しだけを出す。Boardを使い分けない限り、Workspaceの下にすぐタイルが並んでいるように見える。Boardの名前の付き方や作業フェーズは[ワークスペースとBoard](/niwaterm/boards/)、ワークツリーをBoardとして開く方法は[ワークツリー](/niwaterm/worktrees/)で説明している。
+Boardが1つしかないワークスペースでは、サイドバーのBoard行を省略して見出しだけを出す。Boardを使い分けない限り、Workspaceの下にすぐタイルが並んでいるように見える。Boardに自動で付く名前や作業フェーズは[ワークスペースとBoard](/niwaterm/boards/)、ワークツリーをBoardとして開く方法は[ワークツリー](/niwaterm/worktrees/)で説明している。
 
 ### Tile
 

@@ -1,11 +1,9 @@
 ---
 title: ステータスバー
-description: ウィンドウ下端のステータスバー（statusBar）の部品の書き方と、CLIからの再描画・表示の切り替え
+description: ウィンドウの下端に出すステータスバーの中身を設定ファイルで決める方法と、CLIからの更新・表示の切り替え
 ---
 
-`statusBar`は、ウィンドウ下端に全幅で1本出すステータスバー（tmuxの`status-left`/`status-right`、Neovimのlualineに当たるもの）の設定。左・中央・右の3区画へ部品を並べる。表示の基準は**そのウィンドウでフォーカス中のタイルのアクティブタブ**で、タブ・Board・ワークスペースを切り替えると追従する。
-
-未指定時は左にキー入力のモード、右にcwdが出る。サイドバーに出ている情報（Board名・ブランチ・エージェント状態）とは重ねていない。
+ウィンドウの下端には、横長のステータスバーが1本出る。デフォルトでは、左にキー入力のモード（`NORMAL`・`PREFIX`・`COPY`）、右に今いるディレクトリが出る。何を出すかは、設定ファイルの`statusBar`で決める。
 
 ```ts
 statusBar: {
@@ -22,65 +20,38 @@ statusBar: {
 },
 ```
 
-- 書かなかった区画は既定の並びのまま（上の例では`center`が既定の空）。区画に空配列`[]`を書けばその区画は何も出さない
-- `statusBar: false`でバーごと消える。全区画が空になった場合も出さない（空の帯が1行ぶん場所を取るだけになるため）
-- バーはターミナルに重ねず、高さぶんをタイルの領域から差し引く（ブラウザタブのネイティブwebviewはHTMLより手前に描かれ、重ねるとバーが隠れるため）
+この例では、左にモードとBoard名、右にブランチ名・ディレクトリ・時計を並べる。ディレクトリをクリックすると、lazygitがポップアップで開く。
 
-## 部品の書き方
+バーは`left`・`center`・`right`の3か所に分かれていて、それぞれに出すものを配列で並べる。書かなかった場所はデフォルトのまま、`[]`を書くとその場所には何も出ない。バーごと消すときは`statusBar: false`にする。
 
-文字列で書いた部品は`source`だけを指定したのと同じ。
+バーに出る情報は、フォーカス中のタブのもの。タブやBoardを切り替えると、表示も切り替わる。
 
-| `source`              | 出るもの                                                                                                                                                               |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"builtin:mode"`      | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押して2打目を待っている間）・`COPY`（コピーモード中）のバッジ。配色は`appearance.ui`の`accent`・`warning`・`success` |
-| `"builtin:cwd"`       | フォーカス中タブの作業ディレクトリ（OSC7シェル統合）。ホームは`~`へ縮め（WSLのタブはディストロ側のホーム）、マウスを載せると省略前のパスが出る                         |
-| `"builtin:workspace"` | ワークスペース名（未設定なら`Workspace <n>`）                                                                                                                          |
-| `"builtin:board"`     | Board名（未設定なら自動名・`Board <n>`）                                                                                                                               |
-| `"tab-var:<name>"`    | フォーカス中タブのタブ変数の値（`niwaterm tab var set`で書き込む。ブランチなら`tab-var:branch`）                                                                       |
+## 決まった情報を出す
 
-値が空の部品は幅を持たずに詰まる。
+文字列で書くと、niwatermが用意している情報を出せる。
 
-オブジェクトで書くと次のフィールドを指定できる。
+| 書き方                | 出るもの                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `"builtin:mode"`      | キー入力のモード。`NORMAL`・`PREFIX`（prefixキーを押したあと）・`COPY`（コピーモード中）        |
+| `"builtin:cwd"`       | 今いるディレクトリ（[シェル統合](/niwaterm/shell-integration/)が必要）。ホームは`~`と表示される |
+| `"builtin:workspace"` | ワークスペースの名前                                                                            |
+| `"builtin:board"`     | Boardの名前                                                                                     |
+| `"tab-var:<name>"`    | [タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)の値。ブランチ名なら`"tab-var:branch"`       |
 
-| フィールド | 型                                                  | 意味                                                                                                                                                            |
-| ---------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`       | `string`                                            | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で、部品間で重ねない。省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる） |
-| `source`   | `string`                                            | 上の表の値。`render`と同時には書けない（`render`が優先される）                                                                                                  |
-| `render`   | `(ctx, niwa) => StatusBarSegment \| string \| null` | 中身を組み立てる関数。`async`も可。文字列を返せば`text`だけを指定したのと同じで、`null`・空文字列なら出ない                                                     |
-| `interval` | `number`                                            | `render`を呼び直す周期(ms)。250ms未満は250msへ切り上げる。省略時は状況が変わった時だけ呼ぶ                                                                      |
-| `prefix`   | `string`                                            | 値の前に出す短いラベル（値が空なら出ない）。区切りの空白が要るならここへ含める                                                                                  |
-| `color`    | `string`                                            | 文字色（CSSカラー）                                                                                                                                             |
-| `tooltip`  | `string`                                            | マウスを載せた時に出す説明                                                                                                                                      |
-| `run`      | `(ctx, niwa) => void \| Promise<void>`              | 部品を押した時の処理。書いた部品だけが押せる見た目になる                                                                                                        |
+値がないものは詰めて表示される。
 
-`builtin:mode`には`prefix`・`color`が効かない（モードごとの配色は`appearance.ui`から取る）。
+`{ source: "builtin:cwd", ... }`のようにオブジェクトで書くと、前に付ける文字（`prefix`）や文字の色（`color`）、マウスを載せたときの説明（`tooltip`）、クリックしたときの処理（`run`）を足せる。
 
-`render`の戻り値（`StatusBarSegment`）は`text`・`html`・`tooltip`・`color`を持てる。`html`は`text`より優先され、niwaterm本体のwebviewへそのまま入るため、外部から来た文字列（コマンド出力等）を埋め込むときは自分でエスケープする。`html`から参照するCSSは`statusBar.css`へ書く（本体のスタイルと衝突しないようclass名を工夫すること）。
+## 自分で作った表示を出す
 
-## render・runへ渡る状況（`StatusBarContext`）
-
-| フィールド                      | 意味                                                      |
-| ------------------------------- | --------------------------------------------------------- |
-| `windowId`                      | バーを出しているウィンドウ                                |
-| `workspaceId` / `workspaceName` | アクティブなワークスペースと表示名                        |
-| `boardId` / `boardName`         | アクティブなBoardと表示名。Boardが無ければ`null`          |
-| `tabId`                         | フォーカス中タイルのアクティブタブ。Boardが無ければ`null` |
-| `cwd`                           | そのタブの作業ディレクトリ（未報告なら`undefined`）       |
-| `vars`                          | そのタブのタブ変数                                        |
-| `tabName`                       | サイドバーから付けたタブ名（未設定なら`undefined`）       |
-
-`render`はこれらのどれかが変わった時にだけ呼ばれる（ターミナルの出力のたびには呼ばれない）。時計のように状況と無関係に変わる値は`interval`で周期的に呼び直す。`render`が例外を投げた部品は何も出さず、エラーはbun側のログへ出る。
-
-## 再描画・表示の切り替え
-
-`render`がniwatermの外の状態（gitの状態・ファイルの中身等）を読む場合、その変化は状況の変化として届かない。周期で読み直す`interval`の代わりに、変えた側から`niwaterm status-bar refresh`を呼んで知らせられる。`--item <id>`でその部品だけを評価し直す。idは部品の`id`フィールドで付けておくと、並べ替えても変わらない。付けていない部品のidと今の部品の一覧は`niwaterm config show`の`statusBar`で確認できる。
+`render`に関数を書くと、その関数が返した文字列を出せる。
 
 ```ts
 statusBar: {
   right: [
     {
       id: "todo",
-      render: async (_ctx, niwa) => {
+      render: async (ctx, niwa) => {
         const { stdout } = await niwa.shell.run("grep -c TODO ~/notes.md");
         return `TODO ${stdout.trim()}`;
       },
@@ -89,23 +60,68 @@ statusBar: {
 },
 ```
 
+`render`が呼ばれるのは、フォーカス中のタブ・Board・ワークスペースやタブ変数が変わったとき。時計のように時間で変わる表示は、`interval`にミリ秒を書くとその間隔で呼び直す（250ミリ秒より短くはできない）。
+
+関数の1つ目の引数（`ctx`）で、フォーカス中のタブの情報を受け取れる。2つ目の引数は[niwa API](/niwaterm/keybindings/api/)で、コマンドを実行したりポップアップを開いたりできる。
+
+| `ctx`の項目                     | 内容                     |
+| ------------------------------- | ------------------------ |
+| `workspaceId` / `workspaceName` | ワークスペースのidと名前 |
+| `boardId` / `boardName`         | Boardのidと名前          |
+| `tabId`                         | タブのid                 |
+| `tabName`                       | タブの名前               |
+| `cwd`                           | タブが今いるディレクトリ |
+| `vars`                          | タブ変数                 |
+| `windowId`                      | ウィンドウのid           |
+
+文字列の代わりに`{ text, tooltip, color }`を返すと、説明や色も付けられる。`text`の代わりに`html`を返すとHTMLで表示でき、そのためのCSSは`statusBar.css`に書く。コマンドの出力などを`html`に入れるときは、自分でエスケープする。
+
+### 外の変化に合わせて更新する
+
+`render`がファイルやgitの状態を読んでいる場合、それらが変わってもniwatermには分からないので、表示は更新されない。変えた側から`niwaterm status-bar refresh`を実行すると、その場で表示し直す。
+
 ```sh
-# ノートを編集した後に
+# ノートを編集したあとに、idが"todo"の表示だけを更新する
 niwaterm status-bar refresh --item todo
 ```
 
-バーを一時的に隠すには`toggle-status-bar`キーバインド（既定キーは無い）・コマンドパレットの「Toggle Status Bar」・`niwaterm status-bar toggle`を使う。隠した状態は全ウィンドウで共通で、次回起動時にも引き継ぐ。隠している間は`render`も`interval`も呼ばれず、出し直した時点の状況でまとめて評価し直す。`statusBar: false`で出さない設定にしている場合は切り替えられない。
+`--item`には、`render`などと一緒に書いた`id`を渡す。
 
-## CLIから操作する（`status-bar`）
+## バーを隠す
+
+`niwaterm status-bar toggle`、またはコマンドパレットの「Toggle Status Bar」で、バーを隠したり出したりできる。隠した状態は、すべてのウィンドウで共通で、次に起動したときも続く。キーで切り替えたいときは、`toggle-status-bar`アクションを割り当てる（[キーバインド](/niwaterm/keybindings/#キーの割り当てを変える)）。
+
+ステータスバーをまったく使わないなら、設定ファイルで`statusBar: false`にする。この場合はバーが作られないので、上の方法で出すこともできない。
+
+```ts
+statusBar: false,
+```
+
+## 設定項目の一覧
+
+`left`・`center`・`right`の各要素にオブジェクトで書ける項目。
+
+| 項目       | 内容                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で書く。省略すると`left-0`のような「場所-番号」になり、並べ替えると変わる |
+| `source`   | [決まった情報](#決まった情報を出す)の書き方                                                                                               |
+| `render`   | 表示を返す関数。`source`と両方書いたときは`render`が使われる                                                                              |
+| `interval` | `render`を呼び直す間隔（ミリ秒）。250以上                                                                                                 |
+| `prefix`   | 値の前に付ける文字。値がないときは出ない                                                                                                  |
+| `color`    | 文字の色                                                                                                                                  |
+| `tooltip`  | マウスを載せたときに出る説明                                                                                                              |
+| `run`      | クリックしたときの処理。`(ctx, niwa) => { ... }`                                                                                          |
+
+`builtin:mode`には`prefix`と`color`を付けられない。モードの色は[`appearance.ui`](/niwaterm/appearance/#枠やバッジの色)で変える。
+
+## CLI
 
 ```sh
 niwaterm status-bar refresh [--item <id>]
 niwaterm status-bar toggle [--visible on|off]
 ```
 
-ウィンドウ下端のステータスバー（設定の`statusBar`。詳細は[ステータスバー](/niwaterm/status-bar/)）を操作する。どちらも全ウィンドウが対象で、呼び出し元のウィンドウは問わない。
+- `status-bar refresh` — 表示を作り直す。`--item`でその`id`の表示だけにする。`id`を付けていない表示のidは`niwaterm config show`の`statusBar`で確かめられる
+- `status-bar toggle` — バーを隠す・出す。`--visible on` / `off`で向きを決められ、省略すると今と逆になる
 
-- `status-bar refresh` — 部品を状況が変わっていなくても評価し直す。`render`がniwatermの外の状態（gitの状態・ファイル等）を読む場合に、変えた側から変化を知らせるためのもの。`--item`でその部品だけに絞る。`<id>`は部品の`id`フィールド（付けていなければ`left-0`のような区画-番号）で、`niwaterm config show`の`statusBar`で確認できる。存在しないidはエラーメッセージ（今あるidの一覧付き）と共に終了コード1を返す。バーを隠している間は何も評価せず、出し直した時にまとめて評価する
-- `status-bar toggle` — バーの表示/非表示を切り替える。`--visible on`/`off`で向きを指定でき、省略時は今の逆になる。隠した状態は次回起動時にも引き継ぐ（成功時 `status-bar: visible`/`status-bar: hidden` を表示）
-
-`statusBar: false`で出さない設定にしている場合は、いずれもエラーメッセージと共に終了コード1を返す。キーバインド（`refresh-status-bar`・`toggle-status-bar`アクション。既定キーは無い）とコマンドパレットの「Refresh Status Bar」「Toggle Status Bar」からも実行できる。
+どちらもすべてのウィンドウが対象になる。`statusBar: false`にしているときはエラーになる。

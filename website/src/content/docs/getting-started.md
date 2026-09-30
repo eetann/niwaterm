@@ -1,9 +1,14 @@
 ---
 title: セットアップ
-description: niwaterm CLIのリンクと設定ディレクトリの作成、設定ファイルのホットリロードと現在値の確認
+description: niwaterm CLIを使えるようにして設定ファイルを作る。設定は保存するだけで反映される
 ---
 
-niwatermを使い始めるには、`niwaterm`コマンド（CLI）を使えるようにしてから、設定ファイルを置くディレクトリを作る。アプリのビルドと起動がまだなら、先に[インストール](/niwaterm/installation/)を済ませる。
+アプリを起動できたら、次の2つを済ませる。
+
+1. `niwaterm`コマンド（CLI）を使えるようにする
+2. `niwaterm init`で設定ファイルを作る
+
+どちらも1回やれば終わる。アプリのビルドと起動がまだなら、先に[インストール](/niwaterm/installation/)を済ませる。
 
 ## CLIを使えるようにする
 
@@ -14,33 +19,29 @@ cd packages/cli
 bun link
 ```
 
-`bin`フィールド経由で`niwaterm`コマンドがグローバル（`~/.bun/bin`）に登録される。`~/.bun/bin`がPATHに含まれていない場合は追加する。
+これで`niwaterm`コマンドが`~/.bun/bin`に入る。`~/.bun/bin`にPATHが通っていなければ追加する。アプリを起動した状態で`niwaterm ping`を実行し、`pong (pid …)`と返れば使える。
 
-このリポジトリの絶対パスに依存するシンボリックリンクになるため、リポジトリを移動・削除すると`niwaterm`コマンドは壊れる。
-
-アプリが起動していれば、`niwaterm ping`で繋がるか確かめられる。`pong (pid …)`が返れば使える状態になっている。
+リポジトリの場所を指すリンクなので、リポジトリを移動・削除すると`niwaterm`コマンドも動かなくなる。そのときは移動先でもう一度`bun link`する。
 
 ### Windowsの場合
 
-Windowsでは、[インストール](/niwaterm/installation/#windows)でコピーした先（`%USERPROFILE%\niwaterm-worktrees\niwaterm`）の`packages\cli`で、PowerShellから`bun link`を実行する。niwatermのタブで開くPowerShellからはこれで使える。
+[インストール](/niwaterm/installation/#windows)でコピーした先（`%USERPROFILE%\niwaterm-worktrees\niwaterm`）の`packages\cli`で、PowerShellから`bun link`を実行する。niwatermのタブで開いたPowerShellから使えるようになる。
 
-WSLのディストロをタブで開いて使う場合、ディストロの中はWindowsとは別の環境なので、WSL側のリポジトリでも同じように`bun link`する。WSL側からも、Windowsで動いているniwatermへそのまま繋がる。
+WSLのディストロをタブで開いて使うなら、WSL側のリポジトリでも同じように`bun link`する。ディストロの中はWindowsとは別の環境なので、こちらにも入れる必要がある。入れればWSL側からもWindowsで動いているniwatermを操作できる。
 
 ## 設定ディレクトリを作る
 
-niwatermの設定はTypeScriptで書く。設定ディレクトリ（`~/.config/niwaterm/`）を小さなNodeプロジェクトとして扱い、型定義・ヘルパー関数は`@niwaterm/config`パッケージから提供する。これによりTypeScript LSPの標準機能（型補完・定義ジャンプ）がそのまま使える。
+niwatermの設定は`~/.config/niwaterm/niwaterm.config.ts`にTypeScriptで書く。エディタで補完が使えるので、どんな設定項目があるかを補完候補から探しながら書ける。
 
-キーバインドに加えて、フォント・カラーテーマなどの外観も設定できる。設定ファイルの変更は再起動なしで反映される（ホットリロード）。
-
-`niwaterm init`を実行する。
+雛形は`niwaterm init`で作る。
 
 ```sh
 niwaterm init
 ```
 
-`~/.config/niwaterm/`に`package.json`/`tsconfig.json`/`niwaterm.config.ts`の3ファイルを生成し（`packages/config/examples/`が実体）、`bun install`まで実行する。`package.json`の`@niwaterm/config`依存はこのリポジトリの`packages/config`への絶対パスで自動的に埋まる（実際にnpm registryへ公開されたら、このfile参照はバージョン範囲指定、例: `^0.1.0`に差し替わる想定）。既存ファイルは上書きしないため、再実行しても安全。依存インストールを飛ばしたい場合は`--skip-install`を付ける。
+`~/.config/niwaterm/`に`niwaterm.config.ts`と、補完に必要な`package.json`・`tsconfig.json`ができ、必要なパッケージのインストールまで済む。すでにあるファイルは上書きしないので、何度実行しても大丈夫。
 
-生成される`niwaterm.config.ts`は次の内容がベース。
+できた`niwaterm.config.ts`には、キーバインドと見た目の設定例が入っている（抜粋）。
 
 ```ts
 import { defaultAppearance, defineConfig } from "@niwaterm/config";
@@ -63,36 +64,36 @@ export default defineConfig({
 });
 ```
 
-`node_modules/`はDotfilesで管理する場合、Git管理対象外にする想定。
+この例では、prefixキー（デフォルトは`ctrl+b`）のあとに`d`でタイルを上下に分割し、`g`でlazygitをポップアップで開く。フォントサイズと文字色・背景色も変えている。書ける内容は[キーバインド](/niwaterm/keybindings/)や[見た目](/niwaterm/appearance/)などの各ページで説明している。
 
-`file:`の代わりに`bun link`を使う方法もある（`niwaterm init`実行後、`packages/config`で`bun link`を実行し、`~/.config/niwaterm/`で`bun link @niwaterm/config`すると差し替えられる）。
+設定ディレクトリをdotfilesで管理する場合、`node_modules/`はGitの管理から外しておく。
 
-### 設定ディレクトリを変える（`NIWATERM_CONFIG_DIR`）
+### 別のディレクトリの設定で起動する
 
-環境変数`NIWATERM_CONFIG_DIR`に絶対パスを設定して起動すると、`~/.config/niwaterm/`の代わりにそのディレクトリを設定ディレクトリとして読む。niwatermを複数のビルドで使い分けていて、片方だけ別の設定で動かしたいとき（開発中のビルドで設定まわりを試しても普段遣いの設定を壊さないようにする等）に使う。未設定なら従来どおり`~/.config/niwaterm/`を読む。
+環境変数`NIWATERM_CONFIG_DIR`に絶対パスを入れて起動すると、`~/.config/niwaterm/`の代わりにそのディレクトリの設定を読む。普段の設定を変えずに別の設定を試したいときに使う。
 
-切り替わるのはディレクトリ単位で、設定ファイル1つだけを差し替えることはできない。`customViews`の`path`のような相対パスの基準も、ホットリロードの監視対象もそのディレクトリへ移るため、`niwaterm.config.ts`だけでなく`package.json`・`node_modules/`（`@niwaterm/config`の解決に必要）まで一式が要る。雛形は`NIWATERM_CONFIG_DIR=<パス> niwaterm init`で作れる。
-
-この変数はniwatermが開いたタブのシェルへは引き継がれない。タブの中から別のniwatermを起動したときに、起動元インスタンスの設定ディレクトリを巻き込まないようにするため。
+ディレクトリごと切り替わるので、`niwaterm.config.ts`だけでなく`package.json`や`node_modules/`も一式そろえる。雛形は`NIWATERM_CONFIG_DIR=<パス> niwaterm init`で作れる。この環境変数は、niwatermが開いたタブのシェルには引き継がれない。
 
 ## ホットリロード
 
-`~/.config/niwaterm/niwaterm.config.ts`を保存すると、アプリを再起動せずに変更が反映される（キーバインド・外観・customViewsいずれも）。`~/.config/niwaterm/`ディレクトリをサブディレクトリ含めて監視しており、エディタのatomic save（一時ファイル書き込み→rename）方式でも検知できる。保存直後の複数回のファイルイベントは短時間でまとめられる（デバウンス）。
+`niwaterm.config.ts`を保存すると、アプリを再起動しなくてもすぐに反映される。キーバインド・見た目・カスタムビューなど、すべての設定が対象になる。設定を[複数ファイルに分けている](/niwaterm/keybindings/#設定を複数のファイルに分ける)場合も、どのファイルを保存しても反映される。
 
-設定を複数ファイルへ分割している場合（[「複数ファイルへの分割」節](/niwaterm/keybindings/#複数ファイルへの分割)参照）、エントリファイル以外の`.ts`/`.js`等の変更もホットリロード対象になる。読み込みのたびに`~/.config/niwaterm/`配下のソースファイルを一時ディレクトリへコピーしてからimportし直すことで、importツリー全体を最新の内容に差し替えている（`node_modules`は巨大になりうるためコピーせずシンボリックリンクで参照する）。
+手動で読み込み直したいときは、コマンドパレットから「Reload Config」を実行する。
 
-読み込めない内容（構文エラー、存在しないモジュールのimport等）を保存した場合は、**直前に読み込めた設定のまま動き続ける**。デスクトップ通知で理由を知らせ、`niwaterm config show`と設定モーダルの「読み込みエラー」にも同じ内容が出る。エラーを直して再保存すればその時点の内容が反映され、復帰したことも通知される（通知はエラーの内容が変わったときだけ出るので、直し途中の保存で繰り返し鳴ることはない）。
+### 設定を書き間違えたとき
 
-デフォルトへ落ちるのは、まだ一度も設定を適用できていない場合（＝起動直後の初回読み込みから失敗している場合）だけ。設定ファイルの一部の誤りでprefixもテーマもカスタムビューも同時に消えると、編集を戻すための操作すら効かなくなるため、適用済みの設定を優先して残す。
+構文エラーなどで設定ファイルを読み込めないときは、**直前に読み込めた設定のまま動き続ける**。書き間違えた途端にキーバインドが全部消えて、元に戻す操作もできなくなる、ということは起きない。
 
-`~/.config/niwaterm/`ディレクトリ自体が存在しない場合（未セットアップ）は監視そのものがスキップされ、コンソールにログが出るだけでアプリは通常通り起動する。
-
-ファイル監視による自動リロードのほか、`reload-config`アクション（コマンドパレット、または`niwa.keybind`で割り当てたキー）から同じ処理を手動で呼び出すこともできる。挙動は保存時の自動リロードと同一（読み込めた場合は毎回デフォルトから解決し直すため、`niwa.keybind`/`niwa.unbind`で加えた変更をconfigファイルから削除して再読み込みすれば、その分は未設定またはデフォルトの割り当てに戻る）。
+読み込めなかった理由はデスクトップ通知で知らせる。直して保存し直せばその内容が反映され、直ったことも通知される。ただし、起動したときから設定を読み込めていない場合は、デフォルトの設定で起動する。
 
 ## 現在の設定値を確認する
 
-マージ後の実際に効いている値は、アプリ内のモーダル（prefix + `i`の`show-config`アクション、またはコマンドパレットの「Show Settings」）か、CLIの`niwaterm config show`で確認できる。設定ファイルに書いていない項目も既定値として出るため、「書いたつもりが反映されていない」の切り分けに使える。
+「書いたのに反映されない」ときは、いま実際に使われている設定を見る。アプリ内ではprefixキーのあとに`i`（またはコマンドパレットの「Show Settings」）で、CLIからは`niwaterm config show`で表示できる。
 
-設定値の一覧より前に、直近の読み込みが失敗していればその理由（「読み込みエラー」）と、既定値へ落とした項目・無視した項目の一覧（「無視した設定」）が出る。不正な値はその項目だけを落として残りは活かす設計のため、「書いたのに効かない」ときはまずここを見る。
+表示される内容は次のとおり。
 
-キーバインドの個々の割り当てはここには出ない（件数のみ）。一覧は`niwaterm keybind list`で確認する。関数で書く設定（`mouse.selectionMenu`・`worktree.onCreate`・`worktree.onOpen`・`worktree.onBeforeRemove`・`worktree.onRemove`・`niwa.on`のハンドラ）も値として表示できないため含まない。
+- 設定ファイルを読み込めなかった場合は、その理由（「読み込みエラー」）
+- 値が正しくなくて無視した項目と、デフォルト値に戻した項目（「無視した設定」）。正しくない項目があっても、その項目だけを無視して残りは反映している
+- 各設定の現在の値。設定ファイルに書いていない項目もデフォルト値で表示される
+
+キーバインドの割り当ての一覧は、ここには出ない。`niwaterm keybind list`で確認する。関数で書いた設定（右クリックメニューやワークツリーのフックなど）も表示されない。

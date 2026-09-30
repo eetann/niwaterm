@@ -1,42 +1,100 @@
 ---
 title: キーバインド
-description: prefix方式のキーバインドを関数ベースAPIで書く方法と、連打・説明表示・ファイル分割・制約
+description: prefixキーのあとに押すキーバインドとデフォルトのキー一覧、設定ファイルでの割り当て方
 ---
 
-niwatermのキーバインドはtmux風の**prefix方式**。まずprefixキー（既定`ctrl+b`）を押し、離してから2打目のキー（例: `d`）を押すとアクションが発火する（タイムアウトは無く、2打目キーの入力があるまで待ち続ける。`Escape`または割り当てのないキーでキャンセルできる）。コピー・ペーストのような頻用操作だけは、prefixを介さず即座に発火する`direct`ショートカットとして別枠を持てる。`repeat: true`を付けたバインドは、発火後`repeatTimeoutMs`（既定500ms）以内ならprefix無しで連打できる（tmuxの`bind-key -r`相当。詳細は下記「repeatによる連打」参照）。
+niwatermのキー操作は**prefix方式**で行う。prefixキー（デフォルトは`ctrl+b`）を押して離し、続けてもう1つキーを押す。たとえば`ctrl+b`→`d`でタイルを左右に分割する。prefixキーを押したあとでやめたいときは`Escape`を押す。
 
-`keybindings`の指定方法は2つある。単純な文字列アクションの割り当てのみで済むなら[オブジェクト形式](/niwaterm/keybindings/object-format/)で十分だが、複数アクションの束ね・条件分岐・シェル実行を伴う複雑なバインド（`.tmux.conf`にあるような`bind-key`）を書きたい場合は関数ベースAPIを使う。
+コピーとペーストだけは、prefixなしで押せる。macOSは`cmd+c` / `cmd+v`、Windowsは`ctrl+shift+c` / `ctrl+shift+v`を使う。
 
-## 関数ベースAPI（推奨）
+## デフォルトのキー
 
-`niwa`（`niwa.keybind`等）を使って1エントリずつ登録する形。**デフォルトキーバインドは先に登録済みの状態で関数が呼ばれる**ため、上書き・追加したい分だけ書けばよい（`niwa.unbind`で個別に解除もできる）。
+prefixキーのあとに押すキーの一覧。キーが割り当てられていない操作も、prefix + `:`で開くコマンドパレットから名前で探して実行できる。
+
+| キー                             | 動作                                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `d` / `shift+d`                  | タイルを左右 / 上下に分割する                                                                     |
+| `w`                              | フォーカス中のタブを閉じる（最後のタブならタイルごと閉じる）                                      |
+| `up` / `down` / `left` / `right` | 隣のタイルへフォーカスを移す                                                                      |
+| `z`                              | フォーカス中のタイルだけを画面いっぱいに広げる。もう一度押すと戻る                                |
+| `t` / `shift+t`                  | ターミナル / [ブラウザ](/niwaterm/browser/)のタブを開く                                           |
+| `n` / `p`                        | 次 / 前のタブへ切り替える                                                                         |
+| `r`                              | タブの名前を変える                                                                                |
+| `u`                              | ブラウザタブのURL欄へフォーカスする                                                               |
+| `c`                              | [Board](/niwaterm/boards/)を追加する                                                              |
+| `,`                              | Boardの名前を変える                                                                               |
+| `shift+n`                        | ワークスペースを追加する                                                                          |
+| `]` / `[`                        | 次 / 前のワークスペースへ切り替える                                                               |
+| `shift+w`                        | 新しいウィンドウを開く                                                                            |
+| `b`                              | サイドバーを表示する / 隠す                                                                       |
+| `shift+b`                        | サイドバーに出す[カスタムビュー](/niwaterm/custom-views/)を切り替える                             |
+| `` ` ``                          | ポップアップを開く / 閉じる                                                                       |
+| `f`                              | [ジャンプヒント](/niwaterm/jump-and-copy/#ジャンプヒント)を出す                                   |
+| `v`                              | [コピーモード](/niwaterm/jump-and-copy/#コピーモードvi風のキーボード選択)に入る                   |
+| `shift+up` / `shift+down`        | 前 / 次のプロンプトへ飛ぶ（[シェル統合](/niwaterm/shell-integration/)が必要）                     |
+| `pageup` / `pagedown`            | 1ページ分スクロールする                                                                           |
+| `home` / `end`                   | スクロールバックの先頭 / 最新の行へ飛ぶ                                                           |
+| `=` / `-` / `0`                  | 文字を大きく / 小さく / 元の大きさにする                                                          |
+| `:`                              | コマンドパレットを開く                                                                            |
+| `i`                              | 今の設定を表示する（[現在の設定値を確認する](/niwaterm/getting-started/#現在の設定値を確認する)） |
+
+今の割り当ては`niwaterm keybind list`で一覧できる。
+
+## キーの割り当てを変える
+
+`niwaterm.config.ts`の`keybindings`に、`niwa.keybind(キー, 動作)`を並べる。デフォルトのキーは最初から登録されているので、変えたいキーと足したいキーだけを書けばよい。
 
 ```ts
 import { defineConfig } from "@niwaterm/config";
 
 export default defineConfig({
   keybindings: (niwa) => {
-    niwa.keybind("d", "split-horizontal"); // 既存アクション名の文字列で上書き
-    niwa.keybind("m", () => {
-      // 任意のTSコードを書ける。tmuxのif-shell/run-shell/{}束ねに相当することは
-      // 素のif文・Bun.spawn・複数行の関数呼び出しで表現する（専用DSLは増やさない）
-      niwa.popup.open({ width: 80, height: 80, command: "lazygit" });
-    });
+    // prefix + d を上下分割に変える
+    niwa.keybind("d", "split-horizontal");
+    // prefix + m でlazygitをポップアップで開く
+    niwa.keybind(
+      "m",
+      () => {
+        niwa.popup.open({ width: 80, height: 80, command: "lazygit" });
+      },
+      { description: "lazygitをポップアップで開く" },
+    );
+    // prefix + z の割り当てを外す
+    niwa.unbind("z");
   },
 });
 ```
 
-`niwa.keybind`のhandlerは**実際にそのキーが押された時**に呼ばれる（configファイル実行時ではない）。`niwa.tile.current()`等はその時点の実際の状態を返す。handlerの中で呼べるAPIの一覧は[niwa API](/niwaterm/keybindings/api/)にまとめてある。
+2つ目の引数には、動作の名前（`"split-horizontal"`など）か関数を渡す。動作の名前は[アクション一覧](/niwaterm/keybindings/actions/)にある。関数の中では`niwa.popup.open`のようなniwatermの操作を呼べるほか、if文で条件を分けたりコマンドを実行したりと、TypeScriptで好きな処理を書ける。関数から呼べる操作は[niwa API](/niwaterm/keybindings/api/)にまとめてある。3つ目の引数の`description`は、キーの一覧に出す説明（[一覧に説明を出す](#一覧に説明を出す)）。
 
-`noPrefix: true`で`alt+`を含むキーを割り当てると、tmuxの`bind-key -n M-key`相当の即時発火バインドになる。ただしAlt(Option)キー単独の組み合わせはシェルのreadlineショートカット（`Alt+b`で単語移動等）やmacOSの特殊文字入力に使われることがあるため、割り当てるとそのキーはniwaterm側に横取りされ、シェル側へは届かなくなる点に注意する。
+関数はキーを押したときに呼ばれる。そのため、`niwa.tile.current()`のような今の状態を取る関数は、押した時点の状態を返す。
 
-## repeatによる連打
+### prefixキーを変える
 
-`opts.repeat: true`を付けたバインドは、発火後`repeatTimeoutMs`（既定500ms、`niwa.repeatTimeout(ms)`で変更可）以内ならprefix無しで同じ2打目キーテーブルのrepeatableなキーを連打できる（tmuxの`bind-key -r`相当）。`.tmux.conf`の`bind-key -r H/J/K/L resize-pane -L/-D/-U/-R`に相当する例:
+prefixキーは`niwa.prefix`で変えられる。
 
 ```ts
 keybindings: (niwa) => {
-  niwa.repeatTimeout(300); // 省略時は500ms
+  niwa.prefix("ctrl+a");
+},
+```
+
+### prefixなしで押せるキーを作る
+
+`noPrefix: true`を付けると、prefixキーを押さずにそのキーだけで動くようになる。キーには`cmd`・`ctrl`・`alt`のどれかを含める。
+
+```ts
+niwa.keybind("alt+h", "focus-left", { noPrefix: true });
+```
+
+割り当てたキーはniwatermが受け取り、シェルやアプリには届かなくなる。`alt+b`（単語単位でカーソルを戻す）のようにシェルで使うキーや、macOSで`option`を使って入力する特殊文字と重ならないように選ぶ。
+
+### 続けて押せるようにする
+
+`repeat: true`を付けたキーは、一度押したあと少しのあいだ、prefixなしで何度でも押せる。タイルの大きさを少しずつ変えたいときに便利。
+
+```ts
+keybindings: (niwa) => {
   niwa.keybind("h", "resize-left", { repeat: true });
   niwa.keybind("j", "resize-down", { repeat: true });
   niwa.keybind("k", "resize-up", { repeat: true });
@@ -44,30 +102,25 @@ keybindings: (niwa) => {
 },
 ```
 
-`resize-up`/`resize-down`/`resize-left`/`resize-right`はフォーカス中タイルを既定の1ステップ分（`niwa.tile.resize`と同じ量）だけ拡大する組み込みアクションで、既定キーは割り当てられていない（上記のように自分で割り当てる）。`repeat`は`bindings`（prefix経由の2打目キー）側でのみ効果を持ち、`noPrefix: true`のdirectショートカットには効果がない（directは元々prefix無しの即時発火で、キーを押し続ければOSのキーリピートがそのまま連続入力を生むため）。
+この例なら、`ctrl+b`→`h`→`h`→`j`のように続けて押せる。`repeat`を付けたキーどうしなら、別のキーに移っても続けられる。続けて押せる時間はデフォルトで500ミリ秒で、`niwa.repeatTimeout(300)`のように変えられる。
 
-## 一覧での説明表示
+### 一覧に説明を出す
 
-現在有効なキーバインドは`niwaterm keybind list`（詳細: [CLIからの操作](/niwaterm/cli/)）で確認できる。一覧に出るのは既定ではアクション名（文字列アクション）または`function`（関数ハンドラ）のため、関数ハンドラには`opts.description`で何をするバインドなのかを添えておくと読める一覧になる。
+`niwaterm keybind list`の一覧には、関数を割り当てたキーは`function`としか出ない。`description`を付けておくと、その説明が出る。
 
 ```ts
 niwa.keybind(
-  "r",
-  async () => {
-    await niwa.reloadConfig();
-    niwa.notify({ title: "設定をリロードしました" });
+  "g",
+  () => {
+    niwa.popup.open({ width: 90, height: 90, command: "lazygit" });
   },
-  { description: "設定をリロードして通知する" },
+  { description: "lazygitをポップアップで開く" },
 );
 ```
 
-```
-ctrl+b r          設定をリロードして通知する
-```
+### 設定を複数のファイルに分ける
 
-## 複数ファイルへの分割
-
-キーバインドを関心事ごとに複数ファイルへ分けたい場合、各ファイルは`niwa`を受け取る関数をexportし、エントリファイル（`niwaterm.config.ts`）側でimportして呼び出す。
+キーバインドが増えてきたら、`niwa`を受け取る関数を別ファイルに書き、`niwaterm.config.ts`から呼ぶ。分けたファイルを保存したときも、設定はすぐに反映される。
 
 ```ts
 // keymaps.ts
@@ -88,10 +141,14 @@ export default defineConfig({
 });
 ```
 
-エントリファイル以外（上記の`keymaps.ts`）の変更もホットリロードで拾われる（[「ホットリロード」節](/niwaterm/getting-started/#ホットリロード)参照）。
+## キーの書き方
 
-## 制約
+キーは`shift+d`のように、修飾キーとキーを`+`でつないで書く。修飾キーは`cmd`・`ctrl`・`shift`・`alt`の4つ。矢印キーは`up`・`down`・`left`・`right`、Page Up・Page Down・Home・Endキーは`pageup`・`pagedown`・`home`・`end`と書く。
 
-- **`ctrl`修飾子は未対応**。既存機能がcmd/shift/altしか使っていないため、今回の型・パーサでは対象外（将来Ctrl系のキーバインドが必要になったら拡張する）
-- **macOSのOption+英数字キーは英数字・数字キーのみ対応している**。Optionを押しながら文字キーを押すと`e.key`がUnicode記号やデッドキーに変わる（`Option+P`→`π`、`Option+N`→`˜`）が、`alt+n`のような英数字（`a`〜`z`）・数字（`0`〜`9`）のバインドは物理キー位置(`e.code`)から復元しているため`noPrefix`/`direct`でもそのまま動く。一方、記号キー（`alt+;`等）はレイアウトでキー位置がずれるため復元対象外で、macOSでは意図通りマッチしない可能性がある。詳細: `docs/known-issues/macos-option-key-breaks-alt-keybindings.md`
-- **Shiftで入力する記号は`shift+`を付けずに書く**。`|`・`:`・`+`のようにShiftを押して打つ記号は、押した結果の文字そのもので`niwa.keybind("|", ...)`と書けば一致する（Shiftの要否はキーボード配列で変わるため、Shift付きで一致するバインドが無ければShift無しの表記でも引き直している）。英字は従来どおり`d`と`shift+d`を区別する。なおmacOSのJIS配列では`¥`キーの既定入力が`¥`なので、`\`のバインドは`Option+¥`で打つか、入力ソースの設定で`¥`キーを`\`に切り替える必要がある
+- **prefixのあとに押すキー**には、`shift`と`alt`だけを付けられる。`ctrl`や`cmd`を付けたキーは割り当てられない
+- **prefixキーと`noPrefix`のキー**には、`cmd`・`ctrl`・`alt`のどれかを含める
+- **`|`や`:`のようにShiftを押して打つ記号**は、`shift+`を付けずにその記号をそのまま書く（`niwa.keybind("|", ...)`）。英字は`d`と`shift+d`を区別する
+- **macOSで`alt`（Option）を使うとき**は、英字と数字のキーなら`alt+n`のように書けば動く。`alt+;`のような記号のキーは、キーボード配列によっては反応しないことがある
+- **macOSのJIS配列で`\`を割り当てたとき**は、`option+¥`で打つか、入力ソースの設定で`¥`キーの入力を`\`に変える
+
+書き方を間違えたキーや、存在しないアクションの名前を書いた場合は、その行だけが無視される。何を無視したかは[今の設定の表示](/niwaterm/getting-started/#現在の設定値を確認する)の「無視した設定」に出る。

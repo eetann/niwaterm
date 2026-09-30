@@ -3,7 +3,7 @@ title: CLIからの操作
 description: niwaterm CLI（niwatermコマンド）の全コマンドの一覧と、操作対象の省略・ドキュメントの読み方
 ---
 
-niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コマンド（CLI）から操作できる。コマンドは`niwaterm <resource> <verb>`の形で、操作する対象（リソース）ごとにまとまっている。使えるようにする手順は[セットアップ](/niwaterm/getting-started/)を参照。
+niwatermは、`niwaterm`コマンド（CLI）からも操作できる。タイルを分割する、タブへキーを送る、画面の内容を取るといった操作を、スクリプトやAIエージェントから呼べる。コマンドは`niwaterm tab new`のように、操作する対象ごとにまとまっている。使えるようにする手順は[セットアップ](/niwaterm/getting-started/)を参照。
 
 ## コマンド一覧
 
@@ -45,13 +45,19 @@ niwatermアプリはunix socket経由のIPCサーバーを持ち、`niwaterm`コ
 
 ## 対象IDの省略
 
-多くのコマンドは`--tile`/`--tab`/`--board`/`--workspace`を省略でき、その場合は**そのコマンドを実行しているタブ**が対象になる。niwatermが起動したシェルには`NIWATERM_TAB_ID`環境変数が入っており、CLIはそれを起点に所属タイル・Board・ワークスペースを解決する。niwatermの外（普通のターミナル・スクリプト）から実行した場合は、アクティブなワークスペース→アクティブなBoard→フォーカス中タイル→そのアクティブタブへフォールバックする（tmuxの`current-pane`相当）。
+多くのコマンドは`--tile`・`--tab`・`--board`・`--workspace`を省略できる。省略すると、**そのコマンドを実行しているタブ**が対象になる。niwaterm以外のターミナルやスクリプトから実行した場合は、フォーカス中のタイルと、そのタイルで表示中のタブが対象になる。
 
-ウィンドウが複数開いている場合、フォールバック先は**実行しているタブが載っているウィンドウ**になる（CLIは全リクエストに`NIWATERM_TAB_ID`を添えて送る）。niwatermの外から実行した場合は最後にフォーカスされたウィンドウが対象になる。`workspace new`・`popup open`のように対象IDを取らないコマンドも同じ規則で宛先のウィンドウが決まる。
+ウィンドウが複数開いているときは、実行しているタブがあるウィンドウが対象になる。niwaterm以外から実行した場合は、最後にフォーカスしたウィンドウが対象になる。
 
-明示指定した値がこの解決結果で上書きされることはない。存在しないIDを渡しても別の対象へすり替わらず、そのままエラーになる。`--tab`だけを指定して`--tile`を省略した場合は、実行元ではなく**指定したタブが属するタイル**が埋まる（`tab close --tab <tabId>`のような使い方ができる）。
+`--tab`だけを指定して`--tile`を省略すると、指定したタブがあるタイルが対象になる。存在しないIDを渡したときは、ほかの対象に置き換えずにエラーになる。
 
-省略できないのは、自分自身を指しても意味が無い切り替え系（`tab switch`の`--tab`/`--direction`、`board switch --board`、`workspace switch --workspace`）、誤送信を避けたい`tab send-keys --tab`、対象がブラウザタブに限られる`browser *`の`--tab`。`tab var`系の`--tab`は`NIWATERM_TAB_ID`のみを見て、フォーカス中タブへのフォールバックは行わない（シェル統合・エージェント統合のhookがniwaterm外で暴発しないようにするため）。
+次のオプションは省略できない。
+
+- 切り替え先を指す`tab switch`の`--tab`・`--direction`、`board switch --board`、`workspace switch --workspace`
+- 別のタブへ誤ってキーを送らないよう、`tab send-keys`の`--tab`
+- ブラウザタブを指す`browser`系の`--tab`
+
+`tab var set`・`get`・`list`の`--tab`は、省略するとそのコマンドを実行しているタブが対象になる。niwaterm以外から実行した場合はエラーになり、フォーカス中のタブには書き込まない。
 
 ## ヘルプとドキュメント
 
@@ -67,6 +73,6 @@ niwaterm docs list [--json]
 niwaterm docs show <name>
 ```
 
-`niwaterm docs list`は利用可能なドキュメントトピックを`name<TAB>description`形式で表示する。`--json`を付けると、トピックの配列と次の操作を示す`help`を持つJSONで出力する。`niwaterm docs show <name>`はそのトピックのドキュメントそのものをターミナルへ出力する。リポジトリを直接読めない状況（AIエージェントがCLI経由でniwatermを操作する場合など）でも、CLIだけでドキュメント全体を取得できる。
+このドキュメントサイトの各ページは、ターミナルでも読める。`niwaterm docs list`でページの一覧を`name<TAB>description`の形で出し、`niwaterm docs show <name>`でそのページを出す。AIエージェントにniwatermを操作させるとき、CLIだけでドキュメントを読ませられる。`--json`を付けると、一覧をJSONで出す。
 
-トピックはドキュメントサイトのページ（`website/src/content/docs/`配下の`.md`）から組み立てられる。`name`はそこからの相対パスで拡張子を除いたもの（`keybindings/api.md`なら`keybindings/api`）で、説明にはfrontmatterの`description`をそのまま使う。ページを増やせば一覧にも載るので、CLI側にトピックを登録する必要はない。トップページのような`.mdx`のページは、ターミナルでは読みにくいので一覧に載せない。
+`name`は、ドキュメントサイトのURLのうち`/niwaterm/`より後ろの部分と同じ（`/niwaterm/keybindings/api/`なら`keybindings/api`）。トップページは一覧に出ない。

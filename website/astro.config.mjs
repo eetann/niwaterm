@@ -23,7 +23,13 @@ export default defineConfig({
         },
         {
           label: "キーボード",
-          items: ["keybindings", "keybindings/api", "keybindings/object-format", "jump-and-copy"],
+          items: [
+            "keybindings",
+            "keybindings/actions",
+            "keybindings/api",
+            "keybindings/object-format",
+            "jump-and-copy",
+          ],
         },
         { label: "見た目", items: ["appearance"] },
         {

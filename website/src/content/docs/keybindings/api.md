@@ -1,81 +1,120 @@
 ---
 title: niwa API
-description: キーバインドの関数ハンドラから呼べるniwa APIの一覧
+description: キーバインドの関数などで受け取るniwaから、タイル・タブ・ポップアップ・Boardを操作するAPIの一覧
 ---
 
-| API                                                                    | 意味                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `niwa.prefix(binding)`                                                 | prefixキー本体を設定する。例: `niwa.prefix("ctrl+b")`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `niwa.repeatTimeout(ms)`                                               | `repeat: true`なバインドが連打とみなす間隔(ms)を設定する。省略時は既定500ms                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `niwa.keybind(key, action, opts?)`                                     | キーにアクションを割り当てる。`action`は既存アクション名の文字列、または関数ハンドラ`(niwa) => void \| Promise<void>`。`opts.noPrefix: true`でprefix不要の即時発火（directと同じ扱い。この場合`key`はcmd/ctrl/altのいずれかを含むKeyBindingString表記）。`opts.repeat: true`で発火後`repeatTimeoutMs`以内はprefix無しで連打できる（tmuxの`bind-key -r`相当。`bindings`側のみ有効、`noPrefix`併用時は効果を持たない）。`opts.description`で一覧表示（`niwaterm keybind list`）用の説明を付けられる                                                                           |
-| `niwa.unbind(key, opts?)`                                              | `niwa.keybind`で割り当てたバインドを解除する                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `niwa.sleep(ms)`                                                       | 明示的な待ち時間(ms)。下記「非同期処理について」参照                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `niwa.notify(opts)`                                                    | OSのデスクトップ通知を出す。`opts: { title, body?, subtitle?, silent?, tabId? }`（`title`のみ必須）。macOSでは`tabId`を渡すと、通知のクリックでそのタブへ遷移する（Windowsはクリックしても遷移しない）                                                                                                                                                                                                                                                                                                                                                                      |
-| `niwa.reloadConfig()`                                                  | 設定ファイルを再読み込みする（ファイル監視での自動リロード・`reload-config`キーバインドと同じ処理）。完了を`await`できるため、`niwa.keybind`の関数ハンドラ内で「リロード→完了後に`niwa.notify`で知らせる」のような組み立てができる                                                                                                                                                                                                                                                                                                                                          |
-| `niwa.tile.current()`                                                  | フォーカス中タイルの情報（`{ id, cwd }`）を返す。`cwd`はOSC7シェル統合で報告された値、未報告なら`undefined`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `niwa.tile.split(opts)`                                                | フォーカス中タイルを分割する。`opts: { orientation: "horizontal" \| "vertical", ratio?, cwd? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `niwa.tile.focus(direction)`                                           | 隣接タイルへフォーカス移動する。`direction: "up" \| "down" \| "left" \| "right"`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `niwa.tile.resize(opts)`                                               | フォーカス中タイルを`direction`方向へ`amount`分拡大する（tmuxの`resize-pane`相当）。`opts: { direction, amount? }`（`amount`省略時は既定の1ステップ分）。`direction`の軸に一致するsplitが祖先に無い場合（単一タイルのワークスペース等）は`false`                                                                                                                                                                                                                                                                                                                            |
-| `niwa.tile.zoom()`                                                     | フォーカス中タイルの一時的なズーム表示を切り替える（tmuxの`resize-pane -Z`相当）。他のタイルを隠し画面全体に表示し、再度呼ぶと解除する。戻り値はトグル後の状態（`true`=ズーム中）                                                                                                                                                                                                                                                                                                                                                                                           |
-| `niwa.tile.close()`                                                    | フォーカス中タイルのアクティブタブを閉じる                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `niwa.tab.current()`                                                   | フォーカス中タイルのアクティブタブの情報（`{ tabId }`）を返す。アクティブタブが無い場合は`null`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `niwa.tab.create(opts?)`                                               | 新規タブを作成する。`opts: { tileId?, cwd?, shellProfile? }`（`tileId`省略時はフォーカス中タイル）                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `niwa.tab.respawn(tabId, opts?)`                                       | 指定タブのプロセスを強制終了し、同じtabId・タイル位置のまま再起動する（tmuxの`respawn-pane -k`相当）。`opts: { cwd?, shellProfile?, command? }`（`cwd`省略時は直前のOSC7報告cwdを引き継ぐ）。ブラウザタブ・存在しないtabIdは`false`                                                                                                                                                                                                                                                                                                                                         |
-| `niwa.tab.sendKeys(tabId, ...keys)`                                    | 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。リテラル文字列と特殊キー名（`Enter`/`Escape`/`C-a`等）を複数個混在指定できる                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `niwa.tab.show(tabId)`                                                 | 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化をまとめて行う（tmuxの`select-pane`、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合は`false`                                                                                                                                                                                                                                                                                                                                                                         |
-| `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数の読み書き（`niwaterm tab var get/set`相当）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `niwa.tab.var.find(key, value)`                                        | 全ワークスペース・タイル・タブを横断して、`key`の値が`value`と一致するタブの`tabId`配列を返す（tmuxの`list-panes -F "#{pane_id} #{@role}"` + `awk`相当）                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `niwa.popup.open(opts?)`                                               | ポップアップを開く。`opts: { cwd?, command?, width?, height? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `niwa.popup.run(command, opts?)`                                       | ポップアップで`command`を実行し、閉じるまで待って標準出力を返す（CLIの`popup open --capture-stdout`相当）。`opts: { cwd?, width?, height? }`。fzf等の対話UIはポップアップ内に表示したまま、選択結果だけをハンドラ側で受け取れる。既にポップアップが開いている場合は`null`、コマンドが何も出力しなかった場合は空文字列                                                                                                                                                                                                                                                       |
-| `niwa.board.create(cwd?)`                                              | アクティブなワークスペースに新規Boardを作成してアクティブにし、そのidを返す（tmuxの`new-window`相当。BoardはADR 0006の「1ワークスペース内の複数タイルレイアウト」でtmuxのWindowに対応する）。`cwd`は最初のタブの作業ディレクトリで、省略時はOS標準（`tab.create`等と違いフォーカス中タブのcwdは引き継がない）                                                                                                                                                                                                                                                               |
-| `niwa.board.move(boardId, index)`                                      | Boardを所属ワークスペース内の表示順（サイドバーの並び）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなBoardは変更しない。別のワークスペースへ移すのは`niwa.board.moveToWorkspace`（CLIの`niwaterm board move --up/--down`、サイドバーのドラッグ&ドロップと同じ並び替え）                                                                                                                                                                                                                                                    |
-| `niwa.board.moveToWorkspace(boardId, workspaceId, index?)`             | Boardを別のワークスペースへ移す（tmuxの`move-window`相当。CLIの`niwaterm board move --to-workspace`、サイドバーで別ワークスペースへドラッグ&ドロップするのと同じ）。レイアウト・タブ・実行中のプロセスはそのまま移る。`index`は移動先での挿入位置（0始まり）で、省略・範囲外は末尾。アクティブなBoardは移動元・移動先とも変更しない。移動元がこれで空になる場合、そのワークスペースは閉じられる（開いているポップアップも一緒に閉じる）                                                                                                                                     |
-| `niwa.workspace.create(cwd?)`                                          | 新規ワークスペースを作成し、そのidを返す                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `niwa.workspace.switch(workspaceId)`                                   | ワークスペースを切り替える                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `niwa.workspace.move(workspaceId, index)`                              | ワークスペースを表示順（サイドバー・ウィンドウタイトルの番号）の`index`番目（0始まり）へ移動する。範囲外のindexは先頭・末尾へクランプする。中身とアクティブなワークスペースは変更しない（CLIの`niwaterm workspace move`、サイドバーのドラッグ&ドロップと同じ並び替え）                                                                                                                                                                                                                                                                                                      |
-| `niwa.workspace.swap(workspaceIdA, workspaceIdB)`                      | 2つのワークスペースの表示順（サイドバー・ウィンドウタイトルの番号）を入れ替える（tmuxの`swap-window`相当）。中身は変更しない                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `niwa.workspace.list()`                                                | 全ワークスペースを表示順で`{ id, name, active }[]`として返す。`name`は未設定なら`null`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `niwa.workspace.current()`                                             | 現在アクティブなワークスペースのidを返す（tmuxの`switch-client`が参照する`current-window`相当）                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `niwa.clipboard.write(text)` / `niwa.clipboard.read()`                 | クリップボードの読み書き                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `niwa.shell.run(command, opts?)`                                       | 現在のシェルプロファイル設定（wsl.exe/powershell.exe/zsh等）に従ってログイン・インタラクティブシェル経由でコマンドを実行し、結果（`{ exitCode, stdout, stderr }`）を返す（tmuxの`run-shell`相当）。`opts: { shellProfile?, cwd?, env? }`（`shellProfile`省略時はdefaultShell）。PTYを使わないワンショット実行でGUI上にタブ・ポップアップは作らない。対話的な出力を見せたい場合は`popup.open({ command })`を使う。`-i`（インタラクティブ）指定の副作用でシェルが「no job control」等の警告をstderrへ出すことがあるため、判定にはexitCodeを使い、stderrの完全一致は避けること |
+設定ファイル（`niwaterm.config.ts`）では、キーに関数を割り当てて好きな処理を書ける（[キーバインド](/niwaterm/keybindings/#キーの割り当てを変える)）。その関数は引数に`niwa`を受け取り、`niwa`を通してタブを開く・キーを送る・ポップアップでコマンドを実行する、といったniwatermの操作ができる。右クリックメニュー（[`mouse.selectionMenu`](/niwaterm/mouse-and-links/#選択範囲の右クリックメニューselectionmenu)）や[ホバーボタン](/niwaterm/hover-buttons/)の関数でも、同じ`niwa`を使える。
 
-**非同期処理について**: `niwa.tile.split`等の内部APIはPTYの起動要求が完了した時点で返り、実際にシェルが入力を受け付けられる状態になるまでは待たない（niwaterm側では検知できないタイミングのため）。新規タブへ直後に`sendKeys`する場合など、シェル起動待ちが必要な場面では`await niwa.sleep(ms)`で明示的に待つ（`layouts`プリセットの`delay`フィールドと同じ思想）。
+## 使い方の例
+
+### 役割を決めたタブへ飛ぶ
+
+エディタを開くタブで`niwaterm tab var set role editor`を実行しておくと、この`role`という[タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)を目印にタブを探して移れる。
 
 ```ts
-niwa.keybind("t", async () => {
-  const created = niwa.tab.create();
-  if (!created) return;
-  await niwa.sleep(300);
-  niwa.tab.sendKeys(created.tabId, "cd ~/ghq", "Enter");
-});
+niwa.keybind(
+  "e",
+  () => {
+    const [tabId] = niwa.tab.var.find("role", "editor");
+    if (tabId) niwa.tab.show(tabId);
+  },
+  { description: "エディタのタブへ移る" },
+);
 ```
 
-`niwa.tab.var.find` + `niwa.tab.show`を組み合わせると、`role`タブ変数を目印にした「特定の役割のタブへジャンプする」キーバインドが組める（tmuxの`select-pane`をペイン変数で引く運用の相当）。
+### fzfで選んだリポジトリをBoardで開く
+
+`niwa.popup.run`は、ポップアップでコマンドを実行し、その出力を返す。fzfのような選択画面をポップアップに出し、選ばれた結果を関数の中で使える。
 
 ```ts
-niwa.keybind("e", () => {
-  const [tabId] = niwa.tab.var.find("role", "editor");
-  if (tabId) niwa.tab.show(tabId);
-});
+niwa.keybind(
+  "o",
+  async () => {
+    const selected = await niwa.popup.run("ghq list --full-path | fzf", {
+      width: 80,
+      height: 80,
+    });
+    // 選ばずに閉じた場合は空文字列、ほかのポップアップが開いていた場合はnullが返る
+    if (!selected) return;
+    niwa.board.create(selected.trim());
+  },
+  { description: "リポジトリを選んでBoardで開く" },
+);
 ```
 
-`niwa.popup.run`を使うと、ポップアップ内のfzf等でユーザーに選ばせた結果をキーバインドのハンドラ側で受け取って処理できる（tmuxの「`display-popup`内のスクリプトからtmuxコマンドを叩く」構成に対して、niwatermでは「popupは選択結果を標準出力へ返すだけ、実際の操作はハンドラ側」と分担できる）。
+### 新しいタブを開いてコマンドを打つ
 
 ```ts
-// ghqのリポジトリ一覧をfzfで選び、Enterなら新規Board、ctrl-oなら現在のタブでcdする
-niwa.keybind("w", async () => {
-  const tab = niwa.tab.current();
-  const tile = niwa.tile.current();
-  // ghq-selectは「1行目: 押されたキー（fzfの--expect形式。Enterなら空行）」「2行目: 絶対パス」を
-  // 標準出力へ返すだけのスクリプト
-  const output = await niwa.popup.run("ghq-select", { width: 80, height: 80, cwd: tile?.cwd });
-  if (!output) return; // null（既にpopupが開いている）・空文字列（キャンセル）
-  const [key, targetPath] = output.split("\n");
-  if (!targetPath) return;
-  if (key === "ctrl-o") {
-    if (tab) niwa.tab.sendKeys(tab.tabId, `cd "${targetPath}"`, "Enter");
-    return;
-  }
-  niwa.board.create(targetPath);
-});
+niwa.keybind(
+  "l",
+  async () => {
+    const created = niwa.tab.create();
+    if (!created) return;
+    await niwa.sleep(300);
+    niwa.tab.sendKeys(created.tabId, "tail -f log/development.log", "Enter");
+  },
+  { description: "ログを流すタブを開く" },
+);
 ```
+
+タブを開いた直後は、まだシェルが起動しきっていないことがある。すぐにキーを送ると取りこぼすので、`niwa.sleep`で少し待ってから送る。
+
+## APIの一覧
+
+### タイル
+
+| API                          | 動作                                                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `niwa.tile.current()`        | フォーカス中のタイルの`{ id, cwd }`を返す。`cwd`は[シェル統合](/niwaterm/shell-integration/)を入れていないと`undefined`            |
+| `niwa.tile.split(opts)`      | フォーカス中のタイルを分割し、新しい`{ tileId, tabId }`を返す。`opts`は`{ orientation: "vertical" \| "horizontal", ratio?, cwd? }` |
+| `niwa.tile.focus(direction)` | 隣のタイルへフォーカスを移す。`direction`は`"up"` / `"down"` / `"left"` / `"right"`                                                |
+| `niwa.tile.resize(opts)`     | フォーカス中のタイルを`direction`の方向へ広げる。`opts`は`{ direction, amount? }`。その方向へ広げられないときは`false`             |
+| `niwa.tile.zoom()`           | フォーカス中のタイルだけを画面いっぱいに広げる / 元に戻す。広げた状態なら`true`を返す                                              |
+| `niwa.tile.close()`          | フォーカス中のタブを閉じる                                                                                                         |
+
+### タブ
+
+| API                                                                    | 動作                                                                                                                              |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `niwa.tab.current()`                                                   | フォーカス中のタブの`{ tabId }`を返す                                                                                             |
+| `niwa.tab.create(opts?)`                                               | ターミナルのタブを開き、`{ tabId }`を返す。`opts`は`{ tileId?, cwd?, shellProfile? }`。`tileId`を省くとフォーカス中のタイルに開く |
+| `niwa.tab.sendKeys(tabId, ...keys)`                                    | タブへキーを送る。文字列と`Enter` / `Escape` / `C-a`のようなキーの名前を並べて渡せる                                              |
+| `niwa.tab.show(tabId)`                                                 | タブへ移る。別のワークスペースやBoardにあるタブなら、そこへ切り替える                                                             |
+| `niwa.tab.respawn(tabId, opts?)`                                       | タブで動いているプログラムを終了して起動し直す。`opts`は`{ cwd?, shellProfile?, command? }`                                       |
+| `niwa.tab.var.get(tabId, key)` / `niwa.tab.var.set(tabId, key, value)` | タブ変数を読む / 書く                                                                                                             |
+| `niwa.tab.var.find(key, value)`                                        | タブ変数`key`が`value`のタブを探し、`tabId`の配列を返す                                                                           |
+
+`shellProfile`には、[シェルの設定](/niwaterm/shell/)で決めたプロファイルのidを渡す。
+
+### ポップアップ
+
+| API                              | 動作                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `niwa.popup.open(opts?)`         | ポップアップを開く。`opts`は`{ command?, cwd?, width?, height? }`。`command`を渡すとそのコマンドを実行し、終わると閉じる。`width`・`height`は画面に対する割合（%） |
+| `niwa.popup.run(command, opts?)` | ポップアップで`command`を実行し、閉じたあとにその標準出力を返す。`opts`は`{ cwd?, width?, height? }`                                                               |
+
+### Boardとワークスペース
+
+| API                                                        | 動作                                                                          |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `niwa.board.create(cwd?)`                                  | Boardを追加して切り替え、そのidを返す。`cwd`を省くとホームディレクトリで開く  |
+| `niwa.board.move(boardId, index)`                          | サイドバーでのBoardの並びを`index`番目（0から数える）へ動かす                 |
+| `niwa.board.moveToWorkspace(boardId, workspaceId, index?)` | Boardを別のワークスペースへ移す。移したことで空になったワークスペースは閉じる |
+| `niwa.workspace.create(cwd?)`                              | ワークスペースを追加し、そのidを返す                                          |
+| `niwa.workspace.switch(workspaceId)`                       | ワークスペースを切り替える                                                    |
+| `niwa.workspace.current()`                                 | 今のワークスペースのidを返す                                                  |
+| `niwa.workspace.list()`                                    | すべてのワークスペースの`{ id, name, active }`をサイドバーの並び順で返す      |
+| `niwa.workspace.move(workspaceId, index)`                  | サイドバーでのワークスペースの並びを`index`番目（0から数える）へ動かす        |
+| `niwa.workspace.swap(workspaceIdA, workspaceIdB)`          | 2つのワークスペースの並びを入れ替える                                         |
+
+### そのほか
+
+| API                                                    | 動作                                                                                                                                                                                    |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `niwa.shell.run(command, opts?)`                       | 画面に出さずにコマンドを実行し、`{ exitCode, stdout, stderr }`を返す。`opts`は`{ shellProfile?, cwd?, env? }`。成否は`exitCode`で判断する（シェルが`stderr`へ警告を出すことがあるため） |
+| `niwa.notify(opts)`                                    | デスクトップ通知を出す。`opts`は`{ title, body?, subtitle?, silent?, tabId? }`。macOSでは`tabId`を渡すと、通知のクリックでそのタブへ移る                                                |
+| `niwa.clipboard.write(text)` / `niwa.clipboard.read()` | クリップボードに書く / 読む                                                                                                                                                             |
+| `niwa.sleep(ms)`                                       | 指定したミリ秒だけ待つ                                                                                                                                                                  |
+| `niwa.reloadConfig()`                                  | 設定ファイルを読み込み直す。`await`すると読み込みが終わるまで待てる                                                                                                                     |
+
+キーバインドの設定に使う`niwa.keybind`・`niwa.unbind`・`niwa.prefix`・`niwa.repeatTimeout`は[キーバインド](/niwaterm/keybindings/)、ベルやリンクのクリックで動く処理を決める`niwa.on`は[ベル](/niwaterm/bell/)と[マウスとリンク](/niwaterm/mouse-and-links/#開く処理を差し替えるniwaonopen-link-)で説明している。
