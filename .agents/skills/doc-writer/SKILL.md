@@ -51,6 +51,7 @@ niwatermを使うユーザー向けのドキュメント（CLI・設定ファイ
    | `ADR`         | 意思決定記録                     | `docs/adr/`          |
    | `Runbook`     | 手順書（開発者向け）             | `docs/build/`        |
    | `Known Issue` | 既知の不具合の原因調査・対処記録 | `docs/known-issues/` |
+   | `Brand Guide` | 配色・書体・ロゴなどブランドの決まりごと | `docs/brand/`        |
 
 3. ADR を新規作成する場合は adr-creator スキルで本文（Status/Context/Decision/Consequences...）を作り、frontmatter は本スキルのルールで追加する。`type: ADR`、`title` は本文見出し `# ADR NNNN: ...` と同じ文字列にする。
 
