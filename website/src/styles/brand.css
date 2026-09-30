@@ -28,7 +28,7 @@
   --niwa-action: #93b87a;
   --niwa-action-ink: #141a15;
 
-  --sl-font: "Zen Kaku Gothic Antique", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --sl-font: "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-font-mono: "Spline Sans Mono", "BIZ UDGothic", "Osaka-Mono", monospace;
   /* 日本語が主なので英文向けの既定(1.75)より少し広く取る */
   --sl-line-height: 1.8;
