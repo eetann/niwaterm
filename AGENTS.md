@@ -15,7 +15,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 - 開発ルールの正本は `AGENTS.md`。`CLAUDE.md` はこのファイルへのシンボリックリンク。
 - 共通スキルは `.agents/skills/`、共通ルールは `.agents/rules/` で管理する。`.claude/skills`・`.claude/rules` はそれぞれ正本へのシンボリックリンク。
-- スキルを自動検出しないエージェントも、作業に応じて `.agents/skills/*/SKILL.md` を読む。ドキュメント編集は `doc-writer`、アプリのCLI操作は `niwaterm-cli`、Windows実機のGUI確認は `windows-gui-testing` を参照する。
+- スキルを自動検出しないエージェントも、作業に応じて `.agents/skills/*/SKILL.md` を読む。ドキュメント編集は `doc-writer`（ドキュメントサイトのページの中身は `user-doc-writer`）、アプリのCLI操作は `niwaterm-cli`、Windows実機のGUI確認は `windows-gui-testing` を参照する。
 - ソースコードを編集したら `bun run lint` と `bun run format:check` を実行し、変更に応じたテストを行う。`.claude/hooks/` の自動整形はClaude専用のため、他のエージェントでは必要に応じて変更ファイルを整形する。
 - CodexのFull Access設定は `.codex/config.toml` に置く。プロジェクト設定は信頼済みのリポジトリでのみ読み込まれ、起動オプションや管理者側の制約が優先される。
 
