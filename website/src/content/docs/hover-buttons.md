@@ -28,7 +28,7 @@ hoverButtons: [
 
 ## Claude Codeのプロンプトの目次を出す
 
-すぐ使える例として、Claude Codeで打ったプロンプトの目次を出す`claudePromptJump()`を用意している。Claude Codeを動かしているタブにだけ出る。目次の線にマウスを乗せるとプロンプトが出て、クリックするとClaude Codeの画面がそのプロンプトの位置まで移る。
+すぐ使える例として、Claude Codeで打ったプロンプトの目次を出す`claudePromptJump()`を用意している。Claude Codeを動かしているタブにだけ出る。目次の線にマウスを乗せるとプロンプトが出て、クリックするとClaude Codeの画面がそのプロンプトの位置まで移る。目次の最後にある「最新へ」を押すと、一番下の最新の応答へ戻る。
 
 ```ts
 import { claudePromptJump, defineConfig } from "@niwaterm/config";

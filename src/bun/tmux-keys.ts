@@ -8,25 +8,61 @@ const SPECIAL_KEYS: Record<string, string> = {
   Tab: "\t",
   Space: " ",
   BSpace: "\x7f",
-  Up: "\x1b[A",
-  Down: "\x1b[B",
-  Right: "\x1b[C",
-  Left: "\x1b[D",
-  Home: "\x1b[H",
-  End: "\x1b[F",
-  Delete: "\x1b[3~",
-  PageUp: "\x1b[5~",
-  PageDown: "\x1b[6~",
+};
+
+// 修飾キーを付けられる特殊キー。xtermのCSIパラメータ形式で、カーソルキー・Home/Endは
+// "ESC [ 1 ; <mod> <終端文字>"、Delete/PageUp/PageDownは"ESC [ <n> ; <mod> ~"になる
+const CSI_FINAL_KEYS: Record<string, string> = {
+  Up: "A",
+  Down: "B",
+  Right: "C",
+  Left: "D",
+  Home: "H",
+  End: "F",
+};
+
+const CSI_TILDE_KEYS: Record<string, number> = {
+  Delete: 3,
+  PageUp: 5,
+  PageDown: 6,
 };
 
 // 英字のほか`[`・`]`・`\`・`^`・`_`も受け付ける。いずれもASCIIコードを0x1fで
 // マスクすると対応する制御バイトになる（`C-]`なら0x1d）
 const CTRL_KEY_RE = /^C-([A-Za-z[\]\\^_])$/;
 
-/** 特殊キー名（Enter/C-c等）ならバイト列へ変換し、それ以外はリテラル文字列としてそのまま返す */
+/** tmuxと同じ`C-`・`M-`・`S-`の前置（重ねがけ可）と、その後ろのキー名 */
+const MODIFIED_KEY_RE = /^((?:[CMS]-)*)([A-Za-z]+)$/;
+
+/** xtermの修飾パラメータ。shift=1・alt=2・ctrl=4のビット和に1を足した値 */
+function modifierParam(prefixes: string): number {
+  return (
+    1 +
+    (prefixes.includes("S-") ? 1 : 0) +
+    (prefixes.includes("M-") ? 2 : 0) +
+    (prefixes.includes("C-") ? 4 : 0)
+  );
+}
+
+/** カーソル系の特殊キー名（修飾付きを含む）ならバイト列へ変換する。該当しなければnull */
+function csiKeyToBytes(token: string): string | null {
+  const match = token.match(MODIFIED_KEY_RE);
+  if (!match) return null;
+  const mod = modifierParam(match[1] as string);
+  const name = match[2] as string;
+  const final = CSI_FINAL_KEYS[name];
+  if (final !== undefined) return mod === 1 ? `\x1b[${final}` : `\x1b[1;${mod}${final}`;
+  const tilde = CSI_TILDE_KEYS[name];
+  if (tilde !== undefined) return mod === 1 ? `\x1b[${tilde}~` : `\x1b[${tilde};${mod}~`;
+  return null;
+}
+
+/** 特殊キー名（Enter/C-c/C-End等）ならバイト列へ変換し、それ以外はリテラル文字列としてそのまま返す */
 export function tmuxKeyToBytes(token: string): string {
   const special = SPECIAL_KEYS[token];
   if (special !== undefined) return special;
+  const csi = csiKeyToBytes(token);
+  if (csi !== null) return csi;
   const ctrlMatch = token.match(CTRL_KEY_RE);
   if (ctrlMatch) {
     const key = ctrlMatch[1] as string;

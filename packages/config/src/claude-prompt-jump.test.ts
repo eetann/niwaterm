@@ -24,34 +24,50 @@ describe("claudePromptJump", () => {
 
   test("CLIの出力からプロンプトを並べ、本文はエスケープし、押すとタブ変数とキーを送る", async () => {
     const calls: string[] = [];
-    const niwa = {
-      shell: {
-        run: async (command: string) => {
-          calls.push(command);
-          const prompts = [{ index: 1, uuid: "u-1", text: "<b>fix</b>\n bug" }];
-          return {
-            exitCode: 0,
-            stdout: `\u001b]7;file:///x\u0007${JSON.stringify(prompts)}`,
-            stderr: "",
-          };
-        },
-      },
-      tab: {
-        var: {
-          set: (tabId: string, key: string, value: string) =>
-            calls.push(`var ${tabId} ${key} ${value}`),
-        },
-        sendKeys: (tabId: string, ...keys: string[]) =>
-          calls.push(`keys ${tabId} ${keys.join(" ")}`),
-      },
-    } as unknown as Niwa;
+    const niwa = fakeNiwa(calls);
     const button = claudePromptJump({ cli: "niwaterm-dev" });
     const items = await button.items(ctx({}), niwa);
     expect(calls[0]).toBe("niwaterm-dev claude prompt list --json --tab tab-1");
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(2);
     expect(items[0]?.label).toBe("1. <b>fix</b> bug");
     expect(items[0]?.html).toContain("&lt;b&gt;fix&lt;/b&gt; bug");
     await items[0]?.run();
     expect(calls.slice(1)).toEqual(["var tab-1 agent_jump u-1", "keys tab-1 C-]"]);
   });
+
+  test("末尾の「最新へ」はタブ変数を触らずClaude Codeの最下部へ移すキーだけを送る", async () => {
+    const calls: string[] = [];
+    const items = await claudePromptJump().items(ctx({}), fakeNiwa(calls));
+    expect(items.at(-1)?.label).toBe("最新へ");
+    await items.at(-1)?.run();
+    expect(calls.slice(1)).toEqual(["keys tab-1 C-End"]);
+  });
+
+  test("latestKey: falseなら「最新へ」を出さない", async () => {
+    const items = await claudePromptJump({ latestKey: false }).items(ctx({}), fakeNiwa([]));
+    expect(items).toHaveLength(1);
+  });
 });
+
+function fakeNiwa(calls: string[]): Niwa {
+  return {
+    shell: {
+      run: async (command: string) => {
+        calls.push(command);
+        const prompts = [{ index: 1, uuid: "u-1", text: "<b>fix</b>\n bug" }];
+        return {
+          exitCode: 0,
+          stdout: `\u001b]7;file:///x\u0007${JSON.stringify(prompts)}`,
+          stderr: "",
+        };
+      },
+    },
+    tab: {
+      var: {
+        set: (tabId: string, key: string, value: string) =>
+          calls.push(`var ${tabId} ${key} ${value}`),
+      },
+      sendKeys: (tabId: string, ...keys: string[]) => calls.push(`keys ${tabId} ${keys.join(" ")}`),
+    },
+  } as unknown as Niwa;
+}

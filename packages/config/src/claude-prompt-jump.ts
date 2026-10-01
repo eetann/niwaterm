@@ -26,6 +26,11 @@ export interface ClaudePromptJumpOptions extends Omit<HoverButtonConfig, "items"
   labelChars?: number;
   /** 項目に出すツールチップの文字数。長いプロンプトはここで切る */
   tooltipChars?: number;
+  /**
+   * 目次の末尾の「最新へ」で送るキー。既定はClaude Codeの`scroll:bottom`に割り当てられたキー
+   * （ctrl+end）。falseなら「最新へ」を出さない
+   */
+  latestKey?: string | false;
 }
 
 /** ジャンプ先のプロンプトのuuidを渡すタブ変数。modが`niwaterm tab var get`で読む */
@@ -48,7 +53,8 @@ const LEVEL_OPACITY = [0.4, 0.55, 0.7, 0.85, 1];
 /**
  * 印・本文のスタイル。class名に機能名を含めてniwaterm本体と衝突させない。
  * パネルは上下の辺・四隅に置くと横並びになるが、目次は置き場所によらず縦に並べたいので、
- * 印を含むパネルだけ縦並びに固定する
+ * 印を含むパネルだけ縦並びに固定する。
+ * 「最新へ」はプロンプトが多いとスクロールの奥に隠れるので、パネルの下端に貼り付けておく
  */
 const CSS = `
 .hover-panel:has(.claude-prompt-jump-mark) {
@@ -59,6 +65,14 @@ const CSS = `
   width: 10px;
   border-radius: 2px;
   background: currentColor;
+}
+.hover-item:has(.claude-prompt-jump-latest) {
+  position: sticky;
+  bottom: 0;
+  background: var(--chrome-bg);
+}
+.claude-prompt-jump-latest {
+  opacity: 0.8;
 }
 .claude-prompt-jump-text {
   margin-left: 6px;
@@ -128,6 +142,7 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
     itemStyle = "text",
     labelChars = 20,
     tooltipChars = 140,
+    latestKey = "C-End",
     css,
     ...button
   } = options;
@@ -158,7 +173,7 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
       const prompts: ClaudePrompt[] = JSON.parse(
         await runCli(niwa, `claude prompt list --json --tab ${ctx.tabId}`),
       );
-      return prompts.map((prompt) => ({
+      const items: HoverButtonItem[] = prompts.map((prompt) => ({
         label: `${prompt.index}. ${clip(oneLine(prompt.text), labelChars)}`,
         html: itemHtml(prompt),
         tooltip: `${prompt.index}. ${clip(oneLine(prompt.text), tooltipChars)}`,
@@ -168,6 +183,15 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
           niwa.tab.sendKeys(ctx.tabId, jumpKey);
         },
       }));
+      if (latestKey === false || items.length === 0) return items;
+      // 一番下へ移すだけなのでmodを通さず、Claude Code自身のキー操作に任せる
+      items.push({
+        label: "最新へ",
+        html: `<span class="claude-prompt-jump-latest">${itemStyle === "mark" ? "↓" : "↓ 最新へ"}</span>`,
+        tooltip: "最新へ",
+        run: () => niwa.tab.sendKeys(ctx.tabId, latestKey),
+      });
+      return items;
     },
   };
 }

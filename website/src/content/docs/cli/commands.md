@@ -48,7 +48,7 @@ niwaterm tab send-keys --tab tab-3 'ls -la' Enter
 niwaterm tab send-keys --tab tab-3 C-c
 ```
 
-使える特殊キーは`Enter`・`Escape`・`Tab`・`Space`・`BSpace`・`Up`・`Down`・`Left`・`Right`・`Home`・`End`・`Delete`・`PageUp`・`PageDown`と、`C-a`〜`C-z`（Ctrl + 英字）。それ以外は文字列としてそのまま送る。
+使える特殊キーは`Enter`・`Escape`・`Tab`・`Space`・`BSpace`・`Up`・`Down`・`Left`・`Right`・`Home`・`End`・`Delete`・`PageUp`・`PageDown`と、`C-a`〜`C-z`（Ctrl + 英字）。`Up`〜`PageDown`には`C-`・`M-`（Alt）・`S-`（Shift）を前に付けられ、`C-End`や`C-S-Right`のように重ねてもよい。それ以外は文字列としてそのまま送る。
 
 1回のコマンドで並べたキーは、その順に届く。一方で、**コマンドを分けて送ったキーは、順番どおりに届くとは限らない**。順番が大事なときは1回にまとめるか、前のコマンドが終わってから次を送る。
 

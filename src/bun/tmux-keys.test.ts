@@ -37,6 +37,18 @@ describe("tmuxKeyToBytes", () => {
     expect(tmuxKeyToBytes(input)).toBe(expected);
   });
 
+  test.each([
+    ["C-End", "\x1b[1;5F"],
+    ["C-Home", "\x1b[1;5H"],
+    ["S-Up", "\x1b[1;2A"],
+    ["M-Left", "\x1b[1;3D"],
+    ["C-S-Right", "\x1b[1;6C"],
+    ["C-PageDown", "\x1b[6;5~"],
+    ["M-Delete", "\x1b[3;3~"],
+  ])("修飾付きのカーソル系キー %s はxtermの修飾パラメータ付きで %j になる", (input, expected) => {
+    expect(tmuxKeyToBytes(input)).toBe(expected);
+  });
+
   test("未知のC-トークン・キー名らしき文字列はリテラル扱いになる", () => {
     expect(tmuxKeyToBytes("C-1")).toBe("C-1");
     expect(tmuxKeyToBytes("Foo")).toBe("Foo");

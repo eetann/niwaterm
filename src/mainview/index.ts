@@ -3397,11 +3397,13 @@ function takeWheelCells(
 
 /**
  * ホイールの送信先ターミナルを引く。.term上ならそのタブ、タイル内のターミナル外
- * （タブバー等）ならそのタイルのアクティブタブへ送る
+ * （タブバー等）ならそのタイルのアクティブタブへ送る。ホバーボタンのパネル上は送らない
  */
 function findWheelTarget(
   target: EventTarget | null,
 ): { tabId: TabId; termEl: HTMLDivElement } | null {
+  // ホバーボタンのパネルはタイル内に重ねて置くため、除かないとパネルを自前でスクロールできない
+  if (target instanceof Element && target.closest(".hover-panel")) return null;
   const hit = findTerminalAt(target);
   if (hit) return hit;
   const tileEl = target instanceof HTMLElement ? target.closest<HTMLElement>(".tile") : null;
