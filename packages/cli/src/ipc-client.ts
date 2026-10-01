@@ -128,7 +128,13 @@ function wslDefaultGateway(): string | null {
 
 export type IpcEndpoint =
   | { kind: "unix"; path: string }
-  | { kind: "tcp"; hosts: string[]; port: number }
+  | {
+      kind: "tcp";
+      hosts: string[];
+      port: number;
+      /** 応答元がこのアプリ名でなければ接続失敗として扱う（verifyAppVariant参照）。未指定なら確かめない */
+      appVariant?: string;
+    }
   /** 接続先が特定できなかった場合。実際に繋ぎにいく前にreasonをそのままエラーとして返す */
   | { kind: "unavailable"; reason: string };
 
@@ -157,14 +163,20 @@ function wslBridgeHosts(): string[] {
  */
 export function resolveIpcEndpoint(): IpcEndpoint {
   if (isWsl()) {
-    const port = Number(process.env["NIWATERM_BRIDGE_PORT"]) || readBridgePortFile();
+    const envPort = Number(process.env["NIWATERM_BRIDGE_PORT"]);
+    const port = envPort || readBridgePortFile();
     if (!port) {
       return {
         kind: "unavailable",
         reason: `WSLからWindows側niwatermアプリ(${defaultAppVariant()})への接続先ポートが分かりませんでした。Windows側でアプリが起動しているか確認してください（起動していれば%APPDATA%\\${defaultAppVariant()}\\bridge-portが作られます）`,
       };
     }
-    return { kind: "tcp", hosts: wslBridgeHosts(), port };
+    // ポートファイル由来なら、どのインスタンス宛てかは常に分かる。NIWATERM_BRIDGE_PORTを
+    // 手で渡された場合はNIWATERM_APP_VARIANTも渡っているときだけ確かめる
+    const appVariant = envPort
+      ? process.env["NIWATERM_APP_VARIANT"] || undefined
+      : defaultAppVariant();
+    return { kind: "tcp", hosts: wslBridgeHosts(), port, appVariant };
   }
   return { kind: "unix", path: process.env["NIWATERM_SOCKET"] || ipcSocketPath() };
 }
@@ -246,6 +258,33 @@ function ipcFetchInit(
  */
 const IPC_TIMEOUT_MS = 10_000;
 
+/** 応答元インスタンスのアプリ名を載せるヘッダ（src/bun/ipc-server.tsのAPP_VARIANT_HEADERと揃えること） */
+const APP_VARIANT_HEADER = "x-niwaterm-app-variant";
+
+/** 応答元が狙ったインスタンスでなかったことを表す。describeErrorで文言を組み立てる */
+export class AppVariantMismatchError extends Error {
+  constructor(
+    readonly expected: string,
+    readonly actual: string | null,
+  ) {
+    super(`expected ${expected}, but got ${actual ?? "unknown"}`);
+    this.name = "AppVariantMismatchError";
+  }
+}
+
+/**
+ * TCPブリッジの応答元が狙ったインスタンスかを確かめる。ブリッジのポートはOS任せで割り当てるため、
+ * 強制終了したインスタンスのbridge-portが残っていると、同じポートを後から掴んだ別インスタンス
+ * （例: wip宛てのつもりがdaily）へ繋がってしまう。ヘッダが無い応答も、ヘッダを付ける前の
+ * 古いビルドか無関係なサーバーなので弾く
+ */
+export function verifyAppVariant(endpoint: IpcEndpoint, res: Response): void {
+  if (endpoint.kind !== "tcp" || endpoint.appVariant === undefined) return;
+  const actual = res.headers.get(APP_VARIANT_HEADER);
+  if (actual !== endpoint.appVariant)
+    throw new AppVariantMismatchError(endpoint.appVariant, actual);
+}
+
 /**
  * 実際に使うタイムアウト。シェル補完のように「すぐ応答が無いなら候補ゼロで構わない」呼び出しは
  * 10秒待つとタブキーを押した手が止まってしまうため、呼び出し側から短くできるようにしている
@@ -268,20 +307,26 @@ async function ipcFetch(
   // 1つ目の待ち時間を消化済みになる）
   const timeoutSignal = () => (timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs));
   if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) {
-    return await fetch(url, { ...init, signal: timeoutSignal() });
+    const res = await fetch(url, { ...init, signal: timeoutSignal() });
+    verifyAppVariant(endpoint, res);
+    return res;
   }
   let lastError: unknown;
   for (const host of endpoint.hosts) {
     const target = new URL(url);
     target.hostname = host;
+    let res: Response;
     try {
-      return await fetch(target.toString(), {
+      res = await fetch(target.toString(), {
         ...init,
         signal: timeoutSignal(),
       });
     } catch (err) {
       lastError = err;
+      continue;
     }
+    verifyAppVariant(endpoint, res);
+    return res;
   }
   throw lastError;
 }
@@ -324,6 +369,9 @@ function describeError(endpoint: IpcEndpoint, err: unknown): string {
     return String(err);
   }
   const targets = endpoint.hosts.map((host) => `${host}:${endpoint.port}`).join(" / ");
+  if (err instanceof AppVariantMismatchError) {
+    return `WSLから${targets}へ繋ぎましたが、応答したのは${err.expected}ではなく${err.actual ?? "別のアプリ"}でした。${err.expected}が終了していて、残っていたbridge-portのポートを別のアプリが使っている可能性があります（${err.expected}を起動し直してください）`;
+  }
   if (err instanceof Error && err.name === "TimeoutError") {
     // アプリを閉じてもポートファイルは残る（ソケットと同様、掃除は次回起動時）。
     // 誰もlistenしていないポートへの接続がミラーモードでは無応答になるため、ここに来る

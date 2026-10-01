@@ -46,13 +46,16 @@ async function startIpcStub(
     async fetch(request: Request) {
       expect(new URL(request.url).pathname).toBe("/set-var");
       requests.push(await request.json());
-      return Response.json({ ok: true });
+      return Response.json(
+        { ok: true },
+        { headers: { "x-niwaterm-app-variant": "niwaterm-test" } },
+      );
     },
   };
   if (isWsl()) {
     const server = Bun.serve({ port: 0, hostname: "127.0.0.1", ...handler });
     return {
-      env: { NIWATERM_BRIDGE_PORT: String(server.port) },
+      env: { NIWATERM_BRIDGE_PORT: String(server.port), NIWATERM_APP_VARIANT: "niwaterm-test" },
       stop: async () => {
         server.stop(true);
       },

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LayoutsConfig } from "@niwaterm/config";
+import { APP_VARIANT } from "./app-variant.generated";
 import { BUILTIN_LAYOUT_DESCRIPTIONS } from "./builtin-layouts";
 import type { BrowserBridge } from "./browser-bridge";
 import type { ScreenshotResult } from "./browser-screenshot";
@@ -121,6 +122,13 @@ describe("createIpcServer", () => {
     const res = await fetch("http://localhost/ping", { unix: socketPath });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, pid: process.pid });
+  });
+
+  test("応答に自インスタンスのアプリ名ヘッダを付ける", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const res = await fetch("http://localhost/ping", { unix: socketPath });
+    expect(res.headers.get("x-niwaterm-app-variant")).toBe(APP_VARIANT);
   });
 
   test("close()後はソケットファイルが消える", async () => {

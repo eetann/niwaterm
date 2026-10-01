@@ -17,6 +17,7 @@ import type {
 } from "@niwaterm/config";
 import { isHoverButtonPosition, WORKSPACES_VIEW_ID } from "@niwaterm/config";
 import { appSupportDir } from "./app-paths";
+import { APP_VARIANT } from "./app-variant.generated";
 import type { BrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot, type ScreenshotResult } from "./browser-screenshot";
 import { changeBoardStartup, checkLayoutTrust, startupCwdFields } from "./board-startup";
@@ -51,6 +52,14 @@ function customViewNotFoundError(viewId: string | undefined): string {
  * niwatermの外から叩かれた場合は付かないので、フォーカス中ウィンドウへ落とす
  */
 const SCOPE_TAB_HEADER = "x-niwaterm-tab-id";
+
+/**
+ * 全レスポンスへ付ける応答元インスタンスのアプリ名（APP_VARIANT）。WSLのTCPブリッジはポートを
+ * OS任せで割り当てるため、強制終了で残った別インスタンスのbridge-portのポートを、後から起動した
+ * インスタンスが掴んでいることがある。CLIはこれを見て、狙ったインスタンス以外からの応答を弾く
+ * （packages/cli/src/ipc-client.tsのAPP_VARIANT_HEADERと揃えること）
+ */
+const APP_VARIANT_HEADER = "x-niwaterm-app-variant";
 
 /** ウィンドウが1つしか無い前提の既定実装（テスト・単体利用向け） */
 function singleWindowOps(workspaceManager: WorkspaceManager): WindowOps {
@@ -799,6 +808,11 @@ function buildApp(
   statusBarOps: StatusBarOps,
 ) {
   const app = new Hono();
+
+  app.use(async (c, next) => {
+    await next();
+    c.header(APP_VARIANT_HEADER, APP_VARIANT);
+  });
 
   /** 呼び出し元タブが載っているウィンドウ。ヘッダが無ければフォーカス中ウィンドウ */
   function scopeWindowId(c: Context): WindowId | null {
