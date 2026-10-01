@@ -1031,6 +1031,7 @@ function measureCell() {
   if (rect.height > 0) cellHeight = rect.height;
   // .wide の幅計算（2セル幅）用にCSS変数へ反映する
   document.documentElement.style.setProperty("--cell-w", `${cellWidth}px`);
+  syncCellMismatchCache(getComputedStyle(measureEl));
 }
 
 // ---- 罫線・ブロック文字のセル充填 ----
@@ -1167,10 +1168,51 @@ function updateCellGlyphTransform() {
   root.setProperty("--cell-glyph-shift", `${cellGlyphTransform.shiftY}px`);
 }
 
+// ---- 1セル文字のグリフ幅の実測 ----
+// libghostty-vtはEast Asian Ambiguous（※ → ○ α 等）を1セルとして扱うが、CJKフォールバック
+// フォントはこれらを全角幅で描く。そのままだと後続の文字とカーソル位置がずれるため、
+// セル幅と一致しないグリフを持つ文字をfixGlyphsで1セル幅へ固定する。判定はコードポイントごとに
+// キャッシュし、フォントかセル幅が変わったら捨てる
+const cellMismatchByCp = new Map<number, boolean>();
+let cellMismatchFont = "";
+let cellMismatchCellWidth = 0;
+let cellMismatchCanvasCtx: CanvasRenderingContext2D | null = null;
+
+/**
+ * フォントかセル幅が変わっていたら実測結果を捨てる。fixGlyphsは描画のたびに全文字を判定するため、
+ * getComputedStyleを判定ごとに呼ばずセル計測のタイミングで済ませる
+ */
+function syncCellMismatchCache(style: CSSStyleDeclaration) {
+  const font = `${style.fontSize} ${style.fontFamily}`;
+  if (font === cellMismatchFont && cellWidth === cellMismatchCellWidth) return;
+  cellMismatchByCp.clear();
+  cellMismatchFont = font;
+  cellMismatchCellWidth = cellWidth;
+}
+
+function isCellWidthMismatch(cp: number): boolean {
+  // ASCIIは主フォント（等幅）のグリフなので測るまでもない
+  if (cp < 0x80 || !cellMismatchFont) return false;
+  const cached = cellMismatchByCp.get(cp);
+  if (cached !== undefined) return cached;
+  cellMismatchCanvasCtx ??= document.createElement("canvas").getContext("2d");
+  let mismatch = false;
+  if (cellMismatchCanvasCtx) {
+    // 同じフォント指定を渡せばフォールバックの解決結果も描画側と揃う
+    cellMismatchCanvasCtx.font = cellMismatchFont;
+    const width = cellMismatchCanvasCtx.measureText(String.fromCodePoint(cp)).width;
+    // 等幅フォント内のグリフでもサブピクセルの誤差は出るので、それより大きいずれだけを拾う
+    mismatch = Math.abs(width - cellWidth) > 0.1;
+  }
+  cellMismatchByCp.set(cp, mismatch);
+  return mismatch;
+}
+
 // ---- グリフ補正（全角文字の幅・罫線/ブロック文字のセル充填・シェード文字のベタ塗り）----
 /**
  * フォーマッタ出力のテキストノードを走査して、フォント任せだと崩れる文字をspanでラップする。
  * - 全角文字: <span class="wide"> で2セル幅に強制する（フォント任せだと桁がズレるため）
+ * - グリフ幅がセル幅と合わない1セル文字（※等）: <span class="narrow-fit"> で1セル幅に強制する
  * - 罫線・ブロック文字: <span class="cell-glyph"> で行の高さいっぱいに引き伸ばす
  *   （連続する分をまとめて1つのspanにするので、run内の文字送りは通常のテキストのまま）
  * - シェード文字: <span class="shade"> でグリフを隠してセル矩形を前景色の半透明で塗る
@@ -1180,7 +1222,10 @@ function fixGlyphs(root: HTMLElement) {
   const fillCellGlyphs = !isIdentityCellGlyphTransform(cellGlyphTransform);
   // シェード文字は網掛けグリフをベタ塗りへ差し替えるのが目的なので、行の高さとは無関係に常に要る
   const needsFix = (cp: number) =>
-    isWideChar(cp) || shadeAlphaPercent(cp) !== null || (fillCellGlyphs && isCellGlyphChar(cp));
+    isWideChar(cp) ||
+    shadeAlphaPercent(cp) !== null ||
+    (fillCellGlyphs && isCellGlyphChar(cp)) ||
+    isCellWidthMismatch(cp);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const targets: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -1244,6 +1289,12 @@ function fixGlyphs(root: HTMLElement) {
         flushNarrow();
         const span = document.createElement("span");
         span.className = "wide";
+        span.textContent = ch;
+        frag.appendChild(span);
+      } else if (isCellWidthMismatch(cp)) {
+        flushNarrow();
+        const span = document.createElement("span");
+        span.className = "narrow-fit";
         span.textContent = ch;
         frag.appendChild(span);
       } else {
@@ -2916,6 +2967,7 @@ function setCursorGlyph(cursorEl: HTMLDivElement, cell: TermCell | null): void {
   }
   const span = document.createElement("span");
   if (cell.wide) span.className = "wide";
+  else if (isCellWidthMismatch(cell.char.codePointAt(0) ?? 0)) span.className = "narrow-fit";
   span.textContent = cell.char;
   cursorEl.replaceChildren(span);
 }
