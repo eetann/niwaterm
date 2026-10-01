@@ -9,6 +9,6 @@ export default define({
   description: "タブごとのkey-value変数を取得・設定・一覧・検索する（tmuxのペイン変数相当）",
   subCommands: { get: getCommand, set: setCommand, list: listCommand, find: findCommand },
   run: () => {
-    console.log('Run "niwaterm tab var get/set/list/find --help" for details.');
+    console.log('Run "niwa tab var get/set/list/find --help" for details.');
   },
 });

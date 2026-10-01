@@ -124,7 +124,7 @@ export interface PersistedBoard {
    */
   startup?: PersistedBoardStartup;
   /**
-   * このBoardが対応するgitワークツリーの絶対パス。`niwaterm worktree new`・`worktree open`で
+   * このBoardが対応するgitワークツリーの絶対パス。`niwa worktree new`・`worktree open`で
    * 開いたBoardにのみ付き、それ以外のBoardでは省略する。
    *
    * 「そのワークツリーのBoardが既に開いているか」の判定キー。Board内のタブのcwdから推測する方式は

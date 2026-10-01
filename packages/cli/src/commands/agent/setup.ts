@@ -14,22 +14,21 @@ export default define({
     },
     cli: {
       type: "string",
-      description:
-        "hooksから呼ぶCLI（niwaterm または niwaterm-dev。省略時はNIWATERM_APP_VARIANTから選択）",
+      description: "hooksから呼ぶCLI（niwa または niwa-dev。省略時はNIWATERM_APP_VARIANTから選択）",
     },
   },
   run: async (ctx) => {
     const agent = ctx.values.agent;
     const cli =
       ctx.values.cli ??
-      (process.env["NIWATERM_APP_VARIANT"] === "niwaterm-wip" ? "niwaterm-dev" : "niwaterm");
+      (process.env["NIWATERM_APP_VARIANT"] === "niwaterm-wip" ? "niwa-dev" : "niwa");
     if (!isAgent(agent))
       return failAndExit(
         "agent setupに失敗しました: codex-cli または claude-code を指定してください",
       );
-    if (cli !== "niwaterm" && cli !== "niwaterm-dev")
+    if (cli !== "niwa" && cli !== "niwa-dev")
       return failAndExit(
-        "agent setupに失敗しました: --cli は niwaterm または niwaterm-dev を指定してください",
+        "agent setupに失敗しました: --cli は niwa または niwa-dev を指定してください",
       );
     try {
       const result = await setupAgent(agent, ctx.values.config ?? agentConfigPath(agent), cli);

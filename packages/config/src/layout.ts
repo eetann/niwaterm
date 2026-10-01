@@ -1,5 +1,5 @@
 // レイアウトプリセット設定。vde-layout(https://github.com/yuki-yano/vde-layout)のように、
-// あらかじめ定義したタイル構成をCLI（`niwaterm layout apply <name>`）から名前指定して適用できるようにする。
+// あらかじめ定義したタイル構成をCLI（`niwa layout apply <name>`）から名前指定して適用できるようにする。
 // `--startup`で紐づけたBoardはアプリ起動時にもこのプリセットで組み直される
 // （保持先はworkspaces.jsonのPersistedBoard.startup）。
 // タイル分割は既存のワークスペース内部表現（TileSplit）と同じ「2分割・ratio(0.1〜0.9)のネスト」で表現する
@@ -8,7 +8,7 @@
 export interface LayoutTabConfig {
   /** タブ名（サイドバー・タブバー表示用）。省略時はデフォルトの連番ラベル */
   name?: string;
-  /** 使用するシェルプロファイルのid（`niwaterm shell-profile list`で確認）。省略時はデフォルトシェル */
+  /** 使用するシェルプロファイルのid（`niwa shell-profile list`で確認）。省略時はデフォルトシェル */
   shellProfile?: string;
   /** 作業ディレクトリ。省略時はホームディレクトリ */
   cwd?: string;
@@ -42,10 +42,10 @@ export interface LayoutSplitConfig {
 export type LayoutNodeConfig = LayoutTileConfig | LayoutSplitConfig;
 
 export interface LayoutPreset {
-  /** `niwaterm layout list`に表示する説明文 */
+  /** `niwa layout list`に表示する説明文 */
   description?: string;
   layout: LayoutNodeConfig;
 }
 
-/** プリセット名（`niwaterm layout apply <name>`のname）→定義のマップ */
+/** プリセット名（`niwa layout apply <name>`のname）→定義のマップ */
 export type LayoutsConfig = Record<string, LayoutPreset>;

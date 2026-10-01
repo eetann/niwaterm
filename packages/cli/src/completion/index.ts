@@ -31,7 +31,7 @@ function createHandler(
  * 補完候補の設定を組み立てる。
  *
  * ハンドラは同期でしか呼ばれないため、起動中のniwatermへの問い合わせはここで済ませて
- * 結果をハンドラへ閉じ込める。補完が要求されていない通常の実行（`niwaterm tab new`など）では
+ * 結果をハンドラへ閉じ込める。補完が要求されていない通常の実行（`niwa tab new`など）では
  * 問い合わせが起きないよう、`complete -- ...`の形の呼び出しでだけ読み込む
  */
 export async function buildCompletionConfig(argv: string[]): Promise<CompletionConfig> {

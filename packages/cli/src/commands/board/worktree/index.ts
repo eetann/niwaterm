@@ -8,6 +8,6 @@ export default define({
   description: "Boardに紐づくワークツリーの設定・解除・表示",
   subCommands: { set: setCommand, clear: clearCommand, show: showCommand },
   run: () => {
-    console.log('Run "niwaterm board worktree --help" for available subcommands.');
+    console.log('Run "niwa board worktree --help" for available subcommands.');
   },
 });

@@ -28,7 +28,7 @@ import { join } from "node:path";
  * NIWATERM_SOCKET/NIWATERM_BRIDGE_PORT未設定時に見に行くインスタンス。既定は普段遣いのビルド。
  * ブリッジのポートは動的割り当てなので、タブ外から開発中ビルドへ繋ぎたいときに
  * ポート番号を調べて渡す手が使えないため、NIWATERM_APP_VARIANTで切り替えられるようにしている
- * （例: NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping）。
+ * （例: NIWATERM_APP_VARIANT=niwaterm-wip niwa ping）。
  * この変数はniwaterm自身がPTYへも注入するため、タブ内から叩けば自インスタンスを指す
  * （NIWATERM_BRIDGE_PORTが何らかの理由で空でも、ポートファイル経由で正しい接続先に届く）
  */
@@ -633,7 +633,7 @@ async function postJson<T extends { ok: boolean }>(
  * いないのに待ち続ける」のを防ぐ保険だが、`popup open --wait`のように利用者がポップアップを
  * 閉じるまでレスポンスが返らないリクエストでは、待ち時間の上限そのものが決められない
  * （fzfで選び終えるまで何分かかってもおかしくない）。上限を当てると、ポップアップが開いたまま
- * CLIだけが失敗し、呼び出し元がフォールバックへ進む（fzf-niwatermならfzfが二重に起動する）。
+ * CLIだけが失敗し、呼び出し元がフォールバックへ進む（fzf-niwaならfzfが二重に起動する）。
  * 代わりにpinReachableHostで疎通を先に確かめ、接続先が無応答のまま永久に止まるのを防ぐ。
  * 詳細: docs/known-issues/long-waiting-ipc-request-is-cut-at-10-seconds.md
  */

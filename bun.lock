@@ -37,8 +37,8 @@
       "name": "@niwaterm/cli",
       "version": "0.0.1",
       "bin": {
-        "fzf-niwaterm": "./bin/fzf-niwaterm",
-        "niwaterm": "./src/index.ts",
+        "fzf-niwa": "./bin/fzf-niwa",
+        "niwa": "./src/index.ts",
       },
       "dependencies": {
         "@gunshi/plugin-completion": "0.37.3",

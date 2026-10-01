@@ -1,7 +1,7 @@
 // サイドバーの表示設定。ワークスペース一覧のBoard行に出すステータスライン（Board名の下の行）へ
 // 何をどの順で並べるかを指定する。board.tsと違ってBoard自体の挙動には関与しない、見た目だけの設定。
 //
-// 値の出どころはBoard専用の変数ストアではなく代表タブのタブ変数（`niwaterm tab var set`）。
+// 値の出どころはBoard専用の変数ストアではなく代表タブのタブ変数（`niwa tab var set`）。
 // ビルトインのbranch・agentも同じ値を読んでいる（sidebar-props.tsのbuildSidebarWorkspaceItems参照）。
 
 /** ステータスラインに出せるビルトイン項目 */
@@ -13,7 +13,7 @@ const SIDEBAR_BOARD_STATUS_BUILTINS: readonly SidebarBoardStatusBuiltin[] = [
   "agent",
 ];
 
-/** タブ変数名に許す文字。CLI（`niwaterm tab var set`）が受け付ける範囲と揃える */
+/** タブ変数名に許す文字。CLI（`niwa tab var set`）が受け付ける範囲と揃える */
 export const TAB_VAR_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
 
 const BUILTIN_PREFIX = "builtin:";

@@ -12,9 +12,9 @@ description: niwaterm-dailyを起動した状態でniwaterm-wipを起動する�
 wip側のウィンドウは開くが**ターミナルが1文字も描画されない**。サイドバーの枠だけが出て、
 ワークスペース一覧もタイルもタブバーも表示されない。
 
-アプリ自体は生きている。`niwaterm-dev ping`はpongを返し、`niwaterm-dev list`も
+アプリ自体は生きている。`niwa-dev ping`はpongを返し、`niwa-dev list`も
 （永続化から復元した）ワークスペース・タイル・タブを正しく列挙する。にもかかわらず
-`niwaterm-dev tab capture --tab <tabId>`は`tab not found`を返す。この
+`niwa-dev tab capture --tab <tabId>`は`tab not found`を返す。この
 **「listには出るのにcaptureは404」**という食い違いが本問題の目印になる。
 
 起動順を入れ替えれば症状も入れ替わる（**後から起動した方**が必ず壊れる）。
@@ -61,7 +61,7 @@ macOSではlistenソケットの重複bindが`EADDRINUSE`で失敗するため�
 6. `board.ts`の`getTabText`が`sessions.get(tabId)`を引けず`null`を返す → `tab capture`が404
 
 なお**bun→webview方向は壊れない**。こちらはネイティブ層がwebviewへスクリプト注入する
-プロセス内経路のフォールバックを持つため、壊れた状態でも`niwaterm-dev font-size`のような
+プロセス内経路のフォールバックを持つため、壊れた状態でも`niwa-dev font-size`のような
 config更新はwebviewに反映される。「片方向だけ死んでいる」のが切り分けの決め手になる。
 
 ## 対策

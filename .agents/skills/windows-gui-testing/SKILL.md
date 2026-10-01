@@ -20,8 +20,8 @@ niwaterm（Electrobunアプリ）はLinux非対応のため、**AIがWSL/Linux�
 （`main`ブランチ＝このリポジトリ本体のメインワークツリーならdaily、それ以外
 （gtrで追加したdevブランチのworktree）ならwip）ため、**必ずdevブランチのworktree内にいることを
 確認してから実行する**。dailyはユーザーが普段使いしているインスタンスで、
-起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際は**`niwaterm`ではなく`niwaterm-dev`を使う**
-（`niwaterm`はdaily側のソースを指すうえ、接続先もdailyが既定。`niwaterm-dev`はこのワークツリーの
+起動・停止・再起動は作業中のセッション・ポップアップ等を巻き込んで壊す。CLIで実機確認する際は**`niwa`ではなく`niwa-dev`を使う**
+（`niwa`はdaily側のソースを指すうえ、接続先もdailyが既定。`niwa-dev`はこのワークツリーの
 ソースを直接指し、接続先もniwaterm-wipが既定になる）。未セットアップなら`mise run cli:link`。
 WSLブリッジのポートは動的割り当てなので番号を調べる必要はない（CLIがwipの`bridge-port`
 ファイルから読む）。
@@ -63,7 +63,7 @@ WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 powershell.exe -NoProfile -Command "$PS_PREFIX cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME\packages\cli; bun link"
 ```
 
-`niwaterm --version`で疎通確認。`command not found`になる場合は上記PS_PREFIXの
+`niwa --version`で疎通確認。`command not found`になる場合は上記PS_PREFIXの
 `\.bun\bin`付与を忘れていないか確認する（`bin`フィールド経由で`~/.bun/bin`に登録されるため）。
 
 **NixOS(WSL)タブの動作確認をする場合は、このBashツールが動いているWSLディストロ自体にも
@@ -76,7 +76,7 @@ bun link
 
 WSLディストロからWindows側アプリ本体への接続はTCPブリッジ（固定ポート、WSL用仮想アダプタに
 バインド）経由になる。仕組みの詳細はdocs/build/windows-build.md「6. WSLディストロから
-niwaterm CLIを使う」参照。アプリ起動後、WSLディストロ側で`niwaterm ping`が通れば疎通確認完了。
+niwaterm CLIを使う」参照。アプリ起動後、WSLディストロ側で`niwa ping`が通れば疎通確認完了。
 
 ## アプリの起動・停止
 
@@ -113,17 +113,17 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 `--help`が正。ここではハマりやすい引数の形だけメモする。
 
 - `tab send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
-  `niwaterm tab send-keys --tab tab-3 'echo foo' Enter`
+  `niwa tab send-keys --tab tab-3 'echo foo' Enter`
 - `tab switch`は`--tab`（切替先のtabId）か`--direction next|prev`（タイル内のタブ並び順で巡回）の
   どちらか一方が必須。`--tile`は省略可（省略時は`--tab`のタブが属するタイル、`--direction`なら
-  実行しているタブのタイル）: `niwaterm tab switch --tile tile-4 --tab tab-6` /
-  `niwaterm tab switch --tile tile-4 -d next`
-- WSLディストロ等のシェルプロファイルIDは`niwaterm shell-profile list`で確認してから
-  `niwaterm tab new -t <tileId> -s <shellProfileId>`で作成する
-- **daily（普段遣い）のタブ内で作業している場合、`niwaterm-dev`でもdailyに繋がる**。
+  実行しているタブのタイル）: `niwa tab switch --tile tile-4 --tab tab-6` /
+  `niwa tab switch --tile tile-4 -d next`
+- WSLディストロ等のシェルプロファイルIDは`niwa shell-profile list`で確認してから
+  `niwa tab new -t <tileId> -s <shellProfileId>`で作成する
+- **daily（普段遣い）のタブ内で作業している場合、`niwa-dev`でもdailyに繋がる**。
   タブへ注入された`NIWATERM_BRIDGE_PORT`が接続先の解決で先に使われるため、
   `NIWATERM_APP_VARIANT=niwaterm-wip`を付けても効かない。wipを触るときは注入分をunsetする:
-  `env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID NIWATERM_APP_VARIANT=niwaterm-wip niwaterm-dev ping`。
+  `env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID NIWATERM_APP_VARIANT=niwaterm-wip niwa-dev ping`。
   返ってきたpidがwipのプロセスか必ず確認すること。確実なのは実行パスでの突き合わせで、
   ウィンドウが出る前・ヘルパープロセスでも効く（`MainWindowTitle`はウィンドウが出るまで空）:
   `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'bun.exe' } | Select-Object ProcessId,ExecutablePath | Format-List"`。
@@ -133,7 +133,7 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 ## 目視確認・スクリーンショット
 
 PowerShell標準の.NET（`System.Drawing`）だけでWindowsデスクトップのスクリーンショットが撮れる。
-追加ツールのインストールは不要。まず`niwaterm tab focus --tab <tabId>`で対象タブを前面化してから撮る:
+追加ツールのインストールは不要。まず`niwa tab focus --tab <tabId>`で対象タブを前面化してから撮る:
 
 ```bash
 powershell.exe -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; \$b=[System.Windows.Forms.SystemInformation]::VirtualScreen; \$bmp=New-Object System.Drawing.Bitmap \$b.Width,\$b.Height; \$g=[System.Drawing.Graphics]::FromImage(\$bmp); \$g.CopyFromScreen(\$b.Location,[System.Drawing.Point]::Empty,\$b.Size); \$bmp.Save(\"\$env:TEMP\niwaterm-shot.png\",[System.Drawing.Imaging.ImageFormat]::Png)"
@@ -161,7 +161,7 @@ RDPセッション）だと、GDI経由のキャプチャが黒画面になる�
 
 ## キーボードショートカット・マウス操作のシミュレーション
 
-`niwaterm tab send-keys`はPTYへの文字列送信（tmuxのsend-keys相当）であり、
+`niwa tab send-keys`はPTYへの文字列送信（tmuxのsend-keys相当）であり、
 Ctrl+Shift+CやCtrl+Shift+VのようなGUIレベルのキーボードショートカット（webviewの
 keydownイベント経由でRPCが飛ぶもの）は発火できない。これらを検証するにはOSレベルの
 キー・マウスイベント注入が必要で、`System.Windows.Forms.SendKeys`と`user32.dll`の

@@ -76,7 +76,7 @@ export default define({
     const found = findWorktreeByQuery(list.worktrees, query, cwd);
     if (found.kind === "not-found") {
       failAndExit(
-        `worktree openに失敗しました: ワークツリーが見つかりません: ${query}（niwaterm worktree listで一覧を確認できます）`,
+        `worktree openに失敗しました: ワークツリーが見つかりません: ${query}（niwa worktree listで一覧を確認できます）`,
       );
     }
     if (found.kind === "ambiguous") {

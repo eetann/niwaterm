@@ -40,7 +40,7 @@ const PHASE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 /** サイドバーの右クリックメニュー・コマンドパレットに並べるフェーズの候補 */
 export interface BoardPhasePreset {
-  /** CLI（`niwaterm board phase set <id>`）・キーバインドから指す識別子 */
+  /** CLI（`niwa board phase set <id>`）・キーバインドから指す識別子 */
   id: string;
   /** サイドバーのバッジ・メニューに出す表示名。省略時はidをそのまま出す */
   label?: string;

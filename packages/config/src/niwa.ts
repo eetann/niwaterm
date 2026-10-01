@@ -88,14 +88,14 @@ export interface NiwaTabApi {
    */
   respawn(tabId: string, opts?: NiwaTabRespawnOptions): boolean;
   /**
-   * 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwaterm tab send-keys`相当）。
+   * 指定タブへキーを送信する（tmuxのsend-keys、CLIの`niwa tab send-keys`相当）。
    * リテラル文字列と特殊キー名（Enter/Escape/Tab/C-a等）を複数個混在指定できる。
    * 例: niwa.tab.sendKeys(tabId, "cd ~/ghq", "Enter")
    */
   sendKeys(tabId: string, ...keys: string[]): void;
   /**
    * 指定タブへフォーカスを移す。所属ワークスペースへの切替・タイルフォーカス・タブのアクティブ化を
-   * まとめて行う（tmuxのselect-pane、CLIの`niwaterm tab focus`相当）。対象タブが存在しない場合はfalse
+   * まとめて行う（tmuxのselect-pane、CLIの`niwa tab focus`相当）。対象タブが存在しない場合はfalse
    */
   show(tabId: string): boolean;
   var: NiwaTabVarApi;
@@ -295,7 +295,7 @@ export interface KeybindOptions {
    */
   repeat?: boolean;
   /**
-   * キーバインド一覧（`niwaterm keybind list`）に表示する説明。省略時はアクション名（文字列アクション）
+   * キーバインド一覧（`niwa keybind list`）に表示する説明。省略時はアクション名（文字列アクション）
    * または`function`（関数ハンドラ）が表示されるため、関数ハンドラには何をするバインドなのかを書いておく
    */
   description?: string;

@@ -11,7 +11,7 @@ export const BUILTIN_LAYOUT_NAMES = ["empty"] as const;
 
 export type BuiltinLayoutName = (typeof BUILTIN_LAYOUT_NAMES)[number];
 
-/** `niwaterm layout list`に出す説明文 */
+/** `niwa layout list`に出す説明文 */
 export const BUILTIN_LAYOUT_DESCRIPTIONS: Record<BuiltinLayoutName, string> = {
   empty: "Boardをタイル1つ・タブ1つへ畳み、残るタブのシェルも起動し直す（ビルトイン）",
 };

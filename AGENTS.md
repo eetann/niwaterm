@@ -8,7 +8,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - 意思決定記録: docs/adr/
 - ビルド・実行手順（macOS/Windowsのプラットフォーム差分）: docs/build/
 - 既知の問題・ハマりどころの記録: docs/known-issues/（何かに詰まったら先にここをgrepする）
-- ユーザー向けドキュメント（CLI・設定ファイルの使い方）: website/src/content/docs/（ドキュメントサイトのページ。`niwaterm docs list`/`show`でも読める）
+- ユーザー向けドキュメント（CLI・設定ファイルの使い方）: website/src/content/docs/（ドキュメントサイトのページ。`niwa docs list`/`show`でも読める）
 - コード内コメントの書き方: .agents/rules/code-comments.md（タスク番号・経緯を書かない。コメントを書く前に必読）
 
 ## AIエージェント共通の開発環境
@@ -24,9 +24,9 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - `mise run start` — 現在のブランチに応じてniwatermをdevモードで起動する（`main`ならniwaterm-daily、それ以外ならniwaterm-wip）。WSLならWindows実機へ同期、Macならローカルで起動する（GUIアプリなのでbackgroundで実行する）
   - **niwaterm-wip（作業・動作確認対象）とniwaterm-daily（ユーザーの常用インスタンス。動作確認では絶対に触らない）を混同しないこと**
   - wip/dailyの同時起動の制約・停止・daily側への取り込み手順の詳細: docs/build/windows-build.md
-- `mise run cli:link` — 現在のワークツリーのniwaterm CLIをリンクする。**`main`（daily側）なら`niwaterm`、それ以外（devワークツリー＝wip）なら`niwaterm-dev`**という別名になる
-  - **wipの動作確認では必ず`niwaterm-dev`を使う**。`niwaterm`はdaily側のソースを指すため、devブランチでCLIを直しても反映されない（`bun link`はパッケージ名が同じで`niwaterm`を奪い合うので、別名のラッパーで棲み分けている）
-  - `niwaterm-dev`は接続先もniwaterm-wipが既定。タブ内から叩く場合はアプリが注入した自インスタンスが優先される
+- `mise run cli:link` — 現在のワークツリーのniwaterm CLIをリンクする。**`main`（daily側）なら`niwa`、それ以外（devワークツリー＝wip）なら`niwa-dev`**という別名になる
+  - **wipの動作確認では必ず`niwa-dev`を使う**。`niwa`はdaily側のソースを指すため、devブランチでCLIを直しても反映されない（`bun link`はパッケージ名が同じで`niwa`を奪い合うので、別名のラッパーで棲み分けている）
+  - `niwa-dev`は接続先もniwaterm-wipが既定。タブ内から叩く場合はアプリが注入した自インスタンスが優先される
 - `mise run build:native` — Cシム（src/native/shim.c）・PTYの制御端末ラッパー（src/native/ptyexec.c、macOS専用）・通知ヘルパー（src/native/macnotify.m、macOS専用）・ウィンドウ透過ヘルパー（src/native/winwindow.c、Windows専用）を現在の環境向けにビルド（macOSはローカル向け、WSLはWindows向けクロスビルド）
 - `mise run build:vendor:mac` / `mise run build:vendor:win` — libghostty-vt本体をビルド（vendor更新時のみ。詳細: docs/build/macos-build.md、docs/build/windows-build.md）
   - **`-Doptimize=ReleaseFast`必須**。Debugビルドはスクロール1行あたり約700µsかかり、PTY読み取りのイベントループごと止まる（docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）
@@ -47,8 +47,8 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/pty.ts — Bun.Terminal（Bun 1.3.5+）ベースのPTY（createPtyファクトリ関数）
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
-- src/bun/ipc-server.ts — CLI(`niwaterm`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはアプリ名(APP_VARIANT)別に分かれ、macOSが`~/Library/Application Support/<APP_VARIANT>/niwaterm.sock`、Windowsが`%APPDATA%\<APP_VARIANT>\niwaterm.sock`（src/bun/app-paths.tsで解決）。**APP_VARIANTはappフォルダ名(`niwaterm-wip-dev`)ではなくelectrobun.config.tsのapp.nameそのもの(`niwaterm-wip`/`niwaterm-daily`)で、"-dev"は付かない**。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- packages/cli（`@niwaterm/cli`） — `niwaterm` CLI本体。gunshiのsubCommands構成（詳細: website/src/content/docs/cli.md、CLIからも`niwaterm docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
+- src/bun/ipc-server.ts — CLI(`niwa`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはアプリ名(APP_VARIANT)別に分かれ、macOSが`~/Library/Application Support/<APP_VARIANT>/niwaterm.sock`、Windowsが`%APPDATA%\<APP_VARIANT>\niwaterm.sock`（src/bun/app-paths.tsで解決）。**APP_VARIANTはappフォルダ名(`niwaterm-wip-dev`)ではなくelectrobun.config.tsのapp.nameそのもの(`niwaterm-wip`/`niwaterm-daily`)で、"-dev"は付かない**。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
+- packages/cli（`@niwaterm/cli`） — `niwa` CLI本体。gunshiのsubCommands構成（詳細: website/src/content/docs/cli.md、CLIからも`niwa docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
 

@@ -5,7 +5,7 @@ description: タイルの分け方と各タブで動かすコマンドをプリ�
 
 「左でエディタ、右上で開発サーバー、右下でログ」のようなレイアウトを保存できる。レイアウトには、単にタイルの分け方だけではなく、起動時に各タブで動かすコマンドやタブ変数も指定できる。
 
-レイアウトは、設定ファイルの`layouts`に名前を付けてプリセットとして書く。書いたプリセットは`niwaterm layout apply <名前>`で新しいBoardとして開く。
+レイアウトは、設定ファイルの`layouts`に名前を付けてプリセットとして書く。書いたプリセットは`niwa layout apply <名前>`で新しいBoardとして開く。
 
 ```ts
 layouts: {
@@ -28,10 +28,10 @@ layouts: {
 ```
 
 ```sh
-niwaterm layout apply dev
+niwa layout apply dev
 ```
 
-この例では、画面を左右に6:4で分け、左でnvimを開く。右はさらに上下に分けて、上で開発サーバー、下でログを流す。各タブは、`niwaterm layout apply`を実行したディレクトリで開く。
+この例では、画面を左右に6:4で分け、左でnvimを開く。右はさらに上下に分けて、上で開発サーバー、下でログを流す。各タブは、`niwa layout apply`を実行したディレクトリで開く。
 
 ## プリセットの書き方
 
@@ -48,7 +48,7 @@ niwaterm layout apply dev
 | -------------- | ----------------------------------------------------------------------------------------------------------- |
 | `name`         | タブの名前                                                                                                  |
 | `command`      | タブを開いたあとに実行するコマンド。改行を入れると1行ずつ実行する                                           |
-| `cwd`          | タブを開くディレクトリ。省略すると`niwaterm layout apply`を実行したディレクトリ                             |
+| `cwd`          | タブを開くディレクトリ。省略すると`niwa layout apply`を実行したディレクトリ                                 |
 | `shellProfile` | 使う[シェル](/niwaterm/shell/)のid。省略するとデフォルトのシェル                                            |
 | `vars`         | [タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)。`{ role: "editor" }`のように書く                       |
 | `focus`        | `true`にしたタブに、開いたあとフォーカスが移る。プリセット全体で1つだけ                                     |
@@ -58,11 +58,11 @@ niwaterm layout apply dev
 
 `command`は、コマンドを貼り付けたのと同じ扱いで入力される。そのため、zshの略語展開のような、1文字ずつ打ったときに働く機能は使えない。
 
-`description`は`niwaterm layout list`の一覧に出る説明で、省略できる。
+`description`は`niwa layout list`の一覧に出る説明で、省略できる。
 
 ### 別のタブにコマンドを送る
 
-同じプリセットの中の別のタブへ、コマンドから何かを送りたいときは、送り先のタブに`vars`で目印を付けておき、`niwaterm tab var find`で探す。
+同じプリセットの中の別のタブへ、コマンドから何かを送りたいときは、送り先のタブに`vars`で目印を付けておき、`niwa tab var find`で探す。
 
 ```ts
 layout: {
@@ -78,7 +78,7 @@ layout: {
       {
         name: "editprompt",
         command:
-          'target=$(niwaterm tab var find role claude | head -n1); ' +
+          'target=$(niwa tab var find role claude | head -n1); ' +
           '[ -n "$target" ] && editprompt open --editor nvim --target-pane "$target"',
         focus: true,
       },
@@ -93,13 +93,13 @@ layout: {
 
 ```sh
 # 使えるプリセットを一覧する
-niwaterm layout list
+niwa layout list
 
 # 新しいBoardとして開く
-niwaterm layout apply dev
+niwa layout apply dev
 
 # 今のBoardを閉じて、プリセットで開き直す
-niwaterm layout apply dev --replace
+niwa layout apply dev --replace
 ```
 
 `--replace`は、今のBoardのタブをすべて閉じてからプリセットを開く。動いているプログラムも止まるので、実行前に確認が出る。確認なしで実行するときは`--replace-force`を使う。
@@ -108,7 +108,7 @@ niwaterm layout apply dev --replace
 
 ## リポジトリごとにプリセットを置く
 
-プリセットは、ユーザーの設定ファイル（`niwaterm.config.ts`）のほかに、リポジトリの中の`.niwaterm/config.ts`にも書ける。こちらに書いたプリセットは、そのリポジトリの中で`niwaterm layout apply`を実行したときだけ使える。リポジトリごとにタイルの分け方を変えたいときに使う。
+プリセットは、ユーザーの設定ファイル（`niwaterm.config.ts`）のほかに、リポジトリの中の`.niwaterm/config.ts`にも書ける。こちらに書いたプリセットは、そのリポジトリの中で`niwa layout apply`を実行したときだけ使える。リポジトリごとにタイルの分け方を変えたいときに使う。
 
 ```ts
 // .niwaterm/config.ts
@@ -131,7 +131,7 @@ export default {
 
 ```sh
 # 今のBoardを片付けて、タイル1つ・タブ1つにする
-niwaterm layout apply empty --replace
+niwa layout apply empty --replace
 ```
 
 残るタブも起動し直すので、そのBoardで動いていたプログラムはすべて止まる。引き継ぐのは、残るタブが今いるディレクトリだけ。`--replace`を付けなければ、空のBoardを1つ作るだけになる。
@@ -157,29 +157,29 @@ Boardに起動時レイアウトを紐づけると、そのBoardは次に起動�
 プリセットを開くときに`--startup`を付けると、開いたBoardに起動時レイアウトが紐づく。
 
 ```sh
-niwaterm layout apply dev --startup
+niwa layout apply dev --startup
 ```
 
-あとから変えるときは`niwaterm board startup`を使う。
+あとから変えるときは`niwa board startup`を使う。
 
 ```sh
 # 次に起動したとき、プリセットから開き直す
-niwaterm board startup layout --preset dev
+niwa board startup layout --preset dev
 # 次に起動したとき、終了したときの状態に戻す（プリセットの紐づけは残す）
-niwaterm board startup restore
+niwa board startup restore
 # プリセットの紐づけを外す
-niwaterm board startup clear
+niwa board startup clear
 ```
 
 `--board <boardId>`で対象のBoardを選べる。省略すると今のBoardが対象になる。`--preset`を省略すると、そのBoardで前に使ったプリセットを使う。
 
-起動時にタブを開くディレクトリは、`--startup`を付けて実行したディレクトリになる。別のディレクトリにしたいときは、そのディレクトリで`niwaterm layout apply dev --replace --startup`を実行し直す。
+起動時にタブを開くディレクトリは、`--startup`を付けて実行したディレクトリになる。別のディレクトリにしたいときは、そのディレクトリで`niwa layout apply dev --replace --startup`を実行し直す。
 
 ## CLI
 
 ```sh
-niwaterm layout list [--cwd <dir>]
-niwaterm layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup] [--trust]
+niwa layout list [--cwd <dir>]
+niwa layout apply <name> [--replace | --replace-force] [--board <boardId>] [--workspace <workspaceId>] [--cwd <dir>] [--startup] [--trust]
 ```
 
 - `layout list` — プリセットを`名前<TAB>定義した場所<TAB>説明`の形で一覧する。定義した場所は`[project: <パス>]`・`[global]`・`[builtin]`のどれか

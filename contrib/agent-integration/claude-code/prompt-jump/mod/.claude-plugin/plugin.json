@@ -6,8 +6,8 @@
     "cli": {
       "type": "string",
       "title": "niwaterm CLIのコマンド名",
-      "default": "niwaterm",
-      "description": "ジャンプ先を読むniwaterm CLIのコマンド名（devビルドならniwaterm-dev）"
+      "default": "niwa",
+      "description": "ジャンプ先を読むniwaterm CLIのコマンド名（devビルドならniwa-dev）"
     },
     "action": {
       "type": "string",

@@ -42,7 +42,7 @@ async function transcriptFromTab(commandName: string, tab: string | undefined): 
   const path = result.vars[TRANSCRIPT_VAR];
   if (!path) {
     failAndExit(
-      `${commandName}に失敗しました: タブ${tabId}のtranscriptが分かりません。そのタブでClaude Codeを動かし、エージェント統合を入れてください（niwaterm agent setup claude-code）。--transcriptでjsonlのパスを直接渡すこともできます`,
+      `${commandName}に失敗しました: タブ${tabId}のtranscriptが分かりません。そのタブでClaude Codeを動かし、エージェント統合を入れてください（niwa agent setup claude-code）。--transcriptでjsonlのパスを直接渡すこともできます`,
     );
   }
   return path;

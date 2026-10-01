@@ -57,7 +57,7 @@ board: {
 - サイドバーのBoardを右クリックして「フェーズ」から選ぶ
 - コマンドパレットから選ぶ
 - キーを割り当てる。`set-board-phase`は候補から選ぶ画面を開き、`set-board-phase:<id>`はそのフェーズを直接付ける（[アクション一覧](/niwaterm/keybindings/actions/#board)）
-- CLIの`niwaterm board phase set <id>`を使う（[基本のコマンド](/niwaterm/cli/commands/)）
+- CLIの`niwa board phase set <id>`を使う（[基本のコマンド](/niwaterm/cli/commands/)）
 
 付けたフェーズは、niwatermを終了しても残る。
 
@@ -106,7 +106,7 @@ sidebar: {
 
 `{ source, prefix, color }`の形で書くと、値の前に付く文字（`prefix`）と文字の色（`color`）を変えられる。`prefix: ""`にすると、ブランチ名の前の`on`のような、もともと付いている文字を消せる。作業フェーズのバッジの色は、ここではなく`board.phases`の`color`で変える。
 
-`tab-var:<name>`を使うと、自分で決めた値を出せる。たとえばタブで`niwaterm tab var set ticket 1234`を実行すると、上の例ではBoard名の下に`#1234`と出る。Boardにタブがいくつもあるときは、フォーカス中のタブの値が出る。
+`tab-var:<name>`を使うと、自分で決めた値を出せる。たとえばタブで`niwa tab var set ticket 1234`を実行すると、上の例ではBoard名の下に`#1234`と出る。Boardにタブがいくつもあるときは、フォーカス中のタブの値が出る。
 
 ## Boardを全部閉じてもワークスペースは残る
 

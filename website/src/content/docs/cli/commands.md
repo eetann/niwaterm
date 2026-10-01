@@ -6,16 +6,16 @@ description: ウィンドウ・タブ・ポップアップなどを操作する�
 ウィンドウ・ワークスペース・Board・タイル・タブ・ポップアップは、CLIからも操作できる。どんなコマンドとオプションがあるかは、`--help`で確かめられる。
 
 ```sh
-niwaterm --help
-niwaterm tab --help
-niwaterm tab new --help
+niwa --help
+niwa tab --help
+niwa tab new --help
 ```
 
 このページでは、`--help`だけでは分かりにくい使い方と挙動を説明する。特定の機能に関わるコマンドは、その機能のページで説明している（一覧は[CLIからの操作](/niwaterm/cli/)）。
 
 ## 今の状態を見る（`list`）
 
-`niwaterm list`で、今のウィンドウのワークスペース・Board・タイル・タブを階層で表示する。ほかのコマンドに渡すidは、ここで確かめる。
+`niwa list`で、今のウィンドウのワークスペース・Board・タイル・タブを階層で表示する。ほかのコマンドに渡すidは、ここで確かめる。
 
 ```
 workspace-1 "dev" (active)
@@ -35,7 +35,7 @@ workspace-1 "dev" (active)
 ウィンドウは2種類ある。
 
 - **メインウィンドウ** — 起動したときに開く1枚。終了したときのワークスペース・Board・タイル・タブと、ウィンドウの大きさ・位置を、次に起動したときに元に戻す
-- **一時ウィンドウ** — `niwaterm window new`やprefix + `shift+w`で開くウィンドウ。何もない状態で開き、閉じると何も残らない。次に起動したときにも戻らない
+- **一時ウィンドウ** — `niwa window new`やprefix + `shift+w`で開くウィンドウ。何もない状態で開き、閉じると何も残らない。次に起動したときにも戻らない
 
 最後のウィンドウを閉じると、niwatermも終了する。
 
@@ -44,8 +44,8 @@ workspace-1 "dev" (active)
 `tab send-keys`で、ほかのタブへ文字やキーを送れる。文字列と特殊キーの名前は、混ぜて並べられる。
 
 ```sh
-niwaterm tab send-keys --tab tab-3 'ls -la' Enter
-niwaterm tab send-keys --tab tab-3 C-c
+niwa tab send-keys --tab tab-3 'ls -la' Enter
+niwa tab send-keys --tab tab-3 C-c
 ```
 
 使える特殊キーは`Enter`・`Escape`・`Tab`・`Space`・`BSpace`・`Up`・`Down`・`Left`・`Right`・`Home`・`End`・`Delete`・`PageUp`・`PageDown`と、`C-a`〜`C-z`（Ctrl + 英字）。`Up`〜`PageDown`には`C-`・`M-`（Alt）・`S-`（Shift）を前に付けられ、`C-End`や`C-S-Right`のように重ねてもよい。それ以外は文字列としてそのまま送る。
@@ -63,10 +63,10 @@ niwaterm tab send-keys --tab tab-3 C-c
 タブごとに、名前と値の組を持たせられる。シェル統合はブランチ名を、エージェント統合はAIエージェントの状態をタブ変数に書き込み、サイドバーやステータスバーはそれを読んで表示している。
 
 ```sh
-niwaterm tab var set role editor   # このタブに role=editor を付ける
-niwaterm tab var get role          # このタブの role を出す
-niwaterm tab var list              # このタブの変数を一覧する
-niwaterm tab var find role editor  # 同じBoardで role=editor のタブのidを出す
+niwa tab var set role editor   # このタブに role=editor を付ける
+niwa tab var get role          # このタブの role を出す
+niwa tab var list              # このタブの変数を一覧する
+niwa tab var find role editor  # 同じBoardで role=editor のタブのidを出す
 ```
 
 - niwatermの中のシェルから実行すると、そのタブ自身の変数を読み書きする。ほかのタブの変数は`--tab <tabId>`で指す
@@ -80,7 +80,7 @@ niwaterm tab var find role editor  # 同じBoardで role=editor のタブのid�
 `popup open`で、タイルの上に重なるポップアップを開ける。コマンドを渡すと、そのコマンドが終わったときにポップアップも閉じる。
 
 ```sh
-niwaterm popup open lazygit
+niwa popup open lazygit
 ```
 
 ポップアップは、ワークスペースごとに1つだけ開ける。prefix + `` ` ``で隠したり出したりでき、隠しているあいだも中のプログラムは動き続ける。`popup promote`を使うと、ポップアップの中身をそのままふつうのタブにできる。
@@ -90,22 +90,22 @@ niwaterm popup open lazygit
 `--capture-stdout`を付けると、ポップアップの中のコマンドが出力したものを、呼び出したシェルで受け取れる。fzfの選択画面をポップアップに出して、選んだ結果だけを使う、といった使い方ができる。
 
 ```sh
-selected=$(niwaterm popup open --capture-stdout "fzf --multi --preview 'bat --color=always {}'")
+selected=$(niwa popup open --capture-stdout "fzf --multi --preview 'bat --color=always {}'")
 ```
 
-この使い方をまとめた`fzf-niwaterm`コマンドも、`niwaterm`コマンドと一緒に入る。`fzf-tmux`と同じ引数で使えるので、fzfのコマンド名を差し替えられるツールなら、`fzf-tmux`を`fzf-niwaterm`に変えるだけでfzfがポップアップに出る（[使い方](https://github.com/eetann/niwaterm/blob/main/packages/cli/README.md#fzf-niwaterm)）。
+この使い方をまとめた`fzf-niwa`コマンドも、`niwa`コマンドと一緒に入る。`fzf-tmux`と同じ引数で使えるので、fzfのコマンド名を差し替えられるツールなら、`fzf-tmux`を`fzf-niwa`に変えるだけでfzfがポップアップに出る（[使い方](https://github.com/eetann/niwaterm/blob/main/packages/cli/README.md#fzf-niwa)）。
 
 ### `-`で始まる引数を渡すとき
 
-`--capture-stdout`を付けずに、`--multi`のような`-`で始まる引数を含むコマンドを渡すと、`niwaterm`自身のオプションとして扱われてしまう。コマンド全体を引用符で囲んで、1つの文字列として渡す。
+`--capture-stdout`を付けずに、`--multi`のような`-`で始まる引数を含むコマンドを渡すと、`niwa`自身のオプションとして扱われてしまう。コマンド全体を引用符で囲んで、1つの文字列として渡す。
 
 ```sh
-niwaterm popup open "fzf --multi --preview 'bat {}'"
+niwa popup open "fzf --multi --preview 'bat {}'"
 ```
 
 ## 設定が反映されないとき（`config show`）
 
-`niwaterm config show`で、今使われている設定値を表示する。書いた設定が反映されないときは、まずここを見る。
+`niwa config show`で、今使われている設定値を表示する。書いた設定が反映されないときは、まずここを見る。
 
 ```
 config: /Users/you/.config/niwaterm/niwaterm.config.ts
@@ -121,14 +121,14 @@ ResolveMessage: Cannot find module './custom-views/notes-handlers.ts'
 - **`[読み込みエラー]`** — 設定ファイルを読み込めなかった。直前に読み込めた設定のまま動いている
 - **`[無視した設定]`** — 値が正しくなかったので、デフォルトに戻した項目
 
-そのあとに、項目ごとの今の値が続く。関数で書いた設定（キーバインドの割り当てなど）は、値として出せないので表示しない。キーバインドの割り当ては`niwaterm keybind list`で確かめる。
+そのあとに、項目ごとの今の値が続く。関数で書いた設定（キーバインドの割り当てなど）は、値として出せないので表示しない。キーバインドの割り当ては`niwa keybind list`で確かめる。
 
 同じ内容は、prefix + `i`でniwatermの中にも表示できる。
 
 ## アプリが動いているか確かめる（`ping`）
 
 ```sh
-niwaterm ping
+niwa ping
 ```
 
 niwatermが動いていれば`pong (pid <プロセスID>)`と出る。CLIからniwatermに繋がらないときの確認に使う。

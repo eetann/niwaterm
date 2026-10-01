@@ -10,7 +10,7 @@ export default define({
       type: "string",
       short: "t",
       required: true,
-      description: "送信先のtabId（niwaterm listで確認）",
+      description: "送信先のtabId（niwa listで確認）",
     },
     keys: {
       type: "positional",
@@ -23,7 +23,7 @@ export default define({
     const keys = ctx.values.keys ?? [];
     if (keys.length === 0) {
       failAndExit(
-        "送信するキーを1つ以上指定してください（例: niwaterm tab send-keys --tab tab-3 'ls -la' Enter）",
+        "送信するキーを1つ以上指定してください（例: niwa tab send-keys --tab tab-3 'ls -la' Enter）",
       );
     }
     const result = await sendKeys(resolveIpcEndpoint(), ctx.values.tab, keys);

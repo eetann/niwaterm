@@ -13,6 +13,6 @@ export default define({
     reset: resetCommand,
   },
   run: () => {
-    console.log('Run "niwaterm font-size increase/decrease/reset --help" for details.');
+    console.log('Run "niwa font-size increase/decrease/reset --help" for details.');
   },
 });

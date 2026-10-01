@@ -4,8 +4,8 @@
 
 import type { CustomViewHandlers, Niwa } from "@niwaterm/config";
 
-/** PATHにあるniwaterm CLIのコマンド名。devビルドで試すなら"niwaterm-dev"に変える */
-const CLI = "niwaterm";
+/** PATHにあるniwaterm CLIのコマンド名。devビルドで試すなら"niwa-dev"に変える */
+const CLI = "niwa";
 
 export interface WorktreeItem {
   path: string;
@@ -61,7 +61,7 @@ async function runCli(niwa: Niwa, args: string): Promise<string> {
   return stripOsc(result.stdout);
 }
 
-/** `niwaterm worktree list`のTSV（path/branch/HEAD/フラグ、値の無い列は"-"） */
+/** `niwa worktree list`のTSV（path/branch/HEAD/フラグ、値の無い列は"-"） */
 function parseWorktreeList(stdout: string): WorktreeItem[] {
   return stdout
     .split("\n")

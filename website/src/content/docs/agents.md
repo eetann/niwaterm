@@ -14,8 +14,8 @@ Codex CLIやClaude Codeが動いているタブの状態（作業中・応答待
 `agent setup`を実行する。書き込むのはエージェント側の設定ファイルだけなので、niwatermアプリを起動していなくてもよい。
 
 ```sh
-niwaterm agent setup claude-code
-niwaterm agent setup codex-cli
+niwa agent setup claude-code
+niwa agent setup codex-cli
 ```
 
 | エージェント | デフォルトの設定先                                                        | 導入後にすること                                     |
@@ -30,11 +30,11 @@ Codex CLIでhooksを無効にしている場合は、`config.toml`の`[features]
 オプションは次の2つ。
 
 ```sh
-niwaterm agent setup <codex-cli|claude-code> [--config <path>] [--cli <niwaterm|niwaterm-dev>]
+niwa agent setup <codex-cli|claude-code> [--config <path>] [--cli <niwaterm|niwa-dev>]
 ```
 
 - `--config` — 書き込む設定ファイルを変える。プロジェクト単位で入れるなら`--config .claude/settings.local.json`・`--config .codex/hooks.json`のように指定する（Codexの場合はそのプロジェクトも信頼しておく）
-- `--cli` — hooksから呼ぶCLIの名前。省略時は`niwaterm`で、開発用のniwaterm-wipのタブで実行したときだけ`niwaterm-dev`になる
+- `--cli` — hooksから呼ぶCLIの名前。省略時は`niwa`で、開発用のniwaterm-wipのタブで実行したときだけ`niwa-dev`になる
 
 **グローバルとプロジェクトの両方に入れない**。エージェントはどちらの設定も読むので、同じイベントでhookが2回動く。Codexの`config.toml`の`[hooks]`へ自分でniwaterm用の設定を書いていた場合も、`agent setup`はそこを触らないので手で消す。
 
@@ -77,16 +77,16 @@ hooksはエラーを表に出さず、エージェントの動作も止めない
 ### 表示されないとき
 
 - そのタブで`echo $NIWATERM_TAB_ID`が空でないか。niwaterm以外のターミナルで動いているエージェントの状態は届かない
-- hooksが呼ぶCLI（`niwaterm`）にエージェントからPATHが通っているか
+- hooksが呼ぶCLI（`niwa`）にエージェントからPATHが通っているか
 - 設定を書き込んだ先を、エージェントが実際に読んでいるか（`--config`の指定先、`CLAUDE_CONFIG_DIR`・`CODEX_HOME`）
 - Codexなら`/hooks`で設定を信頼したか
-- `niwaterm tab var list`に`agent`・`agent_status`が入っているか。入っていればhookは動いていて、サイドバー側の設定（`sidebar.boardStatus`）を見る
+- `niwa tab var list`に`agent`・`agent_status`が入っているか。入っていればhookは動いていて、サイドバー側の設定（`sidebar.boardStatus`）を見る
 
 hooksのコマンドはmacOS・Linux/WSLのシェル向けの書き方で、WindowsネイティブのPowerShellで動くエージェントには対応していない。
 
 ### タブ変数との関係
 
-hookはタブ変数へ次の値を書き込み、サイドバーはそれを読んで表示している。自作のツールから状態を出したいときは、同じキーを`niwaterm tab var set`で書けば同じ見え方になる。
+hookはタブ変数へ次の値を書き込み、サイドバーはそれを読んで表示している。自作のツールから状態を出したいときは、同じキーを`niwa tab var set`で書けば同じ見え方になる。
 
 | キー                | 値                              | 説明                                                                                                                             |
 | ------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |

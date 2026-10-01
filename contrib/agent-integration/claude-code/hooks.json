@@ -7,7 +7,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -19,7 +19,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -31,7 +31,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -43,7 +43,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -55,7 +55,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -67,7 +67,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -79,7 +79,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }
@@ -91,7 +91,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "niwaterm _hook claude-code >/dev/null 2>&1 || true"
+            "command": "niwa _hook claude-code >/dev/null 2>&1 || true"
           }
         ]
       }

@@ -13,7 +13,7 @@ worktree: {
   },
   // Boardを開いたら、作業フェーズを「実装」にする
   onOpen: async (ctx) => {
-    if (ctx.created) await Bun.$`niwaterm board phase set implement --board ${ctx.boardId}`;
+    if (ctx.created) await Bun.$`niwa board phase set implement --board ${ctx.boardId}`;
   },
   // ワークツリーを消す前に、コンテナを止める
   onBeforeRemove: async () => {
@@ -58,9 +58,9 @@ worktree: {
 worktree: {
   onOpen: async (ctx) => {
     if (ctx.created) {
-      await Bun.$`niwaterm board phase set implement --board ${ctx.boardId}`;
+      await Bun.$`niwa board phase set implement --board ${ctx.boardId}`;
     }
-    await Bun.$`niwaterm tab var set --tab ${ctx.tabIds[0]} role main`;
+    await Bun.$`niwa tab var set --tab ${ctx.tabIds[0]} role main`;
   },
 },
 ```
@@ -75,7 +75,7 @@ worktree: {
 | `boardId`      | 開いたBoardのid                                                          |
 | `tabIds`       | Boardのタブのid                                                          |
 
-`niwaterm`コマンドで操作するときは、`--board ${ctx.boardId}`のようにidを必ず渡す。省略すると、開いたBoardではなく、`worktree new`を実行したタブが対象になる。
+`niwa`コマンドで操作するときは、`--board ${ctx.boardId}`のようにidを必ず渡す。省略すると、開いたBoardではなく、`worktree new`を実行したタブが対象になる。
 
 `worktree new`と`worktree open`のどちらでも実行されるので、作ったときだけの処理は`ctx.created`で分ける。すでに開いていたBoardへ切り替えただけのときと、`--open none`・`--open current-tab`のときは実行されない。
 
@@ -107,7 +107,7 @@ worktree: {
 ## レイアウトプリセットの適用
 
 ```sh
-niwaterm worktree new feat/x --layout dev
+niwa worktree new feat/x --layout dev
 ```
 
 ワークツリーのBoardを開くときに、[レイアウトプリセット](/niwaterm/layouts/)でタイルとタブを組み立てられる。毎回`--layout`を付ける代わりに、設定の`worktree.layout`にも書ける。
@@ -124,7 +124,7 @@ niwaterm worktree new feat/x --layout dev
 `.niwaterm/config.ts`があるリポジトリで`worktree new`や`worktree remove`を初めて実行すると、次のように確認される。
 
 ```
-$ niwaterm worktree new feat/x
+$ niwa worktree new feat/x
 このリポジトリはniwatermのプロジェクトローカル設定を持っています:
   /path/to/repo/.niwaterm/config.ts
 ワークツリーの操作でこのファイルが評価され、worktree.onCreate・onOpen・onBeforeRemove・onRemoveのフックやlayoutsのプリセットに書かれたコマンドが実行されます。

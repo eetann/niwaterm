@@ -1,4 +1,4 @@
-// CLI(niwaterm ping等)からの接続を受け付けるunix socket IPCサーバー。
+// CLI(niwa ping等)からの接続を受け付けるunix socket IPCサーバー。
 // Electrobunのアプリコードは他のネイティブモジュール同様Bun Worker内で動くため、
 // Bun.serveのunixオプションがWorker内でも動作することはsmoke testで実機確認済み。
 
@@ -409,7 +409,7 @@ interface NewBoardRequestBody {
   cwd?: string;
   /** 省略時はtrue（作ったBoardをアクティブにする） */
   activate?: boolean;
-  /** このBoardが対応するgitワークツリーの絶対パス（`niwaterm worktree new`・`worktree open`用） */
+  /** このBoardが対応するgitワークツリーの絶対パス（`niwa worktree new`・`worktree open`用） */
   worktreePath?: string;
   /** Boardの表示名。空文字列は名前なし（設定board.namingによる自動名）として扱う */
   name?: string;
@@ -460,7 +460,7 @@ function parseRenameBoardBody(body: unknown): RenameBoardRequestBody | null {
   return { ...boardIdBody, name: b.name };
 }
 
-/** `niwaterm board worktree set/clear/show`。boardId省略時はアクティブBoardへ向ける */
+/** `niwa board worktree set/clear/show`。boardId省略時はアクティブBoardへ向ける */
 interface BoardWorktreeRequestBody {
   boardId?: string;
   mode: "set" | "clear" | "show";
@@ -484,7 +484,7 @@ function parseBoardWorktreeBody(body: unknown): BoardWorktreeRequestBody | null 
   return result;
 }
 
-/** `niwaterm board phase`。boardId省略時はアクティブBoardへ向ける */
+/** `niwa board phase`。boardId省略時はアクティブBoardへ向ける */
 interface BoardPhaseRequestBody {
   boardId?: string;
   mode: "set" | "clear" | "show";
@@ -754,7 +754,7 @@ function parseFontSizeAction(body: unknown): FontSizeAction | null {
   return action === "increase" || action === "decrease" || action === "reset" ? action : null;
 }
 
-/** `niwaterm tab hover list`が返す1件。項目はそのタブで今並ぶもの */
+/** `niwa tab hover list`が返す1件。項目はそのタブで今並ぶもの */
 export interface HoverButtonListEntry {
   id: string;
   position: HoverButtonPosition;
@@ -774,7 +774,7 @@ function parseRevealHoverButtonBody(
 export type StatusBarRefreshResult = { ok: true } | { ok: false; error: string };
 export type StatusBarToggleResult = { ok: true; visible: boolean } | { ok: false; error: string };
 
-/** `niwaterm status-bar`の実体。表示状態は全ウィンドウ共通なので、呼び出し元のウィンドウは問わない */
+/** `niwa status-bar`の実体。表示状態は全ウィンドウ共通なので、呼び出し元のウィンドウは問わない */
 export interface StatusBarOps {
   /** 部品を全ウィンドウで評価し直す。itemId省略で全部品 */
   refresh(itemId: string | undefined): StatusBarRefreshResult;
@@ -837,7 +837,7 @@ function buildApp(
   app.get("/ping", (c) => c.json({ ok: true, pid: process.pid }));
 
   // 一覧は呼び出し元のウィンドウぶんだけ返す（サイドバーに出ているものと一致させる）。
-  // ウィンドウをまたいだ俯瞰は`niwaterm window list`が担う
+  // ウィンドウをまたいだ俯瞰は`niwa window list`が担う
   app.get("/list", (c) => c.json({ workspaces: scoped(c).listWorkspaces() }));
 
   app.get("/windows", (c) => c.json({ ok: true, windows: windowOps.listWindows() }));
@@ -1064,7 +1064,7 @@ function buildApp(
 
   app.get("/keybindings", (c) => c.json({ ok: true, ...buildKeybindList(getKeybindings()) }));
 
-  // 現在有効な設定値の一覧（`niwaterm config show`）。キーバインドの個々の割り当ては
+  // 現在有効な設定値の一覧（`niwa config show`）。キーバインドの個々の割り当ては
   // /keybindingsの担当で、ここには件数だけが載る
   app.get("/config", (c) => c.json({ ok: true, ...getConfigSummary() }));
 
@@ -1866,7 +1866,7 @@ function removeFileIfExists(path: string): void {
  * Bun.serveの既定のidleTimeout（10秒）を無効化する。`popup open --wait`・`--capture-stdout`は
  * ポップアップが閉じるまでレスポンスを返さない＝その間コネクションに一切データが流れないため、
  * 既定のままだと利用者がポップアップ内で10秒以上操作した時点でサーバー側から接続が切られ、
- * CLIが失敗扱いになる（fzf-niwatermならローカルfzfへのフォールバックが走り、fzfが二重に起動する）。
+ * CLIが失敗扱いになる（fzf-niwaならローカルfzfへのフォールバックが走り、fzfが二重に起動する）。
  * 待ち時間の上限は利用者の操作次第でいくらでも伸びるので、上限そのものを設けない。
  * 詳細: docs/known-issues/long-waiting-ipc-request-is-cut-at-10-seconds.md
  */

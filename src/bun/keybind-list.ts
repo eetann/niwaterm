@@ -1,4 +1,4 @@
-// キーバインド一覧（IPCの/keybindings → CLIの`niwaterm keybind list`）用の正規化。
+// キーバインド一覧（IPCの/keybindings → CLIの`niwa keybind list`）用の正規化。
 // KeybindingsConfigはprefix入力後のbindings・即時発火のdirectに分かれ、値もプレーンなアクション名と
 // オブジェクト形（repeat・description付き）が混在するため、表示側が扱いやすい1本の配列へ均す。
 //

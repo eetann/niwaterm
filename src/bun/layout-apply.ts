@@ -26,7 +26,7 @@ export type ApplyLayoutTarget = "new-board" | "replace";
 
 /** applyLayoutPresetのcwd解決に関わるオプション */
 export interface ApplyLayoutOptions {
-  /** `niwaterm layout apply`を実行したCLIのcwd。プロジェクトローカル由来でないときのcwd基準になる */
+  /** `niwa layout apply`を実行したCLIのcwd。プロジェクトローカル由来でないときのcwd基準になる */
   invocationCwd?: string;
   /**
    * プロジェクトローカル（<projectRoot>/.niwaterm/config.ts）由来のプリセットならその解決元。
@@ -119,7 +119,7 @@ interface BuildContext {
   /**
    * tabConfig.cwd未指定時のデフォルトであり、相対cwdの解決基準。
    * プロジェクトローカル由来のプリセットならprojectRoot、そうでなければ
-   * `niwaterm layout apply`を実行したCLIのcwd（ApplyLayoutOptionsで決まる）
+   * `niwa layout apply`を実行したCLIのcwd（ApplyLayoutOptionsで決まる）
    */
   baseCwd?: string;
 }

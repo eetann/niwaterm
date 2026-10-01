@@ -4,7 +4,7 @@
 // ここに書かない項目はgit configの`niwaterm.worktree.*`も見に行く（gtrと同じ流儀の補助口で、
 // 優先順位はniwatermの設定より下）。詳細はwebsite/src/content/docs/worktrees.md。
 
-/** `niwaterm worktree new`が作成後にワークツリーをniwatermのどこで開くか */
+/** `niwa worktree new`が作成後にワークツリーをniwatermのどこで開くか */
 export type WorktreeOpenMode =
   /** 新規Boardとして開くが、そのBoardへは遷移しない（既定）。作業中のBoardを奪われない */
   | "board"
@@ -82,21 +82,21 @@ export interface WorktreeConfig {
    */
   dir?: string;
   /**
-   * `niwaterm worktree new`の`--open`の既定値。未指定時は`"board"`
+   * `niwa worktree new`の`--open`の既定値。未指定時は`"board"`
    * （新規Boardとして開くが遷移しない）。
    * 例: "board-switch"
    */
   open?: WorktreeOpenMode;
   /**
    * ワークツリーのBoardを開くときに適用するレイアウトプリセット名（`layouts`のキー）。
-   * `niwaterm worktree new`・`worktree open`の`--layout`の既定値で、Boardを新規に作ったときだけ
+   * `niwa worktree new`・`worktree open`の`--layout`の既定値で、Boardを新規に作ったときだけ
    * 適用される（既にそのワークツリーのBoardが開いていれば既存のタブは壊さない）。
    * プリセットはメインワークツリーの`.niwaterm/`から引き、タブはそのワークツリーで開く。
    * 例: "dev"
    */
   layout?: string;
   /**
-   * `niwaterm worktree new`がワークツリーを作る前にリモートをfetchするかどうか。未指定時はtrue。
+   * `niwa worktree new`がワークツリーを作る前にリモートをfetchするかどうか。未指定時はtrue。
    * `--fetch`／`--no-fetch`で個別に上書きできる。falseにすると、pushされたばかりのブランチを
    * 開くときに手でfetchしてから叩くことになる代わりに、作成のたびのネットワーク待ちが無くなる。
    * 既存のワークツリーを開き直すだけのときと`--track local`のときは、trueでもfetchしない。
@@ -112,15 +112,15 @@ export interface WorktreeConfig {
    */
   onCreate?: WorktreeHook;
   /**
-   * `niwaterm worktree new`・`worktree open`がワークツリーのBoardを新規に作った後に走るフック。
+   * `niwa worktree new`・`worktree open`がワークツリーのBoardを新規に作った後に走るフック。
    * `ctx.boardId`・`ctx.tabIds`を使ってCLIでBoardを操作する用途向け（`onCreate`の時点では
    * Boardがまだ無い）。`onCreate`と同じくグローバル→プロジェクトの順に**両方**走る。
    * 失敗してもBoardは閉じず、コマンドが終了コード1で止まる。
-   * 例: async (ctx) => { if (ctx.created) await Bun.$`niwaterm board phase set impl --board ${ctx.boardId}`; }
+   * 例: async (ctx) => { if (ctx.created) await Bun.$`niwa board phase set impl --board ${ctx.boardId}`; }
    */
   onOpen?: WorktreeOpenHook;
   /**
-   * `niwaterm worktree remove`がワークツリーを削除する直前に走るフック。`docker compose down`や
+   * `niwa worktree remove`がワークツリーを削除する直前に走るフック。`docker compose down`や
    * 開発サーバーの停止など、ワークツリーの中身が残っているうちに行う後始末向け。
    * `--force`無しでは消せない対象（未コミットの変更等）なら、フックを走らせる前に止まる。
    * 失敗するとそのワークツリーは削除せずに残し、コマンドは終了コード1で止まる（複数指定時は
@@ -130,7 +130,7 @@ export interface WorktreeConfig {
    */
   onBeforeRemove?: WorktreeRemoveHook;
   /**
-   * `niwaterm worktree remove`がワークツリー（`--delete-branch`ならブランチも）を削除した直後に
+   * `niwa worktree remove`がワークツリー（`--delete-branch`ならブランチも）を削除した直後に
    * 走るフック。ワークツリーの外に作ったキャッシュ・データベースの掃除向け。
    * 失敗しても削除は済んでいるので戻さず、コマンドが終了コード1で止まる。
    * `onCreate`と同じくグローバル→プロジェクトの順に**両方**走る。

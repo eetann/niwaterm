@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fzf-tmux互換のniwaterm版ラッパー。
-# usage: fzf-niwaterm [FZF OPTIONS]
+# usage: fzf-niwa [FZF OPTIONS]
 #
 # fzf-tmux（fzf付属、$(command -v fzf-tmux)のソース参照）は、標準入力を一時ファイルへ
 # 保存し、tmuxの新paneでfzfを実行し、標準出力だけを呼び出し元へ返す「リレー」に徹していて、
@@ -9,14 +9,14 @@
 # 設計されている（「fzf-tmuxが新しいtmux paneでfzfを実行し、標準出力だけをFIFO経由で
 # 呼び出し元へ返す設計と同じ発想」と明記されている）。
 # このスクリプトはfzf-tmuxの役割をniwaterm版に置き換えたもの。
-# ZENO_FZF_COMMAND=fzf-niwaterm（zeno-history-selection等）やFZF_CTRL_T_COMMAND経由の
+# ZENO_FZF_COMMAND=fzf-niwa（zeno-history-selection等）やFZF_CTRL_T_COMMAND経由の
 # fzfラッパーとして、既存のfzf連携ツールを無改造のまま使い回せる。
 #
 # popup起動に失敗した場合（アプリ未起動・既にpopup使用中等）は、
 # 標準入力をそのままローカルのfzfへ渡してフォールバックする。
 set -uo pipefail
 
-fzf_bin=$(command -v fzf) || { echo "fzf-niwaterm: fzf not found" >&2; exit 2; }
+fzf_bin=$(command -v fzf) || { echo "fzf-niwa: fzf not found" >&2; exit 2; }
 
 # 標準入力は一時ファイルへ確定させる（popup成功時・フォールバック時の両方で使い回す。
 # fzf-tmuxのFIFOと違い、popup内シェルとの間はコマンド文字列のやり取りしかできないため、
@@ -25,7 +25,7 @@ fzf_bin=$(command -v fzf) || { echo "fzf-niwaterm: fzf not found" >&2; exit 2; }
 # 構成でも、popup内シェル（WSLプロファイル）と$HOMEを共有しているため
 cachedir="$HOME/.cache/niwaterm"
 mkdir -p "$cachedir" || exec "$fzf_bin" "$@"
-tmpdir=$(mktemp -d "$cachedir/fzf-niwaterm.XXXXXX") || exec "$fzf_bin" "$@"
+tmpdir=$(mktemp -d "$cachedir/fzf-niwa.XXXXXX") || exec "$fzf_bin" "$@"
 trap 'rm -rf "$tmpdir"' EXIT
 inputfile="$tmpdir/input"
 cat <&0 > "$inputfile"
@@ -38,21 +38,21 @@ cat <&0 > "$inputfile"
 # niwaterm CLI自身が持つIPCタイムアウト（packages/cli/src/ipc-client.ts）に任せる
 niwaterm_ping() {
   if command -v timeout > /dev/null 2>&1; then
-    timeout 3 niwaterm ping > /dev/null 2>&1
+    timeout 3 niwa ping > /dev/null 2>&1
   elif command -v gtimeout > /dev/null 2>&1; then
-    gtimeout 3 niwaterm ping > /dev/null 2>&1
+    gtimeout 3 niwa ping > /dev/null 2>&1
   else
-    niwaterm ping > /dev/null 2>&1
+    niwa ping > /dev/null 2>&1
   fi
 }
 
-if [[ -z "${NIWATERM_TAB_ID:-}" ]] || ! command -v niwaterm > /dev/null 2>&1 \
+if [[ -z "${NIWATERM_TAB_ID:-}" ]] || ! command -v niwa > /dev/null 2>&1 \
   || ! niwaterm_ping; then
   "$fzf_bin" "$@" < "$inputfile"
   exit $?
 fi
 
-# printfは引数が無くても書式を1回は適用するため、`fzf-niwaterm`を引数なしで呼ぶと
+# printfは引数が無くても書式を1回は適用するため、`fzf-niwa`を引数なしで呼ぶと
 # 空文字列の引数が1つ出てしまう。fzfは空の引数を`unknown option: `として即座に終了するので、
 # 引数がある時だけ組み立てる
 opts=""
@@ -71,7 +71,7 @@ envs+="FZF_DEFAULT_OPTS_FILE=$(printf %q "${FZF_DEFAULT_OPTS_FILE:-}"); "
 # ターミナル使用を想定した縮小表示）はここでは不要・むしろ有害（fzf本家のtmux popup統合が
 # 内部で--height=100%を渡して上書きするのと同じ理由）。コマンドライン引数はFZF_DEFAULT_OPTSより
 # 優先されるため、末尾に付けるだけで確実に上書きできる
-if ! niwaterm popup open --width 80 --height 80 --capture-stdout \
+if ! niwa popup open --width 80 --height 80 --capture-stdout \
   "$envs fzf $opts --height=100% < $(printf %q "$inputfile")"; then
   "$fzf_bin" "$@" < "$inputfile"
   exit $?

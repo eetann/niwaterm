@@ -27,15 +27,8 @@ describe("appendCommandArgs", () => {
 
   test("Unix系シェルはログイン(-l)かつインタラクティブ(-i)でcommandを実行する", () => {
     const cmd = ["/bin/zsh", "-il"];
-    appendCommandArgs(cmd, "niwaterm tab var set -t tab-1 foo bar", undefined);
-    expect(cmd).toEqual([
-      "/bin/zsh",
-      "-il",
-      "-l",
-      "-i",
-      "-c",
-      "niwaterm tab var set -t tab-1 foo bar",
-    ]);
+    appendCommandArgs(cmd, "niwa tab var set -t tab-1 foo bar", undefined);
+    expect(cmd).toEqual(["/bin/zsh", "-il", "-l", "-i", "-c", "niwa tab var set -t tab-1 foo bar"]);
   });
 
   test("Unix系シェルはcaptureStdoutTo指定時にリダイレクトを追記する", () => {

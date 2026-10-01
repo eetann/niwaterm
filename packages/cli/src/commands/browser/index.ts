@@ -14,6 +14,6 @@ export default define({
     screenshot: screenshotCommand,
   },
   run: () => {
-    console.log('Run "niwaterm browser --help" for available subcommands.');
+    console.log('Run "niwa browser --help" for available subcommands.');
   },
 });

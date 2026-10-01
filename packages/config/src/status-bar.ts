@@ -45,7 +45,7 @@ export interface StatusBarContext {
   tabId: string | null;
   /** フォーカス中タブが報告している作業ディレクトリ（OSC7シェル統合）。未報告ならundefined */
   cwd: string | undefined;
-  /** フォーカス中タブのタブ変数（`niwaterm tab var set`・シェル統合が書き込む） */
+  /** フォーカス中タブのタブ変数（`niwa tab var set`・シェル統合が書き込む） */
   vars: Record<string, string>;
   /** ユーザーがサイドバーから設定したタブ名。未設定はundefined */
   tabName: string | undefined;
@@ -84,7 +84,7 @@ export type StatusBarRenderFn = (
 
 export interface StatusBarComponentConfig {
   /**
-   * `niwaterm status-bar refresh --item <id>`で指す名前。英数字・`_`・`-`で、部品間で重ねない。
+   * `niwa status-bar refresh --item <id>`で指す名前。英数字・`_`・`-`で、部品間で重ねない。
    * 省略時は`left-0`のような「区画-区画内の番号」になる（並べ替えると変わる）
    */
   id?: string;

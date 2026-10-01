@@ -4,8 +4,8 @@ AIエージェントのhooksから、そのタブの状態をniwatermのサイ�
 導入はエージェントごとに1コマンドで行う。niwatermアプリを起動していなくても設定できる。
 
 ```sh
-niwaterm agent setup codex-cli
-niwaterm agent setup claude-code
+niwa agent setup codex-cli
+niwa agent setup claude-code
 ```
 
 既存の他ツールのhooksを保持し、niwatermの設定だけを追加・更新する。
@@ -13,16 +13,16 @@ niwaterm agent setup claude-code
 再実行しても重複しない。JSONが不正な場合は書き換えずにエラーを返す。
 Codexは導入後に`/hooks`で設定を確認して信頼し、再起動する。
 
-wipでは`niwaterm-dev agent setup codex-cli`のように`niwaterm-dev`を使う。
-登録するCLI名は`NIWATERM_APP_VARIANT`が`niwaterm-wip`なら`niwaterm-dev`、それ以外なら`niwaterm`になる。
-`--cli niwaterm-dev`でも明示できる。プロジェクト単位の設定先は`--config .codex/hooks.json`などで指定する。
+wipでは`niwa-dev agent setup codex-cli`のように`niwa-dev`を使う。
+登録するCLI名は`NIWATERM_APP_VARIANT`が`niwaterm-wip`なら`niwa-dev`、それ以外なら`niwa`になる。
+`--cli niwa-dev`でも明示できる。プロジェクト単位の設定先は`--config .codex/hooks.json`などで指定する。
 
 ## hookの実行
 
 設定に入るコマンドは次の形になる。
 
 ```sh
-niwaterm _hook codex-cli >/dev/null 2>&1 || true
+niwa _hook codex-cli >/dev/null 2>&1 || true
 ```
 
 `_hook`は通常のヘルプに表示しない内部コマンド。

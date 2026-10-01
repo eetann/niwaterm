@@ -32,9 +32,9 @@ if (process.argv[2] === "_hook") {
   process.exit(0);
 }
 
-// 補完スクリプトが呼ぶコマンドをPATH上の名前（niwaterm・niwaterm-dev）へ寄せる。
+// 補完スクリプトが呼ぶコマンドをPATH上の名前（niwaterm・niwa-dev）へ寄せる。
 // @gunshi/plugin-completionは実行中のbunバイナリとエントリの絶対パスをスクリプトへ埋め込むが、
-// それだとniwaterm-devのラッパーが渡す接続先（NIWATERM_APP_VARIANT）が落ち、
+// それだとniwa-devのラッパーが渡す接続先（NIWATERM_APP_VARIANT）が落ち、
 // 開発中インスタンスを操作しているのに候補だけ普段遣いのインスタンスから引かれる。
 // bun以外の名前で起動された場合は単一実行ファイルとみなして実行ファイル名だけを埋め込む
 // 実装なので、名前を差し替えるとコマンド名だけが残る（判定が変われば絶対パスに戻るだけで壊れない）
@@ -75,5 +75,5 @@ try {
   // gunshi自身のバリデーションエラー（例: 必須positional未指定）はmessageが空文字列で
   // 投げられ、かつ既にgunshiがエラー内容をコンソール出力済みのため、その場合は上乗せしない
   const message = err instanceof Error ? err.message : String(err);
-  failAndExit(message ? `niwaterm: コマンドの実行中にエラーが発生しました: ${message}` : "");
+  failAndExit(message ? `${cliName()}: コマンドの実行中にエラーが発生しました: ${message}` : "");
 }

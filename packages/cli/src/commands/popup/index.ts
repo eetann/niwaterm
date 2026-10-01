@@ -15,6 +15,6 @@ export default define({
     toggle: toggleCommand,
   },
   run: () => {
-    console.log('Run "niwaterm popup --help" for available subcommands.');
+    console.log('Run "niwa popup --help" for available subcommands.');
   },
 });

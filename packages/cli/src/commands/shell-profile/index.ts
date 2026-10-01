@@ -8,6 +8,6 @@ export default define({
     list: listCommand,
   },
   run: () => {
-    console.log('Run "niwaterm shell-profile --help" for available subcommands.');
+    console.log('Run "niwa shell-profile --help" for available subcommands.');
   },
 });

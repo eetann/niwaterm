@@ -23,14 +23,14 @@ browser: {
 
 ## CLIから操作する
 
-`niwaterm`コマンドから、ブラウザタブのページを移動したり、表示している内容を取り出したりできる。AIエージェントにページの内容を読ませたいときに使う。
+`niwa`コマンドから、ブラウザタブのページを移動したり、表示している内容を取り出したりできる。AIエージェントにページの内容を読ませたいときに使う。
 
 ```sh
-niwaterm browser navigate --tab <tabId> --url <url>
-niwaterm browser get-text --tab <tabId>
-niwaterm browser get-html --tab <tabId>
-niwaterm browser screenshot --tab <tabId> --out <path>
-niwaterm tab focus [--tab <tabId>]
+niwa browser navigate --tab <tabId> --url <url>
+niwa browser get-text --tab <tabId>
+niwa browser get-html --tab <tabId>
+niwa browser screenshot --tab <tabId> --out <path>
+niwa tab focus [--tab <tabId>]
 ```
 
 - `browser navigate` — ブラウザタブで指定したURLを開く。ページを読み込み終わるまで待つ
@@ -39,4 +39,4 @@ niwaterm tab focus [--tab <tabId>]
 - `browser screenshot` — ブラウザタブと同じURLを画面に出さずに開き直し、スクリーンショットをPNGで保存する。開き直すので、ログインした状態・スクロールの位置・フォームに入力中の文字は写らない。Windowsでは使えない
 - `tab focus` — 指定したタブへ切り替えて、niwatermのウィンドウを前面に出す。エージェントが操作していたページを、人が目で確かめたいときに使う
 
-`<tabId>`は`niwaterm list`で調べられる。`browser`のコマンドは、ブラウザタブにしか使えない。ほかのワークスペースにあるブラウザタブを操作するときは、先に`tab focus`でそのタブへ切り替える。
+`<tabId>`は`niwa list`で調べられる。`browser`のコマンドは、ブラウザタブにしか使えない。ほかのワークスペースにあるブラウザタブを操作するときは、先に`tab focus`でそのタブへ切り替える。

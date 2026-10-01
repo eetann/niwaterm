@@ -8,6 +8,6 @@ export default define({
     switch: switchCommand,
   },
   run: () => {
-    console.log('Run "niwaterm sidebar --help" for available subcommands.');
+    console.log('Run "niwa sidebar --help" for available subcommands.');
   },
 });

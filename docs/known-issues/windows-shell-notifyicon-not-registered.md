@@ -8,7 +8,7 @@ description: Electrobunのshow Notification実装がメッセージ専用ウィ�
 
 ## 症状
 
-Windows実機で`niwa.notify`/`niwaterm notify`/`POST /notify`（いずれもElectrobunの`Utils.showNotification()`を呼ぶ）を実行しても、画面に通知が一切表示されない。アプリのログには`Notification shown: <title>`と出て一見成功しているように見えるが、通知センター（タスクバー時計クリックで開くパネル）には「新しい通知はありません」としか出ず、「設定→システム→通知」の「アプリやその他の送信者からの通知」一覧にniwatermが登場しない（同じ一覧に別アプリのWezTermは登場する）。
+Windows実機で`niwa.notify`/`niwa notify`/`POST /notify`（いずれもElectrobunの`Utils.showNotification()`を呼ぶ）を実行しても、画面に通知が一切表示されない。アプリのログには`Notification shown: <title>`と出て一見成功しているように見えるが、通知センター（タスクバー時計クリックで開くパネル）には「新しい通知はありません」としか出ず、「設定→システム→通知」の「アプリやその他の送信者からの通知」一覧にniwatermが登場しない（同じ一覧に別アプリのWezTermは登場する）。
 
 ## 根本原因
 
@@ -41,10 +41,10 @@ niwaterm側でWindows専用の代替実装を追加した（`src/bun/windows-not
 ## 関連
 
 - [設定ファイル](/guide/config.md) — `niwa.notify`（niwa APIの一覧）
-- [CLIリファレンス](/guide/cli.md) — `niwaterm notify`
+- [CLIリファレンス](/guide/cli.md) — `niwa notify`
 - `src/bun/windows-notification.ts` — PowerShell経由のWinRT Toast実装本体
 - `src/bun/index.ts` — `process.platform`によるsendNotificationの分岐
 - `src/bun/niwa-api.ts` — `niwa.notify`
 - `src/bun/ipc-server.ts` — `POST /notify`エンドポイント
-- `packages/cli/src/commands/notify.ts` — `niwaterm notify`コマンド
+- `packages/cli/src/commands/notify.ts` — `niwa notify`コマンド
 - `packages/config/src/niwa.ts` — `NiwaNotifyOptions`型

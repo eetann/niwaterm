@@ -1,6 +1,6 @@
 # CLIコマンドの命名規則
 
-`packages/cli`（`niwaterm`コマンド）にサブコマンドを追加・変更する際のルール。
+`packages/cli`（`niwa`コマンド）にサブコマンドを追加・変更する際のルール。
 対象読者はAIエージェント・人間問わず、このCLIにコマンドを生やす全員。
 コマンドの正式なリファレンスはドキュメントサイトのページ（索引は`website/src/content/docs/cli.md`）で、ここには**命名の判断基準だけ**を置く。
 
@@ -9,9 +9,9 @@
 コマンドは操作対象のリソース単位でグループ化する（git/kubectl/dockerと同じ発想）。
 
 ```
-niwaterm tab new --tile <tileId>
-niwaterm board switch --board <boardId>
-niwaterm tile split --tile <tileId>
+niwa tab new --tile <tileId>
+niwa board switch --board <boardId>
+niwa tile split --tile <tileId>
 ```
 
 新しいverbを追加するとき、まず「どのリソースに属するか」を考える。既存リソースの正本は
@@ -108,9 +108,9 @@ gunshiの`subCommands`でネストする（実装は既存の`commands/tab/index
 
 - `website/src/content/docs/cli.md` — 全コマンドの索引。コマンドを足したら表へ1行足し、説明を載せたページへリンクする
 - そのコマンドを説明するページ — 機能に属するコマンドはその機能のページ（`layouts.md`・`worktrees.md`など）、どの機能にも属さないものは`cli/commands.md`。同じ機能の設定とCLIの説明は1ページに置く（別々のページにすると、読み手がどちらを読めばよいか迷う）
-- `.agents/skills/niwaterm-cli/SKILL.md`・`packages/cli/README.md` — AIエージェント・利用者が最初に読む案内。詳細は書き写さず`niwaterm docs show <topic>`への導線に留める（書き写すとドキュメントを直したときに古い説明が残る）
-- `contrib/shell-integration/*` — シェル統合スクリプト（`niwaterm tab var set branch`を呼ぶ）
-- `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwaterm tab var set agent_status`を呼ぶ）
+- `.agents/skills/niwaterm-cli/SKILL.md`・`packages/cli/README.md` — AIエージェント・利用者が最初に読む案内。詳細は書き写さず`niwa docs show <topic>`への導線に留める（書き写すとドキュメントを直したときに古い説明が残る）
+- `contrib/shell-integration/*` — シェル統合スクリプト（`niwa tab var set branch`を呼ぶ）
+- `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwa tab var set agent_status`を呼ぶ）
 
 `contrib/`配下は`>/dev/null 2>&1`で出力を捨てるため、コマンド名がずれても`Command not found`が握り潰され、
 「サイドバーに何も表示されない」という症状だけが残る。改名時は必ず

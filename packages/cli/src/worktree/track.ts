@@ -7,7 +7,7 @@
 
 import { branchExists, remoteBranchExists, type WorktreeSource } from "./git";
 
-/** ブランチをどこから用意するか。`niwaterm worktree new --track`の値 */
+/** ブランチをどこから用意するか。`niwa worktree new --track`の値 */
 export const WORKTREE_TRACK_MODES = ["auto", "remote", "local", "new"] as const;
 export type WorktreeTrackMode = (typeof WORKTREE_TRACK_MODES)[number];
 

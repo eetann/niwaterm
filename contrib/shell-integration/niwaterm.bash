@@ -1,12 +1,12 @@
 # niwatermシェル統合（bash）
 # タブ内のシェルが自分のgitブランチ・カレントディレクトリをniwatermのサイドバーへ通知する。
-# プロンプト表示のたびに`niwaterm tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
+# プロンプト表示のたびに`niwa tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: ~/.bashrcに以下を追記する
 #   [ -n "$NIWATERM_TAB_ID" ] && source /path/to/niwaterm/contrib/shell-integration/niwaterm.bash
 #
 # NIWATERM_TAB_IDはniwaterm内で起動したシェルにのみ自動設定される環境変数なので、
 # niwaterm外のターミナル（この行を無条件でsourceした場合を含む）では何もしない。
-if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwaterm >/dev/null 2>&1; then
+if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwa >/dev/null 2>&1; then
   _NIWATERM_LAST_BRANCH=""
 
   _niwaterm_report_branch() {
@@ -16,7 +16,7 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwaterm >/dev/null 2>&1; then
     if [[ "$branch" != "$_NIWATERM_LAST_BRANCH" ]]; then
       _NIWATERM_LAST_BRANCH="$branch"
       # バックグラウンド実行かつdisownでジョブ通知を出さない。プロンプト表示をniwaterm CLI起動でブロックしない
-      niwaterm tab var set branch "$branch" >/dev/null 2>&1 &
+      niwa tab var set branch "$branch" >/dev/null 2>&1 &
       disown
     fi
   }

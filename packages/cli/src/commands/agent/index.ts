@@ -6,6 +6,6 @@ export default define({
   description: "AIエージェントとの連携設定",
   subCommands: { setup: setupCommand },
   run: () => {
-    console.log('Run "niwaterm agent --help" for available subcommands.');
+    console.log('Run "niwa agent --help" for available subcommands.');
   },
 });

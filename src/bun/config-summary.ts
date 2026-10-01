@@ -1,9 +1,9 @@
-// 現在有効な設定値の一覧（IPCの/config → CLIの`niwaterm config show`、RPCのconfigメッセージ →
+// 現在有効な設定値の一覧（IPCの/config → CLIの`niwa config show`、RPCのconfigメッセージ →
 // webviewの設定モーダル）用の正規化。解決済みの各設定は型も既定値の持ち方もバラバラなため、
 // 表示側が並べるだけで済む「セクション → key/value」の一本の形へ均す。
 //
 // 値として見せられない設定は含めない（mouse.selectionMenu・niwa.on等の関数、
-// キーバインドの個々のエントリは`niwaterm keybind list`の担当）。
+// キーバインドの個々のエントリは`niwa keybind list`の担当）。
 // worktree設定もここには出ない: 解決はCLIプロセス側でプロジェクトローカル設定と
 // 混ぜて行うため、アプリが保持している「現在の値」が存在しない。
 
@@ -178,7 +178,7 @@ function appearanceSection(
 }
 
 /**
- * キーバインドは件数とprefixだけを出す。個々の割り当ては`niwaterm keybind list`の担当で、
+ * キーバインドは件数とprefixだけを出す。個々の割り当ては`niwa keybind list`の担当で、
  * ここへ並べると他の設定が埋もれる。件数は実際に発火するものだけを数える（keybind listと同じ基準）
  */
 function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySection {
@@ -195,7 +195,7 @@ function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySectio
       {
         key: "bindings",
         value: `${prefixEntries}件`,
-        note: "一覧は niwaterm keybind list",
+        note: "一覧は niwa keybind list",
       },
       { key: "direct", value: `${directEntries}件`, note: "prefix不要で即時発火するバインド" },
     ],
@@ -211,7 +211,7 @@ function statusBarComponentValue(entry: StatusBarComponentEntry): string {
     : `tab-var:${entry.source.name}`;
 }
 
-/** 部品はidをキーに並べる。`niwaterm status-bar refresh --item`で指す名前をここで引けるようにする */
+/** 部品はidをキーに並べる。`niwa status-bar refresh --item`で指す名前をここで引けるようにする */
 function statusBarSection(statusBar: StatusBarDefinition): ConfigSummarySection {
   if (!statusBar.visible) {
     return {
@@ -269,7 +269,7 @@ function shellSection(
         : {
             key: "profiles",
             value: profiles.map((p) => p.id).join(", "),
-            note: "詳細は niwaterm shell-profile list",
+            note: "詳細は niwa shell-profile list",
           },
     ],
   };
@@ -296,7 +296,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
                 value: layoutNames.join(", "),
                 // プロジェクトローカル（<repoRoot>/.niwaterm/config.ts）のプリセットは
                 // cwd依存で解決されるため、アプリが常時保持しているグローバル分だけを出す
-                note: "グローバル設定のみ。プロジェクトローカル分は niwaterm layout list",
+                note: "グローバル設定のみ。プロジェクトローカル分は niwa layout list",
               },
         ],
       },

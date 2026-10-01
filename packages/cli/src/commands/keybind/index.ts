@@ -8,6 +8,6 @@ export default define({
     list: listCommand,
   },
   run: () => {
-    console.log('Run "niwaterm keybind --help" for available subcommands.');
+    console.log('Run "niwa keybind --help" for available subcommands.');
   },
 });

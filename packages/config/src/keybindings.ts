@@ -343,7 +343,7 @@ export function isBindingTarget(value: unknown): value is BindingTarget {
 export interface DetailedBinding {
   target: BindingTarget;
   repeat?: boolean;
-  /** キーバインド一覧（`niwaterm keybind list`）でアクション名の代わりに表示する説明 */
+  /** キーバインド一覧（`niwa keybind list`）でアクション名の代わりに表示する説明 */
   description?: string;
 }
 

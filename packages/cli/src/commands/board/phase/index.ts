@@ -8,6 +8,6 @@ export default define({
   description: "Boardの作業フェーズ（サイドバーのバッジ）を設定・解除・表示する",
   subCommands: { set: setCommand, clear: clearCommand, show: showCommand },
   run: () => {
-    console.log('Run "niwaterm board phase set/clear/show --help" for details.');
+    console.log('Run "niwa board phase set/clear/show --help" for details.');
   },
 });

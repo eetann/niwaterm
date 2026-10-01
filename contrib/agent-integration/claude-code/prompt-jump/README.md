@@ -25,7 +25,7 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 | `mod/` | Claude Codeのプラグイン | そのキーを受けてタブ変数を読み、`$.ui.scroll`でtranscriptの表示を移す |
 
 プロンプト行の`requestId`はtranscript（jsonl）のuuidと同じ値なので、
-`niwaterm claude prompt list`が見せている一覧の値をそのまま渡せる。画面の文字を
+`niwa claude prompt list`が見せている一覧の値をそのまま渡せる。画面の文字を
 読み合わせる必要はない。
 
 **キーを送るのは、transcriptの行を動かすのが「人の操作に応えている間」に限られるため**
@@ -42,7 +42,7 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 書き込み、それを頼りに目次を作る。入れていないタブには目次の帯を張らない。
 
 ```sh
-niwaterm agent setup claude-code
+niwa agent setup claude-code
 ```
 
 **エージェント統合を既に入れてある場合も、このコマンドを実行し直す。** transcriptの在り処を
@@ -100,7 +100,7 @@ export default defineConfig({
 
 | オプション | 既定 | 変える理由 |
 |---|---|---|
-| `cli` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
+| `cli` | `"niwa"` | wipビルドで試すなら`"niwa-dev"` |
 | `jumpKey`とmodの`action` | `C-]`／`app:openArtifact` | 下記の衝突を避けたいとき。**必ず両方揃える** |
 | `itemStyle` | `"text"` | 本文を出さず印だけ並べたいなら`"mark"` |
 | `labelChars` | `20` | 項目に出す本文の量を増やす・減らす |
@@ -126,7 +126,7 @@ hoverButtons: [claudePromptJump({ position: "right", handle: { shape: "round" } 
 
 | 症状 | 見るところ |
 |---|---|
-| 目次が出ない | `niwaterm tab var list`に`agent`と`agent_transcript`があるか。エージェント統合を入れる前から動いているセッションでは、次にプロンプトを打った時点で埋まる |
+| 目次が出ない | `niwa tab var list`に`agent`と`agent_transcript`があるか。エージェント統合を入れる前から動いているセッションでは、次にプロンプトを打った時点で埋まる |
 | 目次は出るがクリックで動かない | `claude plugin details niwaterm-prompt-jump`でmodが読めているかを見る。出てこなければ`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`と`CLAUDE_CODE_PLUGIN_DIRS`の設定を見直す。読めているならキーが別のアクションに取られていないか |
 | `niwaterm: ...`というトーストが出る | modは動いていて、ジャンプ先が読めない・engineに断られた。文面がそのまま理由 |
 
@@ -135,8 +135,8 @@ hoverButtons: [claudePromptJump({ position: "right", handle: { shape: "round" } 
 目次を使わず、同じtranscriptをターミナルから読むこともできる。
 
 ```sh
-niwaterm claude prompt list            # そのタブで打ったプロンプトの一覧
-niwaterm claude prompt show --prompt 3 # 3番目のプロンプトからのやりとり
+niwa claude prompt list            # そのタブで打ったプロンプトの一覧
+niwa claude prompt show --prompt 3 # 3番目のプロンプトからのやりとり
 ```
 
 詳細は[website/src/content/docs/agents.md](../../../../website/src/content/docs/agents.md)の「Claude Codeのセッション参照」節を参照。

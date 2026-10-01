@@ -5,7 +5,7 @@
 // タブ変数へ置いてからキーを送り、このButtonの押下として受け取る。
 //
 // プロンプト行のrequestIdはtranscript（jsonl）のuuidと同じ値なので、niwatermが
-// `niwaterm claude prompt list`で見せている一覧の値をそのまま渡せる。
+// `niwa claude prompt list`で見せている一覧の値をそのまま渡せる。
 
 import type { Hook, Register } from 'claude-code'
 
@@ -34,7 +34,7 @@ async function jumpToPending($: Dollar, cli: string): Promise<void> {
 }
 
 export const register: Register = (on, options) => {
-  const cli = String(options.cli ?? 'niwaterm')
+  const cli = String(options.cli ?? 'niwa')
   const action = String(options.action ?? 'app:openArtifact')
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

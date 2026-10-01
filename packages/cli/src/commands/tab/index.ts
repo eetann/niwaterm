@@ -25,6 +25,6 @@ export default define({
     hover: hoverCommand,
   },
   run: () => {
-    console.log('Run "niwaterm tab --help" for available subcommands.');
+    console.log('Run "niwa tab --help" for available subcommands.');
   },
 });

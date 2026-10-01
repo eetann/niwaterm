@@ -111,7 +111,7 @@ export function resolveRemovalTargets(
     const found = findWorktreeByQuery(worktrees, query, cwd);
     if (found.kind === "not-found") {
       errors.push(
-        `ワークツリーが見つかりません: ${query}（niwaterm worktree listで一覧を確認できます）`,
+        `ワークツリーが見つかりません: ${query}（niwa worktree listで一覧を確認できます）`,
       );
       continue;
     }

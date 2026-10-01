@@ -38,7 +38,7 @@ alternate screenにはスクロールバックが無く、Claude Codeは毎フ�
 そのターン全体を切り出せる。
 
 [エージェント統合](/guide/cli.md)のhooksがこのパスをタブ変数へ書き込み、
-`niwaterm claude prompt list` / `show` がそれを読む。画面から消えた
+`niwa claude prompt list` / `show` がそれを読む。画面から消えた
 （コンテキスト圧縮で失われた）やりとりも辿れるので、スクロールで遡るより射程が広い。
 
 ## 表示を動かしてもらう
@@ -49,7 +49,7 @@ alternate screenにはスクロールバックが無く、Claude Codeは毎フ�
 
 代わりに**function hooksのmod**から`$.ui.scroll`で頼む。transcriptの行は
 `{ requestId }`で指定でき、この`requestId`はjsonlのuuidと同じ値なので、
-`niwaterm claude prompt list`が出すuuidをそのまま渡せる。ただし
+`niwa claude prompt list`が出すuuidをそのまま渡せる。ただし
 **人の操作に応えている間しか動かせない**（タイマーや通知から呼ぶと
 `deny: "not person-initiated"`）。niwatermからはジャンプ先をタブ変数へ置いてキーを送り、
 mod側のButtonの押下として受け取る形にしてある。実装例は

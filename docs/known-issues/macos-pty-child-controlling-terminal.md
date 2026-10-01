@@ -8,7 +8,7 @@ description: Bun.TerminalはPTYを子プロセスの制御端末に設定しな�
 
 ## 症状
 
-niwatermのpopup（`popup open --capture-stdout`、`fzf-niwaterm`、`niwa.popup.run`）や通常タブでfzfを実行すると、**popup枠は開くのに中身が真っ白のまま何も表示されず、キー入力にも反応しない**。`popup close`しても中のプロセスは残り続け、試すたびに停止状態(`ps`のSTATが`T`)のfzfが積み上がる。
+niwatermのpopup（`popup open --capture-stdout`、`fzf-niwa`、`niwa.popup.run`）や通常タブでfzfを実行すると、**popup枠は開くのに中身が真っ白のまま何も表示されず、キー入力にも反応しない**。`popup close`しても中のプロセスは残り続け、試すたびに停止状態(`ps`のSTATが`T`)のfzfが積み上がる。
 
 発生条件は**niwatermアプリ自体を「制御端末を持つ状態」で起動したかどうか**で決まる。
 

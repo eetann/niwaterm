@@ -8,7 +8,7 @@ description: mainWindow.activate()を呼ぶと、Windows実機でwebviewのOSキ
 
 ## 症状
 
-Windows実機で`niwaterm popup`（CLI）や`POST /popup`（IPC）経由でpopupを開くと、開いた直後はキー入力が一切届かない。ポップアップ内のterm表示領域を一度マウスでクリックすると、以後は正常にキー入力できるようになる。`niwaterm popup lazygit`のように`command`を指定したワンショット実行でも同様に発生する。
+Windows実機で`niwa popup`（CLI）や`POST /popup`（IPC）経由でpopupを開くと、開いた直後はキー入力が一切届かない。ポップアップ内のterm表示領域を一度マウスでクリックすると、以後は正常にキー入力できるようになる。`niwa popup lazygit`のように`command`を指定したワンショット実行でも同様に発生する。
 
 ## 根本原因
 
@@ -38,7 +38,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 
 ## 対処方法
 
-`src/bun/ipc-server.ts`の`POST /popup`から`activateWindow()`の呼び出しを削除した。popupは「今操作しているniwatermに対して素早く一時的な操作をする」用途が主で、既にウィンドウがフォアグラウンドの状態で開かれるケースがほとんどのため、ウィンドウ前面化を諦めても実用上の支障は小さいと判断した。バックグラウンドから`niwaterm popup`を実行した場合はウィンドウが自動的に前面化されなくなるが、その場合は手動でアプリをクリックすれば通常通り操作できる。
+`src/bun/ipc-server.ts`の`POST /popup`から`activateWindow()`の呼び出しを削除した。popupは「今操作しているniwatermに対して素早く一時的な操作をする」用途が主で、既にウィンドウがフォアグラウンドの状態で開かれるケースがほとんどのため、ウィンドウ前面化を諦めても実用上の支障は小さいと判断した。バックグラウンドから`niwa popup`を実行した場合はウィンドウが自動的に前面化されなくなるが、その場合は手動でアプリをクリックすれば通常通り操作できる。
 
 `tab focus`等、他の`activateWindow()`呼び出し箇所（目視確認が主目的で、その後すぐにキー入力を行うことを前提としていない操作）は今回のスコープ外として維持した。今後同種の症状が別のエンドポイントで報告された場合は、同様に`activateWindow()`の要否を見直すこと。
 
@@ -46,7 +46,7 @@ Windows実機で、webview側に一時的な診断ログ（`sendMessage("log", .
 
 - [起動直後にキー入力が届かない・クリック後も日本語入力だけできない](/known-issues/windows-startup-webview-focus-and-ime.md) — 同根の調査。`activate()`の代わりに`show()`（`showWindow(activate: true)`）を使うとネイティブ側が`FocusActiveView()`まで実行するため、web contentへフォーカスが渡ることが分かった
 - [Windowsでのビルド・実行手順](/build/windows-build.md) — 実機セットアップ手順
-- [CLIリファレンス](/guide/cli.md) — `niwaterm popup`
+- [CLIリファレンス](/guide/cli.md) — `niwa popup`
 - `src/bun/ipc-server.ts` — `/popup`エンドポイント、`activateWindow`引数
 - `src/bun/index.ts` — `mainWindow.activate()`、`createIpcServer`への`activateWindow`引数の受け渡し
 - `src/mainview/index.ts` — `applyPopupState`（popup表示時に`imeEl.focus()`する処理）

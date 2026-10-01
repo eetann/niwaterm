@@ -8,7 +8,7 @@ export default defineConfig({
     niwa.keybind("shift+d", "split-vertical");
 
     // 任意のTSコードを書ける（tmuxのif-shell/run-shell相当は素のif文・Bun.spawnで表現する）。
-    // descriptionは`niwaterm keybind list`の一覧表示に使われる（省略すると"function"とだけ表示される）
+    // descriptionは`niwa keybind list`の一覧表示に使われる（省略すると"function"とだけ表示される）
     niwa.keybind(
       "g",
       () => {

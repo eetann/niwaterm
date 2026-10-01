@@ -27,9 +27,9 @@ niwatermの `docs/` 配下（`docs/adr/` 含む）は [ADR 0002](/docs/adr/0002-
 
 niwatermを使うユーザー向けのドキュメント（CLI・設定ファイルの書き方など）は`docs/`ではなく`website/`のドキュメントサイトに書く（[ADR 0008](/docs/adr/0008-move-user-docs-from-docs-guide-to-docs-site.md)）。ページの中身の書き方（何を書き、何を書かないか）はuser-doc-writerスキルに従う。`docs/`の外なのでOKFの対象外で、以下の「新規ドキュメントを書くとき」は適用しない。
 
-- frontmatterはフレームワークの規約に従い、`title`と`description`を必ず書く（`description`は`niwaterm docs list`の説明に使われる）
-- 本文は`.md`で書く。フレームワークのコンポーネントが必要なページだけ`.mdx`にする（`niwaterm docs show`がファイルをそのまま出力するため）。`.mdx`のページは`docs list`に載らない
-- `docs show`のトピック名は、contentディレクトリ（`website/src/content/docs/`）からの相対パスから拡張子を除いたものになる（`keybindings/api.md`なら`keybindings/api`）。ファイルを移したり名前を変えたりするとトピック名も変わるので、`niwaterm docs show <旧名>`を書いている箇所をgrepで探して直す
+- frontmatterはフレームワークの規約に従い、`title`と`description`を必ず書く（`description`は`niwa docs list`の説明に使われる）
+- 本文は`.md`で書く。フレームワークのコンポーネントが必要なページだけ`.mdx`にする（`niwa docs show`がファイルをそのまま出力するため）。`.mdx`のページは`docs list`に載らない
+- `docs show`のトピック名は、contentディレクトリ（`website/src/content/docs/`）からの相対パスから拡張子を除いたものになる（`keybindings/api.md`なら`keybindings/api`）。ファイルを移したり名前を変えたりするとトピック名も変わるので、`niwa docs show <旧名>`を書いている箇所をgrepで探して直す
 - ページ間のリンクは`/niwaterm/<トピック名>/#<見出し>`の絶対パスで書く（`base`が`/niwaterm/`のため）。見出しのアンカーはgithub-sluggerの規則で作られ、英字は小文字になり全角括弧などの記号は消える。書いたら`mise run docs:build`の出力（`website/dist/`）で`id`が実在するか確かめる
 
 ## 新規ドキュメントを書くとき

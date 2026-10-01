@@ -27,13 +27,13 @@ export default define({
     "capture-stdout": {
       type: "boolean",
       description:
-        "commandの標準出力をキャプチャし、popupが閉じた後にこのCLIプロセス自身の標準出力へそのまま出力する（--waitは暗黙に有効になる。commandと同時指定必須）。fzf-tmuxのポップアップ相当の使い方を想定: 呼び出し元シェルは`selected=$(niwaterm popup open --capture-stdout -- fzf ...)`のように結果を直接受け取れる（UIの描画自体はpopup内に残ったまま、コマンドの標準出力だけを分離して返す）",
+        "commandの標準出力をキャプチャし、popupが閉じた後にこのCLIプロセス自身の標準出力へそのまま出力する（--waitは暗黙に有効になる。commandと同時指定必須）。fzf-tmuxのポップアップ相当の使い方を想定: 呼び出し元シェルは`selected=$(niwa popup open --capture-stdout -- fzf ...)`のように結果を直接受け取れる（UIの描画自体はpopup内に残ったまま、コマンドの標準出力だけを分離して返す）",
     },
     command: {
       type: "positional",
       multiple: true,
       description:
-        "デフォルトシェル（WSLプロファイル等も含む）でこのコマンドを実行する（省略時はシェルを起動したままにする）。コマンドが終了すると自動的にポップアップが閉じる（ワンショット実行。lazygit等のフルスクリーンTUIでも機能する。例: niwaterm popup open lazygit）",
+        "デフォルトシェル（WSLプロファイル等も含む）でこのコマンドを実行する（省略時はシェルを起動したままにする）。コマンドが終了すると自動的にポップアップが閉じる（ワンショット実行。lazygit等のフルスクリーンTUIでも機能する。例: niwa popup open lazygit）",
     },
   },
   run: async (ctx) => {

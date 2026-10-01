@@ -3,8 +3,8 @@
 gitワークツリーの一覧をサイドバーへ出し、絞り込んで開く・新しいブランチのワークツリーを作る。
 
 - 一覧はブランチ名・パスで絞り込める（`main`等のフラグも表示）
-- 行をクリック、または絞り込み欄で`Enter`を押すと`niwaterm worktree open`で開く（開いたBoardへ遷移する）
-- 下の入力欄にブランチ名を入れて`Enter`で`niwaterm worktree new`（作るだけで遷移はしない）。リモートにしか無いブランチ名でもよく、`origin/feat/x`のようにリモート名を付けても渡せる
+- 行をクリック、または絞り込み欄で`Enter`を押すと`niwa worktree open`で開く（開いたBoardへ遷移する）
+- 下の入力欄にブランチ名を入れて`Enter`で`niwa worktree new`（作るだけで遷移はしない）。リモートにしか無いブランチ名でもよく、`origin/feat/x`のようにリモート名を付けても渡せる
 - `⟳`ボタンで一覧を取り直す
 
 一覧の対象リポジトリは**一覧を取った時点で、フォーカス中タイルのアクティブタブが
@@ -39,7 +39,7 @@ export default defineConfig({
 
 保存するとホットリロードで反映される。サイドバー上部の「Worktrees」タブへ切り替えると一覧が出る。
 タブとして大きく開きたい場合は`new-custom-view-tab`アクションへキーを割り当てるか、
-`niwaterm tab new --custom-view --view worktrees`を使う。
+`niwa tab new --custom-view --view worktrees`を使う。
 
 ## 変えたくなりそうなところ
 
@@ -47,7 +47,7 @@ export default defineConfig({
 
 | 場所 | 既定 | 変える理由 |
 |---|---|---|
-| `const CLI` | `"niwaterm"` | wipビルドで試すなら`"niwaterm-dev"` |
+| `const CLI` | `"niwa"` | wipビルドで試すなら`"niwa-dev"` |
 | `create`の`--open board` | 作るが遷移しない | 作ってすぐ移りたいなら`--open board-switch` |
 | `currentCwd` | フォーカス中タイルのcwd | 常に同じリポジトリを見たいなら固定パスを返す |
 

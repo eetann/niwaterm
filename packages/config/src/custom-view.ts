@@ -21,7 +21,7 @@ export const WORKSPACES_VIEW_ID = "workspaces";
 
 export interface CustomViewConfig {
   /**
-   * キーバインド（`show-sidebar-view:<id>`）・CLI（`niwaterm sidebar switch --view <id>`）から
+   * キーバインド（`show-sidebar-view:<id>`）・CLI（`niwa sidebar switch --view <id>`）から
    * このビューを指すためのid。省略時はnameから導出する（resolveCustomViews参照）
    */
   id?: string;

@@ -34,15 +34,15 @@ export default {
 - タブの`cwd`は、リポジトリの一番上（`.niwaterm/`がある場所）からの相対パスで書ける。`cwd`を省略したタブも、そこで開く
 - `niwaterm.config.ts`に同じ名前のプリセットがあるときは、`.niwaterm/config.ts`のほうが使われる
 
-どちらのプリセットが使われるかは、`niwaterm layout list`の2列目で確かめられる。`[project: <パス>]`ならリポジトリの、`[global]`なら`niwaterm.config.ts`のプリセット。
+どちらのプリセットが使われるかは、`niwa layout list`の2列目で確かめられる。`[project: <パス>]`ならリポジトリの、`[global]`なら`niwaterm.config.ts`のプリセット。
 
 ## どこの`.niwaterm/`が使われるか
 
-`niwaterm layout list`・`layout apply`は、実行したディレクトリから親ディレクトリへ順に`.niwaterm/`を探す。リポジトリの中なら、どのサブディレクトリから実行しても同じプリセットが使える。
+`niwa layout list`・`layout apply`は、実行したディレクトリから親ディレクトリへ順に`.niwaterm/`を探す。リポジトリの中なら、どのサブディレクトリから実行しても同じプリセットが使える。
 
 gitのワークツリーで作業しているときに、そのワークツリーに`.niwaterm/`がなければ、元のリポジトリの`.niwaterm/`を使う。ただし、WSLのリポジトリをWindowsのniwatermで開いているときのように、niwatermが動いているマシンにgitがないと、元のリポジトリは探せない。
 
-`niwaterm worktree new` / `worktree open`の`--layout`は、元のリポジトリの`.niwaterm/`だけを見る。
+`niwa worktree new` / `worktree open`の`--layout`は、元のリポジトリの`.niwaterm/`だけを見る。
 
 ## 信頼の確認
 

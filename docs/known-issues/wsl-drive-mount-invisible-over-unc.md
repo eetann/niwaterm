@@ -9,7 +9,7 @@ description: WSLの9pサーバーが公開するのはディストロのルー�
 ## 症状
 
 WSL側のCLIから、Windowsのドライブ上（`/mnt/c/...`）にあるディレクトリを対象に
-`niwaterm worktree new` / `worktree open` でBoardを開くと、**タブのcwdが指定したディレクトリではなく
+`niwa worktree new` / `worktree open` でBoardを開くと、**タブのcwdが指定したディレクトリではなく
 ホームディレクトリになる**。エラーは出ず、シェルが普通に立ち上がるので気づきにくい。
 
 WSLプロファイルのタブが`/mnt/c`配下にいる状態で新しいタブを開いた（タブ追加・タイル分割）ときも同じで、

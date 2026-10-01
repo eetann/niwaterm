@@ -8,6 +8,6 @@ export default define({
   description: "起動時にBoardをレイアウトプリセットで組み直すかを設定する",
   subCommands: { layout: layoutCommand, restore: restoreCommand, clear: clearCommand },
   run: () => {
-    console.log('Run "niwaterm board startup layout/restore/clear --help" for details.');
+    console.log('Run "niwa board startup layout/restore/clear --help" for details.');
   },
 });

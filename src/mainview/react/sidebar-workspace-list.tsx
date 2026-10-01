@@ -125,7 +125,7 @@ function dropPositionAt(e: React.DragEvent<HTMLElement>): SidebarDropPosition {
 
 type EditingTarget = { kind: "board"; id: BoardId } | { kind: "workspace"; id: WorkspaceId };
 
-/** Board行のツールチップ・アイコンのaria-label。`niwaterm list`の[startup:]/[preset:]表示と対応させる */
+/** Board行のツールチップ・アイコンのaria-label。`niwa list`の[startup:]/[preset:]表示と対応させる */
 function startupLabel(startup: NonNullable<SidebarBoardItem["startup"]>): string {
   return startup.restoreMode === "layout"
     ? `起動時レイアウト: ${startup.preset}`

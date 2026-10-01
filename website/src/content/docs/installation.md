@@ -89,4 +89,4 @@ mise run start
 
 ## 次にやること
 
-アプリが起動したら、[セットアップ](/niwaterm/getting-started/)で`niwaterm`コマンドを使えるようにし、設定ファイルを置くディレクトリを作る。画面の作りは[画面の構成](/niwaterm/concepts/)で説明している。
+アプリが起動したら、[セットアップ](/niwaterm/getting-started/)で`niwa`コマンドを使えるようにし、設定ファイルを置くディレクトリを作る。画面の作りは[画面の構成](/niwaterm/concepts/)で説明している。

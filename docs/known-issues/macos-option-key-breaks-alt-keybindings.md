@@ -49,7 +49,7 @@ keydownリスナ冒頭にあるIMEガードがこれを早期returnで捨てる�
 
 webviewのconsole.logはメインプロセスのstdoutに出ないため、
 keydownの中身が知りたい時はkeydownリスナから`sendMessage("input", ...)`で
-ターミナルへ直接ダンプを流し込み、`niwaterm tab capture`で読むのが速い。
+ターミナルへ直接ダンプを流し込み、`niwa tab capture`で読むのが速い。
 `e.key` / `e.code` / `e.altKey` / `e.keyCode`と、
 webview側が受け取っているキーバインド表（`lastKeybindingsConfig.direct`のキー一覧）を
 同時に出すと、「キーが届いていない」のか「バインドが届いていない」のかを一度に切り分けられる。

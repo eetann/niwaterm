@@ -6,7 +6,7 @@ description: WSL2をミラーモード(networkingMode=mirrored)で使うと、WS
 
 # WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない
 
-WSLディストロのタブから`niwaterm`コマンドを実行すると、Windows側アプリが正常に起動しているのに
+WSLディストロのタブから`niwa`コマンドを実行すると、Windows側アプリが正常に起動しているのに
 すべてのサブコマンドが接続エラーになる。
 
 ```

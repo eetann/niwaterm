@@ -23,6 +23,6 @@ export default define({
     worktree: worktreeCommand,
   },
   run: () => {
-    console.log('Run "niwaterm board --help" for available subcommands.');
+    console.log('Run "niwa board --help" for available subcommands.');
   },
 });

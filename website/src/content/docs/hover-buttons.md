@@ -97,7 +97,7 @@ export default defineConfig({
 
 `show`はタブの状態が変わるたびに呼ばれる。時間のかかる処理は`show`ではなく`items`に書く。
 
-自分で目印を付けて絞りたいときは、そのタブで`niwaterm tab var set <名前> <値>`を実行し、`show`で`tab.vars`を見る。
+自分で目印を付けて絞りたいときは、そのタブで`niwa tab var set <名前> <値>`を実行し、`show`で`tab.vars`を見る。
 
 ## 取っ手の見た目を変える（handle）
 
@@ -138,9 +138,9 @@ css: `
 CLIから、ホバーボタンに並ぶボタンを一覧したり、枠を開いたままにしたりできる。見た目を確かめたり、スクリーンショットを撮ったりするときに使う。
 
 ```sh
-niwaterm tab hover list [--tab <tabId>]
-niwaterm tab hover reveal --position <position> [--tab <tabId>]
-niwaterm tab hover hide [--tab <tabId>]
+niwa tab hover list [--tab <tabId>]
+niwa tab hover reveal --position <position> [--tab <tabId>]
+niwa tab hover hide [--tab <tabId>]
 ```
 
 - `tab hover list` — そのタブに出るホバーボタンと、並ぶボタンの名前を一覧する

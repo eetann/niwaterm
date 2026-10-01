@@ -139,7 +139,7 @@ export type NiwaRPC = {
       /**
        * サイドバーの起動時レイアウトメニューに並べるプリセット一覧。プロジェクトローカルの
        * プリセットは対象Boardのフォーカス中タブのcwdから解決するため、そのBoardのタブで
-       * `niwaterm layout list`を叩いたのと同じ結果になる
+       * `niwa layout list`を叩いたのと同じ結果になる
        */
       listBoardLayouts: {
         params: { boardId: BoardId };
@@ -327,7 +327,7 @@ export type NiwaRPC = {
         boardPhases: ResolvedBoardPhase[];
         /** サイドバーのBoard行のステータスラインに並べる項目（sidebar.boardStatus）。設定した順 */
         boardStatus: ResolvedSidebarBoardStatusItem[];
-        /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwaterm config show`と同じ内容 */
+        /** 設定モーダル（show-config）に出す現在の設定値。CLIの`niwa config show`と同じ内容 */
         configSummary: ConfigSummary;
       };
       /**
@@ -352,7 +352,7 @@ export type NiwaRPC = {
       revealHoverButton: { tabId: TabId; position: HoverButtonPosition | null };
       copied: { chars: number; lines: number };
       /**
-       * サイドバーに出すビューの指定（CLIの`niwaterm sidebar switch`から）。viewIdは
+       * サイドバーに出すビューの指定（CLIの`niwa sidebar switch`から）。viewIdは
        * customViewのidかワークスペース一覧のid。存在確認はIPCサーバー側で済んでいる
        */
       setSidebarView: { viewId: string };
@@ -585,7 +585,7 @@ function findCustomView(viewId?: string): ResolvedCustomViewConfig | null {
 }
 
 /**
- * サイドバーに出すビューを切り替える（CLIの`niwaterm sidebar switch`から）。サイドバーの表示状態は
+ * サイドバーに出すビューを切り替える（CLIの`niwa sidebar switch`から）。サイドバーの表示状態は
  * ウィンドウごとにwebview側が持つため、呼び出し元タブのウィンドウ（不明ならフォーカス中）へ送る
  */
 function sendSidebarView(viewId: string, windowId: WindowId | null): void {
@@ -630,7 +630,7 @@ function refreshStatusBar(itemId?: string): StatusBarRefreshResult {
 }
 
 /**
- * そのタブで今出せるホバーボタンと、並ぶ項目を返す（CLIの`niwaterm tab hover list`から）。
+ * そのタブで今出せるホバーボタンと、並ぶ項目を返す（CLIの`niwa tab hover list`から）。
  * 項目の組み立てはホバー時と同じ経路を通すので、CLIで見えるものと画面に出るものが一致する
  */
 async function listHoverButtons(tabId: TabId): Promise<HoverButtonListEntry[]> {
@@ -649,7 +649,7 @@ async function listHoverButtons(tabId: TabId): Promise<HoverButtonListEntry[]> {
 }
 
 /**
- * ホバーボタンを強制的に出す／しまう（CLIの`niwaterm tab hover reveal`・`hide`から）。
+ * ホバーボタンを強制的に出す／しまう（CLIの`niwa tab hover reveal`・`hide`から）。
  * ホバーは合成入力では当てにくく、実機での目視・スクリーンショット確認の足場が要るため
  */
 function revealHoverButton(tabId: TabId, position: HoverButtonPosition | null): void {
@@ -1540,7 +1540,7 @@ function createWindowRpc(windowId: WindowId) {
           preset: string;
           trust?: boolean;
         }) => {
-          // 解決起点はそのBoardのフォーカス中タブのcwd。そのタブで`niwaterm layout apply`を
+          // 解決起点はそのBoardのフォーカス中タブのcwd。そのタブで`niwa layout apply`を
           // 叩いたのと同じ解決になり、プロジェクトローカルのプリセットも同じ顔ぶれで引ける
           const cwd = windowManager.getBoardFocusedCwd(boardId);
           applyAndBindStartupLayout(windowManager, shellProfiles, layouts, {

@@ -183,8 +183,8 @@ function constantSource(kind: SourceKind): CompletionItem[] | null {
       return AGENTS.map((agent) => ({ value: agent }));
     case "cliName":
       return [
-        { value: "niwaterm", description: "普段遣いのインスタンス" },
-        { value: "niwaterm-dev", description: "開発中のインスタンス" },
+        { value: "niwa", description: "普段遣いのインスタンス" },
+        { value: "niwa-dev", description: "開発中のインスタンス" },
       ];
     default:
       return null;

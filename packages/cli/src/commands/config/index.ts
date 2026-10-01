@@ -8,6 +8,6 @@ export default define({
     show: showCommand,
   },
   run: () => {
-    console.log('Run "niwaterm config --help" for available subcommands.');
+    console.log('Run "niwa config --help" for available subcommands.');
   },
 });

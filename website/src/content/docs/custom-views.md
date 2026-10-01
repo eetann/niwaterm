@@ -28,7 +28,7 @@ customViews: [
 
 ビューごとに別のHTMLファイルを指定する。同じファイルを2つのビューに指定すると、あとから開いたほうが真っ白のままになる。同じUIを使い回したいときは、中身を`<script src>`で読み込むだけのHTMLをビューの数だけ用意する。
 
-実際に付いた`id`は`niwaterm config show`で確かめられる。`name`が日本語のときや、ほかのビューと`id`が重なったときは、`custom-view-1`や`notes-2`のような`id`になる。
+実際に付いた`id`は`niwa config show`で確かめられる。`name`が日本語のときや、ほかのビューと`id`が重なったときは、`custom-view-1`や`notes-2`のような`id`になる。
 
 ### ビューを切り替える
 
@@ -43,7 +43,7 @@ customViews: [
   },
   ```
 - コマンドパレットの「Show Sidebar View: <名前>」
-- CLIの`niwaterm sidebar switch --view <id>`
+- CLIの`niwa sidebar switch --view <id>`
 
 サイドバーを閉じているときは、開いてから切り替える。
 
@@ -57,7 +57,7 @@ customViews: [
     niwa.keybind("shift+u", "new-custom-view-tab");
   },
   ```
-- CLIの`niwaterm tab new --custom-view --view <id>`で、ビューを選んで開く
+- CLIの`niwa tab new --custom-view --view <id>`で、ビューを選んで開く
 
 ## HTMLからniwatermを操作する（handlers）
 

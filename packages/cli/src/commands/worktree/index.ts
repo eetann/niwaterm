@@ -14,6 +14,6 @@ export default define({
     remove: removeCommand,
   },
   run: () => {
-    console.log('Run "niwaterm worktree --help" for available subcommands.');
+    console.log('Run "niwa worktree --help" for available subcommands.');
   },
 });

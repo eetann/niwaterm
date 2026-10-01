@@ -78,18 +78,18 @@ statusBar: {
 
 ### 外の変化に合わせて更新する
 
-`render`がファイルやgitの状態を読んでいる場合、それらが変わってもniwatermには分からないので、表示は更新されない。変えた側から`niwaterm status-bar refresh`を実行すると、その場で表示し直す。
+`render`がファイルやgitの状態を読んでいる場合、それらが変わってもniwatermには分からないので、表示は更新されない。変えた側から`niwa status-bar refresh`を実行すると、その場で表示し直す。
 
 ```sh
 # ノートを編集したあとに、idが"todo"の表示だけを更新する
-niwaterm status-bar refresh --item todo
+niwa status-bar refresh --item todo
 ```
 
 `--item`には、`render`などと一緒に書いた`id`を渡す。
 
 ## バーを隠す
 
-`niwaterm status-bar toggle`、またはコマンドパレットの「Toggle Status Bar」で、バーを隠したり出したりできる。隠した状態は、すべてのウィンドウで共通で、次に起動したときも続く。キーで切り替えたいときは、`toggle-status-bar`アクションを割り当てる（[キーバインド](/niwaterm/keybindings/#キーの割り当てを変える)）。
+`niwa status-bar toggle`、またはコマンドパレットの「Toggle Status Bar」で、バーを隠したり出したりできる。隠した状態は、すべてのウィンドウで共通で、次に起動したときも続く。キーで切り替えたいときは、`toggle-status-bar`アクションを割り当てる（[キーバインド](/niwaterm/keybindings/#キーの割り当てを変える)）。
 
 ステータスバーをまったく使わないなら、設定ファイルで`statusBar: false`にする。この場合はバーが作られないので、上の方法で出すこともできない。
 
@@ -101,27 +101,27 @@ statusBar: false,
 
 `left`・`center`・`right`の各要素にオブジェクトで書ける項目。
 
-| 項目       | 内容                                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`       | `niwaterm status-bar refresh --item`で指す名前。英数字・`_`・`-`で書く。省略すると`left-0`のような「場所-番号」になり、並べ替えると変わる |
-| `source`   | [決まった情報](#決まった情報を出す)の書き方                                                                                               |
-| `render`   | 表示を返す関数。`source`と両方書いたときは`render`が使われる                                                                              |
-| `interval` | `render`を呼び直す間隔（ミリ秒）。250以上                                                                                                 |
-| `prefix`   | 値の前に付ける文字。値がないときは出ない                                                                                                  |
-| `color`    | 文字の色                                                                                                                                  |
-| `tooltip`  | マウスを載せたときに出る説明                                                                                                              |
-| `run`      | クリックしたときの処理。`(ctx, niwa) => { ... }`                                                                                          |
+| 項目       | 内容                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | `niwa status-bar refresh --item`で指す名前。英数字・`_`・`-`で書く。省略すると`left-0`のような「場所-番号」になり、並べ替えると変わる |
+| `source`   | [決まった情報](#決まった情報を出す)の書き方                                                                                           |
+| `render`   | 表示を返す関数。`source`と両方書いたときは`render`が使われる                                                                          |
+| `interval` | `render`を呼び直す間隔（ミリ秒）。250以上                                                                                             |
+| `prefix`   | 値の前に付ける文字。値がないときは出ない                                                                                              |
+| `color`    | 文字の色                                                                                                                              |
+| `tooltip`  | マウスを載せたときに出る説明                                                                                                          |
+| `run`      | クリックしたときの処理。`(ctx, niwa) => { ... }`                                                                                      |
 
 `builtin:mode`には`prefix`と`color`を付けられない。モードの色は[`appearance.ui`](/niwaterm/appearance/#枠やバッジの色)で変える。
 
 ## CLI
 
 ```sh
-niwaterm status-bar refresh [--item <id>]
-niwaterm status-bar toggle [--visible on|off]
+niwa status-bar refresh [--item <id>]
+niwa status-bar toggle [--visible on|off]
 ```
 
-- `status-bar refresh` — 表示を作り直す。`--item`でその`id`の表示だけにする。`id`を付けていない表示のidは`niwaterm config show`の`statusBar`で確かめられる
+- `status-bar refresh` — 表示を作り直す。`--item`でその`id`の表示だけにする。`id`を付けていない表示のidは`niwa config show`の`statusBar`で確かめられる
 - `status-bar toggle` — バーを隠す・出す。`--visible on` / `off`で向きを決められ、省略すると今と逆になる
 
 どちらもすべてのウィンドウが対象になる。`statusBar: false`にしているときはエラーになる。

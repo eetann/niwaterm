@@ -12,7 +12,7 @@
 # NIWATERM_WIP_CONFIG_DIRはniwaterm-wipにだけ読ませる設定ディレクトリ(niwaterm.config.ts等の置き場)。
 # 普段遣いの設定を書き換えずに設定まわりを検証するための口で、未設定なら従来どおり
 # 両方が~/.config/niwaterm/を読む。アプリはWindows実機で動くためWindows側のパスで書き、
-# 中身はniwaterm.config.ts・node_modules込みで一式必要(`niwaterm init`で雛形を作れる)。
+# 中身はniwaterm.config.ts・node_modules込みで一式必要(`niwa init`で雛形を作れる)。
 #
 # niwaterm-wip（開発中ビルド）はgtrで作成した追加のgit worktree（devブランチ）で、
 # niwaterm-daily（普段遣いビルド）はこのリポジトリ本体（mainブランチ、gitの
@@ -357,32 +357,32 @@ fi
 
 # niwaterm CLIのリンク。ワークツリーごとに別名で共存させる。
 # `bun link`はパッケージ名(@niwaterm/cli)で登録するため、複数のワークツリーから実行すると
-# 後勝ちで`niwaterm`を奪い合う。実際、devワークツリーで作業していても`niwaterm`は
+# 後勝ちで`niwa`を奪い合う。実際、devワークツリーで作業していても`niwa`は
 # daily側のソースを指したままになり、CLI側の変更が反映されていないことに気づきにくかった
 # （さらにグローバルリンクがwin:sync対象外の古いコピーを指していたこともある）。
-# そのため、wip側は`niwaterm-dev`という別名の薄いラッパーにして棲み分ける。
+# そのため、wip側は`niwa-dev`という別名の薄いラッパーにして棲み分ける。
 [tasks."cli:link"]
-description = "現在のワークツリーのniwaterm CLIをリンクする（mainなら`niwaterm`、それ以外なら開発用の`niwaterm-dev`）"
+description = "現在のワークツリーのniwaterm CLIをリンクする（mainなら`niwa`、それ以外なら開発用の`niwa-dev`）"
 run = '''
 ROOT="$(git rev-parse --show-toplevel)"
 if [ "$(git branch --show-current)" = "main" ]; then
-  # daily(普段遣い)向け。bun linkでパッケージごと登録する（fzf-niwatermも一緒に張られる）
+  # daily(普段遣い)向け。bun linkでパッケージごと登録する（fzf-niwaも一緒に張られる）
   cd "$ROOT/packages/cli" && bun link
-  echo "niwaterm をリンクしました: $ROOT/packages/cli"
+  echo "niwa をリンクしました: $ROOT/packages/cli"
 else
   # wip(開発中ビルド)向け。上記の理由でbun linkは使わず、別名のラッパーを置いて共存させる
   ENTRY="$ROOT/packages/cli/src/index.ts"
-  BIN="$HOME/.bun/bin/niwaterm-dev"
+  BIN="$HOME/.bun/bin/niwa-dev"
   mkdir -p "$HOME/.bun/bin"
   cat > "$BIN" <<EOF
 #!/bin/sh
 # mise run cli:link が生成。直接編集しない。
 # 接続先はniwaterm-wipを既定にする。niwatermのタブ内から叩いた場合はアプリが注入した
 # 自インスタンスのNIWATERM_APP_VARIANTが優先されるため、他インスタンスを奪うことはない
-exec env NIWATERM_APP_VARIANT="\${NIWATERM_APP_VARIANT:-niwaterm-wip}" NIWATERM_CLI_NAME="niwaterm-dev" bun "$ENTRY" "\$@"
+exec env NIWATERM_APP_VARIANT="\${NIWATERM_APP_VARIANT:-niwaterm-wip}" NIWATERM_CLI_NAME="niwa-dev" bun "$ENTRY" "\$@"
 EOF
   chmod +x "$BIN"
-  echo "niwaterm-dev をリンクしました: $ENTRY"
+  echo "niwa-dev をリンクしました: $ENTRY"
 fi
 '''
 

@@ -99,7 +99,7 @@ const applyCommand = define({
   args: {
     name: {
       type: "positional",
-      description: "適用するプリセット名（niwaterm layout listで確認）",
+      description: "適用するプリセット名（niwa layout listで確認）",
     },
     replace: {
       type: "boolean",
@@ -220,6 +220,6 @@ export default define({
   description: "レイアウトプリセットを一覧・適用する（vde-layoutライク）",
   subCommands: { list: listCommand, apply: applyCommand },
   run: () => {
-    console.log('Run "niwaterm layout list" or "niwaterm layout apply <name>".');
+    console.log('Run "niwa layout list" or "niwa layout apply <name>".');
   },
 });

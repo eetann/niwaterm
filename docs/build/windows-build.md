@@ -323,7 +323,7 @@ New-Item -ItemType Junction -Path "$dst\node_modules\@niwaterm\config" -Target <
 ```
 
 あとは`niwaterm.config.ts`を置けば起動時に読まれる。実際に読まれている設定ディレクトリは
-`niwaterm-dev config show`の先頭行（`config: <パス>`）で確認できる。
+`niwa-dev config show`の先頭行（`config: <パス>`）で確認できる。
 
 ### タスクバーから起動する
 
@@ -362,7 +362,7 @@ electrobunはビルドの度に`buildFolder`配下を丸ごと作り直すため
 
 ### `browser-screenshot` が動かない（Bun本体の既知issue）
 
-`niwaterm browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
+`niwa browser-screenshot` を実行すると、サーバー側で次の例外が出て500エラーになる:
 
 ```
 error: Failed to spawn Chrome (set BUN_CHROME_PATH, backend.path, or install Chrome/Chromium)
@@ -387,7 +387,7 @@ $env:ELECTROBUN_CONSOLE=1
 ## 6. WSLディストロからniwaterm CLIを使う
 
 niwatermはWSLディストロ（NixOS等）をシェルプロファイルとしてタブに開ける。そのタブ内から
-`niwaterm` CLI（シェル統合のブランチ表示・エージェント統合のhooksが内部で呼び出す）を
+`niwa` CLI（シェル統合のブランチ表示・エージェント統合のhooksが内部で呼び出す）を
 使うには、以下の2つの対応が要る。
 
 ### 6-1. WSLディストロ内でも別途CLIセットアップが要る
@@ -404,17 +404,17 @@ mise run cli:link
 
 | ワークツリー          | コマンド        | 接続先の既定    |
 | --------------------- | --------------- | --------------- |
-| `main`（daily側）     | `niwaterm`      | niwaterm-daily  |
-| それ以外（devなど）   | `niwaterm-dev`  | niwaterm-wip    |
+| `main`（daily側）     | `niwa`      | niwaterm-daily  |
+| それ以外（devなど）   | `niwa-dev`  | niwaterm-wip    |
 
-**wipの動作確認では`niwaterm-dev`を使う**。`bun link`はパッケージ名(`@niwaterm/cli`)で登録するため、
-複数のワークツリーから実行すると後勝ちで`niwaterm`を奪い合い、devで作業していても`niwaterm`が
+**wipの動作確認では`niwa-dev`を使う**。`bun link`はパッケージ名(`@niwaterm/cli`)で登録するため、
+複数のワークツリーから実行すると後勝ちで`niwa`を奪い合い、devで作業していても`niwa`が
 daily側のソースを指したままになる（CLI側の変更が反映されていないことに気づきにくい）。
-これを避けるため、wip側は`bun link`を使わず`niwaterm-dev`という別名の薄いラッパーにしている。
+これを避けるため、wip側は`bun link`を使わず`niwa-dev`という別名の薄いラッパーにしている。
 
-WSL側のソースを直接指すので、`niwaterm-dev`はワークツリーを更新すれば即座に反映される
-（`niwaterm`側は`mise run daily:merge-dev`でmainへ取り込んだ時点で反映される）。
-`niwaterm --version` / `niwaterm-dev --version`で疎通確認する。
+WSL側のソースを直接指すので、`niwa-dev`はワークツリーを更新すれば即座に反映される
+（`niwa`側は`mise run daily:merge-dev`でmainへ取り込んだ時点で反映される）。
+`niwa --version` / `niwa-dev --version`で疎通確認する。
 
 ### 6-2. WSL→WindowsはTCPブリッジ経由で接続する
 
@@ -449,7 +449,7 @@ niwaterm固有の問題ではない。
 - **接続先インスタンスの切り替え**: `bridge-port`ファイル（およびUnix domain socket）を
   どのインスタンスから読むかは`NIWATERM_APP_VARIANT`で指定する（既定は`niwaterm-daily`）。
   ポートが動的になったため、タブ外から開発中ビルドへ繋ぎたい場合はポート番号ではなくこちらを使う:
-  `NIWATERM_APP_VARIANT=niwaterm-wip niwaterm ping`。
+  `NIWATERM_APP_VARIANT=niwaterm-wip niwa ping`。
   この変数はniwaterm自身がPTYへも注入するので、タブ内から叩く分には指定不要。
   **ただしタブ内では`NIWATERM_BRIDGE_PORT`（自インスタンスのポート）も注入済みで、
   そちらがAPP_VARIANTによる解決より先に使われる**。そのため普段遣いビルドのタブ内から
@@ -459,7 +459,7 @@ niwaterm固有の問題ではない。
 
   ```bash
   env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID \
-    NIWATERM_APP_VARIANT=niwaterm-wip niwaterm-dev ping
+    NIWATERM_APP_VARIANT=niwaterm-wip niwa-dev ping
   ```
 
   実際にどちらへ繋がったかは、`ping`が返すpidをWindows側のプロセス一覧
@@ -469,11 +469,11 @@ niwaterm固有の問題ではない。
 
 ```bash
 # WSL(NixOS)タブ内で実行
-niwaterm ping
+niwa ping
 # pong (pid ...)
 
-niwaterm tab var set mykey myvalue
-niwaterm tab var get mykey
+niwa tab var set mykey myvalue
+niwa tab var get mykey
 # myvalue
 ```
 
@@ -492,9 +492,9 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 | ターミナルが起動しない / PTYが動かない                                      | Windows側のBunが1.3.14未満。`bun upgrade` する                                                                                                                                                                                                                                                                                                                                        |
 | WebViewが真っ白                                                             | WebView2 Runtime未導入                                                                                                                                                                                                                                                                                                                                                                |
 | `browser-screenshot` が `unexpected status 500` で失敗する                  | Bun本体のWindows版`Bun.WebView`の既知issue（[oven-sh/bun#29102](https://github.com/oven-sh/bun/issues/29102)）。`BUN_CHROME_PATH`を設定しても直らない。niwaterm側の回避策は無く、Bun側の修正待ち                                                                                                                                                                                    |
-| `niwaterm ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
-| WSLディストロのタブ内で`niwaterm`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
-| WSLディストロのタブ内で`niwaterm ping`等が「アプリが起動していない可能性があります」「接続できませんでした」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、ブリッジのポートがbindできずlistenしていない、のいずれか。アプリ起動ログの`[bun] wsl bridge listening on ...`の有無で切り分ける（[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照） |
+| `niwa ping`等のCLIコマンドが応答なしでハングする                        | niwaterm自体の問題ではなく検証時の起動方法が原因のことが多い。`Start-Process`で起動する場合は`-NoNewWindow`を付ける（付けないとIPCサーバーへの接続がハングする現象を確認した）                                                                                                                                                                                                       |
+| WSLディストロのタブ内で`niwa`が`command not found`                      | WSLディストロには別途`bun link`が要る（「6-1. WSLディストロ内でも別途CLIセットアップが要る」参照）。Windows側リポジトリでのlinkとは独立                                                                                                                                                                                                                                              |
+| WSLディストロのタブ内で`niwa ping`等が「アプリが起動していない可能性があります」「接続できませんでした」等で失敗する | 「6-2. WSL→WindowsはTCPブリッジ経由で接続する」参照。Windows側アプリが古くTCPブリッジ非対応、ブリッジのポートがbindできずlistenしていない、のいずれか。アプリ起動ログの`[bun] wsl bridge listening on ...`の有無で切り分ける（[WSLミラーモードでTCPブリッジがlistenできず、CLIが繋がらない](/known-issues/wsl-mirrored-mode-breaks-tcp-bridge.md)参照） |
 | `send-keys`等でPTYへ書き込んだ直後にniwatermアプリ自体が`Segmentation fault`でクラッシュする | [Windows実機: PTY終了直後のdispose()でuse-after-freeクラッシュ](/known-issues/windows-pty-dispose-use-after-free.md)参照                                                                                                                                                                                                                                          |
 | タスクバーにピン留めしたアイコンから起動できない（ウィンドウが一瞬見えて消える） | ピン留め対象が`launcher.exe`ではなく`bun.exe`になっている。[タスクバーからdev/dailyビルドを起動するとWindows Terminalが開き、閉じるとniwatermごと終了する](/known-issues/windows-taskbar-launch-opens-windows-terminal.md)参照 |
 | Explorerから起動するとWindows Terminalも開き、閉じるとniwatermも終了する | devビルドのlauncherが`bun.exe`をコンソール付きで起動するため。postBuildフック(`scripts/patch-win-bun-subsystem.ts`)適用後のビルドで解消する。[同上](/known-issues/windows-taskbar-launch-opens-windows-terminal.md) |

@@ -14,6 +14,6 @@ export default define({
     zoom: zoomCommand,
   },
   run: () => {
-    console.log('Run "niwaterm tile --help" for available subcommands.');
+    console.log('Run "niwa tile --help" for available subcommands.');
   },
 });

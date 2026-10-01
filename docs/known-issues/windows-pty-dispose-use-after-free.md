@@ -62,12 +62,12 @@ function dispose(): void {
 }
 ```
 
-これまで採用していた「`;`でコマンドを連結せず改行で分けて送信する」という回避策（popupの`command`実行）は、この根本原因に対する対症療法にすぎない。ガード追加後は`;`区切りでも安全になる見込みだが、対話的フルスクリーンTUI（lazygit等）でワンショット実行の`exit`が意図しない入力として扱われる問題（[CLIリファレンス](/guide/cli.md)「niwaterm popup」参照）は別の不具合であり、このガードでは解決しない。
+これまで採用していた「`;`でコマンドを連結せず改行で分けて送信する」という回避策（popupの`command`実行）は、この根本原因に対する対症療法にすぎない。ガード追加後は`;`区切りでも安全になる見込みだが、対話的フルスクリーンTUI（lazygit等）でワンショット実行の`exit`が意図しない入力として扱われる問題（[CLIリファレンス](/guide/cli.md)「niwa popup」参照）は別の不具合であり、このガードでは解決しない。
 
 ## 関連
 
 - [Windowsでのビルド・実行手順](/build/windows-build.md) — 実機セットアップ手順
-- [CLIリファレンス](/guide/cli.md) — `niwaterm popup`の既知の制約
+- [CLIリファレンス](/guide/cli.md) — `niwa popup`の既知の制約
 - `src/bun/terminal-session.ts` — `dispose()` / `pty.onData`
 - `src/bun/pty.ts` — `kill()`（`terminal.close()` + `proc.kill()`）
 - `src/bun/ghostty.ts` — `free()`（`ghostty_terminal_free`）

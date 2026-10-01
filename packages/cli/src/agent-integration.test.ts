@@ -249,7 +249,7 @@ describe("agent setup", () => {
               other,
               {
                 command:
-                  'if [ -n "$NIWATERM_TAB_ID" ]; then niwaterm tab var set agent_status idle; fi',
+                  'if [ -n "$NIWATERM_TAB_ID" ]; then niwa tab var set agent_status idle; fi',
               },
             ],
           },
@@ -257,12 +257,12 @@ describe("agent setup", () => {
         SubagentStop: [{ hooks: [other] }],
       },
     };
-    const merged = mergeAgentHooks(current, "codex-cli", "niwaterm-dev");
+    const merged = mergeAgentHooks(current, "codex-cli", "niwa-dev");
     expect(merged.model).toBe("keep");
     expect(merged.hooks?.Stop?.[0]?.hooks).toEqual([other]);
     expect(merged.hooks?.SubagentStop).toEqual(current.hooks.SubagentStop);
-    expect(merged.hooks?.Stop?.[1]?.hooks[0]?.command).toStartWith("niwaterm-dev _hook codex-cli");
-    expect(mergeAgentHooks(merged, "codex-cli", "niwaterm-dev")).toEqual(merged);
+    expect(merged.hooks?.Stop?.[1]?.hooks[0]?.command).toStartWith("niwa-dev _hook codex-cli");
+    expect(mergeAgentHooks(merged, "codex-cli", "niwa-dev")).toEqual(merged);
     expect(current.hooks.Stop[0]?.hooks).toHaveLength(2);
   });
   test("旧dev用hookを移行し、タブ環境を使う他のhookは保持する", () => {
@@ -275,23 +275,33 @@ describe("agent setup", () => {
               other,
               {
                 command:
-                  'if [ -n "$NIWATERM_TAB_ID" ]; then niwaterm-dev tab var set agent_status idle; fi',
+                  'if [ -n "$NIWATERM_TAB_ID" ]; then niwa-dev tab var set agent_status idle; fi',
               },
             ],
           },
         ],
       },
     };
-    const merged = mergeAgentHooks(current, "claude-code", "niwaterm-dev");
+    const merged = mergeAgentHooks(current, "claude-code", "niwa-dev");
     expect(merged.hooks?.Stop?.[0]?.hooks).toEqual([other]);
     expect(merged.hooks?.Stop).toHaveLength(2);
+  });
+  test("旧コマンド名niwatermで入れたhookを置き換える", () => {
+    const current = {
+      hooks: {
+        Stop: [{ hooks: [{ command: "niwaterm _hook claude-code >/dev/null 2>&1 || true" }] }],
+      },
+    };
+    const merged = mergeAgentHooks(current, "claude-code", "niwa");
+    expect(JSON.stringify(merged)).not.toContain("niwaterm _hook");
+    expect(merged.hooks?.Stop?.[0]?.hooks[0]?.command).toStartWith("niwa _hook claude-code");
   });
   test("リンク切れの設定先を置き換えない", async () => {
     const directory = await mkdtemp(join(tmpdir(), "niwaterm-agent-"));
     try {
       const path = join(directory, "hooks.json");
       await symlink(join(directory, "missing.json"), path);
-      await expect(setupAgent("codex-cli", path, "niwaterm")).rejects.toThrow("シンボリックリンク");
+      await expect(setupAgent("codex-cli", path, "niwa")).rejects.toThrow("シンボリックリンク");
       expect(await readdir(directory)).toEqual(["hooks.json"]);
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -309,7 +319,7 @@ describe("agent setup", () => {
       ]) {
         const path = join(directory, "hooks.json");
         await writeFile(path, contents);
-        await expect(setupAgent("codex-cli", path, "niwaterm")).rejects.toThrow();
+        await expect(setupAgent("codex-cli", path, "niwa")).rejects.toThrow();
         expect(await readFile(path, "utf8")).toBe(contents);
         expect(await readdir(directory)).toEqual(["hooks.json"]);
       }
@@ -321,16 +331,16 @@ describe("agent setup", () => {
     const directory = await mkdtemp(join(tmpdir(), "niwaterm-agent-"));
     try {
       const path = join(directory, "config with spaces", "hooks.json");
-      expect((await setupAgent("codex-cli", path, "niwaterm")).changed).toBe(true);
+      expect((await setupAgent("codex-cli", path, "niwa")).changed).toBe(true);
       const original = await readFile(path, "utf8");
       const link = join(directory, "linked.json");
       await symlink(path, link);
-      expect((await setupAgent("codex-cli", link, "niwaterm-dev")).changed).toBe(true);
+      expect((await setupAgent("codex-cli", link, "niwa-dev")).changed).toBe(true);
       const files = await readdir(join(directory, "config with spaces"));
       const backup = files.find((file) => file.endsWith(".bak"))!;
       expect(await readFile(join(directory, "config with spaces", backup), "utf8")).toBe(original);
       expect((await stat(path)).mode & 0o777).toBe(0o600);
-      expect((await setupAgent("codex-cli", path, "niwaterm-dev")).changed).toBe(false);
+      expect((await setupAgent("codex-cli", path, "niwa-dev")).changed).toBe(false);
       expect(await readdir(join(directory, "config with spaces"))).toEqual(files);
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -341,12 +351,12 @@ describe("agent setup", () => {
     try {
       const path = join(directory, "settings.json");
       const result = await invoke(
-        ["agent", "setup", "claude-code", "--config", path, "--cli", "niwaterm-dev"],
+        ["agent", "setup", "claude-code", "--config", path, "--cli", "niwa-dev"],
         "",
       );
       expect(result.code).toBe(0);
       expect(JSON.parse(await readFile(path, "utf8")).hooks.Stop[0].hooks[0].command).toStartWith(
-        "niwaterm-dev _hook claude-code",
+        "niwa-dev _hook claude-code",
       );
     } finally {
       await rm(directory, { recursive: true, force: true });

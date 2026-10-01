@@ -16,6 +16,6 @@ export default define({
     move: moveCommand,
   },
   run: () => {
-    console.log('Run "niwaterm workspace --help" for available subcommands.');
+    console.log('Run "niwa workspace --help" for available subcommands.');
   },
 });

@@ -12,6 +12,6 @@ export default define({
     close: closeCommand,
   },
   run: () => {
-    console.log('Run "niwaterm window --help" for available subcommands.');
+    console.log('Run "niwa window --help" for available subcommands.');
   },
 });

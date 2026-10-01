@@ -3,13 +3,13 @@ title: ワークツリー
 description: ブランチごとにgitワークツリーを作り、それぞれをBoardとして開く・切り替える・削除する
 ---
 
-`niwaterm worktree`コマンドを使うと、ブランチごとにgitのワークツリー（ブランチ別の作業ディレクトリ）を作り、それぞれを[Board](/niwaterm/concepts/#board)として開ける。サイドバーでBoardを切り替えるだけで、ブランチごとの作業場所を行き来できる。
+`niwa worktree`コマンドを使うと、ブランチごとにgitのワークツリー（ブランチ別の作業ディレクトリ）を作り、それぞれを[Board](/niwaterm/concepts/#board)として開ける。サイドバーでBoardを切り替えるだけで、ブランチごとの作業場所を行き来できる。
 
 ```sh
-niwaterm worktree new feat/login     # ワークツリーを作ってBoardで開く
-niwaterm worktree open feat/login    # 作ったワークツリーを開く
-niwaterm worktree list               # ワークツリーの一覧
-niwaterm worktree remove feat/login  # ワークツリーを削除してBoardを閉じる
+niwa worktree new feat/login     # ワークツリーを作ってBoardで開く
+niwa worktree open feat/login    # 作ったワークツリーを開く
+niwa worktree list               # ワークツリーの一覧
+niwa worktree remove feat/login  # ワークツリーを削除してBoardを閉じる
 ```
 
 作ったときにパッケージをインストールする、削除するときにコンテナを止める、といった処理も設定ファイルに書ける（[ワークツリーのフックと承認](/niwaterm/worktrees/hooks/)）。
@@ -17,7 +17,7 @@ niwaterm worktree remove feat/login  # ワークツリーを削除してBoardを
 ## ワークツリーを作る
 
 ```sh
-niwaterm worktree new feat/login
+niwa worktree new feat/login
 ```
 
 ブランチ`feat/login`のワークツリーを作り、Boardとして開く。Boardにはブランチ名が付く。
@@ -33,8 +33,8 @@ niwaterm worktree new feat/login
 手元にないブランチ名を渡すと、リモートのブランチから作る。誰かがpushしたブランチをレビューしたいときは、ブランチ名を渡すだけでよい。作る前に`git fetch`するので、pushされたばかりのブランチも見つかる。
 
 ```sh
-niwaterm worktree new feat/x          # 手元 → リモート → 新規 の順に探す
-niwaterm worktree new origin/feat/x   # リモートから作ると明示する
+niwa worktree new feat/x          # 手元 → リモート → 新規 の順に探す
+niwa worktree new origin/feat/x   # リモートから作ると明示する
 ```
 
 できたブランチはリモートのブランチを追跡するので、そのまま`git pull`・`git push`できる。リモートが複数あるときは`origin`を使う。別のリモートにするときは`--remote upstream`か`upstream/feat/x`のように指定する。
@@ -44,7 +44,7 @@ fetchに失敗しても、警告を出して作成を続ける。オフライン
 ## ワークツリーを開く
 
 ```sh
-niwaterm worktree open feat/login
+niwa worktree open feat/login
 ```
 
 作ってあるワークツリーをBoardとして開き、そのBoardへ切り替える。ワークツリーはブランチ名・パス・ディレクトリ名のどれでも指定できる。そのワークツリーのBoardがすでに開いていれば、新しく作らずにそのBoardへ切り替える。
@@ -52,7 +52,7 @@ niwaterm worktree open feat/login
 ## ワークツリーの一覧
 
 ```sh
-niwaterm worktree list
+niwa worktree list
 ```
 
 ```
@@ -67,7 +67,7 @@ niwaterm worktree list
 ## ワークツリーを削除する
 
 ```sh
-niwaterm worktree remove feat/login
+niwa worktree remove feat/login
 ```
 
 ワークツリーをディレクトリごと削除し、そのワークツリーのBoardを閉じる。スペースで区切って複数指定できる。デフォルトではブランチは残る。
@@ -86,7 +86,7 @@ Boardには「このBoardはこのワークツリーの作業用」という紐�
 
 - サイドバーのBoardを右クリックして「ワークツリーを設定」を選ぶ。入力欄には今のディレクトリが入っているので、そのまま確定すればよい
 - コマンドパレットから`Set Board Worktree Directory`を実行する
-- CLIで`niwaterm board worktree set .`を実行する（`.`は今いるディレクトリ）
+- CLIで`niwa board worktree set .`を実行する（`.`は今いるディレクトリ）
 
 紐づけておくと、次のように動く。
 
@@ -94,7 +94,7 @@ Boardには「このBoardはこのワークツリーの作業用」という紐�
 - ワークツリーのディレクトリがなくなると、サイドバーのBoardに警告のアイコンが出る
 - [`board.newTabCwd: "worktree"`](/niwaterm/boards/#新しいタブを開く場所)にすると、新しいタブやタイルがワークツリーのディレクトリで開く
 
-紐づけを外すときは、入力欄を空にして確定するか、`niwaterm board worktree clear`を実行する。
+紐づけを外すときは、入力欄を空にして確定するか、`niwa board worktree clear`を実行する。
 
 ## 設定（`worktree`）
 
@@ -187,10 +187,10 @@ git config niwaterm.worktree.fetch false
 
 ### `board worktree`
 
-| コマンド                             | 内容                               |
-| ------------------------------------ | ---------------------------------- |
-| `niwaterm board worktree set <path>` | Boardにワークツリーを紐づける      |
-| `niwaterm board worktree clear`      | 紐づけを外す                       |
-| `niwaterm board worktree show`       | 紐づけているワークツリーを表示する |
+| コマンド                         | 内容                               |
+| -------------------------------- | ---------------------------------- |
+| `niwa board worktree set <path>` | Boardにワークツリーを紐づける      |
+| `niwa board worktree clear`      | 紐づけを外す                       |
+| `niwa board worktree show`       | 紐づけているワークツリーを表示する |
 
 どれも`--board <boardId>`で対象のBoardを指定できる。省略すると、実行したタブのBoardが対象になる。

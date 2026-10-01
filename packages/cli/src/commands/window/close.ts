@@ -9,7 +9,7 @@ export default define({
     window: {
       type: "string",
       required: true,
-      description: "閉じるwindowId（niwaterm window listで確認）",
+      description: "閉じるwindowId（niwa window listで確認）",
     },
   },
   run: async (ctx) => {

@@ -13,7 +13,7 @@ import type { HoverButtonConfig, HoverButtonContext, HoverButtonItem } from "./h
 import type { Niwa } from "./niwa";
 
 export interface ClaudePromptJumpOptions extends Omit<HoverButtonConfig, "items"> {
-  /** PATHにあるniwaterm CLIのコマンド名。devビルドで試すなら"niwaterm-dev" */
+  /** PATHにあるniwaterm CLIのコマンド名。devビルドで試すなら"niwa-dev" */
   cli?: string;
   /**
    * modがプロンプト上の帯へ置いたButtonを押すキー。既定はClaude Codeの`app:openArtifact`に
@@ -33,7 +33,7 @@ export interface ClaudePromptJumpOptions extends Omit<HoverButtonConfig, "items"
   latestKey?: string | false;
 }
 
-/** ジャンプ先のプロンプトのuuidを渡すタブ変数。modが`niwaterm tab var get`で読む */
+/** ジャンプ先のプロンプトのuuidを渡すタブ変数。modが`niwa tab var get`で読む */
 const JUMP_VAR = "agent_jump";
 
 /**
@@ -137,7 +137,7 @@ function isClaudeTab(ctx: HoverButtonContext): boolean {
  */
 export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverButtonConfig {
   const {
-    cli = "niwaterm",
+    cli = "niwa",
     jumpKey = "C-]",
     itemStyle = "text",
     labelChars = 20,

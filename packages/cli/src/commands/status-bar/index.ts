@@ -10,6 +10,6 @@ export default define({
     toggle: toggleCommand,
   },
   run: () => {
-    console.log('Run "niwaterm status-bar --help" for available subcommands.');
+    console.log('Run "niwa status-bar --help" for available subcommands.');
   },
 });

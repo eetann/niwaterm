@@ -5,8 +5,8 @@ description: niwaterm CLIを使えるようにして設定ファイルを作る�
 
 アプリを起動できたら、次の2つを済ませる。
 
-1. `niwaterm`コマンド（CLI）を使えるようにする
-2. `niwaterm init`で設定ファイルを作る
+1. `niwa`コマンド（CLI）を使えるようにする
+2. `niwa init`で設定ファイルを作る
 
 どちらも1回やれば終わる。アプリのビルドと起動がまだなら、先に[インストール](/niwaterm/installation/)を済ませる。
 
@@ -19,9 +19,9 @@ cd packages/cli
 bun link
 ```
 
-これで`niwaterm`コマンドが`~/.bun/bin`に入る。`~/.bun/bin`にPATHが通っていなければ追加する。アプリを起動した状態で`niwaterm ping`を実行し、`pong (pid …)`と返れば使える。
+これで`niwa`コマンドが`~/.bun/bin`に入る。`~/.bun/bin`にPATHが通っていなければ追加する。アプリを起動した状態で`niwa ping`を実行し、`pong (pid …)`と返れば使える。
 
-リポジトリの場所を指すリンクなので、リポジトリを移動・削除すると`niwaterm`コマンドも動かなくなる。そのときは移動先でもう一度`bun link`する。
+リポジトリの場所を指すリンクなので、リポジトリを移動・削除すると`niwa`コマンドも動かなくなる。そのときは移動先でもう一度`bun link`する。
 
 ### Windowsの場合
 
@@ -33,10 +33,10 @@ WSLのディストロをタブで開いて使うなら、WSL側のリポジト�
 
 niwatermの設定は`~/.config/niwaterm/niwaterm.config.ts`にTypeScriptで書く。エディタで補完が使えるので、どんな設定項目があるかを補完候補から探しながら書ける。
 
-雛形は`niwaterm init`で作る。
+雛形は`niwa init`で作る。
 
 ```sh
-niwaterm init
+niwa init
 ```
 
 `~/.config/niwaterm/`に`niwaterm.config.ts`と、補完に必要な`package.json`・`tsconfig.json`ができ、必要なパッケージのインストールまで済む。すでにあるファイルは上書きしないので、何度実行しても大丈夫。
@@ -72,7 +72,7 @@ export default defineConfig({
 
 環境変数`NIWATERM_CONFIG_DIR`に絶対パスを入れて起動すると、`~/.config/niwaterm/`の代わりにそのディレクトリの設定を読む。普段の設定を変えずに別の設定を試したいときに使う。
 
-ディレクトリごと切り替わるので、`niwaterm.config.ts`だけでなく`package.json`や`node_modules/`も一式そろえる。雛形は`NIWATERM_CONFIG_DIR=<パス> niwaterm init`で作れる。この環境変数は、niwatermが開いたタブのシェルには引き継がれない。
+ディレクトリごと切り替わるので、`niwaterm.config.ts`だけでなく`package.json`や`node_modules/`も一式そろえる。雛形は`NIWATERM_CONFIG_DIR=<パス> niwa init`で作れる。この環境変数は、niwatermが開いたタブのシェルには引き継がれない。
 
 ## ホットリロード
 
@@ -88,7 +88,7 @@ export default defineConfig({
 
 ## 現在の設定値を確認する
 
-「書いたのに反映されない」ときは、いま実際に使われている設定を見る。アプリ内ではprefixキーのあとに`i`（またはコマンドパレットの「Show Settings」）で、CLIからは`niwaterm config show`で表示できる。
+「書いたのに反映されない」ときは、いま実際に使われている設定を見る。アプリ内ではprefixキーのあとに`i`（またはコマンドパレットの「Show Settings」）で、CLIからは`niwa config show`で表示できる。
 
 表示される内容は次のとおり。
 
@@ -96,4 +96,4 @@ export default defineConfig({
 - 値が正しくなくて無視した項目と、デフォルト値に戻した項目（「無視した設定」）。正しくない項目があっても、その項目だけを無視して残りは反映している
 - 各設定の現在の値。設定ファイルに書いていない項目もデフォルト値で表示される
 
-キーバインドの割り当ての一覧は、ここには出ない。`niwaterm keybind list`で確認する。関数で書いた設定（右クリックメニューやワークツリーのフックなど）も表示されない。
+キーバインドの割り当ての一覧は、ここには出ない。`niwa keybind list`で確認する。関数で書いた設定（右クリックメニューやワークツリーのフックなど）も表示されない。

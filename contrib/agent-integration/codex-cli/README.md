@@ -5,7 +5,7 @@ Codex CLIのhooksから、状態と要約をniwatermのサイドバーへ通知�
 ## 導入
 
 ```sh
-niwaterm agent setup codex-cli
+niwa agent setup codex-cli
 ```
 
 `$CODEX_HOME/hooks.json`（未設定なら`~/.codex/hooks.json`）へ、既存の他ツールのhooksを残して追加する。
@@ -13,7 +13,7 @@ Codexの`/hooks`で追加・更新された設定を確認して信頼し、Code
 hooksを無効にしている場合は、`config.toml`の既存の`[features]`で`hooks = true`にする。
 設定はCodex CLI 0.153.0と[公式Hooks仕様](https://learn.chatgpt.com/docs/hooks)を基準にしている。
 
-wipでは`niwaterm-dev agent setup codex-cli`を使う。
+wipでは`niwa-dev agent setup codex-cli`を使う。
 プロジェクト単位なら`--config .codex/hooks.json`を付け、そのプロジェクトもCodexで信頼する。
 Codexは複数の設定元のhooksを読み込むため、グローバルとプロジェクトに重複して導入しない。
 既に`config.toml`の`[hooks]`にniwaterm用の設定があれば、そちらは手動で削除する。

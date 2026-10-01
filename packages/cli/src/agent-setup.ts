@@ -38,22 +38,19 @@ function validateConfig(value: unknown): asserts value is Config {
   }
 }
 
+// `niwaterm`はCLIの旧コマンド名。それで導入済みのhooksも`agent setup`の再実行で置き換えられるよう一致させる
 function isNiwatermHook(handler: Handler): boolean {
   if (typeof handler.command !== "string") return false;
   return (
-    /\bniwaterm(?:-dev)?\s+_hook\s+(?:claude-code|codex-cli)\b/.test(handler.command) ||
+    /\bniwa(?:term)?(?:-dev)?\s+_hook\s+(?:claude-code|codex-cli)\b/.test(handler.command) ||
     (handler.command.includes("NIWATERM_TAB_ID") &&
-      /(?:niwaterm(?:-dev)?\s+tab\s+var\s+set\s+agent(?:_status(?:_text)?)?\s|\$niwa_cli)/.test(
+      /(?:niwa(?:term)?(?:-dev)?\s+tab\s+var\s+set\s+agent(?:_status(?:_text)?)?\s|\$niwa_cli)/.test(
         handler.command,
       ))
   );
 }
 
-export function mergeAgentHooks(
-  current: unknown,
-  agent: Agent,
-  cli: "niwaterm" | "niwaterm-dev",
-): Config {
+export function mergeAgentHooks(current: unknown, agent: Agent, cli: "niwa" | "niwa-dev"): Config {
   validateConfig(current);
   const merged = structuredClone(current);
   const hooks = merged.hooks ?? {};
@@ -70,7 +67,7 @@ export function mergeAgentHooks(
     const entries = structuredClone(groups);
     for (const group of entries) {
       for (const handler of group.hooks) {
-        handler.command = handler.command.replace(/^niwaterm /, `${cli} `);
+        handler.command = handler.command.replace(/^niwa /, `${cli} `);
       }
     }
     hooks[event] = [...(hooks[event] ?? []), ...entries];
@@ -84,7 +81,7 @@ export function agentConfigPath(agent: Agent): string {
     : join(process.env["CLAUDE_CONFIG_DIR"] || join(homedir(), ".claude"), "settings.json");
 }
 
-export async function setupAgent(agent: Agent, path: string, cli: "niwaterm" | "niwaterm-dev") {
+export async function setupAgent(agent: Agent, path: string, cli: "niwa" | "niwa-dev") {
   let target = resolve(path);
   let original: string | undefined;
   let mode = 0o600;

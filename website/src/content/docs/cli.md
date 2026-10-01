@@ -3,7 +3,7 @@ title: CLIからの操作
 description: niwaterm CLI（niwatermコマンド）の全コマンドの一覧と、操作対象の省略・ドキュメントの読み方
 ---
 
-niwatermは、`niwaterm`コマンド（CLI）からも操作できる。タイルを分割する、タブへキーを送る、画面の内容を取るといった操作を、スクリプトやAIエージェントから呼べる。コマンドは`niwaterm tab new`のように、操作する対象ごとにまとまっている。使えるようにする手順は[セットアップ](/niwaterm/getting-started/)を参照。
+niwatermは、`niwa`コマンド（CLI）からも操作できる。タイルを分割する、タブへキーを送る、画面の内容を取るといった操作を、スクリプトやAIエージェントから呼べる。コマンドは`niwa tab new`のように、操作する対象ごとにまとまっている。使えるようにする手順は[セットアップ](/niwaterm/getting-started/)を参照。
 
 ## コマンド一覧
 
@@ -56,15 +56,15 @@ niwatermは、`niwaterm`コマンド（CLI）からも操作できる。タイ�
 `--help`はどのコマンドにも付けられ、そのコマンドのオプションを一覧する。
 
 ```sh
-niwaterm --help
-niwaterm ping --help
+niwa --help
+niwa ping --help
 ```
 
 ```sh
-niwaterm docs list [--json]
-niwaterm docs show <name>
+niwa docs list [--json]
+niwa docs show <name>
 ```
 
-このドキュメントサイトの各ページは、ターミナルでも読める。`niwaterm docs list`でページの一覧を`name<TAB>description`の形で出し、`niwaterm docs show <name>`でそのページを出す。AIエージェントにniwatermを操作させるとき、CLIだけでドキュメントを読ませられる。`--json`を付けると、一覧をJSONで出す。
+このドキュメントサイトの各ページは、ターミナルでも読める。`niwa docs list`でページの一覧を`name<TAB>description`の形で出し、`niwa docs show <name>`でそのページを出す。AIエージェントにniwatermを操作させるとき、CLIだけでドキュメントを読ませられる。`--json`を付けると、一覧をJSONで出す。
 
 `name`は、ドキュメントサイトのURLのうち`/niwaterm/`より後ろの部分と同じ（`/niwaterm/keybindings/api/`なら`keybindings/api`）。トップページは一覧に出ない。

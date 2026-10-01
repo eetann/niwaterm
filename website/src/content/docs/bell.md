@@ -71,10 +71,10 @@ niwa.on("bell", (event) => {
 
 ## CLIから通知を出す（`notify`）
 
-ベルとは別に、`niwaterm notify`でデスクトップ通知を出せる。AIエージェントやスクリプトから、作業が終わったことを知らせるときに使う。
+ベルとは別に、`niwa notify`でデスクトップ通知を出せる。AIエージェントやスクリプトから、作業が終わったことを知らせるときに使う。
 
 ```sh
-niwaterm notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent] [--tab <tabId>]
+niwa notify --title <title> [--body <body>] [--subtitle <subtitle>] [--silent] [--tab <tabId>]
 ```
 
 - `--title`だけが必須。`--silent`を付けると通知音を鳴らさない

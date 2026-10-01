@@ -4,13 +4,13 @@
 # OSのANSIコードページ（日本語環境ならCP932）として読むため、BOMを落とすと
 # 日本語コメントが壊れてスクリプト全体がパースエラーになる。
 # タブ内のシェルが自分のgitブランチをniwatermのサイドバーへ通知する。
-# プロンプト表示のたびに`niwaterm tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
+# プロンプト表示のたびに`niwa tab var set branch <branch>`相当を呼ぶ（値が変わった時のみ）。
 # 導入: $PROFILEに以下を追記する
 #   if ($env:NIWATERM_TAB_ID) { . C:\path\to\niwaterm\contrib\shell-integration\niwaterm.ps1 }
 #
 # NIWATERM_TAB_IDはniwaterm内で起動したシェルにのみ自動設定される環境変数なので、
 # niwaterm外のターミナル（この行を無条件でドットソースした場合を含む）では何もしない。
-if ($env:NIWATERM_TAB_ID -and (Get-Command niwaterm -ErrorAction SilentlyContinue)) {
+if ($env:NIWATERM_TAB_ID -and (Get-Command niwa -ErrorAction SilentlyContinue)) {
     $script:NiwatermLastBranch = $null
     # 既存のprompt関数を上書きしても壊さないよう、元の実装を保持して最後に呼ぶ
     $script:NiwatermOriginalPrompt = $function:prompt
@@ -40,7 +40,7 @@ if ($env:NIWATERM_TAB_ID -and (Get-Command niwaterm -ErrorAction SilentlyContinu
         if ($branch -ne $script:NiwatermLastBranch) {
             $script:NiwatermLastBranch = $branch
             # Start-Processで非同期起動。プロンプト表示をniwaterm CLI起動でブロックしない
-            Start-Process -FilePath "niwaterm" -ArgumentList @("tab", "var", "set", "branch", "$branch") `
+            Start-Process -FilePath "niwa" -ArgumentList @("tab", "var", "set", "branch", "$branch") `
                 -WindowStyle Hidden -RedirectStandardOutput "NUL" -RedirectStandardError "NUL"
         }
 

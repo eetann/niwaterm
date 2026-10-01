@@ -8,7 +8,7 @@ description: EPIPE対策でprocess.stdoutへerrorハンドラを登録してい�
 
 ## 症状
 
-`niwaterm`コマンドの出力を他のコマンドへパイプで渡すと、内容が途中で切れる。
+`niwa`コマンドの出力を他のコマンドへパイプで渡すと、内容が途中で切れる。
 JSONを出すコマンドなら受け取り側が`JSON Parse error: Unterminated string`で落ちる。
 出力先がファイル（`> file`）や端末なら正しく出るため、気づきにくい。
 

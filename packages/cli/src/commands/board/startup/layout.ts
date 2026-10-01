@@ -15,7 +15,7 @@ export default define({
       type: "string",
       short: "p",
       description:
-        "紐づけるプリセット名（niwaterm layout listで確認）。省略時は現在紐づいているプリセット（解決元込み）を引き継ぐ",
+        "紐づけるプリセット名（niwa layout listで確認）。省略時は現在紐づいているプリセット（解決元込み）を引き継ぐ",
     },
     cwd: {
       type: "string",

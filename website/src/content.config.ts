@@ -7,7 +7,7 @@ export const collections = {
   docs: defineCollection({
     loader: docsLoader(),
     schema: docsSchema({
-      // `niwaterm docs list`がトピックの説明として表示するため、省略を許さない（ADR 0008）
+      // `niwa docs list`がトピックの説明として表示するため、省略を許さない（ADR 0008）
       extend: z.object({ description: z.string().min(1) }),
     }),
   }),

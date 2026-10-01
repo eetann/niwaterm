@@ -1,6 +1,6 @@
 // 現在有効な設定値を一覧するモーダル（show-configアクション）。中身はbun側が組み立てた
 // ConfigSummaryをそのまま並べるだけで、表示以外の判断はここでは持たない
-// （CLIの`niwaterm config show`と同じ内容を出すため）。
+// （CLIの`niwa config show`と同じ内容を出すため）。
 import type { ConfigSummary } from "../../bun/config-summary";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 

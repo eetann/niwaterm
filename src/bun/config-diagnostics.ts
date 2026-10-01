@@ -1,7 +1,7 @@
 // 設定ファイルの読み込み・解決で見つかった不備の収集。
 // config.tsのresolveXは不正な値をその項目だけ既定値へ落として残りを活かすが、落としたこと自体は
 // console.logにしか出ておらず、GUIしか見ていないユーザーは「設定したのに効かない」としか分からない。
-// ここへ集めた内容をConfigSummary経由で`niwaterm config show`・設定モーダルに載せる。
+// ここへ集めた内容をConfigSummary経由で`niwa config show`・設定モーダルに載せる。
 
 /** warnはその項目だけ既定値へ落ちた状態、errorはセクション単位で効いていない状態 */
 export type ConfigDiagnosticLevel = "warn" | "error";

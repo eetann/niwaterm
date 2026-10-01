@@ -5,14 +5,14 @@ Claude Codeのhooksから、状態と要約をniwatermのサイドバーへ通�
 ## 導入
 
 ```sh
-niwaterm agent setup claude-code
+niwa agent setup claude-code
 ```
 
 `$CLAUDE_CONFIG_DIR/settings.json`（未設定なら`~/.claude/settings.json`）へ設定を追加し、Claude Codeを再起動する。
 既存の他ツールのhooksは保持し、長いコマンドを埋め込んだ旧niwaterm設定も置き換える。
 `jq`は不要。バックアップと共通の動作は[共通README](../README.md)を参照。
 
-wipでは`niwaterm-dev agent setup claude-code`を使う。
+wipでは`niwa-dev agent setup claude-code`を使う。
 プロジェクト単位なら`--config .claude/settings.local.json`を付ける。
 グローバルとプロジェクトに重複して導入しない。
 
@@ -32,7 +32,7 @@ wipでは`niwaterm-dev agent setup claude-code`を使う。
 Claude Codeはalternate screenで動き会話がniwatermのスクロールバックへ残らないため、
 このパスが過去のやりとりを辿る唯一の手がかりになる
 （[docs/known-issues/claude-code-history-not-in-scrollback.md](../../../docs/known-issues/claude-code-history-not-in-scrollback.md)）。
-読み出しは`niwaterm claude prompt list` / `show`。タブの端に目次を出して、選んだ
+読み出しは`niwa claude prompt list` / `show`。タブの端に目次を出して、選んだ
 プロンプトへClaude Codeの表示を移す例は[prompt-jump/](prompt-jump/)。
 
 権限確認への回答後は`PostToolUse` / `PostToolUseFailure`で`working`へ戻す。

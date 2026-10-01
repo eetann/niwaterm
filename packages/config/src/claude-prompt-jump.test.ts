@@ -25,9 +25,9 @@ describe("claudePromptJump", () => {
   test("CLIの出力からプロンプトを並べ、本文はエスケープし、押すとタブ変数とキーを送る", async () => {
     const calls: string[] = [];
     const niwa = fakeNiwa(calls);
-    const button = claudePromptJump({ cli: "niwaterm-dev" });
+    const button = claudePromptJump({ cli: "niwa-dev" });
     const items = await button.items(ctx({}), niwa);
-    expect(calls[0]).toBe("niwaterm-dev claude prompt list --json --tab tab-1");
+    expect(calls[0]).toBe("niwa-dev claude prompt list --json --tab tab-1");
     expect(items).toHaveLength(2);
     expect(items[0]?.label).toBe("1. <b>fix</b> bug");
     expect(items[0]?.html).toContain("&lt;b&gt;fix&lt;/b&gt; bug");

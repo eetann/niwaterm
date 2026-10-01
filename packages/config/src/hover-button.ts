@@ -41,7 +41,7 @@ export interface HoverButtonContext {
   /** そのタブが報告している作業ディレクトリ（OSC7シェル統合）。未報告ならundefined */
   cwd: string | undefined;
   /**
-   * そのタブのタブ変数（`niwaterm tab var set`・シェル統合・エージェント統合のhookが書き込む）。
+   * そのタブのタブ変数（`niwa tab var set`・シェル統合・エージェント統合のhookが書き込む）。
    * cwdもこの中の"cwd"に入っている
    */
   vars: Record<string, string>;
@@ -51,7 +51,7 @@ export interface HoverButtonContext {
 
 export interface HoverButtonItem {
   /**
-   * 表示するテキスト。htmlを併記した場合は表示に使われず、`niwaterm tab hover list`・
+   * 表示するテキスト。htmlを併記した場合は表示に使われず、`niwa tab hover list`・
    * ツールチップの既定値としてだけ使われる
    */
   label?: string;
@@ -111,7 +111,7 @@ export interface HoverButtonHandleConfig {
 
 export interface HoverButtonConfig {
   /**
-   * CLI（`niwaterm tab hover reveal --button <id>`）からこのボタンを指すためのid。
+   * CLI（`niwa tab hover reveal --button <id>`）からこのボタンを指すためのid。
    * 省略時はpositionと出現順から導出する（resolveHoverButtons参照）
    */
   id?: string;

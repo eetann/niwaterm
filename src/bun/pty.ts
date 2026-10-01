@@ -157,7 +157,7 @@ export function appendCommandArgs(
  *    残っているとタブ内で`mise run start`したときにブランチではなく起動中インスタンスの
  *    アプリ名が採用され、wipのつもりでdailyを組んでしまう。
  * 3. 起動中インスタンスの設定ディレクトリ（NIWATERM_CONFIG_DIR）。タブ内から起動した別インスタンスや
- *    `niwaterm init`が、そのタブを開いているインスタンス用の設定ディレクトリを引き継いでしまう。
+ *    `niwa init`が、そのタブを開いているインスタンス用の設定ディレクトリを引き継いでしまう。
  */
 const INHERITED_TERMINAL_ENV_KEYS = [
   "TMUX",

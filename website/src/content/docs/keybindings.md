@@ -38,7 +38,7 @@ prefixキーのあとに押すキーの一覧。キーが割り当てられて�
 | `:`                              | コマンドパレットを開く                                                                            |
 | `i`                              | 今の設定を表示する（[現在の設定値を確認する](/niwaterm/getting-started/#現在の設定値を確認する)） |
 
-今の割り当ては`niwaterm keybind list`で一覧できる。
+今の割り当ては`niwa keybind list`で一覧できる。
 
 ## キーの割り当てを変える
 
@@ -106,7 +106,7 @@ keybindings: (niwa) => {
 
 ### 一覧に説明を出す
 
-`niwaterm keybind list`の一覧には、関数を割り当てたキーは`function`としか出ない。`description`を付けておくと、その説明が出る。
+`niwa keybind list`の一覧には、関数を割り当てたキーは`function`としか出ない。`description`を付けておくと、その説明が出る。
 
 ```ts
 niwa.keybind(

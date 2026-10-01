@@ -9,7 +9,7 @@ description: キーバインドの関数などで受け取るniwaから、タイ
 
 ### 役割を決めたタブへ飛ぶ
 
-エディタを開くタブで`niwaterm tab var set role editor`を実行しておくと、この`role`という[タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)を目印にタブを探して移れる。
+エディタを開くタブで`niwa tab var set role editor`を実行しておくと、この`role`という[タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)を目印にタブを探して移れる。
 
 ```ts
 niwa.keybind(

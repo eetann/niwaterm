@@ -1393,7 +1393,7 @@ export async function loadAndResolveConfig(
    * nullでないときこの戻り値は全項目が既定値なので、呼び出し元は直前の解決結果を残す判断に使う
    */
   loadError: string | null;
-  /** 既定値へ落とした項目・無視した項目。`niwaterm config show`・設定モーダルに出す */
+  /** 既定値へ落とした項目・無視した項目。`niwa config show`・設定モーダルに出す */
   diagnostics: ConfigDiagnostic[];
   keybindings: KeybindingsConfig;
   appearance: ResolvedAppearanceConfig;

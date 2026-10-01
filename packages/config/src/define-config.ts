@@ -73,7 +73,7 @@ export interface NiwatermConfig {
    */
   terminal?: TerminalConfig;
   /**
-   * レイアウトプリセット設定。`niwaterm layout apply <name>`で名前指定して適用できる
+   * レイアウトプリセット設定。`niwa layout apply <name>`で名前指定して適用できる
    * タイル構成（2分割ratioのネスト）とタブごとのcommand/cwd/vars/focus等を定義する。
    * `layout apply <name> --startup`（または`board startup layout`）で紐づけたBoardは、
    * アプリ起動時にも保存した骨格の復元ではなくここのプリセットで組み直される。
@@ -96,7 +96,7 @@ export interface NiwatermConfig {
   mouse?: MouseConfig;
   /**
    * ワークスペース設定。新規ワークスペース作成時（アプリ起動時の最初のワークスペース・
-   * `niwaterm workspace new`）の最初のタブに使うデフォルトcwdを変更できる。
+   * `niwa workspace new`）の最初のタブに使うデフォルトcwdを変更できる。
    * 未指定時はOS標準のホームディレクトリ（WSL上でniwaterm自体を動かしている場合は
    * 自然にWSL側のホームディレクトリになる）。分割・新規タブ作成時のcwd継承には影響しない。
    * 例: { defaultCwd: "/home/eetann/projects" }
