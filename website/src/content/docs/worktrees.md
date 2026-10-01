@@ -70,25 +70,9 @@ niwaterm worktree list
 niwaterm worktree remove feat/login
 ```
 
-ワークツリーをディレクトリごと削除し、そのワークツリーのBoardを閉じる。スペースで区切って複数指定できる。ブランチは残る。
+ワークツリーをディレクトリごと削除し、そのワークツリーのBoardを閉じる。スペースで区切って複数指定できる。デフォルトではブランチは残る。
 
-消えると困るものが残っているときは、何も消さずに止まる。
-
-| 止まるとき                                           | 理由                                                  |
-| ---------------------------------------------------- | ----------------------------------------------------- |
-| コミットしていない変更がある（新しいファイルも含む） | ディレクトリごと消えるので、元に戻せない              |
-| どのリモートにもpushしていないコミットがある         | `--delete-branch`でブランチも消すと、なくなってしまう |
-| `git worktree lock`でロックしてある                  | ロックは「消さないで」という印なので                  |
-
-```
-$ niwaterm worktree remove feat/login
-worktree removeに失敗しました: /path/to/repo@feat-login は削除しませんでした:
-  - 未コミットの変更が3件あります（ワークツリーごと消えます）
-  - どのリモートにも無いコミットが2件あります
-無視して削除するには--forceを付けてください
-```
-
-複数指定したときは、1つでも止まる理由があれば、ほかのワークツリーも消さない。それでも消すときは`--force`を付ける。
+コミットしていない変更などが残っているときは、何も消さずに止まる。それでも消すときは`--force`を付ける。
 
 - ブランチも消すときは`--delete-branch`を付ける。まだマージしていないブランチは`--force`も必要
 - Boardを閉じずに残すときは`--keep-board`を付ける
@@ -137,7 +121,7 @@ worktree: {
 
 ### リポジトリごとに設定する
 
-リポジトリの`.niwaterm/config.ts`にも`worktree`を書ける。チームでワークツリーの置き場所やセットアップの手順をそろえたいときに使う。項目ごとに、リポジトリの設定がユーザーの設定より優先される。
+リポジトリの`.niwaterm/config.ts`にも`worktree`を書ける。項目ごとに、リポジトリの設定がユーザーの設定より優先される。
 
 ```ts
 // <リポジトリ>/.niwaterm/config.ts
@@ -148,7 +132,7 @@ export default {
 } satisfies NiwatermProjectConfig;
 ```
 
-リポジトリの設定は、そのリポジトリを信頼すると答えるまで読み込まれない（[プロジェクトローカル設定の承認](/niwaterm/worktrees/hooks/#プロジェクトローカル設定の承認)）。
+リポジトリの設定は、`worktree new`などの実行時に出る確認で信頼するまで読み込まれない（[プロジェクトローカル設定の承認](/niwaterm/worktrees/hooks/#プロジェクトローカル設定の承認)）。
 
 niwatermを入れていない環境と設定を共有したいときは、git configにも書ける。優先順位はniwatermの設定ファイルより低い。
 
@@ -160,7 +144,7 @@ git config niwaterm.worktree.fetch false
 
 ## GUIから使う
 
-サイドバーにワークツリーの一覧を出して、クリックで開いたり、ブランチ名を入れて作ったりできる[カスタムビュー](/niwaterm/custom-views/)のサンプルがある。`contrib/custom-views/worktrees/`のREADMEを参照。一覧には、フォーカス中のタブがいるリポジトリのワークツリーが出る（[シェル統合](/niwaterm/shell-integration/)が必要）。
+サイドバーにワークツリーの一覧を出して、クリックで開いたり、ブランチ名を入れて作ったりできる[カスタムビュー](/niwaterm/custom-views/)のサンプルがある。[`contrib/custom-views/worktrees/`](https://github.com/eetann/niwaterm/tree/main/contrib/custom-views/worktrees)のREADMEを参照。一覧には、フォーカス中のタブがいるリポジトリのワークツリーが出る（[シェル統合](/niwaterm/shell-integration/)が必要）。
 
 ## オプション
 

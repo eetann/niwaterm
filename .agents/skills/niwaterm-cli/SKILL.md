@@ -24,7 +24,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 **`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwaterm docs show cli`の「対象IDの省略」節を参照。
 
 - `agent setup <codex-cli|claude-code>` — AIエージェントのhooksを追加・更新する（アプリの起動は不要）。詳細は`niwaterm docs show agents`の「エージェント統合」を参照。`_hook`はhooks専用の内部コマンドで、通常の操作では使わない
-- `claude prompt list` / `show` — そのタブで動いているClaude Codeのtranscript（jsonl）から、打ったプロンプトの一覧と、選んだプロンプトからのやりとりを読む。**Claude Codeはalternate screenで動くので`tab capture`では会話が取れない**（画面に出ている分すら読めない）代わりの手段で、コンテキスト圧縮で消えたやりとりも辿れる。エージェント統合のhooksが要る（未導入なら`--transcript <path>`で直接指定）。詳細は`niwaterm docs show agents`の「Claude Codeのセッション参照」を参照
+- `claude prompt list` / `show` — そのタブで動いているClaude Codeのtranscript（jsonl）から、打ったプロンプトの一覧と、選んだプロンプトからのやりとりを読む。**Claude Codeはalternate screenで動くので`tab capture`では会話が取れない**（画面に出ている分すら読めない）代わりの手段で、コンテキスト圧縮で消えたやりとりも辿れる。エージェント統合のhooksが要る（未導入なら`--transcript <path>`で直接指定）。オプションは`niwaterm claude prompt list --help`・`show --help`を参照
 - `init` — 設定ディレクトリ(`~/.config/niwaterm/`、`NIWATERM_CONFIG_DIR`で変更可)の初期セットアップ（`package.json`/`tsconfig.json`/`niwaterm.config.ts`生成 + `bun install`）
 - `list` — ワークスペース・Board・タイル・タブの一覧（操作対象のIDを確認する起点。Boardが1つのみのワークスペースはBoard行を省略）。**実行しているタブが載っているOSウィンドウのぶんだけ**表示される
 - `tab new` / `switch` / `close` / `restart` / `focus` / `capture` / `send-keys` — タブ操作（作成・切替・削除・プロセス再起動・目視確認用アクティブ化・画面内容取得・キー送信）
@@ -59,13 +59,13 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 コマンドの全オプション・使用例・終了コード・設定ファイルの書き方は`niwaterm docs show <topic>`で確認すること。このSKILL.mdには詳細を書き写さない（常に最新の内容を得るため、都度このコマンドを呼ぶ）。
 
     niwaterm docs show cli              # 全コマンドの一覧と、説明のあるページ
-    niwaterm docs show cli/commands     # tab・tile・board・workspace・popup等の基本のコマンド
+    niwaterm docs show cli/commands     # 基本のコマンドの分かりにくい挙動（オプションは各コマンドの--help）
     niwaterm docs show getting-started  # CLIのリンク・設定ディレクトリの作成・設定値の確認
     niwaterm docs show concepts         # Window・Workspace・Board・Tile・Tabの階層と役割
     niwaterm docs show keybindings      # キーバインドの書き方（niwa APIの一覧はkeybindings/api）
     niwaterm docs show layouts          # レイアウトプリセットの定義と適用
     niwaterm docs show worktrees        # ワークツリー管理（置き場所・Boardとの紐づけ）
-    niwaterm docs show agents           # エージェント統合・Claude Codeのセッション参照
+    niwaterm docs show agents           # エージェント統合
 
 トピック一覧の確認は`niwaterm docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックはドキュメントサイトのページ（`website/src/content/docs/`）から自動で列挙されるので、ここに挙げた以外が増えていることもある。サブディレクトリ内のページは`keybindings/api`のように`/`区切りのトピック名になる。ドキュメントは機能ごとのページに分かれていて、その機能の設定とCLIコマンドは同じページにある。どのページか分からなければ、まず`docs list`で説明を見て選ぶ。
 

@@ -109,8 +109,8 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 
 ## niwaterm CLIでの操作
 
-疎通確認・一覧・レイアウト操作は`.agents/skills/niwaterm-cli/SKILL.md`と
-`niwaterm docs show cli/commands`が正。ここではハマりやすい引数の形だけメモする。
+疎通確認・一覧・レイアウト操作は`.agents/skills/niwaterm-cli/SKILL.md`と各コマンドの
+`--help`が正。ここではハマりやすい引数の形だけメモする。
 
 - `tab send-keys`はキーを**位置引数**で渡す（`-k`のようなオプションではない）:
   `niwaterm tab send-keys --tab tab-3 'echo foo' Enter`

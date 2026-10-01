@@ -72,4 +72,4 @@ workspace-1 "dev" (active)
     tab-3 "server" (active)
 ```
 
-この例のようにBoardが1つだけのワークスペースでは、サイドバーと同じくBoardの行を省く。表示の詳しい読み方は[基本のコマンド](/niwaterm/cli/commands/#状態を確認するping--list)で説明している。
+この例のようにBoardが1つだけのワークスペースでは、サイドバーと同じくBoardの行を省く。表示の詳しい読み方は[基本のコマンド](/niwaterm/cli/commands/#今の状態を見るlist)で説明している。

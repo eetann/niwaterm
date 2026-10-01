@@ -5,6 +5,8 @@ description: タブの端に自分で決めたボタンを置く。押すとボ�
 
 ホバーボタンを使うと、タブの端に自分で決めたボタンを置ける。端に出る小さな取っ手を押すと枠が開き、ボタンが並ぶ。「このタブのディレクトリでlazygitを開く」のような、そのタブに合わせた操作をマウスで呼び出せる。
 
+![Claude Codeのタブの右端にある取っ手を押して、打ったプロンプトの目次を開いたところ](/niwaterm/screenshots/extend.png)
+
 ```ts
 hoverButtons: [
   {
@@ -36,7 +38,7 @@ export default defineConfig({
 });
 ```
 
-置く場所は`claudePromptJump({ position: "right" })`のように変えられる。Claude Code側にも入れるものがある。導入手順はリポジトリの`contrib/agent-integration/claude-code/prompt-jump/`にある。
+置く場所は`claudePromptJump({ position: "right" })`のように変えられる。Claude Code側にも入れるものがある。導入手順はリポジトリの[`contrib/agent-integration/claude-code/prompt-jump/`](https://github.com/eetann/niwaterm/tree/main/contrib/agent-integration/claude-code/prompt-jump)にある。
 
 ## ボタンを組み立てる（items）
 

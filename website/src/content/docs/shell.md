@@ -10,12 +10,21 @@ description: 新しいタブで起動するシェル、「+」ボタンから選
 `shell.default`に、新しいタブで起動するシェルのコマンドを書く。書かなければ、macOSでは`/bin/zsh -il`、Windowsでは`powershell.exe -NoLogo`が起動する。
 
 ```ts
-shell: {
-  default: "/bin/bash",
-},
+import { defineConfig } from "@niwaterm/config";
+
+const isWindows = process.platform === "win32";
+
+export default defineConfig({
+  shell: {
+    // WindowsではWSLのNixOSを、macOSではOS標準のシェルを起動する
+    default: isWindows ? "wsl.exe -d NixOS" : undefined,
+  },
+});
 ```
 
-`"wsl.exe -d Ubuntu"`のように引数も付けられる。ただしコマンドは空白で区切って渡すだけなので、空白を含むパスや、引用符で囲んだ引数は使えない。
+macOSとWindowsで同じ設定ファイルを使うときは、この例のように`process.platform`で分けられる。`undefined`にした側では、OS標準のシェルが起動する。
+
+`-d NixOS`のように引数も付けられる。ただしコマンドは空白で区切って渡すだけなので、空白を含むパスや、引用符で囲んだ引数は使えない。
 
 設定を変えると、次に開いたタブから新しいシェルになる。開いているタブのシェルはそのまま。
 

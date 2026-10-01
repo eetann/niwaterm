@@ -16,7 +16,7 @@ customViews: [
 ],
 ```
 
-設定すると、サイドバーの上にビューを切り替えるタブが出る。ワークスペース一覧と、`customViews`に並べたビューを切り替えられる。
+設定すると、サイドバーの上にビューを切り替えるタブが出る。ビルトインのワークスペース一覧と、`customViews`に並べたビューを切り替えられる。
 
 | 項目       | 内容                                                                                            |
 | ---------- | ----------------------------------------------------------------------------------------------- |
@@ -92,9 +92,9 @@ await niwaterm.call("open", { path: "/path/to/worktree" });
 - やりとりできるのは、JSONにできる値だけ
 - 関数でエラーが起きると、HTML側の`niwaterm.call`もエラーになる
 - 時間のかかる処理（gitの操作やパッケージのインストールなど）も、途中で打ち切られない
-- [シェル統合](/niwaterm/shell-integration/)を入れていると、`niwa.shell.run`の出力にシェル統合の制御文字が入ることがある。出力を解析するときは取り除く（`contrib/custom-views/worktrees/handlers.ts`の`stripOsc`が例）
+- [シェル統合](/niwaterm/shell-integration/)を入れていると、`niwa.shell.run`の出力にシェル統合の制御文字が入ることがある。出力を解析するときは取り除く（[`contrib/custom-views/worktrees/handlers.ts`](https://github.com/eetann/niwaterm/blob/main/contrib/custom-views/worktrees/handlers.ts)の`stripOsc`が例）
 
-`url`でほかの人のWebページを開いている場合も、そのページから`handlers`の関数を呼べてしまう。自分で用意したページ以外を開くときは、`handlers`に何を書くかに気を付ける。
+`handlers`を呼べるのは、カスタムビューとして表示したページだけ。ブラウザタブでふつうに開いたWebページからは呼べない。ただし、カスタムビューの`url`にほかの人のWebページを指定した場合や、カスタムビューの中でリンクをたどってほかのページへ移った場合は、そのページからも`handlers`の関数を呼べる。自分で用意したページ以外を表示するときは、`handlers`に何を書くかに気を付ける。
 
 ### HTML側で準備を待つ
 
@@ -133,4 +133,4 @@ HTMLの背景の色は、必ず自分で指定する。指定しないと、そ�
 
 ## 例
 
-gitワークツリーの一覧・絞り込み・作成ができるカスタムビューが、リポジトリの`contrib/custom-views/`にある。そのまま使うこともできるし、自分で作るときの手本にもなる。
+gitワークツリーの一覧・絞り込み・作成ができるカスタムビューが、リポジトリの[`contrib/custom-views/`](https://github.com/eetann/niwaterm/tree/main/contrib/custom-views)にある。そのまま使うこともできるし、自分で作るときの手本にもなる。

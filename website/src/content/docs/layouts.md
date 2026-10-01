@@ -3,7 +3,9 @@ title: レイアウトプリセット
 description: タイルの分け方と各タブで動かすコマンドをプリセットとして設定ファイルに書き、コマンド1つで開く方法
 ---
 
-「左でエディタ、右上で開発サーバー、右下でログ」のような、タイルの分け方と各タブで動かすコマンドを、名前を付けて設定ファイルに書いておける。書いたプリセットは`niwaterm layout apply <名前>`で新しいBoardとして開く。
+「左でエディタ、右上で開発サーバー、右下でログ」のようなレイアウトを保存できる。レイアウトには、単にタイルの分け方だけではなく、起動時に各タブで動かすコマンドやタブ変数も指定できる。
+
+レイアウトは、設定ファイルの`layouts`に名前を付けてプリセットとして書く。書いたプリセットは`niwaterm layout apply <名前>`で新しいBoardとして開く。
 
 ```ts
 layouts: {
@@ -30,8 +32,6 @@ niwaterm layout apply dev
 ```
 
 この例では、画面を左右に6:4で分け、左でnvimを開く。右はさらに上下に分けて、上で開発サーバー、下でログを流す。各タブは、`niwaterm layout apply`を実行したディレクトリで開く。
-
-リポジトリの中にプリセットを置いて、そのリポジトリでだけ使うこともできる（[プロジェクトローカルのレイアウト](/niwaterm/layouts/project-local/)）。
 
 ## プリセットの書き方
 
@@ -106,6 +106,25 @@ niwaterm layout apply dev --replace
 
 プリセットに誤り（存在しないシェルのid、`focus: true`が2つある、など）があるときは、Boardには何もせずにエラーになる。
 
+## リポジトリごとにプリセットを置く
+
+プリセットは、ユーザーの設定ファイル（`niwaterm.config.ts`）のほかに、リポジトリの中の`.niwaterm/config.ts`にも書ける。こちらに書いたプリセットは、そのリポジトリの中で`niwaterm layout apply`を実行したときだけ使える。リポジトリごとにタイルの分け方を変えたいときに使う。
+
+```ts
+// .niwaterm/config.ts
+import type { NiwatermProjectConfig } from "@niwaterm/config";
+
+export default {
+  layouts: {
+    dev: {
+      layout: { kind: "tile", tabs: [{ name: "test", command: "bun test --watch" }] },
+    },
+  },
+} satisfies NiwatermProjectConfig;
+```
+
+書き方の違いや、同じ名前のプリセットがあるときにどちらが使われるかは、[プロジェクトローカルのレイアウト](/niwaterm/layouts/project-local/)を参照。
+
 ## ビルトインのプリセット
 
 設定ファイルに何も書かなくても、`empty`というプリセットが使える。
@@ -121,15 +140,25 @@ niwaterm layout apply empty --replace
 
 ## 起動時レイアウト
 
-niwatermは、終了したときのタイルの分け方やタブの名前を覚えていて、次に起動したときに元に戻す。ただし、プリセットの`command`は実行し直さない。
+デフォルトでは、niwatermは終了したときのタイルの分け方やタブの名前を覚えていて、次に起動したときに元に戻す。ただし、プリセットの`command`は実行し直さない。
 
-`--startup`を付けて開くと、そのBoardは次に起動したときもプリセットから開き直すので、`command`も毎回実行される。「このBoardは毎回サーバーを立ち上げた状態で始めたい」ときに使う。
+Boardに起動時レイアウトを紐づけると、そのBoardは次に起動したときもプリセットから開き直すので、`command`も毎回実行される。「このBoardは毎回サーバーを立ち上げた状態で始めたい」ときに使う。起動時レイアウトを紐づけたBoardには、サイドバーでアイコンが付く。
+
+起動したときにプリセットが設定ファイルから消えていると、そのBoardはタブ1つで開き、デスクトップ通知で知らせる。プリセットの名前を変えたときは、新しい名前で紐づけ直す。
+
+[ワークツリー](/niwaterm/worktrees/hooks/#レイアウトプリセットの適用)を`--layout`付きで開いたBoardは、`--startup`を付けなくても起動時レイアウトになる。
+
+### サイドバーから紐づける
+
+サイドバーのBoardを右クリックして、「起動時レイアウト」からプリセットを選ぶ。選んだプリセットで、その場でBoardを開き直す（実行前に確認が出る）。紐づけを外すときは、同じメニューの「紐づけを解除」を選ぶ。
+
+### CLIから紐づける
+
+プリセットを開くときに`--startup`を付けると、開いたBoardに起動時レイアウトが紐づく。
 
 ```sh
 niwaterm layout apply dev --startup
 ```
-
-サイドバーのBoardを右クリックして、「起動時レイアウト」からプリセットを選ぶこともできる。この場合は、選んだプリセットでその場でBoardを開き直す（実行前に確認が出る）。起動時レイアウトを紐づけたBoardには、サイドバーでアイコンが付く。
 
 あとから変えるときは`niwaterm board startup`を使う。
 
@@ -145,10 +174,6 @@ niwaterm board startup clear
 `--board <boardId>`で対象のBoardを選べる。省略すると今のBoardが対象になる。`--preset`を省略すると、そのBoardで前に使ったプリセットを使う。
 
 起動時にタブを開くディレクトリは、`--startup`を付けて実行したディレクトリになる。別のディレクトリにしたいときは、そのディレクトリで`niwaterm layout apply dev --replace --startup`を実行し直す。
-
-起動したときにプリセットが設定ファイルから消えていると、そのBoardはタブ1つで開き、デスクトップ通知で知らせる。プリセットの名前を変えたときは、`board startup layout --preset <新しい名前>`で紐づけ直す。
-
-[ワークツリー](/niwaterm/worktrees/hooks/#レイアウトプリセットの適用)を`--layout`付きで開いたBoardは、`--startup`を付けなくても起動時レイアウトになる。
 
 ## CLI
 
