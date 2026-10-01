@@ -820,10 +820,13 @@ html.has-status-bar {
 
 /*
  * 押せる範囲は中身より一回り大きく取る。項目が細い印1本（目次の線のような`html`）でも
- * 狙える大きさにするため、余白とあわせて最小の縦横を持たせる
+ * 狙える大きさにするため、余白とあわせて最小の縦横を持たせる。
+ * 縮ませないのは、項目が多いとパネルのmax-heightへ収めようとmin-heightまで潰れ、
+ * スクロールに回る前に文字が重なってしまうため
  */
 .hover-item {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   min-width: 16px;
   min-height: 16px;
