@@ -1,11 +1,9 @@
 ---
 id: MILESTONE-0014
 title: 細かいUIのモダン化
-status: planned
-hidden: false
+status: completed
+hidden: true
 ---
-
-
 ツールチップ・ボーダー・アイコン・色など、小さいけど古く見える所をshadcn/lucide/テーマトークンに寄せていく。
 
 見た目の変化が大きく変更範囲が小さい順に、TASK-0177 → 0178 → 0179 → 0181 → 0182 → 0180 → 0184 → 0183 を推奨。
