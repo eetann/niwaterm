@@ -82,6 +82,7 @@ import {
   type NonPaletteKeybindAction,
 } from "./react/command-palette";
 import { ConfigDialog } from "./react/config-dialog";
+import { NoBoard } from "./react/no-board";
 import { ConfirmDialog } from "./react/confirm-dialog";
 import { DomTooltip } from "./react/dom-tooltip";
 import { PhasePicker } from "./react/phase-picker";
@@ -126,7 +127,6 @@ import { isWideChar, splitCells } from "../shared/wide-char";
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
 const noBoardEl = document.getElementById("no-board") as HTMLDivElement;
-const noBoardNewButtonEl = document.getElementById("no-board-new") as HTMLButtonElement;
 const measureEl = document.getElementById("measure") as HTMLSpanElement;
 const imeEl = document.getElementById("ime-input") as HTMLTextAreaElement;
 const compositionEl = document.getElementById("composition") as HTMLDivElement;
@@ -998,6 +998,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         hostRpcReplyReceived = true;
         keybindResolver = createKeybindResolver(compileKeybindings(keybindings));
         lastKeybindingsConfig = keybindings;
+        if (!noBoardEl.hidden) renderNoBoardContent();
         applyAppearance(appearance);
         mouseConfig = mouse;
         linkConfig = link;
@@ -1494,14 +1495,23 @@ function renderNoBoard(): void {
 function setNoBoardVisible(visible: boolean): void {
   noBoardEl.hidden = !visible;
   tileTreeEl.hidden = visible;
+  if (visible) renderNoBoardContent();
 }
 
-// Board 0個の状態から抜ける唯一のGUI操作（この画面にはCLIを打つタブも無い）
-noBoardNewButtonEl.addEventListener("click", () => {
-  if (!activeWorkspaceId) return;
-  sendMessage("newBoard", { workspaceId: activeWorkspaceId });
-  imeEl.focus({ preventScroll: true });
-});
+const noBoardRoot = createMemoRoot(noBoardEl, "no-board");
+
+function renderNoBoardContent(): void {
+  const newBoardShortcut = shortcutLabelForAction("new-board");
+  noBoardRoot.renderIfChanged(newBoardShortcut ?? "", () =>
+    createElement(NoBoard, {
+      newBoardShortcut,
+      onNewBoard: () => {
+        newBoardInActiveWorkspace();
+        imeEl.focus({ preventScroll: true });
+      },
+    }),
+  );
+}
 
 function renderLayout(layout: TileNode, tabs: Record<TabId, TabRenderState>): void {
   const seenTabIds = new Set<TabId>();

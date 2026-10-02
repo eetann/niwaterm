@@ -25,6 +25,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ResolvedBoardPhase } from "@niwaterm/config";
 import { cn } from "@/lib/utils";
@@ -468,7 +469,12 @@ export function SidebarWorkspaceList({
           <ContextMenuLabel className="text-xs font-normal text-muted-foreground">
             選ぶと今すぐ適用し、次回の起動時も同じ構成にする
           </ContextMenuLabel>
-          {entries === null && <ContextMenuItem disabled>読み込み中...</ContextMenuItem>}
+          {entries === null && (
+            <ContextMenuItem disabled>
+              <Spinner />
+              読み込み中
+            </ContextMenuItem>
+          )}
           {entries?.length === 0 && (
             <ContextMenuItem disabled>プリセットがありません</ContextMenuItem>
           )}

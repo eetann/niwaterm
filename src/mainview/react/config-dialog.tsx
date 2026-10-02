@@ -1,8 +1,11 @@
 // 現在有効な設定値を一覧するモーダル（show-configアクション）。中身はbun側が組み立てた
 // ConfigSummaryをそのまま並べるだけで、表示以外の判断はここでは持たない
 // （CLIの`niwa config show`と同じ内容を出すため）。
+import { CircleAlert } from "lucide-react";
 import type { ConfigSummary } from "../../bun/config-summary";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 
 export interface ConfigDialogProps {
   open: boolean;
@@ -42,7 +45,10 @@ export function ConfigDialog({ open, onOpenChange, summary }: ConfigDialogProps)
           <DialogTitle>現在の設定</DialogTitle>
         </DialogHeader>
         {summary === null ? (
-          <p className="text-sm text-muted-foreground">設定を読み込み中です</p>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner />
+            設定を読み込み中です
+          </p>
         ) : (
           <>
             <p className="text-xs break-words text-muted-foreground">
@@ -51,15 +57,18 @@ export function ConfigDialog({ open, onOpenChange, summary }: ConfigDialogProps)
             </p>
             {/* 「設定したのに効かない」時に真っ先に見る情報なので、設定値一覧より前に出す */}
             {summary.loadError !== null && (
-              <section className="rounded-sm border border-destructive/50 p-2">
-                <h3 className="mb-1 font-semibold text-destructive text-sm">読み込みエラー</h3>
-                <p className="break-words font-mono text-xs">{summary.loadError}</p>
-                <p className="mt-1 text-muted-foreground text-xs">
-                  {summary.configFileLoaded
-                    ? "直前に読み込めた設定のまま動いています（以下はその内容）"
-                    : "全項目が既定値です"}
-                </p>
-              </section>
+              <Alert variant="destructive">
+                <CircleAlert />
+                <AlertTitle>読み込みエラー</AlertTitle>
+                <AlertDescription>
+                  <p className="break-words font-mono text-xs">{summary.loadError}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {summary.configFileLoaded
+                      ? "直前に読み込めた設定のまま動いています（以下はその内容）"
+                      : "全項目が既定値です"}
+                  </p>
+                </AlertDescription>
+              </Alert>
             )}
             {summary.diagnostics.length > 0 && (
               <section>
