@@ -106,6 +106,18 @@ export {
   type SidebarBoardStatusSource,
   type SidebarConfig,
 } from "./sidebar";
+export {
+  DEFAULT_SIDEBAR_TOOLBAR,
+  parseSidebarToolbarBuiltin,
+  type ResolvedSidebarToolbarConfig,
+  type ResolvedSidebarToolbarItem,
+  SIDEBAR_TOOLBAR_SECTIONS,
+  type SidebarToolbarBuiltin,
+  type SidebarToolbarComponent,
+  type SidebarToolbarComponentConfig,
+  type SidebarToolbarConfig,
+  type SidebarToolbarSection,
+} from "./sidebar-toolbar";
 export { type ShellConfig, type ShellProfile } from "./shell";
 export {
   DEFAULT_STATUS_BAR,

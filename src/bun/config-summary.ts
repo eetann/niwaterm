@@ -25,7 +25,8 @@ import type {
 import { formatSidebarBoardStatusSource } from "@niwaterm/config";
 import type { ConfigDiagnostic } from "./config-diagnostics";
 import { buildKeybindList } from "./keybind-list";
-import type { StatusBarComponentEntry, StatusBarDefinition } from "./status-bar";
+import type { SidebarToolbarDefinition, SidebarToolbarEntry } from "./sidebar-toolbar";
+import type { ComponentEntry, StatusBarDefinition } from "./status-bar";
 
 /** 値が無い項目の表示。未設定でも既定値で動く項目はnoteへフォールバック先を書く */
 const UNSET = "(未設定)";
@@ -86,6 +87,7 @@ export interface ConfigSummaryInput {
   sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
   statusBar: StatusBarDefinition;
+  sidebarToolbar: SidebarToolbarDefinition;
 }
 
 /** background-imageの値がdata URIとして埋め込まれた画像かどうかと、そのMIMEタイプ */
@@ -204,7 +206,7 @@ function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySectio
   };
 }
 
-function statusBarComponentValue(entry: StatusBarComponentEntry): string {
+function statusBarComponentValue(entry: ComponentEntry): string {
   if (entry.source === null) {
     return entry.interval === null ? "render" : `render (${entry.interval}msごと)`;
   }
@@ -231,6 +233,30 @@ function statusBarSection(statusBar: StatusBarDefinition): ConfigSummarySection 
       note: entry.run === undefined ? entry.section : `${entry.section}・押せる`,
     })),
   };
+}
+
+function sidebarToolbarComponentValue(entry: SidebarToolbarEntry): string {
+  if (entry.builtin !== null) return `builtin:${entry.builtin}`;
+  if (entry.render !== undefined || entry.source !== null) return statusBarComponentValue(entry);
+  if (entry.label !== "") return entry.label;
+  if (entry.html !== "") return "html";
+  return `icon:${entry.icon}`;
+}
+
+function sidebarToolbarComponentNote(entry: SidebarToolbarEntry): string {
+  if (entry.action !== null) return `${entry.section}・${entry.action}`;
+  return entry.run === undefined ? entry.section : `${entry.section}・押せる`;
+}
+
+function sidebarToolbarEntries(toolbar: SidebarToolbarDefinition): ConfigSummaryEntry[] {
+  if (!toolbar.visible) {
+    return [{ key: "toolbar", value: "(なし)", note: "toolbar: falseか全区画が空のため出さない" }];
+  }
+  return toolbar.components.map((entry) => ({
+    key: `toolbar.${entry.id}`,
+    value: sidebarToolbarComponentValue(entry),
+    note: sidebarToolbarComponentNote(entry),
+  }));
 }
 
 function customViewsSection(customViews: ResolvedCustomViewConfig[]): ConfigSummarySection {
@@ -350,6 +376,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
                   .map((item) => formatSidebarBoardStatusSource(item.source))
                   .join(", "),
               },
+          ...sidebarToolbarEntries(input.sidebarToolbar),
         ],
       },
       {

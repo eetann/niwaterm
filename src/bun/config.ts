@@ -70,8 +70,12 @@ import {
   type ResolvedLinkRule,
   type ResolvedMouseConfig,
   type ResolvedSidebarConfig,
+  DEFAULT_SIDEBAR_TOOLBAR,
   DEFAULT_STATUS_BAR,
+  parseSidebarToolbarBuiltin,
   parseStatusBarSource,
+  SIDEBAR_TOOLBAR_SECTIONS,
+  type SidebarToolbarComponentConfig,
   STATUS_BAR_MIN_INTERVAL_MS,
   STATUS_BAR_SECTIONS,
   type StatusBarComponentConfig,
@@ -103,7 +107,8 @@ import {
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
 import { createNiwaApi, type NiwaApiHandle } from "./niwa-api";
 import { createSelectionMenu, type SelectionMenuHandle } from "./selection-menu";
-import type { StatusBarComponentEntry, StatusBarDefinition } from "./status-bar";
+import type { SidebarToolbarDefinition, SidebarToolbarEntry } from "./sidebar-toolbar";
+import type { ComponentEntry, StatusBarComponentEntry, StatusBarDefinition } from "./status-bar";
 import type { WorkspaceManager } from "./workspace-manager";
 
 /**
@@ -1144,6 +1149,54 @@ function resolveStatusBarItemId(
   return id;
 }
 
+/** 部品の書き方（文字列はsourceだけの短縮形）をオブジェクトへ揃える。どちらでもなければ警告してnull */
+function componentConfigOf<T extends { source?: string }>(
+  raw: unknown,
+  scope: string,
+  diag: ConfigDiagnostics,
+): T | null {
+  if (typeof raw === "string") return { source: raw } as T;
+  if (typeof raw === "object" && raw !== null) return raw as T;
+  diag.warn(scope, `文字列かオブジェクトでないためこの部品だけ無視します: ${describeValue(raw)}`);
+  return null;
+}
+
+/** renderとintervalを取り込む。renderが関数でなければ警告してfalse（部品ごと無視する） */
+function resolveComponentRender(
+  user: StatusBarComponentConfig,
+  entry: ComponentEntry,
+  scope: string,
+  diag: ConfigDiagnostics,
+): boolean {
+  if (typeof user.render !== "function") {
+    diag.warn(
+      `${scope}.render`,
+      `関数ではないためこの部品だけ無視します: ${describeValue(user.render)}`,
+    );
+    return false;
+  }
+  entry.render = user.render;
+  entry.interval = resolveStatusBarInterval(user.interval, `${scope}.interval`, diag);
+  return true;
+}
+
+/** prefix・color・tooltip・runを取り込む。型の合わない項目は警告して未指定扱いにする */
+function resolveComponentCommon(
+  user: StatusBarComponentConfig,
+  entry: ComponentEntry,
+  scope: string,
+  diag: ConfigDiagnostics,
+): void {
+  entry.prefix = resolveOptionalString(user.prefix, `${scope}.prefix`, diag);
+  entry.color = resolveOptionalString(user.color, `${scope}.color`, diag);
+  entry.tooltip = resolveOptionalString(user.tooltip, `${scope}.tooltip`, diag);
+  if (user.run !== undefined) {
+    if (typeof user.run === "function") entry.run = user.run;
+    else
+      diag.warn(`${scope}.run`, `関数ではないため押しても何もしません: ${describeValue(user.run)}`);
+  }
+}
+
 function resolveStatusBarComponent(
   raw: unknown,
   id: string,
@@ -1162,26 +1215,10 @@ function resolveStatusBarComponent(
     tooltip: "",
     run: undefined,
   };
-  const user: StatusBarComponentConfig | null =
-    typeof raw === "string"
-      ? { source: raw }
-      : typeof raw === "object" && raw !== null
-        ? (raw as StatusBarComponentConfig)
-        : null;
-  if (user === null) {
-    diag.warn(scope, `文字列かオブジェクトでないためこの部品だけ無視します: ${describeValue(raw)}`);
-    return null;
-  }
+  const user = componentConfigOf<StatusBarComponentConfig>(raw, scope, diag);
+  if (user === null) return null;
   if (user.render !== undefined) {
-    if (typeof user.render !== "function") {
-      diag.warn(
-        `${scope}.render`,
-        `関数ではないためこの部品だけ無視します: ${describeValue(user.render)}`,
-      );
-      return null;
-    }
-    entry.render = user.render;
-    entry.interval = resolveStatusBarInterval(user.interval, `${scope}.interval`, diag);
+    if (!resolveComponentRender(user, entry, scope, diag)) return null;
   } else {
     const source = typeof user.source === "string" ? parseStatusBarSource(user.source) : null;
     if (source === null) {
@@ -1196,14 +1233,7 @@ function resolveStatusBarComponent(
       diag.warn(`${scope}.interval`, "renderを持たない部品では使わないため無視します");
     }
   }
-  entry.prefix = resolveOptionalString(user.prefix, `${scope}.prefix`, diag);
-  entry.color = resolveOptionalString(user.color, `${scope}.color`, diag);
-  entry.tooltip = resolveOptionalString(user.tooltip, `${scope}.tooltip`, diag);
-  if (user.run !== undefined) {
-    if (typeof user.run === "function") entry.run = user.run;
-    else
-      diag.warn(`${scope}.run`, `関数ではないため押しても何もしません: ${describeValue(user.run)}`);
-  }
+  resolveComponentCommon(user, entry, scope, diag);
   return entry;
 }
 
@@ -1262,6 +1292,129 @@ export function resolveStatusBar(
   return {
     visible: components.length > 0,
     css: resolveOptionalString(fields["css"], "statusBar.css", diag),
+    components,
+  };
+}
+
+function resolveSidebarToolbarComponent(
+  raw: unknown,
+  id: string,
+  section: SidebarToolbarEntry["section"],
+  scope: string,
+  diag: ConfigDiagnostics,
+): SidebarToolbarEntry | null {
+  const entry: SidebarToolbarEntry = {
+    id,
+    section,
+    source: null,
+    render: undefined,
+    interval: null,
+    prefix: "",
+    color: "",
+    tooltip: "",
+    run: undefined,
+    builtin: null,
+    icon: "",
+    label: "",
+    html: "",
+    action: null,
+  };
+  const user = componentConfigOf<SidebarToolbarComponentConfig>(raw, scope, diag);
+  if (user === null) return null;
+  if (user.render !== undefined) {
+    if (!resolveComponentRender(user, entry, scope, diag)) return null;
+  } else if (user.source !== undefined) {
+    const builtin =
+      typeof user.source === "string" ? parseSidebarToolbarBuiltin(user.source) : null;
+    // ビルトインのボタンは見た目も押した時の処理も決まっているので、ほかの項目は読まない
+    if (builtin !== null) return { ...entry, builtin };
+    const source = typeof user.source === "string" ? parseStatusBarSource(user.source) : null;
+    if (source === null || (source.kind === "builtin" && source.id === "mode")) {
+      diag.warn(
+        `${scope}.source`,
+        `builtin:command-palette / builtin:cwd / builtin:workspace / builtin:board / tab-var:<name>のいずれでもないためこの部品だけ無視します: ${describeValue(user.source)}`,
+      );
+      return null;
+    }
+    entry.source = source;
+  }
+  if (entry.render === undefined && user.interval !== undefined) {
+    diag.warn(`${scope}.interval`, "renderを持たない部品では使わないため無視します");
+  }
+  entry.icon = resolveOptionalString(user.icon, `${scope}.icon`, diag);
+  entry.label = resolveOptionalString(user.label, `${scope}.label`, diag);
+  entry.html = resolveOptionalString(user.html, `${scope}.html`, diag);
+  const dynamic = entry.render !== undefined || entry.source !== null;
+  if (dynamic && (entry.label !== "" || entry.html !== "")) {
+    diag.warn(scope, "source・renderの値を出す部品ではlabel・htmlを使わないため無視します");
+    entry.label = "";
+    entry.html = "";
+  }
+  if (!dynamic && entry.icon === "" && entry.label === "" && entry.html === "") {
+    diag.warn(
+      scope,
+      "icon・label・html・source・renderのどれも無く何も出せないため、この部品だけ無視します",
+    );
+    return null;
+  }
+  resolveComponentCommon(user, entry, scope, diag);
+  if (user.action !== undefined) {
+    if (!isKeybindAction(user.action)) {
+      diag.warn(
+        `${scope}.action`,
+        `キーバインドのアクション名ではないため押しても何もしません: ${describeValue(user.action)}`,
+      );
+    } else if (entry.run !== undefined) {
+      diag.warn(`${scope}.action`, "runと同時には書けないため、runを使います");
+    } else {
+      entry.action = user.action;
+    }
+  }
+  return entry;
+}
+
+/**
+ * サイドバーのツールバーを解決する。falseなら出さない。区画ごとの既定値・不正な部品の扱いは
+ * ステータスバー（resolveStatusBar）と同じ
+ */
+export function resolveSidebarToolbar(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): SidebarToolbarDefinition {
+  const user = userConfig?.sidebar?.toolbar;
+  if (user === false) return { visible: false, css: "", components: [] };
+  let fields: Record<string, unknown> = {};
+  if (user !== undefined) {
+    if (typeof user === "object" && user !== null) fields = user as Record<string, unknown>;
+    else
+      diag.warn(
+        "sidebar.toolbar",
+        `falseかオブジェクトでないため既定の並びを使います: ${describeValue(user)}`,
+      );
+  }
+  const components: SidebarToolbarEntry[] = [];
+  const usedIds = new Set<string>();
+  for (const section of SIDEBAR_TOOLBAR_SECTIONS) {
+    let list: unknown = fields[section];
+    if (list === undefined) list = DEFAULT_SIDEBAR_TOOLBAR[section];
+    else if (!Array.isArray(list)) {
+      diag.warn(
+        `sidebar.toolbar.${section}`,
+        `配列ではないため既定の並びを使います: ${describeValue(list)}`,
+      );
+      list = DEFAULT_SIDEBAR_TOOLBAR[section];
+    }
+    for (const [index, raw] of (list as unknown[]).entries()) {
+      const scope = `sidebar.toolbar.${section}[${index}]`;
+      const id = resolveStatusBarItemId(raw, `${section}-${index}`, `${scope}.id`, usedIds, diag);
+      usedIds.add(id);
+      const entry = resolveSidebarToolbarComponent(raw, id, section, scope, diag);
+      if (entry) components.push(entry);
+    }
+  }
+  return {
+    visible: components.length > 0,
+    css: resolveOptionalString(fields["css"], "sidebar.toolbar.css", diag),
     components,
   };
 }
@@ -1446,6 +1599,8 @@ export async function loadAndResolveConfig(
    * 決めてから呼び出し元がniwaと合わせて作る（捨てる解決結果からタイマーが漏れないように）
    */
   statusBar: StatusBarDefinition;
+  /** サイドバーのツールバーの部品。statusBarと同じく、ハンドルは呼び出し元が作る */
+  sidebarToolbar: SidebarToolbarDefinition;
   /** render・runへ渡すniwa API */
   niwa: Niwa;
   defaultShell: string | undefined;
@@ -1517,6 +1672,7 @@ export async function loadAndResolveConfig(
     hoverButtons: hoverButtonsHandle.resolved(),
     hoverButtonsHandle,
     statusBar: resolveStatusBar(userConfig, diag),
+    sidebarToolbar: resolveSidebarToolbar(userConfig, diag),
     niwa: niwaApi.niwa,
     defaultShell,
     shellProfiles,

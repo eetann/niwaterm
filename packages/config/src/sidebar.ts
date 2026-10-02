@@ -4,6 +4,8 @@
 // 値の出どころはBoard専用の変数ストアではなく代表タブのタブ変数（`niwa tab var set`）。
 // ビルトインのbranch・agentも同じ値を読んでいる（sidebar-props.tsのbuildSidebarWorkspaceItems参照）。
 
+import type { SidebarToolbarConfig } from "./sidebar-toolbar";
+
 /** ステータスラインに出せるビルトイン項目 */
 export type SidebarBoardStatusBuiltin = "phase" | "branch" | "agent";
 
@@ -51,6 +53,11 @@ export interface SidebarConfig {
    * 空配列ならステータスライン自体が出ず、Board行は1行のままになる。
    */
   boardStatus?: SidebarBoardStatusItem[];
+  /**
+   * サイドバー上端のツールバーへ並べる部品。ステータスバーと同じ書き方で、左右の区画へ置く。
+   * 未指定の区画は既定値（右にコマンドパレットのボタン）のまま。falseならツールバーを出さない。
+   */
+  toolbar?: SidebarToolbarConfig | false;
 }
 
 export interface ResolvedSidebarConfig {

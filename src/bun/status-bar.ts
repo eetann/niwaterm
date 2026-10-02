@@ -1,4 +1,5 @@
 // ウィンドウ下端のステータスバー（設定のstatusBar）の部品の評価と、押された部品の実行。
+// サイドバーのツールバー（sidebar.toolbar）も同じ部品の書き方なので、評価器を共有する。
 // render・runはユーザー設定の関数でbun側でしか呼べないため、webviewへは部品のidと評価後の
 // 文字列だけを送る（hoverButtonsと同じ方式）。builtin:modeはwebview側の状態なのでここでは扱わない。
 //
@@ -22,10 +23,9 @@ import type {
 } from "@niwaterm/config";
 
 /** 関数を含む解決済みの1部品。webviewへ渡せない部分をbun側に残すための型 */
-export interface StatusBarComponentEntry {
+export interface ComponentEntry {
   id: string;
-  section: StatusBarSection;
-  /** renderを持つ部品ではnull */
+  /** renderを持つ部品・値を持たない部品ではnull */
   source: StatusBarSource | null;
   render: StatusBarRenderFn | undefined;
   /** renderを呼び直す周期(ms)。nullなら状況が変わった時だけ */
@@ -39,15 +39,20 @@ export interface StatusBarComponentEntry {
   run: StatusBarComponentConfig["run"];
 }
 
+export interface StatusBarComponentEntry extends ComponentEntry {
+  section: StatusBarSection;
+}
+
 export interface StatusBarDefinition {
   visible: boolean;
   css: string;
   components: StatusBarComponentEntry[];
 }
 
-export interface StatusBarHandle {
-  /** webviewへ配る定義（関数を除いたもの） */
-  resolved(): ResolvedStatusBarConfig;
+/**
+ * 部品の評価と実行。ステータスバーとサイドバーのツールバーが、それぞれの部品の並びで1つずつ持つ
+ */
+export interface ComponentEvaluator {
   /** 描画のたびに呼ぶ。状況が前回と変わったウィンドウだけ部品を評価し直す */
   update(windowId: string, ctx: StatusBarContext): void;
   /** webviewが読み込み直された時に、評価済みの値を送り直す */
@@ -67,7 +72,16 @@ export interface StatusBarHandle {
   dispose(): void;
 }
 
-export interface CreateStatusBarOptions {
+export interface StatusBarHandle extends ComponentEvaluator {
+  /** webviewへ配る定義（関数を除いたもの） */
+  resolved(): ResolvedStatusBarConfig;
+}
+
+export interface CreateComponentEvaluatorOptions {
+  /** ログに出す部品の持ち主（"statusBar"等） */
+  label: string;
+  /** falseなら状況を覚えず、何も評価しない（バー自体を出さない設定） */
+  enabled: boolean;
   /** 評価した値をそのウィンドウのwebviewへ送る。内容が前回と変わった時だけ呼ばれる */
   send(windowId: string, values: Record<string, StatusBarValue>): void;
   /**
@@ -130,7 +144,7 @@ function stringOr(value: unknown, fallback: string): string {
   return typeof value === "string" && value !== "" ? value : fallback;
 }
 
-function toValue(entry: StatusBarComponentEntry, segment: StatusBarSegment | null): StatusBarValue {
+function toValue(entry: ComponentEntry, segment: StatusBarSegment | null): StatusBarValue {
   if (segment === null) return EMPTY_VALUE;
   const text = stringOr(segment.text, "");
   const html = stringOr(segment.html, "");
@@ -144,28 +158,24 @@ function toValue(entry: StatusBarComponentEntry, segment: StatusBarSegment | nul
   };
 }
 
-export function createStatusBar(
-  definition: StatusBarDefinition,
+/** builtin:modeはwebview側の状態なので、bun側では値を評価しない */
+function isModeComponent(entry: ComponentEntry): boolean {
+  return entry.source?.kind === "builtin" && entry.source.id === "mode";
+}
+
+/**
+ * 部品の評価器を作る。値を評価するのはrenderかsourceを持つ部品だけで、どちらも持たない部品
+ * （ツールバーの固定ボタン等）とbuiltin:modeはrunの呼び出しにだけ使う
+ */
+export function createComponentEvaluator(
+  components: readonly ComponentEntry[],
   niwa: Niwa,
-  opts: CreateStatusBarOptions,
-): StatusBarHandle {
-  const resolvedConfig: ResolvedStatusBarConfig = {
-    visible: definition.visible,
-    css: definition.css,
-    sections: { left: [], center: [], right: [] },
-  };
-  for (const entry of definition.components) {
-    const item: ResolvedStatusBarItem = {
-      id: entry.id,
-      kind: entry.source?.kind === "builtin" && entry.source.id === "mode" ? "mode" : "value",
-      clickable: entry.run !== undefined,
-    };
-    resolvedConfig.sections[entry.section].push(item);
-  }
-  const byId = new Map(definition.components.map((entry) => [entry.id, entry]));
-  const valueComponents = definition.visible
-    ? definition.components.filter(
-        (entry) => !(entry.source?.kind === "builtin" && entry.source.id === "mode"),
+  opts: CreateComponentEvaluatorOptions,
+): ComponentEvaluator {
+  const byId = new Map(components.map((entry) => [entry.id, entry]));
+  const valueComponents = opts.enabled
+    ? components.filter(
+        (entry) => (entry.render !== undefined || entry.source !== null) && !isModeComponent(entry),
       )
     : [];
   const windows = new Map<string, WindowState>();
@@ -191,14 +201,14 @@ export function createStatusBar(
     queueMicrotask(() => flush(windowId));
   }
 
-  function logError(entry: StatusBarComponentEntry, err: unknown): void {
+  function logError(entry: ComponentEntry, err: unknown): void {
     const message = String(err);
     if (lastErrors.get(entry.id) === message) return;
     lastErrors.set(entry.id, message);
-    console.log(`[bun] statusBar ${entry.id} render failed: ${message}`);
+    console.log(`[bun] ${opts.label} ${entry.id} render failed: ${message}`);
   }
 
-  function evaluate(windowId: string, state: WindowState, entry: StatusBarComponentEntry): void {
+  function evaluate(windowId: string, state: WindowState, entry: ComponentEntry): void {
     if (entry.render === undefined) {
       const text =
         entry.source === null
@@ -244,12 +254,9 @@ export function createStatusBar(
     );
 
   return {
-    resolved() {
-      return resolvedConfig;
-    },
     update(windowId, ctx) {
-      // 値を持つ部品が無くても状況は覚えておく。builtin:modeにもrunを書けるため
-      if (!definition.visible) return;
+      // 値を持つ部品が無くても状況は覚えておく。builtin:modeや固定のボタンにもrunを書けるため
+      if (!opts.enabled) return;
       const key = JSON.stringify(ctx);
       let state = windows.get(windowId);
       if (state?.key === key) return;
@@ -305,12 +312,45 @@ export function createStatusBar(
       try {
         await entry.run(ctx, niwa);
       } catch (err) {
-        console.log(`[bun] statusBar ${itemId} run failed: ${String(err)}`);
+        console.log(`[bun] ${opts.label} ${itemId} run failed: ${String(err)}`);
       }
     },
     dispose() {
       for (const timer of timers) clearInterval(timer);
       windows.clear();
+    },
+  };
+}
+
+export type CreateStatusBarOptions = Omit<CreateComponentEvaluatorOptions, "label" | "enabled">;
+
+export function createStatusBar(
+  definition: StatusBarDefinition,
+  niwa: Niwa,
+  opts: CreateStatusBarOptions,
+): StatusBarHandle {
+  const resolvedConfig: ResolvedStatusBarConfig = {
+    visible: definition.visible,
+    css: definition.css,
+    sections: { left: [], center: [], right: [] },
+  };
+  for (const entry of definition.components) {
+    const item: ResolvedStatusBarItem = {
+      id: entry.id,
+      kind: isModeComponent(entry) ? "mode" : "value",
+      clickable: entry.run !== undefined,
+    };
+    resolvedConfig.sections[entry.section].push(item);
+  }
+  const evaluator = createComponentEvaluator(definition.components, niwa, {
+    ...opts,
+    label: "statusBar",
+    enabled: definition.visible,
+  });
+  return {
+    ...evaluator,
+    resolved() {
+      return resolvedConfig;
     },
   };
 }

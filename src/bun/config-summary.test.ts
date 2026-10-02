@@ -38,6 +38,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     sidebar: defaultSidebarConfig,
     terminal: defaultTerminalConfig,
     statusBar: { visible: false, css: "", components: [] },
+    sidebarToolbar: { visible: false, css: "", components: [] },
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ import {
   defaultKeybindings,
   defaultMouseConfig,
   defaultSidebarConfig,
+  type KeybindAction,
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
   type ResolvedBoardPhase,
@@ -15,6 +16,7 @@ import {
   type ResolvedLinkConfig,
   type ResolvedMouseConfig,
   type ResolvedSidebarBoardStatusItem,
+  type ResolvedSidebarToolbarConfig,
   type ResolvedStatusBarConfig,
   resolveBoardPhase,
   type ShellProfile,
@@ -288,13 +290,53 @@ popupToolbarRoot.renderOnEvent(
   }),
 );
 
-// ---- サイドバーツールバー: 起動時に固定のReact root（propsは不変のため一度だけrenderする）----
+// ---- サイドバーツールバー（設定のsidebar.toolbar）: 設定・値・タイトルバーの状態が変わるたびrenderし直す ----
+// 部品の並びはconfigで、source・renderを持つ部品の値はsidebarToolbarValuesでbun側から届く
 const sidebarToolbarRoot = createMemoRoot(sidebarToolbarEl, "sidebar-toolbar");
-sidebarToolbarRoot.renderOnEvent(
-  createElement(SidebarToolbar, {
-    onOpenCommandPalette: () => openCommandPalette(),
-  }),
-);
+/** configが届くまでは既定の並び（右にコマンドパレットのボタン）で出しておく */
+let sidebarToolbarConfig: ResolvedSidebarToolbarConfig = {
+  visible: true,
+  css: "",
+  sections: {
+    left: [],
+    right: [
+      {
+        id: "right-0",
+        builtin: "command-palette",
+        icon: "",
+        label: "",
+        html: "",
+        tooltip: "",
+        color: "",
+        dynamic: false,
+        runnable: false,
+        action: null,
+      },
+    ],
+  },
+};
+let sidebarToolbarValues: Record<string, StatusBarValue> = {};
+let titleBarHidden = false;
+
+function renderSidebarToolbar(): void {
+  sidebarToolbarEl.hidden = !sidebarToolbarConfig.visible;
+  sidebarToolbarRoot.renderOnEvent(
+    createElement(SidebarToolbar, {
+      config: sidebarToolbarConfig,
+      values: sidebarToolbarValues,
+      reserveWindowControls: titleBarHidden && navigator.userAgent.includes("Mac"),
+      onOpenCommandPalette: () => openCommandPalette(),
+      onRunItem: (id: string) => {
+        sendMessage("runSidebarToolbarItem", { id });
+        imeEl.focus({ preventScroll: true });
+      },
+      onAction: (action: KeybindAction) => {
+        handleTileCommand(actionToTileCommand(action));
+      },
+    }),
+  );
+}
+renderSidebarToolbar();
 
 // ---- コマンドパレット: open状態が変わるたびrenderし直す ----
 const commandPaletteRoot = createMemoRoot(commandPaletteRootEl, "command-palette");
@@ -741,11 +783,14 @@ function setupPalette() {
  * ウィンドウ自体のスタイルは生成時に決まるため、ここで切り替わるのはwebview側だけ
  * （設定を変えた直後は再起動するまでネイティブ側と食い違う）。
  *
- * macOSの`hiddenInset`はウィンドウ操作ボタンをコンテンツへ重ねて残すが、ツールバーは
- * ボタンが右寄せで左側が空いているため、そこへ収まる
+ * macOSの`hiddenInset`はウィンドウ操作ボタンをコンテンツへ重ねて残すため、ツールバーの左の区画は
+ * そのぶん右へずらす
  */
 function applyTitleBarMode(mode: TitleBarMode) {
   sidebarToolbarEl.classList.toggle(DRAG_REGION_CLASS, mode === "hidden");
+  if (titleBarHidden === (mode === "hidden")) return;
+  titleBarHidden = mode === "hidden";
+  renderSidebarToolbar();
 }
 
 let colorProbeCanvas: HTMLCanvasElement | undefined;
@@ -931,6 +976,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customViews: views,
         hoverButtons: hoverButtonConfigs,
         statusBar: statusBarConfig,
+        sidebarToolbar: nextSidebarToolbarConfig,
         shellProfiles: profiles,
         boardPhases: phases,
         boardStatus,
@@ -943,6 +989,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         customViews: ResolvedCustomViewConfig[];
         hoverButtons: ResolvedHoverButtonConfig[];
         statusBar: ResolvedStatusBarConfig;
+        sidebarToolbar: ResolvedSidebarToolbarConfig;
         shellProfiles: ShellProfile[];
         boardPhases: ResolvedBoardPhase[];
         boardStatus: ResolvedSidebarBoardStatusItem[];
@@ -958,6 +1005,8 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         applyCustomViews(views);
         hoverButtons.setConfig(hoverButtonConfigs);
         statusBar.setConfig(statusBarConfig);
+        sidebarToolbarConfig = nextSidebarToolbarConfig;
+        renderSidebarToolbar();
         shellProfiles = profiles;
         shellProfilesVersion++;
         boardPhases = phases;
@@ -979,6 +1028,10 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
       },
       statusBarValues: ({ values }: { values: Record<string, StatusBarValue> }) => {
         statusBar.setValues(values);
+      },
+      sidebarToolbarValues: ({ values }: { values: Record<string, StatusBarValue> }) => {
+        sidebarToolbarValues = values;
+        renderSidebarToolbar();
       },
       statusBarHidden: ({ hidden }: { hidden: boolean }) => {
         statusBar.setHidden(hidden);

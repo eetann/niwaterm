@@ -30,6 +30,7 @@ import type {
   ResolvedResumeConfig,
   ResolvedSidebarBoardStatusItem,
   ResolvedSidebarConfig,
+  ResolvedSidebarToolbarConfig,
   ResolvedStatusBarConfig,
   ResolvedTerminalConfig,
   ShellProfile,
@@ -85,6 +86,11 @@ import {
 } from "./persistence";
 import type { SelectionMenuEntry, SelectionMenuHandle } from "./selection-menu";
 import { detectShellProfiles, resolveShellProfileCommand } from "./shell-profiles";
+import {
+  createSidebarToolbar,
+  type SidebarToolbarDefinition,
+  type SidebarToolbarHandle,
+} from "./sidebar-toolbar";
 import { createStatusBar, type StatusBarDefinition, type StatusBarHandle } from "./status-bar";
 import { createWslHomeResolver } from "./wsl-home";
 import {
@@ -282,6 +288,8 @@ export type NiwaRPC = {
       runHoverButtonItem: { tabId: TabId; buttonId: string; id: string };
       /** ステータスバーで押された部品。idはconfigのstatusBarで配ったもの */
       runStatusBarItem: { id: string };
+      /** サイドバーのツールバーで押された部品のうちrunを持つもの。idはconfigのsidebarToolbarで配ったもの */
+      runSidebarToolbarItem: { id: string };
       /** toggle-status-barキーバインド・コマンドパレット。表示状態は全ウィンドウ共通でbun側が持つ */
       toggleStatusBar: {};
       /** refresh-status-barキーバインド・コマンドパレット */
@@ -331,6 +339,8 @@ export type NiwaRPC = {
         hoverButtons: ResolvedHoverButtonConfig[];
         /** ウィンドウ下端のステータスバーの部品の並び。値はstatusBarValuesで別に配る */
         statusBar: ResolvedStatusBarConfig;
+        /** サイドバー上端のツールバーの部品の並び。値はsidebarToolbarValuesで別に配る */
+        sidebarToolbar: ResolvedSidebarToolbarConfig;
         shellProfiles: ShellProfile[];
         /** Boardへ付けられるフェーズの候補（board.phases）。サイドバーのメニュー・コマンドパレットに並ぶ */
         boardPhases: ResolvedBoardPhase[];
@@ -349,6 +359,8 @@ export type NiwaRPC = {
        * 状況が変わった時・intervalの周期で評価し直し、内容が前回と変わったときにしか送らない
        */
       statusBarValues: { values: Record<string, StatusBarValue> };
+      /** サイドバーのツールバーの、source・renderを持つ部品の評価済みの値（statusBarValuesと同じ扱い） */
+      sidebarToolbarValues: { values: Record<string, StatusBarValue> };
       /**
        * ユーザーがステータスバーを隠したか（toggle-status-bar・CLIの`status-bar toggle`）。
        * 設定のstatusBar.visibleとは別に持ち、両方が出す指定の時だけ出す
@@ -436,7 +448,9 @@ function render(windowId: WindowId) {
   dropUnchangedPaletteCss(view, snap);
   dropSentKittyImages(view, snap);
   sendHoverButtonTabs(view, snap);
-  statusBarHandle?.update(windowId, statusBarContextOf(windowId, snap));
+  const statusBarCtx = statusBarContextOf(windowId, snap);
+  statusBarHandle?.update(windowId, statusBarCtx);
+  sidebarToolbarHandle?.update(windowId, statusBarCtx);
   view.browserWindow.setTitle(
     snap.workspaceIds.length === 1
       ? APP_VARIANT
@@ -565,6 +579,7 @@ function sendConfig(windowId?: WindowId) {
       customViews,
       hoverButtons,
       statusBar: statusBarHandle?.resolved() ?? HIDDEN_STATUS_BAR,
+      sidebarToolbar: sidebarToolbarHandle?.resolved() ?? HIDDEN_SIDEBAR_TOOLBAR,
       shellProfiles,
       boardPhases: boardConfig.phases,
       boardStatus: sidebarConfig.boardStatus,
@@ -844,12 +859,29 @@ let hoverButtonsHandle: HoverButtonsHandle;
 let statusBarHandle: StatusBarHandle | null = null;
 /** config showで部品のidを引けるよう、関数を含む解決結果をそのまま持つ */
 let statusBarDefinition: StatusBarDefinition = { visible: false, css: "", components: [] };
-/** ステータスバーのbuiltin:cwdを縮めるため。設定のリロードをまたいで問い合わせ結果を使い回す */
-const wslHomes = createWslHomeResolver({ onResolved: () => statusBarHandle?.refresh() });
+/** 設定の初回読み込み前はnull */
+let sidebarToolbarHandle: SidebarToolbarHandle | null = null;
+let sidebarToolbarDefinition: SidebarToolbarDefinition = {
+  visible: false,
+  css: "",
+  components: [],
+};
+/** builtin:cwdを縮めるため。設定のリロードをまたいで問い合わせ結果を使い回す */
+const wslHomes = createWslHomeResolver({
+  onResolved: () => {
+    statusBarHandle?.refresh();
+    sidebarToolbarHandle?.refresh();
+  },
+});
 const HIDDEN_STATUS_BAR: ResolvedStatusBarConfig = {
   visible: false,
   css: "",
   sections: { left: [], center: [], right: [] },
+};
+const HIDDEN_SIDEBAR_TOOLBAR: ResolvedSidebarToolbarConfig = {
+  visible: false,
+  css: "",
+  sections: { left: [], right: [] },
 };
 const uiStatePath = uiStateFilePath();
 /** キーバインド・CLIで切り替えた表示状態。全ウィンドウで共有し、次回起動時に引き継ぐ */
@@ -1034,6 +1066,7 @@ function currentConfigSummary(): ConfigSummary {
     sidebar: sidebarConfig,
     terminal: terminalConfig,
     statusBar: statusBarDefinition,
+    sidebarToolbar: sidebarToolbarDefinition,
     link: linkConfig,
   });
 }
@@ -1078,6 +1111,7 @@ async function refreshConfig(): Promise<void> {
     sidebar: sidebarConfig,
     terminal: terminalConfig,
     statusBar: statusBarDefinition,
+    sidebarToolbar: sidebarToolbarDefinition,
     customViews,
     customViewHandlers,
     hoverButtons,
@@ -1096,14 +1130,20 @@ async function refreshConfig(): Promise<void> {
     runDefaultOpenLink,
   } = next);
   configApplied = true;
+  const homeDirOf = (ctx: StatusBarContext): string =>
+    (ctx.boardId !== null
+      ? wslHomes.homeOf(windowManager.getBoardFocusedShell(ctx.boardId))
+      : undefined) ?? homedir();
   statusBarHandle?.dispose();
   statusBarHandle = createStatusBar(next.statusBar, next.niwa, {
     send: (windowId, values) => rpcSendOf(windowId)?.statusBarValues({ values }),
-    homeDirOf: (ctx) =>
-      (ctx.boardId !== null
-        ? wslHomes.homeOf(windowManager.getBoardFocusedShell(ctx.boardId))
-        : undefined) ?? homedir(),
+    homeDirOf,
     hidden: uiState.statusBarHidden,
+  });
+  sidebarToolbarHandle?.dispose();
+  sidebarToolbarHandle = createSidebarToolbar(next.sidebarToolbar, next.niwa, {
+    send: (windowId, values) => rpcSendOf(windowId)?.sidebarToolbarValues({ values }),
+    homeDirOf,
   });
   // 起動済みのタブはgetMaxScrollbackを読み直さないため、ここで今の値を配って回る
   windowManager.applyMaxScrollback(terminalConfig.scrollback);
@@ -1318,6 +1358,7 @@ function createWindowRpc(windowId: WindowId) {
           sendConfig(windowId);
           rpcSendOf(windowId)?.statusBarHidden({ hidden: uiState.statusBarHidden });
           statusBarHandle?.resend(windowId);
+          sidebarToolbarHandle?.resend(windowId);
           focusWebviewOnce(windowId);
         },
         input: ({ tabId, data }: { tabId: TabId; data: string }) => {
@@ -1616,6 +1657,9 @@ function createWindowRpc(windowId: WindowId) {
         runStatusBarItem: ({ id }: { id: string }) => {
           void statusBarHandle?.run(windowId, id);
         },
+        runSidebarToolbarItem: ({ id }: { id: string }) => {
+          void sidebarToolbarHandle?.run(windowId, id);
+        },
         toggleStatusBar: () => {
           toggleStatusBar();
         },
@@ -1751,6 +1795,7 @@ function finalizeWindow(windowId: WindowId, closeNative: boolean): void {
   view.closed = true;
   views.delete(windowId);
   statusBarHandle?.forget(windowId);
+  sidebarToolbarHandle?.forget(windowId);
   // window-manager側から畳まれた場合、この時点で既にpersistent判定はfalseになっており
   // 中身も空なので保存は走らない（空のワークスペースで上書きしないための順序）
   saveWindowFrameNow(view);

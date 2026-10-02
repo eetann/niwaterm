@@ -42,6 +42,7 @@ import {
   resolveStatusBar,
   resolveShellProfiles,
   resolveSidebar,
+  resolveSidebarToolbar,
   resolveTerminal,
   resolveWorkspaceDefaultCwd,
 } from "./config";
@@ -1596,5 +1597,142 @@ describe("resolveStatusBar", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("resolveSidebarToolbar", () => {
+  test("未指定なら右にコマンドパレットのボタンだけを出す", () => {
+    const def = resolveSidebarToolbar(null);
+    expect(def.visible).toBe(true);
+    expect(def.components.map((entry) => [entry.id, entry.builtin])).toEqual([
+      ["right-0", "command-palette"],
+    ]);
+  });
+
+  test("falseなら出さない", () => {
+    expect(resolveSidebarToolbar({ sidebar: { toolbar: false } })).toEqual({
+      visible: false,
+      css: "",
+      components: [],
+    });
+  });
+
+  test("固定のボタン・sourceの値・renderの値を並べ、書かなかった区画は既定のまま", () => {
+    const run = () => {};
+    const render = () => "x";
+    const def = resolveSidebarToolbar({
+      sidebar: {
+        toolbar: {
+          left: [
+            { icon: "git-branch", tooltip: "lazygit", run },
+            { icon: "power", action: "quit-app" },
+            { icon: "git-branch", source: "tab-var:branch" },
+            { render, interval: 1000 },
+          ],
+        },
+      },
+    });
+    expect(
+      def.components.map((entry) => ({
+        id: entry.id,
+        builtin: entry.builtin,
+        icon: entry.icon,
+        source: entry.source,
+        render: entry.render !== undefined,
+        run: entry.run !== undefined,
+        action: entry.action,
+      })),
+    ).toEqual([
+      {
+        id: "left-0",
+        builtin: null,
+        icon: "git-branch",
+        source: null,
+        render: false,
+        run: true,
+        action: null,
+      },
+      {
+        id: "left-1",
+        builtin: null,
+        icon: "power",
+        source: null,
+        render: false,
+        run: false,
+        action: "quit-app",
+      },
+      {
+        id: "left-2",
+        builtin: null,
+        icon: "git-branch",
+        source: { kind: "tab-var", name: "branch" },
+        render: false,
+        run: false,
+        action: null,
+      },
+      {
+        id: "left-3",
+        builtin: null,
+        icon: "",
+        source: null,
+        render: true,
+        run: false,
+        action: null,
+      },
+      {
+        id: "right-0",
+        builtin: "command-palette",
+        icon: "",
+        source: null,
+        render: false,
+        run: false,
+        action: null,
+      },
+    ]);
+    expect(def.components[3]?.interval).toBe(1000);
+  });
+
+  test("不正な部品だけ落として警告し、actionはrunと同時なら使わない", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const run = () => {};
+      const def = resolveSidebarToolbar(
+        {
+          sidebar: {
+            toolbar: {
+              left: [
+                "builtin:mode",
+                { tooltip: "中身が無い" },
+                { icon: "x", action: "no-such-action" as never },
+                { icon: "y", action: "quit-app", run },
+                { label: "固定", source: "builtin:cwd" },
+              ],
+              right: [],
+            },
+          },
+        },
+        diag,
+      );
+      expect(def.components.map((entry) => [entry.id, entry.action, entry.label])).toEqual([
+        ["left-2", null, ""],
+        ["left-3", null, ""],
+        ["left-4", null, ""],
+      ]);
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "sidebar.toolbar.left[0].source",
+        "sidebar.toolbar.left[1]",
+        "sidebar.toolbar.left[2].action",
+        "sidebar.toolbar.left[3].action",
+        "sidebar.toolbar.left[4]",
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  test("全区画を空にするとツールバー自体を出さない", () => {
+    expect(resolveSidebarToolbar({ sidebar: { toolbar: { left: [], right: [] } } }).visible).toBe(
+      false,
+    );
   });
 });

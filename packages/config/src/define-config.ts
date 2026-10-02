@@ -120,6 +120,7 @@ export interface NiwatermConfig {
    * サイドバーの表示設定。ワークスペース一覧のBoard行に出すステータスライン（Board名の下の行）へ
    * 並べる項目と順番を指定する。未指定ならフェーズ・ブランチ・エージェント状態の3つが出る。
    * 例: { boardStatus: ["builtin:branch", { source: "tab-var:ticket", prefix: "#" }] }
+   * 上端のツールバーへ並べるボタン（toolbar）もここで指定する。
    */
   sidebar?: SidebarConfig;
   /**
