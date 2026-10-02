@@ -37,6 +37,11 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-popover-border: var(--popover-border);
   --color-destructive: var(--destructive);
+  /* 状態を知らせる役割色。appearance.uiへ追従させるため、amber-500等のTailwindパレットを直接使わずこちらを使う。
+     infoはエージェントの作業中のような「進行中」を表し、accentと同じ色を指す */
+  --color-warning: var(--ui-warning);
+  --color-success: var(--ui-success);
+  --color-info: var(--ui-accent);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

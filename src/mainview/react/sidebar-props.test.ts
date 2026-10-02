@@ -3,7 +3,6 @@ import { normalizeSidebarBoardStatus } from "@niwaterm/config";
 import type { TileLeaf, TileNode, TileSplit } from "../../bun/tile-layout";
 import type { BoardStatusEntry, WorkspaceListEntry } from "../../bun/workspace-manager";
 import {
-  agentStatusBadgeClass,
   agentStatusBadgeLabel,
   buildSidebarWorkspaceItems,
   type SidebarBoardItem,
@@ -532,13 +531,6 @@ describe("agentStatusBadgeLabel", () => {
     expect(agentStatusBadgeLabel("working")).toBe("作業中");
     expect(agentStatusBadgeLabel("blocked")).toBe("応答待ち");
     expect(agentStatusBadgeLabel("idle")).toBeNull();
-  });
-});
-
-describe("agentStatusBadgeClass", () => {
-  test("working/blockedそれぞれに対応する配色クラスを返す", () => {
-    expect(agentStatusBadgeClass("working")).toBe("text-blue-500 bg-blue-500/15");
-    expect(agentStatusBadgeClass("blocked")).toBe("text-amber-500 bg-amber-500/15");
   });
 });
 

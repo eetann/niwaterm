@@ -134,18 +134,6 @@ export function agentStatusBadgeLabel(status: AgentStatus): string | null {
   }
 }
 
-/** working/blocked状態のバッジ配色Tailwindクラスを返す。idleはバッジ自体を出さないため空文字列 */
-export function agentStatusBadgeClass(status: AgentStatus): string {
-  switch (status) {
-    case "working":
-      return "text-blue-500 bg-blue-500/15";
-    case "blocked":
-      return "text-amber-500 bg-amber-500/15";
-    case "idle":
-      return "";
-  }
-}
-
 /**
  * Boardの状態表示（変数・ステータスライン）に使う代表タブ。フォーカス中タイルのアクティブタブを使う
  * （ユーザーが今そのBoardで見ているタブの状態が、サイドバーの一覧でも最も自然に対応するため）。

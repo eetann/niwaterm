@@ -186,7 +186,7 @@ export function TileTabBar({
                     className={TAB_TRIGGER_CLASS}
                   >
                     {tab.bell && (
-                      <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />
+                      <Bell aria-label="ベル" className="size-3 shrink-0 text-warning" />
                     )}
                     <span>{tab.label}</span>
                     <Button

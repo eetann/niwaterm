@@ -31,9 +31,9 @@ export function isTitleBarMode(value: unknown): value is TitleBarMode {
 export interface UiColorsConfig {
   /** サイドバー・タブバー・ポップアップの境界線と、フォーカスしていないタイルの枠 */
   border?: string;
-  /** フォーカス中タイルの枠・タブD&Dのドロップ先・選択ハイライト・情報メッセージの地 */
+  /** フォーカス中タイルの枠・タブD&Dのドロップ先・選択ハイライト・情報メッセージの地・エージェント作業中の表示 */
   accent?: string;
-  /** ズーム中タイルの枠・検索一致・コピーモードのカーソル・スクロールバックバッジ・ジャンプヒントの地 */
+  /** ズーム中タイルの枠・検索一致・コピーモードのカーソル・スクロールバックバッジ・ジャンプヒントの地・ベルやエージェント応答待ちの表示 */
   warning?: string;
   /** 完了を知らせるバッジ（コピー完了）の地 */
   success?: string;

@@ -60,7 +60,7 @@ export function ConfirmDialog({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {danger && <AlertTriangle aria-hidden className="size-4 shrink-0 text-amber-500" />}
+            {danger && <AlertTriangle aria-hidden className="size-4 shrink-0 text-warning" />}
             {title}
           </DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
@@ -77,7 +77,7 @@ export function ConfirmDialog({
             キャンセル
           </Button>
           <Button variant="destructive" size="sm" onClick={onConfirm}>
-            <Kbd className="bg-white/20 text-white">y</Kbd>
+            <Kbd className="bg-current/20 text-inherit">y</Kbd>
             実行
           </Button>
         </div>

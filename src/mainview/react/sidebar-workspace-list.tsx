@@ -620,21 +620,21 @@ export function SidebarWorkspaceList({
         <div key={line.id} className="flex gap-1.5">
           {line.prefix === null ? (
             blocked ? (
-              <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-amber-500" />
+              <AlertTriangle className="mt-0.5 size-2.5 shrink-0 text-warning" />
             ) : line.agent.status === "working" ? (
-              <LoaderCircle className="mt-0.5 size-2.5 shrink-0 animate-spin text-sky-400" />
+              <LoaderCircle className="mt-0.5 size-2.5 shrink-0 animate-spin text-info" />
             ) : (
               <Bot className="mt-0.5 size-2.5 shrink-0 text-muted-foreground" />
             )
           ) : (
-            <span className={cn("shrink-0", blocked ? "text-amber-500" : "text-sky-400")}>
+            <span className={cn("shrink-0", blocked ? "text-warning" : "text-info")}>
               {line.prefix}
             </span>
           )}
           <span
             className={cn(
               "line-clamp-2",
-              line.color === null && (blocked ? "text-amber-400/90" : "text-muted-foreground"),
+              line.color === null && (blocked ? "text-warning/90" : "text-muted-foreground"),
             )}
             style={line.color === null ? undefined : { color: line.color }}
           >
@@ -645,7 +645,7 @@ export function SidebarWorkspaceList({
     }
     return (
       <div key={line.id} className="flex items-center gap-1.5 text-muted-foreground">
-        {line.prefix !== null && <span className="shrink-0 text-blue-400/80">{line.prefix}</span>}
+        {line.prefix !== null && <span className="shrink-0 text-info/80">{line.prefix}</span>}
         <span
           className="min-w-0 truncate"
           style={line.color === null ? undefined : { color: line.color }}
@@ -678,9 +678,9 @@ export function SidebarWorkspaceList({
     const hasStatusLine = board.statusItems.length > 0;
     const dotClass =
       board.agent?.status === "working"
-        ? "bg-blue-500 shadow-[0_0_4px] shadow-blue-500"
+        ? "bg-info shadow-[0_0_4px] shadow-info"
         : board.agent?.status === "blocked"
-          ? "bg-amber-500 shadow-[0_0_4px] shadow-amber-500"
+          ? "bg-warning shadow-[0_0_4px] shadow-warning"
           : "bg-muted-foreground/30";
     const dropPosition =
       dropTarget?.kind === "board" && dropTarget.boardId === board.boardId
@@ -735,7 +735,7 @@ export function SidebarWorkspaceList({
                         // 起動時に組み直すBoardだけ色を付ける。プリセット名を覚えているだけの
                         // Boardは起動時の見た目が変わらないため、区別が付く程度に落とす
                         board.startup.restoreMode === "layout"
-                          ? "text-sky-400"
+                          ? "text-info"
                           : "text-muted-foreground/40",
                       )}
                     />
@@ -743,7 +743,7 @@ export function SidebarWorkspaceList({
                   {board.worktreeMissing && (
                     <FolderX
                       aria-label="ワークツリーが見つかりません"
-                      className="size-3 shrink-0 text-amber-500"
+                      className="size-3 shrink-0 text-warning"
                     />
                   )}
                   {board.zoomed && (
@@ -753,7 +753,7 @@ export function SidebarWorkspaceList({
                     />
                   )}
                   {board.bell && (
-                    <Bell aria-label="ベル" className="size-3 shrink-0 text-amber-500" />
+                    <Bell aria-label="ベル" className="size-3 shrink-0 text-warning" />
                   )}
                 </div>
                 {hasStatusLine && (
@@ -887,7 +887,7 @@ export function SidebarWorkspaceList({
               onDrop={(e) => handleWorkspaceHeaderBoardDrop(e, workspace.workspaceId)}
               className={cn(
                 "flex w-full items-center gap-1 rounded-md py-1.5 pr-2 pl-1",
-                isBoardDropHeader && "bg-sky-400/20 ring-1 ring-sky-400",
+                isBoardDropHeader && "bg-primary/20 ring-1 ring-primary",
               )}
             >
               <Button

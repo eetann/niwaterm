@@ -239,7 +239,7 @@ export function CommandPalette({
                     onSelectAction(def.action);
                   }}
                 >
-                  <Icon className={def.danger ? "text-amber-500" : undefined} />
+                  <Icon className={def.danger ? "text-warning" : undefined} />
                   <div className="flex flex-col">
                     <span>{def.labelEn}</span>
                     <span className="text-xs text-muted-foreground">{def.label}</span>
