@@ -1143,7 +1143,7 @@ export type BoardResumeResult =
   | { ok: false; error: string };
 
 /**
- * 実行中だったコマンドを起動時に打ち直すかの、Boardごとの手動の切り替え。boardId省略時はアクティブBoard。
+ * 実行中だったコマンドを起動時に再実行するかの、Boardごとの手動の切り替え。boardId省略時はアクティブBoard。
  * resumeはmode: "set"のみ必須。結果のresumeがnullなら手動の切り替えは無く、設定に従う
  */
 export function setBoardResume(

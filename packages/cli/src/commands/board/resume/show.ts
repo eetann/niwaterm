@@ -6,7 +6,7 @@ import { createTargetResolver } from "../../../resolve-target";
 export default define({
   name: "show",
   description:
-    "Boardの打ち直しの切り替えを表示する（on / off。切り替えていなければ空行で、設定ファイルに従う）",
+    "Boardの再実行の切り替えを表示する（on / off。切り替えていなければ空行で、設定ファイルに従う）",
   args: {
     board: {
       type: "string",

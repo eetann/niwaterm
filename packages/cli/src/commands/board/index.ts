@@ -12,7 +12,7 @@ import worktreeCommand from "./worktree";
 export default define({
   name: "board",
   description:
-    "Boardの作成・切替・削除・名前変更・並び替え・作業フェーズ・起動時レイアウト・コマンドの打ち直し・ワークツリー紐づけ設定",
+    "Boardの作成・切替・削除・名前変更・並び替え・作業フェーズ・起動時レイアウト・起動時のコマンド再実行・ワークツリー紐づけ設定",
   subCommands: {
     new: newCommand,
     close: closeCommand,

@@ -50,7 +50,7 @@ export interface SidebarBoardItem {
   worktreeMissing: boolean;
   /** ユーザーが付けた作業フェーズ。未設定はnull */
   phase: SidebarBoardPhaseItem | null;
-  /** 実行中だったコマンドを起動時に打ち直すかの手動の切り替え。nullは設定に従う */
+  /** 実行中だったコマンドを起動時に再実行するかの手動の切り替え。nullは設定に従う */
   resume: boolean | null;
 }
 

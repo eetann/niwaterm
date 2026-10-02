@@ -19,7 +19,7 @@ niwatermは、`niwa`コマンド（CLI）からも操作できる。タイルを
 | `board new` / `switch` / `close` / `rename` / `move`        | Boardを操作する                                       | [基本のコマンド](/niwaterm/cli/commands/)                                    |
 | `board phase set` / `clear` / `show`                        | Boardの作業フェーズを付け外しする                     | [基本のコマンド](/niwaterm/cli/commands/)                                    |
 | `board startup layout` / `restore` / `clear`                | Boardの起動時レイアウトを切り替える                   | [レイアウトプリセット](/niwaterm/layouts/#起動時レイアウト)                  |
-| `board resume set` / `clear` / `show`                       | 実行中だったコマンドの打ち直しをBoardごとに切り替える | [コマンドの打ち直し](/niwaterm/resume/#boardごとに切り替える)                |
+| `board resume set` / `clear` / `show`                       | 起動時にコマンドを再実行するかをBoardごとに切り替える | [起動時にコマンドを再実行](/niwaterm/resume/#boardごとに切り替える)          |
 | `board worktree set` / `clear` / `show`                     | Boardに紐づくワークツリーを設定する                   | [ワークツリー](/niwaterm/worktrees/#boardに紐づくワークツリー)               |
 | `tile split` / `focus` / `resize` / `zoom`                  | タイルを分割・移動・拡大する                          | [基本のコマンド](/niwaterm/cli/commands/)                                    |
 | `tab new` / `close` / `restart` / `switch`                  | タブを作る・閉じる・再起動する・切り替える            | [基本のコマンド](/niwaterm/cli/commands/)                                    |

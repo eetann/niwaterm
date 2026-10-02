@@ -5,7 +5,7 @@ import { createTargetResolver } from "../../../resolve-target";
 
 export default define({
   name: "clear",
-  description: "Boardの打ち直しの切り替えを解除し、設定ファイルに従わせる",
+  description: "Boardの再実行の切り替えを解除し、設定ファイルに従わせる",
   args: {
     board: {
       type: "string",

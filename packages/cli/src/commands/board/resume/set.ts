@@ -6,7 +6,7 @@ import { createTargetResolver } from "../../../resolve-target";
 export default define({
   name: "set",
   description:
-    "実行中だったコマンドを起動時に打ち直すかをBoardに設定する。設定ファイル（resume.enabled・レイアウトプリセットのresume）より優先される",
+    "実行中だったコマンドを起動時に再実行するかをBoardに設定する。設定ファイル（resume.enabled・レイアウトプリセットのresume）より優先される",
   args: {
     board: {
       type: "string",
@@ -17,7 +17,7 @@ export default define({
     value: {
       type: "positional",
       choices: ["on", "off"] as const,
-      description: "on で打ち直す、off で打ち直さない",
+      description: "on で再実行する、off で再実行しない",
     },
   },
   run: async (ctx) => {
