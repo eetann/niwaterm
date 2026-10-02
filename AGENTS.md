@@ -10,6 +10,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 - 既知の問題・ハマりどころの記録: docs/known-issues/（何かに詰まったら先にここをgrepする）
 - ユーザー向けドキュメント（CLI・設定ファイルの使い方）: website/src/content/docs/（ドキュメントサイトのページ。`niwa docs list`/`show`でも読める）
 - コード内コメントの書き方: .agents/rules/code-comments.md（タスク番号・経緯を書かない。コメントを書く前に必読）
+- UIの見た目の書き方: .agents/rules/ui-styling.md（部品・色・寸法の選び方と正本の場所。src/mainview/のUIを触る前に必読）
 
 ## AIエージェント共通の開発環境
 

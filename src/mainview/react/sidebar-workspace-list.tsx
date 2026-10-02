@@ -495,14 +495,14 @@ export function SidebarWorkspaceList({
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                   {entry.projectRoot && (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">project</span>
+                    <span className="shrink-0 text-2xs text-muted-foreground">project</span>
                   )}
                 </div>
                 {entry.description && (
-                  <span className="text-[10px] text-muted-foreground">{entry.description}</span>
+                  <span className="text-2xs text-muted-foreground">{entry.description}</span>
                 )}
                 {entry.projectRoot && (
-                  <span className="text-[10px] break-all text-muted-foreground">
+                  <span className="text-2xs break-all text-muted-foreground">
                     {`${entry.projectRoot}/.niwaterm/config.ts`}
                   </span>
                 )}
@@ -765,7 +765,7 @@ export function SidebarWorkspaceList({
                 {hasStatusLine && (
                   <div className="flex w-full gap-1.5 px-1.5 pb-1.5">
                     <div className="ml-[3px] w-0.5 shrink-0 rounded-full bg-muted-foreground/20" />
-                    <div className="min-w-0 flex-1 font-mono text-[10px] leading-relaxed">
+                    <div className="min-w-0 flex-1 font-mono text-2xs leading-relaxed">
                       {board.statusItems.map((line) => renderBoardStatusLine(line))}
                     </div>
                   </div>
@@ -828,7 +828,7 @@ export function SidebarWorkspaceList({
       >
         <PictureInPicture2 className="size-3 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-xs font-medium">{popup.label}</span>
-        <span className="shrink-0 text-[9px] text-muted-foreground">
+        <span className="shrink-0 text-3xs text-muted-foreground">
           {popup.visible ? "popup" : "最小化"}
         </span>
       </button>
@@ -837,7 +837,7 @@ export function SidebarWorkspaceList({
       <div className="mt-2 flex flex-col gap-1.5">
         <div className="flex items-center gap-1.5 px-1">
           <div className="h-px flex-1 bg-border" />
-          <span className="shrink-0 text-[8px] font-bold tracking-wider text-muted-foreground/70">
+          <span className="shrink-0 text-3xs font-bold tracking-wider text-muted-foreground/70">
             POPUP
           </span>
           <div className="h-px flex-1 bg-border" />
@@ -978,7 +978,7 @@ export function SidebarWorkspaceList({
               )}
               <Badge
                 variant="secondary"
-                className="rounded-full border-0 px-1.5 text-[9px] text-muted-foreground"
+                className="rounded-full border-0 px-1.5 text-3xs text-muted-foreground"
               >
                 {workspace.boards.length}
               </Badge>

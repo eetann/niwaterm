@@ -22,6 +22,15 @@
   --shadow-lg: 0 8px 32px rgb(0 0 0 / 0.6);
 }
 
+/*
+ * Tailwind既定の最小（text-xs = 12px）より小さい文字。サイドバーの補足・バッジのような密な表示で使う。
+ * 行の高さは持たせず親から継承させる。行の高さを決めると、1行に収めている行の高さが変わる
+ */
+@theme {
+  --text-2xs: 10px;
+  --text-3xs: 9px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
