@@ -74,6 +74,7 @@ function createTestNiwaApi(): NiwaApiHandle {
       mouseAnyMotion: false,
     }),
     dumpText: () => "",
+    showNotice: () => {},
     setCallbacks: () => {},
     dispose: () => {},
   };

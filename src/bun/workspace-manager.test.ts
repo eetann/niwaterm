@@ -59,6 +59,7 @@ function createFakeSessionFactory() {
         mouseAnyMotion: false,
       }),
       dumpText: () => "",
+      showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {
         record.disposed = true;

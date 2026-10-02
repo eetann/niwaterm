@@ -83,6 +83,7 @@ function createTestWorkspaceManager(): {
         mouseAnyMotion: false,
       }),
       dumpText: () => `screen-text-${index}`,
+      showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {},
     };
@@ -4416,6 +4417,7 @@ describe("ウィンドウ（複数OSウィンドウ）", () => {
         kittyImages: [],
       }),
       dumpText: () => "",
+      showNotice: () => {},
       isCopyMode: () => false,
       enterCopyMode: () => {},
       exitCopyMode: () => {},

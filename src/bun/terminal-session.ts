@@ -34,7 +34,8 @@ import { decodePwdReport } from "./pwd-report";
 export type TerminalSessionCallbacks = {
   /** PTY出力によりVT状態が変わった時に呼ばれる。描画スケジューリングは呼び出し側の責務 */
   onOutput?: () => void;
-  onExit?: (code: number) => void;
+  /** codeはシグナル等で終了コードを持たずに終わった場合null */
+  onExit?: (code: number | null) => void;
   /** シェル統合が送るOSC 7/9/1337でカレントディレクトリが変化した時に呼ばれる */
   onPwdChanged?: (cwd: string) => void;
   /** BEL文字(0x07)を受け取った時に呼ばれる */
@@ -218,6 +219,13 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (disposed) return;
     callbacks.onExit?.(code);
   });
+
+  /** PTYを経由せず画面へ直接文字列を書く。プロセスが終了したタブへの案内表示に使う */
+  function showNotice(text: string): void {
+    if (disposed) return;
+    term.write(new TextEncoder().encode(text));
+    callbacks.onOutput?.();
+  }
 
   /** popupからタブへの昇格時、PTYセッションを作り直さずに呼び出し先だけをBoard側へ差し替える */
   function setCallbacks(next: TerminalSessionCallbacks): void {
@@ -715,6 +723,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     jumpPrompt,
     renderState,
     dumpText,
+    showNotice,
     setCallbacks,
     dispose,
   };

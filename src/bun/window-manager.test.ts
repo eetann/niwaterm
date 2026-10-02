@@ -42,6 +42,7 @@ function createFakeSessionFactory() {
         kittyImages: [],
       }),
       dumpText: () => "",
+      showNotice: () => {},
       isCopyMode: () => false,
       enterCopyMode: () => {},
       exitCopyMode: () => {},

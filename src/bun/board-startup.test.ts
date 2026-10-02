@@ -336,6 +336,7 @@ function createTestWorkspaceManager(): WorkspaceManager {
         kittyImages: [],
       }),
       dumpText: () => `screen-text-${index}`,
+      showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {},
     };

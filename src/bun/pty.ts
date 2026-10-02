@@ -37,7 +37,8 @@ export interface PtyOptions {
 export interface Pty {
   readonly pid: number;
   onData(fn: (data: Uint8Array) => void): void;
-  onExit(fn: (code: number) => void): void;
+  /** codeはシグナル等で終了コードを持たずに終わった場合null */
+  onExit(fn: (code: number | null) => void): void;
   write(data: string | Uint8Array): void;
   resize(cols: number, rows: number): void;
   kill(): void;
@@ -206,7 +207,7 @@ export function createPty(opts: PtyOptions): Pty {
   appendCommandArgs(cmd, opts.command, opts.captureStdoutTo);
 
   let onDataFn: ((data: Uint8Array) => void) | null = null;
-  let onExitFn: ((code: number) => void) | null = null;
+  let onExitFn: ((code: number | null) => void) | null = null;
 
   const terminal = new Bun.Terminal({
     cols: opts.cols,
@@ -222,7 +223,7 @@ export function createPty(opts: PtyOptions): Pty {
     env: buildEnv(cmd, term, opts.env),
     terminal,
     onExit(_proc: Bun.Subprocess, exitCode: number | null) {
-      onExitFn?.(exitCode ?? 0);
+      onExitFn?.(exitCode);
     },
   };
 
@@ -250,7 +251,7 @@ export function createPty(opts: PtyOptions): Pty {
     onDataFn = fn;
   }
 
-  function onExit(fn: (code: number) => void): void {
+  function onExit(fn: (code: number | null) => void): void {
     onExitFn = fn;
   }
 

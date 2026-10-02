@@ -142,6 +142,10 @@ export function createBoard(opts: BoardOptions) {
   // 描画側の関心事のため）。closeTile/splitTile/focus変更で対象が意味を失う場合はクリアする
   let zoomedTileId: TileId | null = null;
 
+  // プロセスが異常終了したまま残しているタブ（handleTabProcessExit参照）。PTYはもう居ないので
+  // 入力は送らず、キー入力をタブを閉じる合図として扱う
+  const exitedTabs = new Set<TabId>();
+
   const genTileId = opts.genTileId;
   const genTabId = opts.genTabId;
 
@@ -189,7 +193,7 @@ export function createBoard(opts: BoardOptions) {
       },
       maxScrollback: opts.getMaxScrollback?.(),
       onOutput: () => opts.onDirty(),
-      onExit: () => handleTabProcessExit(tabId),
+      onExit: (code) => handleTabProcessExit(tabId, code),
       // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
       onBell: () => opts.onBell?.(tabId),
@@ -253,6 +257,7 @@ export function createBoard(opts: BoardOptions) {
       shellByTabId.delete(tabId);
       browserTabs.delete(tabId);
       pendingSpawnByTabId.delete(tabId);
+      exitedTabs.delete(tabId);
     }
   }
 
@@ -271,9 +276,30 @@ export function createBoard(opts: BoardOptions) {
     opts.onDirty();
   }
 
-  // シェルが1つ終了した時の挙動。そのタブだけ閉じる（同じタイルに他のタブが残っていればタイルは維持）。
-  // タイル内最後のタブで、かつBoard最後の1枚だった場合のみ「アプリごと終了」を維持する。
-  function handleTabProcessExit(tabId: TabId): void {
+  /**
+   * シェルが終了した時の挙動。終了コード0（exitで抜けた等）ならそのタブを閉じる。
+   * それ以外（非0・シグナルで落とされた）はタブを閉じずに終了した旨を表示して残し、
+   * 次のキー入力で閉じる。
+   *
+   * 異常終了で閉じないのは、OSのシャットダウンやWSLの停止で全タブのプロセスがまとめて
+   * 殺されたとき、閉じたタブ・空になったBoardが順にworkspaces.jsonへ保存され、
+   * 次回起動時にBoardごと消えてしまうため
+   */
+  function handleTabProcessExit(tabId: TabId, code: number | null): void {
+    if (code === 0) {
+      closeExitedTab(tabId);
+      return;
+    }
+    exitedTabs.add(tabId);
+    const reason = code === null ? "シグナルで終了" : `exit code ${code}`;
+    sessions
+      .get(tabId)
+      ?.showNotice(`\r\n[プロセスが終了しました (${reason})。何かキーを押すとタブを閉じます]\r\n`);
+  }
+
+  // そのタブだけ閉じる（同じタイルに他のタブが残っていればタイルは維持）。
+  // Board最後のタブだった場合はBoardごと畳む（onAllTabsClosed）
+  function closeExitedTab(tabId: TabId): void {
     const leaf = listLeaves(tree).find((l) => l.tabIds.includes(tabId));
     if (!leaf) return;
     const result = closeTabInTile(tree, leaf.id, tabId);
@@ -388,7 +414,7 @@ export function createBoard(opts: BoardOptions) {
     tree = result;
     session.setCallbacks({
       onOutput: () => opts.onDirty(),
-      onExit: () => handleTabProcessExit(tabId),
+      onExit: (code) => handleTabProcessExit(tabId, code),
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
       onBell: () => opts.onBell?.(tabId),
     });
@@ -569,12 +595,17 @@ export function createBoard(opts: BoardOptions) {
     const resolvedCwd = cwd ?? actualCwdOf(tabId);
     sessions.get(tabId)?.dispose();
     sessions.delete(tabId);
+    exitedTabs.delete(tabId);
     spawnSession(tabId, size.cols, size.rows, shellOverride, resolvedCwd, command);
     opts.onDirty();
     return true;
   }
 
   function handleInput(tabId: TabId, data: string): void {
+    if (exitedTabs.has(tabId)) {
+      closeExitedTab(tabId);
+      return;
+    }
     sessions.get(tabId)?.write(data);
   }
 
@@ -598,10 +629,12 @@ export function createBoard(opts: BoardOptions) {
   }
 
   function handlePaste(tabId: TabId, data: string): void {
+    if (exitedTabs.has(tabId)) return;
     sessions.get(tabId)?.paste(data);
   }
 
   function handleMouseEvent(tabId: TabId, ev: MouseEventInput): void {
+    if (exitedTabs.has(tabId)) return;
     sessions.get(tabId)?.mouseEvent(ev);
   }
 

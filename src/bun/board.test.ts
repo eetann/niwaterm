@@ -35,6 +35,10 @@ interface FakeSessionRecord {
   appliedMaxScrollback: number | null;
   /** setCallbacksで差し替わった最新のコールバック。テストからtriggerExit/triggerPwdChangedで発火する */
   callbacks: TerminalSessionCallbacks;
+  /** showNoticeで画面へ書かれた文字列 */
+  notices: string[];
+  /** writeでPTYへ送られた入力 */
+  writes: string[];
 }
 
 function createFakeSessionFactory() {
@@ -44,6 +48,8 @@ function createFakeSessionFactory() {
       opts,
       disposed: false,
       appliedMaxScrollback: null,
+      notices: [],
+      writes: [],
       callbacks: {
         onOutput: opts.onOutput,
         onExit: opts.onExit,
@@ -53,7 +59,9 @@ function createFakeSessionFactory() {
     };
     created.push(record);
     return {
-      write: () => {},
+      write: (data: string | Uint8Array) => {
+        record.writes.push(String(data));
+      },
       runCommandWhenReady: () => {},
       paste: () => {},
       mouseEvent: () => {},
@@ -77,6 +85,9 @@ function createFakeSessionFactory() {
         mouseAnyMotion: false,
       }),
       dumpText: () => "",
+      showNotice: (text: string) => {
+        record.notices.push(text);
+      },
       setCallbacks: (next) => {
         record.callbacks = next;
       },
@@ -1605,6 +1616,66 @@ describe("シェルプロセス終了時の挙動(onExit経由)", () => {
     resolvePending(ws);
     created[0]?.opts.onExit?.(0);
     expect(allClosed).toBe(true);
+  });
+
+  test("非0で終了したタブは閉じずに残し、終了した旨を表示する", () => {
+    const { created, factory } = createFakeSessionFactory();
+    let allClosed = false;
+    const ws = createBoard(
+      baseOpts({ createSession: factory, onAllTabsClosed: () => (allClosed = true) }),
+    );
+    resolvePending(ws);
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+
+    created[0]?.opts.onExit?.(1);
+
+    expect(allClosed).toBe(false);
+    expect((ws.snapshot().layout as TileLeaf).tabIds).toEqual([tabId]);
+    expect(created[0]?.notices.join("")).toContain("exit code 1");
+  });
+
+  test("シグナルで落とされたタブ（code: null）も閉じずに残す", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tileId = (ws.snapshot().layout as TileLeaf).id;
+    ws.newTab(tileId);
+    resolvePending(ws);
+
+    created[0]?.opts.onExit?.(null);
+
+    expect((ws.snapshot().layout as TileLeaf).tabIds.length).toBe(2);
+    expect(created[0]?.notices.join("")).toContain("シグナルで終了");
+  });
+
+  test("異常終了で残したタブはキー入力で閉じ、PTYへは送らない", () => {
+    const { created, factory } = createFakeSessionFactory();
+    let allClosed = false;
+    const ws = createBoard(
+      baseOpts({ createSession: factory, onAllTabsClosed: () => (allClosed = true) }),
+    );
+    resolvePending(ws);
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    created[0]?.opts.onExit?.(1);
+
+    ws.handleInput(tabId, "a");
+
+    expect(created[0]?.writes).toEqual([]);
+    expect(allClosed).toBe(true);
+  });
+
+  test("異常終了で残したタブをrespawnすると、以後の入力は新しいPTYへ届く", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const ws = createBoard(baseOpts({ createSession: factory }));
+    resolvePending(ws);
+    const tabId = (ws.snapshot().layout as TileLeaf).activeTabId;
+    created[0]?.opts.onExit?.(1);
+
+    ws.respawnTab(tabId);
+    ws.handleInput(tabId, "a");
+
+    expect(created[1]?.writes).toEqual(["a"]);
+    expect((ws.snapshot().layout as TileLeaf).tabIds).toEqual([tabId]);
   });
 });
 
