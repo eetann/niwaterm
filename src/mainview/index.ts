@@ -2133,7 +2133,8 @@ function renderTileTabBar(tileId: TileId): void {
   }));
   const zoomed = zoomedTileId === tileId;
   const newTabShortcut = shortcutLabelForAction("new-tab");
-  let key = `${shellProfilesVersion}\u0000${newTabShortcut}\u0000${leaf.activeTabId}\u0000${zoomed}`;
+  const newBrowserTabShortcut = shortcutLabelForAction("new-browser-tab");
+  let key = `${shellProfilesVersion}\u0000${newTabShortcut}\u0000${newBrowserTabShortcut}\u0000${leaf.activeTabId}\u0000${zoomed}`;
   for (const tab of tabs) key += `\u0000${tab.tabId}\u0001${tab.label}\u0001${tab.bell}`;
   root.renderIfChanged(key, () =>
     createElement(TileTabBar, {
@@ -2143,6 +2144,7 @@ function renderTileTabBar(tileId: TileId): void {
       zoomed,
       shellProfiles,
       newTabShortcut,
+      newBrowserTabShortcut,
       onSelectTab: (tabId) => {
         switchToTab(tileId, tabId);
         imeEl.focus({ preventScroll: true });
@@ -2160,6 +2162,11 @@ function renderTileTabBar(tileId: TileId): void {
         focusTileLocally(tileId);
         sendMessage("newTab", shellProfileId ? { tileId, shellProfileId } : { tileId });
         imeEl.focus({ preventScroll: true });
+      },
+      onAddBrowserTab: () => {
+        focusTileLocally(tileId);
+        browserUrlAutoFocusDeadlineMs = performance.now() + BROWSER_URL_AUTO_FOCUS_WINDOW_MS;
+        sendMessage("newBrowserTab", { tileId });
       },
       onRequestTerminalFocus: () => imeEl.focus({ preventScroll: true }),
       onRenameTab: renameSidebarTab,

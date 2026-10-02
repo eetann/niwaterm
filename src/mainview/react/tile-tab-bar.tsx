@@ -1,5 +1,5 @@
 import type { ShellProfile } from "@niwaterm/config";
-import { Bell, ChevronDown, Plus, X } from "lucide-react";
+import { Bell, ChevronDown, Globe, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
@@ -44,10 +46,13 @@ export interface TileTabBarProps {
   shellProfiles: ShellProfile[];
   /** 新しいタブ（new-tab）のショートカット表記。キーが割り当てられていなければundefined */
   newTabShortcut?: string;
+  /** 新しいブラウザタブ（new-browser-tab）のショートカット表記。キーが割り当てられていなければundefined */
+  newBrowserTabShortcut?: string;
   onSelectTab: (tabId: TabId) => void;
   onCloseTab: (tabId: TabId) => void;
   onAddTab: () => void;
   onAddTabWithProfile: (shellProfileId: string | undefined) => void;
+  onAddBrowserTab: () => void;
   onRequestTerminalFocus: () => void;
   onRenameTab: (tabId: TabId, name: string) => void;
   onToggleZoom: () => void;
@@ -89,10 +94,12 @@ export function TileTabBar({
   zoomed,
   shellProfiles,
   newTabShortcut,
+  newBrowserTabShortcut,
   onSelectTab,
   onCloseTab,
   onAddTab,
   onAddTabWithProfile,
+  onAddBrowserTab,
   onRequestTerminalFocus,
   onRenameTab,
   onToggleZoom,
@@ -248,13 +255,13 @@ export function TileTabBar({
         <Tooltip disableHoverableContent>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-xs" aria-label="シェルを選択">
+              <Button variant="ghost" size="icon-xs" aria-label="タブの種類を選択">
                 <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="left" className={TOOLTIP_CONTENT_CLASS}>
-            シェルを選択
+            タブの種類を選択
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent
@@ -272,6 +279,14 @@ export function TileTabBar({
               {profile.name}
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onAddBrowserTab}>
+            <Globe />
+            ブラウザ
+            {newBrowserTabShortcut && (
+              <DropdownMenuShortcut>{newBrowserTabShortcut}</DropdownMenuShortcut>
+            )}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
