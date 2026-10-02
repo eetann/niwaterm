@@ -158,11 +158,13 @@ function appearanceSection(
   return {
     name: "appearance",
     entries: [
+      { key: "theme", value: appearance.theme },
       { key: "fontFamily", value: appearance.fontFamily },
       fontSizeEntry(appearance.fontSize, baseFontSize),
       lineHeightEntry(appearance.lineHeight, baseLineHeight),
       { key: "foreground", value: appearance.foreground, swatches: [appearance.foreground] },
       { key: "background", value: appearance.background, swatches: [appearance.background] },
+      { key: "cursor", value: appearance.cursor, swatches: [appearance.cursor] },
       { key: "backgroundOpacity", value: String(appearance.backgroundOpacity) },
       backgroundImageEntry(appearance.backgroundImage),
       {

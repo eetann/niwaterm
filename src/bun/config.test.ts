@@ -10,6 +10,7 @@ import {
   DEFAULT_HOVER_TRIGGER_PX,
   STATUS_BAR_MIN_INTERVAL_MS,
   HOVER_TRIGGER_MAX_PX,
+  builtinThemes,
   defaultAppearance,
   defaultBoardConfig,
   defaultBrowserConfig,
@@ -602,6 +603,42 @@ describe("resolveKeybindings", () => {
 describe("resolveAppearance", () => {
   test("nullを渡すとdefaultAppearanceがそのまま返る", () => {
     expect(resolveAppearance(null)).toEqual(defaultAppearance);
+  });
+
+  test("themeで選んだテーマの色が土台になり、書いた色だけが上書きする", () => {
+    const tokyo = builtinThemes["tokyo-night"].colors;
+    const resolved = resolveAppearance({
+      appearance: { theme: "tokyo-night", cursor: "#ff0000", ui: { accent: "#00ff00" } },
+    });
+    expect(resolved.theme).toBe("tokyo-night");
+    expect(resolved.foreground).toBe(tokyo.foreground);
+    expect(resolved.background).toBe(tokyo.background);
+    expect(resolved.ansiColors).toEqual([...tokyo.ansiColors]);
+    expect(resolved.cursor).toBe("#ff0000");
+    expect(resolved.ui.accent).toBe("#00ff00");
+    expect(resolved.ui.border).toBe(tokyo.ui.border);
+  });
+
+  test("ansiColorsの空けた番号はテーマの色のまま残る", () => {
+    const tokyo = builtinThemes["tokyo-night"].colors;
+    const resolved = resolveAppearance({
+      appearance: { theme: "tokyo-night", ansiColors: [undefined, "#ff5555"] },
+    });
+    expect(resolved.ansiColors[0]).toBe(tokyo.ansiColors[0]);
+    expect(resolved.ansiColors[1]).toBe("#ff5555");
+    expect(resolved.ansiColors[2]).toBe(tokyo.ansiColors[2]);
+  });
+
+  test("知らないthemeは警告付きで既定のテーマへ戻す", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const resolved = resolveAppearance({ appearance: { theme: "monokai" as never } });
+      expect(resolved.theme).toBe(defaultAppearance.theme);
+      expect(resolved.background).toBe(defaultAppearance.background);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   test("フィールドごとに部分上書きできる", () => {

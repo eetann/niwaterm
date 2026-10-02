@@ -77,7 +77,7 @@ Radix系の部品は閉じる際に開く前の要素へフォーカスを戻す
 ## 作ったら確かめる
 
 - `react/`にコンポーネントを足したら、隣に`*.stories.tsx`を置いて状態別の見た目を確認できるようにする
-- 色を触ったらStorybookのツールバーのThemeをlightにしても確かめる。暗い地でしか見ていないと、
-  明るい地で文字や枠が消える崩れを見落とす
+- 色を触ったらStorybookのツールバーのThemeを明るい地のテーマ（Gruvbox Light・Solarized Light）にしても
+  確かめる。暗い地でしか見ていないと、明るい地で文字や枠が消える崩れを見落とす
 - 最終確認は実機（`mise run start`で起動するniwaterm-wip）で行う。WebView2・WKWebView固有の描画差や
   ユーザー設定の配色はStorybookに出ない（docs/build/storybook.mdの「本番の見た目との差」）

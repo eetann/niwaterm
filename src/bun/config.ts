@@ -18,7 +18,7 @@ import {
   defaultLinkConfig,
   defaultMouseConfig,
   defaultTerminalConfig,
-  defaultUiColors,
+  builtinThemes,
   type CustomViewConfig,
   type CustomViewHandlers,
   HOVER_BUTTON_POSITIONS,
@@ -34,6 +34,7 @@ import {
   isNewTabCwdMode,
   isPopupToolbarMode,
   isTabBarMode,
+  isThemeName,
   isTitleBarMode,
   type KeybindingsConfig,
   type LayoutPreset,
@@ -466,18 +467,22 @@ function isOpacity(value: unknown): value is number {
 }
 
 /**
- * defaultUiColorsにユーザー設定をマージした最終値を返す。全フィールドが同じ「CSSカラー値の
+ * テーマのui配色にユーザー設定をマージした最終値を返す。全フィールドが同じ「CSSカラー値の
  * 文字列」なので、キーを並べて回すだけで済む
  */
-function resolveUiColors(user: AppearanceConfig["ui"], diag: ConfigDiagnostics): ResolvedUiColors {
-  const resolved = { ...defaultUiColors };
-  for (const key of Object.keys(defaultUiColors) as (keyof ResolvedUiColors)[]) {
+function resolveUiColors(
+  user: AppearanceConfig["ui"],
+  base: ResolvedUiColors,
+  diag: ConfigDiagnostics,
+): ResolvedUiColors {
+  const resolved = { ...base };
+  for (const key of Object.keys(base) as (keyof ResolvedUiColors)[]) {
     resolved[key] = resolveField(
       diag,
       "appearance.ui",
       key,
       user?.[key],
-      defaultUiColors[key],
+      base[key],
       isNonEmptyString,
     );
   }
@@ -487,14 +492,24 @@ function resolveUiColors(user: AppearanceConfig["ui"], diag: ConfigDiagnostics):
 /**
  * defaultAppearanceにユーザー設定をマージし、フィールド単位・ansiColorsはindex単位で
  * 不正値を警告付きで除外した最終値を返す（resolveKeybindingsと同じper-entry方針）。
+ * 色のフィールドはthemeで選んだテーマの色を既定値とし、書いたものだけがそれを上書きする
  */
 export function resolveAppearance(
   userConfig: NiwatermConfig | null,
   diag: ConfigDiagnostics = createConfigDiagnostics(),
 ): ResolvedAppearanceConfig {
   const user = userConfig?.appearance;
+  const theme = resolveField(
+    diag,
+    "appearance",
+    "theme",
+    user?.theme,
+    defaultAppearance.theme,
+    isThemeName,
+  );
+  const themeColors = builtinThemes[theme].colors;
 
-  const ansiColors = [...defaultAppearance.ansiColors];
+  const ansiColors = [...themeColors.ansiColors];
   if (user?.ansiColors !== undefined) {
     for (let i = 0; i < ansiColors.length; i++) {
       const color = user.ansiColors[i];
@@ -511,6 +526,7 @@ export function resolveAppearance(
   }
 
   return {
+    theme,
     fontFamily: resolveField(
       diag,
       "appearance",
@@ -540,7 +556,7 @@ export function resolveAppearance(
       "appearance",
       "foreground",
       user?.foreground,
-      defaultAppearance.foreground,
+      themeColors.foreground,
       isNonEmptyString,
     ),
     background: resolveField(
@@ -548,7 +564,15 @@ export function resolveAppearance(
       "appearance",
       "background",
       user?.background,
-      defaultAppearance.background,
+      themeColors.background,
+      isNonEmptyString,
+    ),
+    cursor: resolveField(
+      diag,
+      "appearance",
+      "cursor",
+      user?.cursor,
+      themeColors.cursor,
       isNonEmptyString,
     ),
     backgroundOpacity: resolveField(
@@ -626,7 +650,7 @@ export function resolveAppearance(
       defaultAppearance.tileShadow,
       isNonEmptyString,
     ),
-    ui: resolveUiColors(user?.ui, diag),
+    ui: resolveUiColors(user?.ui, themeColors.ui, diag),
   };
 }
 

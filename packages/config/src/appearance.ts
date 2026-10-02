@@ -1,6 +1,8 @@
 // 外観設定。フォント・カラーテーマをniwaterm.config.tsから変更できるようにする。
 // 全フィールドoptionalの型を「ユーザーの部分上書き」と「マージ後の解決済み値」の両方に使い回す。
 
+import { builtinThemes, DEFAULT_THEME, type ThemeName } from "./themes";
+
 /**
  * タブが1つだけのタイルでのタブバーの出し方。
  * "auto": 高さを占有させず、タイル上端へマウスを寄せた間だけターミナルへ重ねて出す。
@@ -58,22 +60,21 @@ export interface UiColorsConfig {
 
 export type ResolvedUiColors = Required<UiColorsConfig>;
 
-export const defaultUiColors: ResolvedUiColors = {
-  border: "#313244",
-  accent: "#89b4fa",
-  warning: "#f9e2af",
-  success: "#a6e3a1",
-  danger: "#f38ba8",
-  badgeForeground: "#1e1e2e",
-  scrollbar: "#45475a",
-};
+export const defaultUiColors: ResolvedUiColors = { ...builtinThemes[DEFAULT_THEME].colors.ui };
 
 export interface AppearanceConfig {
+  /**
+   * 配色の土台にする組み込みテーマの名前。foreground・background・cursor・ansiColors・uiのうち
+   * 書いたものだけがテーマの色を上書きする
+   */
+  theme?: ThemeName;
   fontFamily?: string;
   fontSize?: number;
   lineHeight?: number;
   foreground?: string;
   background?: string;
+  /** ブロックカーソルの地と、中抜きカーソルの枠の色。カーソル上の文字はbackgroundで描く */
+  cursor?: string;
   /**
    * 背景の不透明度（0〜1）。1未満にするとウィンドウ自体が透過し、背後のウィンドウが透ける。
    * 透過中はサブピクセルアンチエイリアスが使えずグレースケール描画に落ちるため、
@@ -85,8 +86,8 @@ export interface AppearanceConfig {
    * 画像ファイルのパスを指定する。パスの場合はdata URIへ変換して埋め込む
    */
   backgroundImage?: string;
-  // index 0-15がANSI標準色（0-7:通常, 8-15:bright）。不足分・不正値はdefaultAppearanceにフォールバック
-  ansiColors?: readonly string[];
+  // index 0-15がANSI標準色（0-7:通常, 8-15:bright）。undefined・不足分・不正値はthemeの色にフォールバック
+  ansiColors?: readonly (string | undefined)[];
   /**
    * タブが1つだけのタイルでタブバーに1行分の高さを常時割くかどうか。
    * ブラウザタブだけのタイルは"auto"でも常時表示のまま（ネイティブのwebviewはHTMLより手前に
@@ -120,44 +121,30 @@ export interface AppearanceConfig {
   /** タイルに付ける影。CSSのbox-shadow値で、"none"で影を付けない */
   tileShadow?: string;
   /**
-   * ターミナル本体以外のUIの配色。未指定のフィールドはdefaultUiColorsの値のまま有効。
+   * ターミナル本体以外のUIの配色。未指定のフィールドはthemeの値のまま有効。
    * サイドバー・ダイアログ・コマンドパレットの地と文字色はここではなく
    * foreground/backgroundから派生するため、全体の明るさを変えるときはその2つを先に変える
    */
   ui?: UiColorsConfig;
 }
 
-export type ResolvedAppearanceConfig = Required<Omit<AppearanceConfig, "ui">> & {
+export type ResolvedAppearanceConfig = Required<Omit<AppearanceConfig, "ui" | "ansiColors">> & {
+  ansiColors: readonly string[];
   ui: ResolvedUiColors;
 };
 
 export const defaultAppearance: ResolvedAppearanceConfig = {
+  theme: DEFAULT_THEME,
   fontFamily:
     '"HackGen Console NF", "SF Mono", Menlo, Monaco, "Hiragino Kaku Gothic ProN", "Hiragino Sans", monospace',
   fontSize: 13,
   lineHeight: 18,
-  foreground: "#cdd6f4",
-  background: "#1e1e2e",
+  foreground: builtinThemes[DEFAULT_THEME].colors.foreground,
+  background: builtinThemes[DEFAULT_THEME].colors.background,
+  cursor: builtinThemes[DEFAULT_THEME].colors.cursor,
   backgroundOpacity: 1,
   backgroundImage: "none",
-  ansiColors: [
-    "#45475a",
-    "#f38ba8",
-    "#a6e3a1",
-    "#f9e2af",
-    "#89b4fa",
-    "#f5c2e7",
-    "#94e2d5",
-    "#bac2de",
-    "#585b70",
-    "#f38ba8",
-    "#a6e3a1",
-    "#f9e2af",
-    "#89b4fa",
-    "#f5c2e7",
-    "#94e2d5",
-    "#a6adc8",
-  ],
+  ansiColors: [...builtinThemes[DEFAULT_THEME].colors.ansiColors],
   tabBar: "auto",
   popupToolbar: "always",
   titleBar: "default",

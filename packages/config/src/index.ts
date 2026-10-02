@@ -26,6 +26,14 @@ export {
   type ResolvedBoardPhase,
   resolveBoardPhase,
 } from "./board";
+export {
+  type BuiltinTheme,
+  builtinThemes,
+  DEFAULT_THEME,
+  isThemeName,
+  type ThemeColors,
+  type ThemeName,
+} from "./themes";
 export { type BrowserConfig, defaultBrowserConfig, type ResolvedBrowserConfig } from "./browser";
 export {
   type CustomViewConfig,

@@ -36,7 +36,8 @@ import連鎖だけを束ねるため、ストーリーがアプリ本体へ混�
 
 - **テーマ**: 本番は`index.ts`の`applyAppearance`・`applyThemeMode`が設定値からCSS変数と`.dark`クラスを
   流し込む。Storybookでは`.storybook/preview.tsx`のdecoratorが同じ変数を入れており、ツールバーの
-  Themeでdark（既定の配色）とlight（明るい地での崩れの確認用）を切り替えられる。ユーザー設定の配色は反映されない
+  Themeで組み込みテーマ（`appearance.theme`で選べるもの）を切り替えられる。明るい地での崩れはGruvbox Light・
+  Solarized Lightで確かめる。ユーザー設定の配色は反映されない
 - **Tailwind**: 本番は`scripts/build-tailwind.ts`がCLIで事前生成するが、Storybookはストーリー編集に
   追従させるため`@tailwindcss/vite`で生成する。入力はどちらも`src/mainview/index.css`
 - **レンダリングエンジン**: 開いたブラウザのエンジンで描画される。WebView2（Windows）・WKWebView（macOS）固有の

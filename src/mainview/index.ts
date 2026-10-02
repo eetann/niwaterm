@@ -841,6 +841,7 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   root.setProperty("--term-line-height", `${config.lineHeight}px`);
   root.setProperty("--term-fg", config.foreground);
   root.setProperty("--term-bg", config.background);
+  root.setProperty("--term-cursor", config.cursor);
   customViewTheme = {
     background: config.background,
     foreground: config.foreground,
