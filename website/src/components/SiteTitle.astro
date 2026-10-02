@@ -1,0 +1,60 @@
+---
+/*
+ * Starlight既定のSiteTitleの差し替え。ロゴの隣にドキュメントへの導線を置く。
+ * 既定のHeaderは検索欄より右をスマホ幅で隠すが、タイトル欄は常に出るのでここに並べる。
+ * トップページ（splash）にはサイドバーが無く、ヘッダーに導線が無いとインストール手順しか
+ * 無いサイトに見えてしまう。
+ */
+import Default from "@astrojs/starlight/components/SiteTitle.astro";
+
+const { id } = Astro.locals.starlightRoute;
+const isCli = id === "cli" || id.startsWith("cli/");
+
+const links = [
+  { label: "ドキュメント", href: "/niwaterm/installation/", current: id !== "" && !isCli },
+  { label: "CLI", href: "/niwaterm/cli/", current: isCli },
+];
+---
+
+<Default />
+<nav class="site-nav" aria-label="サイト">
+  {
+    links.map(({ label, href, current }) => (
+      <a {href} aria-current={current ? "true" : undefined}>
+        {label}
+      </a>
+    ))
+  }
+</nav>
+
+<style>
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-inline-start: 1.5rem;
+    white-space: nowrap;
+  }
+
+  a {
+    font-size: var(--sl-text-sm);
+    font-weight: 700;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+  }
+
+  a:hover,
+  a[aria-current="true"] {
+    color: var(--sl-color-white);
+  }
+
+  /* スマホ幅では検索・メニューのボタンと並ぶので、入口の1つだけ残す */
+  @media (max-width: 30rem) {
+    .site-nav {
+      margin-inline-start: 1rem;
+    }
+    a:not(:first-child) {
+      display: none;
+    }
+  }
+</style>

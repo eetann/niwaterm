@@ -12,6 +12,7 @@ export default defineConfig({
       title: "niwaterm",
       components: {
         Hero: "./src/components/Hero.astro",
+        SiteTitle: "./src/components/SiteTitle.astro",
       },
       locales: {
         root: { label: "日本語", lang: "ja" },
