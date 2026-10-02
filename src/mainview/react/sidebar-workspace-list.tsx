@@ -10,6 +10,7 @@ import {
   PictureInPicture2,
 } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -969,9 +970,12 @@ export function SidebarWorkspaceList({
                   </ContextMenuContent>
                 </ContextMenu>
               )}
-              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+              <Badge
+                variant="secondary"
+                className="rounded-full border-0 px-1.5 text-[9px] text-muted-foreground"
+              >
                 {workspace.boards.length}
-              </span>
+              </Badge>
             </div>
             {!isWorkspaceCollapsed && (
               <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
