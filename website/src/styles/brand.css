@@ -31,6 +31,9 @@
   --niwa-code-ink: #e4e2d6;
   --niwa-code-frame: #2c372d;
   --niwa-prompt: #93b87a;
+  /* 表のゼブラ縞(gray-6)・見出し行(gray-5)の上でも消えないよう、下地を透かす色にする。
+     地の色(black)に重ねるとStarlight既定のgray-5とほぼ同じ色になる */
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-4) 28%, transparent);
 
   --sl-font: "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-font-mono: "Spline Sans Mono", "BIZ UDGothic", "Osaka-Mono", monospace;
@@ -66,6 +69,8 @@
   --niwa-code-ink: #ece8df;
   --niwa-code-frame: #3a3a35;
   --niwa-prompt: #a9c08f;
+  /* ダークと同じ理由で透かす。地の色に重ねるとStarlight既定のgray-6とほぼ同じ色になる */
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-4) 11%, transparent);
 }
 
 h1,
@@ -119,9 +124,58 @@ h1,
   color: var(--sl-color-white);
 }
 
-/* 日本語の見出し・キャッチコピーが1〜2文字だけ次の行へ落ちないよう、文節で折り返す */
-h1,
-h2,
-.hero .tagline {
+body {
+  /* lang="ja"なのでChromium系は文節の区切りで折り返す。見出しやキャッチコピーの1〜2文字だけが
+     次の行へ落ちるのも防げる。auto-phraseを解釈できないブラウザは直前のnormalへ落ち、
+     文字単位の折り返しになる */
+  word-break: normal;
   word-break: auto-phrase;
+  /* 日本語と英数字・インラインコードの境目に四分アキを入れる。Chromiumの初期値は
+     no-autospaceなので、normalを明示しないと効かない */
+  text-autospace: normal;
+  /* 行頭に来た開き括弧の左半分を詰めて左端を揃える。初期値のnormalは段落の1行目を詰めないため、
+     「で始まる段落だけ左端がずれる */
+  text-spacing-trim: trim-start;
+}
+
+/* コードは書いたとおりの桁で見せる */
+pre {
+  text-autospace: no-autospace;
+  text-spacing-trim: space-all;
+}
+
+/* 項目どうしの間隔。一項目が複数行に折り返すと、Starlight既定の0.25remでは行間と区別できず
+   項目の切れ目が読み取れない。行間よりは狭く保って一覧のまとまりは残す */
+.sl-markdown-content li + li:not(:where(.not-content *)) {
+  margin-top: 0.5em;
+}
+
+/* ネストしたリスト。左の罫線は深さを示すガイド線で、親の項目のテキストの左端に沿う */
+.sl-markdown-content li > :is(ul, ol):not(:where(.not-content *)) {
+  margin-top: 0.5em;
+  border-inline-start: 1px solid var(--sl-color-gray-5);
+}
+
+/* 段落と箇条書きの境目。「説明の段落→箇条書き→次の段落」が続くと、上下が同じ間隔では
+   箇条書きが上の段落に属するのか下の段落の前置きなのか読み取れない。上を項目どうし(0.5em)より
+   狭く詰め、下を段落どうし(1rem)より広く空けて、切れ目を箇条書きの下側だけに寄せる。
+   下は見出しの上(1.5em)より狭く留め、見出しほどの切れ目には見せない */
+.sl-markdown-content p + :is(ul, ol):not(:where(.not-content *)) {
+  margin-top: 0.25em;
+}
+.sl-markdown-content :is(ul, ol) + p:not(:where(.not-content *)) {
+  margin-top: 1.5em;
+}
+
+/* 横に長い表で、右端まで視線を動かしたときに読んでいた行を見失わないよう縞を敷く。
+   見出し行は縞より一段濃くして、境目を縞に埋もれさせない */
+.sl-markdown-content th:not(:where(.not-content *)) {
+  background: var(--sl-color-gray-5);
+}
+.sl-markdown-content tbody tr:nth-child(even):not(:where(.not-content *)) {
+  background: var(--sl-color-gray-6);
+}
+/* Starlightは端のセルの外側の余白を0にしているため、そのままだと縞の端に文字が貼り付く */
+.sl-markdown-content :is(th, td):is(:first-child, :last-child):not(:where(.not-content *)) {
+  padding-inline: 1rem;
 }
