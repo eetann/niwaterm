@@ -66,6 +66,9 @@ export default defineConfig({
         // コードブロックは両テーマとも暗い面にする（docs/brand/brand-guide.md）。
         // テーマを1つだけ渡すと明暗どちらでも同じ配色になる
         themes: ["github-dark"],
+        // 横スクロールだとスマホ幅で長いコマンドや設定値の末尾が隠れ、読み落とされやすい。
+        // 折り返し後の行は元のインデント位置から続ける（preserveIndentの既定値）
+        defaultProps: { wrap: true },
         styleOverrides: {
           borderRadius: "0",
           codeBackground: "var(--niwa-code-bg)",
