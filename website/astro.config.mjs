@@ -12,8 +12,9 @@ export default defineConfig({
       title: "niwaterm",
       components: {
         Hero: "./src/components/Hero.astro",
-        SiteTitle: "./src/components/SiteTitle.astro",
+        SocialIcons: "./src/components/SocialIcons.astro",
       },
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/eetann/niwaterm" }],
       locales: {
         root: { label: "日本語", lang: "ja" },
       },

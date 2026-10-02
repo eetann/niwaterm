@@ -1,11 +1,11 @@
 ---
 /*
- * Starlight既定のSiteTitleの差し替え。ロゴの隣にドキュメントへの導線を置く。
- * 既定のHeaderは検索欄より右をスマホ幅で隠すが、タイトル欄は常に出るのでここに並べる。
+ * Starlight既定のSocialIconsの差し替え。GitHubアイコンの前にドキュメントへの導線を置く。
  * トップページ（splash）にはサイドバーが無く、ヘッダーに導線が無いとインストール手順しか
  * 無いサイトに見えてしまう。
+ * このコンポーネントはヘッダー右側（スマホ幅では非表示）とモバイルメニューの下端の両方で描画される。
  */
-import Default from "@astrojs/starlight/components/SiteTitle.astro";
+import Default from "@astrojs/starlight/components/SocialIcons.astro";
 
 const { id } = Astro.locals.starlightRoute;
 const isCli = id === "cli" || id.startsWith("cli/");
@@ -16,7 +16,6 @@ const links = [
 ];
 ---
 
-<Default />
 <nav class="site-nav" aria-label="サイト">
   {
     links.map(({ label, href, current }) => (
@@ -26,13 +25,13 @@ const links = [
     ))
   }
 </nav>
+<Default />
 
 <style>
   .site-nav {
     display: flex;
     align-items: center;
     gap: 1.25rem;
-    margin-inline-start: 1.5rem;
     white-space: nowrap;
   }
 
@@ -46,15 +45,5 @@ const links = [
   a:hover,
   a[aria-current="true"] {
     color: var(--sl-color-white);
-  }
-
-  /* スマホ幅では検索・メニューのボタンと並ぶので、入口の1つだけ残す */
-  @media (max-width: 30rem) {
-    .site-nav {
-      margin-inline-start: 1rem;
-    }
-    a:not(:first-child) {
-      display: none;
-    }
   }
 </style>
