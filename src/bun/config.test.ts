@@ -706,6 +706,20 @@ describe("resolveAppearance", () => {
     }
   });
 
+  test('popupToolbarは"always"/"hover"だけ受け付ける', () => {
+    expect(resolveAppearance({}).popupToolbar).toBe("always");
+    expect(resolveAppearance({ appearance: { popupToolbar: "hover" } }).popupToolbar).toBe("hover");
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(
+        resolveAppearance({ appearance: { popupToolbar: "auto" as never } }).popupToolbar,
+      ).toBe(defaultAppearance.popupToolbar);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test("uiはフィールド単位でマージする", () => {
     const resolved = resolveAppearance({ appearance: { ui: { accent: "#ff0000" } } });
     expect(resolved.ui.accent).toBe("#ff0000");

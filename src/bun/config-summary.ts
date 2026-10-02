@@ -171,6 +171,7 @@ function appearanceSection(
         swatches: [...appearance.ansiColors],
       },
       { key: "tabBar", value: appearance.tabBar },
+      { key: "popupToolbar", value: appearance.popupToolbar },
       { key: "titleBar", value: appearance.titleBar },
       { key: "tileBorderRadius", value: `${appearance.tileBorderRadius}px` },
       { key: "tileGap", value: `${appearance.tileGap}px` },

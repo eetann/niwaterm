@@ -13,6 +13,17 @@ export function isTabBarMode(value: unknown): value is TabBarMode {
 }
 
 /**
+ * ポップアップ上部のツールバー（タブへ昇格・最小化・閉じる）の出し方。
+ * "always": 独立したヘッダー行として常に高さを占有して出す。
+ * "hover": 高さを占有させず、ポップアップ上端へマウスを寄せた間だけターミナルへ重ねて出す
+ */
+export type PopupToolbarMode = "always" | "hover";
+
+export function isPopupToolbarMode(value: unknown): value is PopupToolbarMode {
+  return value === "always" || value === "hover";
+}
+
+/**
  * ネイティブのタイトルバーの出し方。
  * "default": OS標準のタイトルバー（ウィンドウ操作ボタン付き）を出す。
  * "hidden": タイトルバーを隠してその高さぶんを画面へ回す。ウィンドウの移動は
@@ -83,6 +94,11 @@ export interface AppearanceConfig {
    */
   tabBar?: TabBarMode;
   /**
+   * ポップアップ上部のツールバーに1行分の高さを常時割くかどうか。
+   * "hover"のときの枠の移動は、ツールバーを出してからその空き領域をドラッグして行う
+   */
+  popupToolbar?: PopupToolbarMode;
+  /**
    * ネイティブのタイトルバーを隠すかどうか。背景の透過（backgroundOpacity）とは独立していて、
    * 片方だけでも組み合わせても使える。
    * 隠すとウィンドウ操作ボタンも消えるため、移動はサイドバーのツールバーのドラッグ、
@@ -143,6 +159,7 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
     "#a6adc8",
   ],
   tabBar: "auto",
+  popupToolbar: "always",
   titleBar: "default",
   tileBorderRadius: 6,
   tileGap: 4,

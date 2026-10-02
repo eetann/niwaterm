@@ -92,6 +92,18 @@ appearance: {
 },
 ```
 
+## ポップアップのツールバー
+
+ポップアップの上には、タブへ昇格・最小化・閉じるのボタンが並んだツールバーがある。`popupToolbar: "hover"`にすると、ふだんはツールバーを隠して、その分ターミナルを1行広く使う。ツールバーは、マウスをポップアップの上端に当てているあいだだけ現れる。
+
+```ts
+appearance: {
+  popupToolbar: "hover",
+},
+```
+
+ポップアップを動かすときは、上端にマウスを当ててツールバーを出してから、ボタンのない所をドラッグする。
+
 ## 背景を透かす・画像を表示する
 
 `backgroundOpacity`を1より小さくすると、背景が透けて後ろのウィンドウが見える。`backgroundImage`には、グラデーションや画像ファイルを指定できる。
@@ -143,6 +155,7 @@ Windowsでは、ドラッグで画面の端に寄せてウィンドウを並べ�
 | `tileShadow`        | `"none"`                   | タイルの影。CSSの`box-shadow`と同じ書き方                                             |
 | `inactiveTileDim`   | `0`                        | フォーカスしていないタイルを暗くする度合い（0〜1）                                    |
 | `tabBar`            | `"auto"`                   | タブが1つのときのタブバー。`"auto"`か`"always"`                                       |
+| `popupToolbar`      | `"always"`                 | ポップアップのツールバー。`"always"`か`"hover"`                                       |
 | `backgroundOpacity` | `1`                        | 背景の不透明度（0〜1）。起動し直すと反映される                                        |
 | `backgroundImage`   | `"none"`                   | 背景のグラデーションや画像。CSSの`background-image`と同じ書き方か、画像ファイルのパス |
 | `titleBar`          | `"default"`                | タイトルバーを出すか。`"default"`か`"hidden"`。起動し直すと反映される                 |

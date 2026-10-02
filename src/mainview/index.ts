@@ -866,6 +866,8 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   applyAnsiPalette(config.ansiColors);
   applyTitleBarMode(config.titleBar);
   tabBarMode = config.tabBar;
+  // ツールバーの出し方が変わると.termの高さも変わる。popupのResizeObserverが実寸を送り直す
+  popupBoxEl.classList.toggle("toolbar-hover", config.popupToolbar === "hover");
   // タブバーの出し方が変わると.tile-contentの高さも変わる。下のsendResizeが実寸を送り直す
   for (const tileId of tabBarElByTileId.keys()) updateTabBarOverlay(tileId);
   // 罫線・ブロック文字を行の高さへ合わせる変換はフォント・サイズ・行高に依存するため測り直す
@@ -2064,6 +2066,9 @@ function applyPopupState(popup: PopupRenderState | null): void {
   const becameVisible = popup.visible && !popupVisible;
   popupVisible = popup.visible;
   popupEl.hidden = !popup.visible;
+  // ツールバーの最小化ボタンで隠すとmouseleaveが来ないまま消えるため、次に開いたとき
+  // マウスが上端に無くてもツールバーが出たままになる
+  if (!popup.visible) setPopupToolbarRevealed(false);
   // ドラッグ中はローカルで直接styleを書いているので、bun由来の（まだ古い）値で上書きしない
   if (!draggingPopup) {
     if (pendingPopupGeometry && popupGeometryReached(popup, pendingPopupGeometry)) {
@@ -3660,6 +3665,41 @@ function attachPopupDrags(): void {
   // ツールバーの空き領域（ボタンより左）が枠の移動ハンドルを兼ねる
   attachPopupDrag(popupToolbarEl, "move");
 }
+
+// ---- ポップアップのツールバーのホバー表示（appearance.popupToolbar === "hover"）----
+// 考え方はタブが1つだけのタイルのタブバーと同じ（updateTabBarOverlay参照）。
+
+/**
+ * ツールバーを呼び出す#popup-boxの上端からの距離(px)。上辺のリサイズの掴み代
+ * （.popup-resize-handle[data-dir="n"]）と同じ高さにし、掴み代へ寄せればツールバーも出るようにする
+ */
+const POPUP_TOOLBAR_REVEAL_EDGE_PX = 6;
+
+function setPopupToolbarRevealed(revealed: boolean): void {
+  popupToolbarEl.classList.toggle("revealed", revealed);
+}
+
+/**
+ * マウスが上端の呼び出し帯に入ったか、または出ているツールバーの上にいるかを見る。
+ * #popupは画面全体を覆うので、枠の外へ出たときもここで拾える
+ */
+popupEl.addEventListener("mousemove", (e) => {
+  if (!popupBoxEl.classList.contains("toolbar-hover")) return;
+  // 移動・リサイズのドラッグ中はポインタが掴んだ要素へ固定され、帯の判定がずれる
+  if (draggingPopup) return;
+  const target = e.target instanceof Element ? e.target : null;
+  let revealed = target?.closest("#popup-toolbar") === popupToolbarEl;
+  if (!revealed && target && popupBoxEl.contains(target)) {
+    const offsetY = e.clientY - popupBoxEl.getBoundingClientRect().top;
+    revealed = offsetY >= 0 && offsetY <= POPUP_TOOLBAR_REVEAL_EDGE_PX;
+  }
+  setPopupToolbarRevealed(revealed);
+});
+
+// ウィンドウの外へ抜けるとmousemoveが来なくなり、出したままのツールバーが残る
+document.documentElement.addEventListener("mouseleave", () => {
+  if (!draggingPopup) setPopupToolbarRevealed(false);
+});
 
 /** サイドバーと#screen間のdivider。タイル分割と異なりbunのtreeに属さないローカルUI状態
  * のため、resizeSplitのようなRPC送信はせずlocalStorageへ直接保存する */

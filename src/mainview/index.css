@@ -956,9 +956,13 @@ html.has-status-bar {
 /*
  * ツールバーはターミナル出力に重ねず、独立したヘッダー行として高さを占有する
  * （重ねると右上のセルがボタンに隠れて読めなくなる）。
- * 負のmarginは#popup-boxの左右paddingを打ち消して枠いっぱいに伸ばすため
+ * 負のmarginは#popup-boxの左右paddingを打ち消して枠いっぱいに伸ばすため。
+ * DOMでは#popup-contentより後ろに置き、orderで先頭へ並べ直している。重ねて出す
+ * .toolbar-hoverのときに、z-indexを付けずにターミナルより手前へ描かせるため
+ * （z-indexを付けるとボタン列が上辺のリサイズの掴み代より手前に出られなくなる）
  */
 #popup-toolbar {
+  order: -1;
   display: flex;
   /* 空き領域（ボタンより左）が枠の移動ハンドルを兼ねる */
   cursor: move;
@@ -968,6 +972,36 @@ html.has-status-bar {
   padding: 2px 4px;
   background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--ui-border);
+}
+
+/*
+ * ツールバーを重ねて出すモード（appearance.popupToolbarが"hover"のとき）。1行分の高さを
+ * ターミナルへ譲り、枠の上端へマウスを寄せた間だけ.revealedが付いて重なって出る。
+ * 出し入れをopacity/pointer-eventsだけで行う理由と、地を--chrome-bgの不透明で塗る理由は
+ * .tab-bar.overlayと同じ。
+ * #popup-contentをz-index:0で独立した重なりのまとまりにし、中の.copy-overlay(1)・
+ * .copied-badge(3)がツールバーより手前へ抜けてこないようにする
+ */
+#popup-box.toolbar-hover {
+  padding-top: 4px;
+}
+#popup-box.toolbar-hover > #popup-content {
+  z-index: 0;
+}
+#popup-box.toolbar-hover > #popup-toolbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  background-color: var(--chrome-bg);
+  transition: opacity 100ms ease-out;
+}
+#popup-box.toolbar-hover > #popup-toolbar.revealed {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /*

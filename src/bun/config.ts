@@ -32,6 +32,7 @@ import {
   type LinkRule,
   isLinkOpenTarget,
   isNewTabCwdMode,
+  isPopupToolbarMode,
   isTabBarMode,
   isTitleBarMode,
   type KeybindingsConfig,
@@ -576,6 +577,14 @@ export function resolveAppearance(
       user?.tabBar,
       defaultAppearance.tabBar,
       isTabBarMode,
+    ),
+    popupToolbar: resolveField(
+      diag,
+      "appearance",
+      "popupToolbar",
+      user?.popupToolbar,
+      defaultAppearance.popupToolbar,
+      isPopupToolbarMode,
     ),
     titleBar: resolveField(
       diag,
