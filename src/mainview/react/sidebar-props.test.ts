@@ -55,6 +55,7 @@ function board(
     worktreePath: options.worktreePath ?? null,
     worktreeMissing: options.worktreeMissing ?? false,
     phase: options.phase ?? null,
+    resume: null,
   };
 }
 
@@ -104,6 +105,7 @@ describe("buildSidebarWorkspaceItems", () => {
             worktreePath: null,
             worktreeMissing: false,
             phase: null,
+            resume: null,
           },
         ],
       },
@@ -125,6 +127,7 @@ describe("buildSidebarWorkspaceItems", () => {
             worktreePath: null,
             worktreeMissing: false,
             phase: null,
+            resume: null,
           },
         ],
       },

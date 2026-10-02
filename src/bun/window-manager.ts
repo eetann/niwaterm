@@ -64,6 +64,7 @@ type SharedWorkspaceOptions = Pick<
   | "getMaxScrollback"
   | "isWorktreeMissing"
   | "onBell"
+  | "resolveResumeCommand"
   | "createSession"
 >;
 
@@ -123,6 +124,9 @@ export function createWindowManager(opts: WindowManagerOptions) {
         ? { isWorktreeMissing: opts.isWorktreeMissing }
         : {}),
       ...(opts.onBell !== undefined ? { onBell: opts.onBell } : {}),
+      ...(opts.resolveResumeCommand !== undefined
+        ? { resolveResumeCommand: opts.resolveResumeCommand }
+        : {}),
       ...(opts.createSession !== undefined ? { createSession: opts.createSession } : {}),
     });
     entries.set(windowId, { windowId, workspaces, persistent });
@@ -345,6 +349,9 @@ export function createWindowManager(opts: WindowManagerOptions) {
     setBoardPhase: (boardId: BoardId, phase: string | null) =>
       byBoard(boardId)?.setBoardPhase(boardId, phase) ?? false,
     getBoardPhase: (boardId: BoardId) => byBoard(boardId)?.getBoardPhase(boardId) ?? null,
+    setBoardResume: (boardId: BoardId, resume: boolean | null) =>
+      byBoard(boardId)?.setBoardResume(boardId, resume) ?? false,
+    getBoardResume: (boardId: BoardId) => byBoard(boardId)?.getBoardResume(boardId) ?? null,
     getBoardFocusedCwd: (boardId: BoardId) => byBoard(boardId)?.getBoardFocusedCwd(boardId),
     getBoardFocusedShell: (boardId: BoardId) => byBoard(boardId)?.getBoardFocusedShell(boardId),
     findBoard: (boardId: BoardId) => byBoard(boardId)?.findBoard(boardId),
@@ -406,6 +413,10 @@ export function createWindowManager(opts: WindowManagerOptions) {
     handleInput: (tabId: TabId, data: string) => byTab(tabId)?.handleInput(tabId, data),
     sendInitialCommand: (tabId: TabId, command: string) =>
       byTab(tabId)?.sendInitialCommand(tabId, command) ?? false,
+    sendResumeCommand: (tabId: TabId, command: string) =>
+      byTab(tabId)?.sendResumeCommand(tabId, command) ?? false,
+    setTabLayoutSlot: (tabId: TabId, slot: string) =>
+      byTab(tabId)?.setTabLayoutSlot(tabId, slot) ?? false,
     handleMouseEvent: (tabId: TabId, ev: MouseEventInput) =>
       byTab(tabId)?.handleMouseEvent(tabId, ev),
     enterCopyMode: (tabId: TabId) => byTab(tabId)?.enterCopyMode(tabId),

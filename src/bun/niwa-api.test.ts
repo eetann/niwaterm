@@ -70,6 +70,7 @@ function createFakeSessionFactory(sessionOpts: TerminalSessionOptions[] = []) {
         mouseAnyMotion: false,
       }),
       dumpText: () => "",
+      getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {},

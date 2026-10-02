@@ -1136,6 +1136,27 @@ export function setBoardPhase(
   return postJson<BoardPhaseResult>(endpoint, "/board-phase", body);
 }
 
+export type BoardResumeMode = "set" | "clear" | "show";
+
+export type BoardResumeResult =
+  | { ok: true; boardId: string; resume: boolean | null }
+  | { ok: false; error: string };
+
+/**
+ * 実行中だったコマンドを起動時に打ち直すかの、Boardごとの手動の切り替え。boardId省略時はアクティブBoard。
+ * resumeはmode: "set"のみ必須。結果のresumeがnullなら手動の切り替えは無く、設定に従う
+ */
+export function setBoardResume(
+  endpoint: IpcEndpoint,
+  mode: BoardResumeMode,
+  opts: { boardId?: string; resume?: boolean } = {},
+): Promise<BoardResumeResult> {
+  const body: { mode: BoardResumeMode; boardId?: string; resume?: boolean } = { mode };
+  if (opts.boardId !== undefined) body.boardId = opts.boardId;
+  if (opts.resume !== undefined) body.resume = opts.resume;
+  return postJson<BoardResumeResult>(endpoint, "/board-resume", body);
+}
+
 export type OpenPopupResult =
   | { ok: true; tabId: TabId; stdout?: string }
   | { ok: false; error: string };

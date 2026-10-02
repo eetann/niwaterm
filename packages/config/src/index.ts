@@ -88,6 +88,12 @@ export {
 } from "./mouse";
 export type { NiwatermProjectConfig } from "./project";
 export {
+  defaultResumeConfig,
+  normalizeResumeAllow,
+  type ResolvedResumeConfig,
+  type ResumeConfig,
+} from "./resume";
+export {
   defaultSidebarConfig,
   formatSidebarBoardStatusSource,
   normalizeSidebarBoardStatus,

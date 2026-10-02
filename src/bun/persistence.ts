@@ -1,5 +1,5 @@
-// ワークスペースの状態（レイアウト骨格・タブごとのcwd/シェル/名前/変数・ブラウザタブのURL）を永続化する。
-// PTYのスクロールバック・実行中プロセスそのものは対象外。
+// ワークスペースの状態（レイアウト骨格・タブごとのcwd/シェル/名前/変数/実行中だったコマンド行・
+// ブラウザタブのURL）を永続化する。PTYのスクロールバック・実行中プロセスそのものは対象外。
 // 復元時は各タブに対して新規シェルを起動する（terminalタブのみ）か、ブラウザタブとしてURLを開き直す。
 // tabIds/tileIdの実体は保存せず新規採番するため、木構造の走査順（leafの並び・tabsの並び）で
 // 永続化データと新規採番後のidを対応付ける。
@@ -23,6 +23,13 @@ export interface PersistedTerminalTab extends PersistedTabBase {
   kind: "terminal";
   /** 実際に使われた起動シェルコマンド文字列（例: "wsl.exe -d NixOS"）。省略時は復元時にgetDefaultShell()へフォールバック */
   shell?: string;
+  /**
+   * 保存した時点でシェル統合が報告していた実行中のコマンド行。プロンプトに戻っていれば省略する。
+   * 次回起動時、許可されたコマンドなら打ち直す（resume-command.ts）
+   */
+  runningCommand?: string;
+  /** レイアウトプリセットのどのタブ定義から作ったタブか（layout-apply.tsのslotPath）。プリセット由来でなければ省略 */
+  layoutSlot?: string;
 }
 
 export interface PersistedBrowserTab extends PersistedTabBase {
@@ -137,6 +144,11 @@ export interface PersistedBoard {
    * agent_status等のタブ変数と違い、アプリを閉じても作業の段階は変わらないので復元する
    */
   phase?: string;
+  /**
+   * 実行中だったコマンドを起動時に打ち直すかの手動の切り替え（CLIの`board resume set`・サイドバー）。
+   * 設定（resume.enabled・レイアウトプリセットのresume）より優先される。省略時は設定に従う
+   */
+  resume?: boolean;
 }
 
 export interface PersistedWorkspace {
@@ -245,7 +257,11 @@ function isPersistedTab(value: unknown): value is PersistedTab {
   if (v["name"] !== undefined && typeof v["name"] !== "string") return false;
   if (v["vars"] !== undefined && !isVarsRecord(v["vars"])) return false;
   if (v["kind"] === "terminal") {
-    return v["shell"] === undefined || typeof v["shell"] === "string";
+    return (
+      (v["shell"] === undefined || typeof v["shell"] === "string") &&
+      (v["runningCommand"] === undefined || typeof v["runningCommand"] === "string") &&
+      (v["layoutSlot"] === undefined || typeof v["layoutSlot"] === "string")
+    );
   }
   if (v["kind"] === "browser") {
     return typeof v["url"] === "string";
@@ -299,6 +315,7 @@ function isPersistedBoard(value: unknown): value is PersistedBoard {
   if (v["startup"] !== undefined && !isPersistedBoardStartup(v["startup"])) return false;
   if (v["worktreePath"] !== undefined && typeof v["worktreePath"] !== "string") return false;
   if (v["phase"] !== undefined && typeof v["phase"] !== "string") return false;
+  if (v["resume"] !== undefined && typeof v["resume"] !== "boolean") return false;
   return isPersistedTileNode(v["layout"]);
 }
 

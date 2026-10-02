@@ -50,6 +50,8 @@ export interface SidebarBoardItem {
   worktreeMissing: boolean;
   /** ユーザーが付けた作業フェーズ。未設定はnull */
   phase: SidebarBoardPhaseItem | null;
+  /** 実行中だったコマンドを起動時に打ち直すかの手動の切り替え。nullは設定に従う */
+  resume: boolean | null;
 }
 
 /** Board行に出す作業フェーズのバッジ。候補に無い文字列はlabel=値そのもの・color=nullで出る */
@@ -335,6 +337,7 @@ export function buildSidebarWorkspaceItems(
         worktreePath: board.worktreePath,
         worktreeMissing: board.worktreeMissing,
         phase,
+        resume: board.resume,
       };
     }),
   }));

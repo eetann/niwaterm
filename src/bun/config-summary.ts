@@ -16,6 +16,7 @@ import type {
   ResolvedCustomViewConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
+  ResolvedResumeConfig,
   ResolvedSidebarConfig,
   ResolvedTerminalConfig,
   ResolvedUiColors,
@@ -81,6 +82,7 @@ export interface ConfigSummaryInput {
   link: ResolvedLinkConfig;
   workspaceDefaultCwd: string | undefined;
   board: ResolvedBoardConfig;
+  resume: ResolvedResumeConfig;
   sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
   statusBar: StatusBarDefinition;
@@ -318,6 +320,19 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
                 key: "phases",
                 value: input.board.phases.map((phase) => phase.id).join(", "),
               },
+        ],
+      },
+      {
+        name: "resume",
+        entries: [
+          {
+            key: "enabled",
+            value: String(input.resume.enabled),
+            note: "レイアウトプリセットで組み直さないBoardの既定。Boardごとの切り替えが優先",
+          },
+          input.resume.allow.length === 0
+            ? { key: "allow", value: "(なし)", note: "何も打ち直さない" }
+            : { key: "allow", value: input.resume.allow.join(", ") },
         ],
       },
       {

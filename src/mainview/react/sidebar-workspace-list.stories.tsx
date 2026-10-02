@@ -17,6 +17,7 @@ function board(overrides: Partial<SidebarBoardItem> & Pick<SidebarBoardItem, "bo
     worktreePath: null,
     worktreeMissing: false,
     phase: null,
+    resume: null,
     ...overrides,
   } satisfies SidebarBoardItem;
 }
@@ -70,6 +71,7 @@ const meta = {
       { id: "done", label: "完了", color: null },
     ],
     onSetBoardPhase: fn(),
+    onSetBoardResume: fn(),
     onSelectWorkspaceHeader: fn(),
     onSelectBoard: fn(),
     onSelectPopup: fn(),

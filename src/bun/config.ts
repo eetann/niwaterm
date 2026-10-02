@@ -13,6 +13,7 @@ import {
   type AppearanceConfig,
   defaultAppearance,
   defaultBoardConfig,
+  defaultResumeConfig,
   defaultBrowserConfig,
   defaultLinkConfig,
   defaultMouseConfig,
@@ -44,6 +45,7 @@ import {
   type NiwaNotifyOptions,
   type NiwatermConfig,
   normalizeBoardPhases,
+  normalizeResumeAllow,
   normalizeSidebarBoardStatus,
   parseKeyBindingString,
   parseSecondKeyString,
@@ -51,6 +53,7 @@ import {
   resolveBindingEntry,
   type ResolvedAppearanceConfig,
   type ResolvedBoardConfig,
+  type ResolvedResumeConfig,
   type ResolvedBrowserConfig,
   type ResolvedCustomViewConfig,
   DEFAULT_HOVER_BUTTON_POSITION,
@@ -660,6 +663,31 @@ export function resolveBoard(
     ),
     // 要素単位で落とす正規化なのでresolveFieldは通さない（不正な1件だけを捨てる）
     phases: normalizeBoardPhases(user?.phases),
+  };
+}
+
+/**
+ * defaultResumeConfigにユーザー設定をマージした最終値を返す（resolveAppearanceと同じper-field方針）。
+ */
+export function resolveResume(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): ResolvedResumeConfig {
+  const user = userConfig?.resume;
+  if (user?.allow !== undefined && !Array.isArray(user.allow)) {
+    diag.warn("resume.allow", `配列でないため無視します: ${describeValue(user.allow)}`);
+  }
+  return {
+    enabled: resolveField(
+      diag,
+      "resume",
+      "enabled",
+      user?.enabled,
+      defaultResumeConfig.enabled,
+      isBoolean,
+    ),
+    // 要素単位で落とす正規化なのでresolveFieldは通さない（board.phasesと同じ）
+    allow: normalizeResumeAllow(user?.allow),
   };
 }
 
@@ -1399,6 +1427,8 @@ export async function loadAndResolveConfig(
   appearance: ResolvedAppearanceConfig;
   browser: ResolvedBrowserConfig;
   board: ResolvedBoardConfig;
+  /** 実行中だったコマンドの打ち直し */
+  resume: ResolvedResumeConfig;
   /** サイドバーのBoard行に出すステータスラインの構成 */
   sidebar: ResolvedSidebarConfig;
   terminal: ResolvedTerminalConfig;
@@ -1478,6 +1508,7 @@ export async function loadAndResolveConfig(
     appearance: resolveAppearance(userConfig, diag),
     browser: resolveBrowser(userConfig, diag),
     board: resolveBoard(userConfig, diag),
+    resume: resolveResume(userConfig, diag),
     sidebar: resolveSidebar(userConfig),
     terminal: resolveTerminal(userConfig, diag),
     link,

@@ -28,8 +28,24 @@ if test -n "$NIWATERM_TAB_ID"; and type -q niwa
     function _niwaterm_mark_prompt --on-event fish_prompt
         printf '\e]133;A\a'
     end
+    # Cには実行するコマンド行を付ける（kittyの拡張cmdline_url）。niwatermはアプリ終了時に実行中だった
+    # コマンドを覚えておき、設定のresume.allowに載っていれば次回起動時に打ち直す。
+    # 区切りの;・エスケープの%・制御文字だけをパーセントエンコードする。
+    # 先頭が空白のコマンド（履歴に残さない慣習）はコマンド行を送らない
     function _niwaterm_mark_output --on-event fish_preexec
-        printf '\e]133;C\a'
+        set -l cmd $argv[1]
+        if test -z "$cmd"; or string match -q -- ' *' "$cmd"
+            printf '\e]133;C\a'
+            return
+        end
+        # コマンド置換は改行で分割されるため、複数行のコマンドでもstring collectで1つの値に保つ
+        set cmd (string replace -a -- '%' '%25' "$cmd" | string collect)
+        set cmd (string replace -a -- ';' '%3B' "$cmd" | string collect)
+        set cmd (string replace -a -- \n '%0A' "$cmd" | string collect)
+        set cmd (string replace -a -- \r '%0D' "$cmd" | string collect)
+        set cmd (string replace -a -- \e '%1B' "$cmd" | string collect)
+        set cmd (string replace -a -- \a '%07' "$cmd" | string collect)
+        printf '\e]133;C;cmdline_url=%s\a' "$cmd"
     end
 
     # カレントディレクトリをOSC 7で通知する。libghostty-vtがネイティブにパースするため

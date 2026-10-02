@@ -56,6 +56,7 @@ export interface DetachedBoard {
   startup?: PersistedBoardStartup;
   worktreePath?: string;
   phase?: string;
+  resume?: boolean;
 }
 
 export interface WorkspaceRenderState {
@@ -97,6 +98,8 @@ export interface BoardListEntry {
   worktreePath: string | null;
   /** ユーザーが付けた作業フェーズ。board.phasesのidか任意の文字列。未設定はnull */
   phase: string | null;
+  /** 実行中だったコマンドの打ち直しの手動の切り替え。nullは設定に従う */
+  resume: boolean | null;
 }
 
 /** newBoardの任意指定。cwdだけは呼び出し側で必須になりがちなので引数のまま分けている */
@@ -127,6 +130,12 @@ export interface InitialBoard {
   startup?: PersistedBoardStartup;
   worktreePath?: string;
   phase?: string;
+  resume?: boolean;
+  /**
+   * 起動時にプリセットで組み直すBoard（startup.restoreMode: "layout"）の、前回の終了時に実行中だった
+   * コマンド。キーはタブのlayoutSlotで、組み直したタブのうち同じslotのものへ引き継ぐ
+   */
+  startupResumeCommands?: Record<string, string>;
 }
 
 export interface WorkspaceOptions {
@@ -160,6 +169,11 @@ export interface WorkspaceOptions {
   getBoardNaming?: () => BoardNaming;
   getMaxScrollback?: BoardOptions["getMaxScrollback"];
   onBell?: BoardOptions["onBell"];
+  /**
+   * 復元したタブで前回実行中だったコマンドを、打ち直すコマンドへ変換する。overrideはそのBoardの
+   * 手動の切り替え（nullなら設定に従う）。省略時は何も打ち直さない
+   */
+  resolveResumeCommand?: (command: string, override: boolean | null) => string | null;
   createSession?: BoardOptions["createSession"];
 }
 
@@ -181,6 +195,11 @@ export function createWorkspace(opts: WorkspaceOptions) {
   const boardWorktreePaths = new Map<BoardId, string>();
   // ユーザーが付けた作業フェーズ。boardNamesと同じく永続化対象になる
   const boardPhases = new Map<BoardId, string>();
+  // 実行中だったコマンドの打ち直しの手動の切り替え。boardNamesと同じく永続化対象になる
+  const boardResumes = new Map<BoardId, boolean>();
+  // 起動時にプリセットで組み直すBoardへ引き継ぐ、前回の実行中コマンド（InitialBoard参照）。
+  // 永続化しない: 組み直した後のタブが改めて自分の実行中コマンドを持つため
+  const boardStartupResumeCommands = new Map<BoardId, Record<string, string>>();
   // ポップアップ（ADR 0005）。Boardをまたいでも同じものを使えるようWorkspace直下で1つだけ持つ（ADR 0006）
   const popup: Popup = createPopup({
     genTabId: opts.genTabId,
@@ -214,6 +233,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
       getNewTabCwd: () => newTabCwdOf(id),
       getMaxScrollback: opts.getMaxScrollback,
       onBell: opts.onBell,
+      resolveResumeCommand: (command) =>
+        opts.resolveResumeCommand?.(command, boardResumes.get(id) ?? null) ?? null,
       createSession: opts.createSession,
     });
     boards.set(id, board);
@@ -227,6 +248,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     boardStartups.delete(id);
     boardWorktreePaths.delete(id);
     boardPhases.delete(id);
+    boardResumes.delete(id);
+    boardStartupResumeCommands.delete(id);
   }
 
   /**
@@ -270,6 +293,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
       if (initialBoard.worktreePath !== undefined)
         boardWorktreePaths.set(id, initialBoard.worktreePath);
       if (initialBoard.phase !== undefined) boardPhases.set(id, initialBoard.phase);
+      if (initialBoard.resume !== undefined) boardResumes.set(id, initialBoard.resume);
+      if (initialBoard.startupResumeCommands !== undefined)
+        boardStartupResumeCommands.set(id, initialBoard.startupResumeCommands);
     }
     const clampedIndex = Math.min(Math.max(0, opts.activeBoardIndex ?? 0), order.length - 1);
     activeBoardId = order.length === 0 ? null : order[clampedIndex];
@@ -407,6 +433,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     const startup = boardStartups.get(boardId);
     const worktreePath = boardWorktreePaths.get(boardId);
     const phase = boardPhases.get(boardId);
+    const resume = boardResumes.get(boardId);
     forgetBoardMeta(boardId);
     if (order.length === 0) {
       // ポップアップを閉じる分のonDirtyだけは出る（開いていた場合のみ）
@@ -422,6 +449,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       ...(startup !== undefined ? { startup } : {}),
       ...(worktreePath !== undefined ? { worktreePath } : {}),
       ...(phase !== undefined ? { phase } : {}),
+      ...(resume !== undefined ? { resume } : {}),
     };
   }
 
@@ -446,6 +474,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     if (detached.startup !== undefined) boardStartups.set(boardId, detached.startup);
     if (detached.worktreePath !== undefined) boardWorktreePaths.set(boardId, detached.worktreePath);
     if (detached.phase !== undefined) boardPhases.set(boardId, detached.phase);
+    if (detached.resume !== undefined) boardResumes.set(boardId, detached.resume);
     if (activeBoardId === null) activeBoardId = boardId;
   }
 
@@ -610,6 +639,26 @@ export function createWorkspace(opts: WorkspaceOptions) {
 
   function getBoardPhase(boardId: BoardId): string | null {
     return boardPhases.get(boardId) ?? null;
+  }
+
+  /** nullを渡すと手動の切り替えを解除し、設定に従わせる */
+  function setBoardResume(boardId: BoardId, resume: boolean | null): boolean {
+    if (!boards.has(boardId)) return false;
+    if (resume === null) boardResumes.delete(boardId);
+    else boardResumes.set(boardId, resume);
+    opts.onDirty();
+    return true;
+  }
+
+  function getBoardResume(boardId: BoardId): boolean | null {
+    return boardResumes.get(boardId) ?? null;
+  }
+
+  /** 起動時に組み直すBoardへ引き継ぐ前回の実行中コマンドを取り出す。一度取り出すと消える */
+  function takeStartupResumeCommands(boardId: BoardId): Record<string, string> {
+    const commands = boardStartupResumeCommands.get(boardId) ?? {};
+    boardStartupResumeCommands.delete(boardId);
+    return commands;
   }
 
   /** そのBoardで新しいタブを開くときのcwd。undefinedなら呼び出し側の既定（cwdの引き継ぎ）に任せる */
@@ -804,6 +853,15 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTabId(tabId)?.sendInitialCommand(tabId, command) ?? false;
   }
 
+  /** board.tsのsendResumeCommand参照 */
+  function sendResumeCommand(tabId: TabId, command: string): boolean {
+    return findBoardOwnerByTabId(tabId)?.sendResumeCommand(tabId, command) ?? false;
+  }
+
+  function setTabLayoutSlot(tabId: TabId, slot: string): boolean {
+    return findBoardOwnerByTabId(tabId)?.setTabLayoutSlot(tabId, slot) ?? false;
+  }
+
   function handlePaste(tabId: TabId, data: string): void {
     if (popup.hasTab(tabId)) {
       popup.handlePaste(data);
@@ -903,6 +961,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         startup: boardStartups.get(id) ?? null,
         worktreePath: boardWorktreePaths.get(id) ?? null,
         phase: boardPhases.get(id) ?? null,
+        resume: boardResumes.get(id) ?? null,
       };
     });
   }
@@ -1010,6 +1069,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
     startup?: PersistedBoardStartup;
     worktreePath?: string;
     phase?: string;
+    resume?: boolean;
   }[] {
     return order.map((id) => {
       const board = boards.get(id) as Board;
@@ -1023,6 +1083,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
       const startup = boardStartups.get(id);
       const worktreePath = boardWorktreePaths.get(id);
       const phase = boardPhases.get(id);
+      const resume = boardResumes.get(id);
       const entry: {
         boardId: BoardId;
         layout: PersistedTileNode;
@@ -1031,12 +1092,14 @@ export function createWorkspace(opts: WorkspaceOptions) {
         startup?: PersistedBoardStartup;
         worktreePath?: string;
         phase?: string;
+        resume?: boolean;
       } = { boardId: id, layout };
       if (name !== undefined) entry.name = name;
       if (autoName !== undefined) entry.autoName = autoName;
       if (startup !== undefined) entry.startup = startup;
       if (worktreePath !== undefined) entry.worktreePath = worktreePath;
       if (phase !== undefined) entry.phase = phase;
+      if (resume !== undefined) entry.resume = resume;
       return entry;
     });
   }
@@ -1080,6 +1143,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     getBoardWorktreePath,
     setBoardPhase,
     getBoardPhase,
+    setBoardResume,
+    getBoardResume,
+    takeStartupResumeCommands,
     getBoardFocusedShell,
     getBoardFocusedCwd,
     splitTile,
@@ -1107,6 +1173,8 @@ export function createWorkspace(opts: WorkspaceOptions) {
     respawnTab,
     handleInput,
     sendInitialCommand,
+    sendResumeCommand,
+    setTabLayoutSlot,
     handleMouseEvent,
     handlePaste,
     enterCopyMode,

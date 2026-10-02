@@ -64,6 +64,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
     niwa docs show concepts         # Window・Workspace・Board・Tile・Tabの階層と役割
     niwa docs show keybindings      # キーバインドの書き方（niwa APIの一覧はkeybindings/api）
     niwa docs show layouts          # レイアウトプリセットの定義と適用
+    niwa docs show resume           # 実行中だったコマンドの打ち直し（設定・board resume）
     niwa docs show worktrees        # ワークツリー管理（置き場所・Boardとの紐づけ）
     niwa docs show agents           # エージェント統合
 

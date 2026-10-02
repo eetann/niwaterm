@@ -59,6 +59,7 @@ function createTestWorkspaceManager(): {
         mouseAnyMotion: false,
       }),
       dumpText: () => `screen-text-${index}`,
+      getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {},

@@ -18,6 +18,11 @@ import type {
 import type { BoardId } from "./board";
 import type { BuiltinLayoutName } from "./builtin-layouts";
 import { resolveTabCwd } from "./project-config";
+import {
+  type BoardResumeOverride,
+  decideResumeCommand,
+  isLayoutTabResumeEnabled,
+} from "./resume-command";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { findNode, listLeaves, type TabId, type TileId } from "./tile-layout";
 import type { WorkspaceManager } from "./workspace-manager";
@@ -40,6 +45,17 @@ export interface ApplyLayoutOptions {
    * タブはそのワークツリーで開く必要があり、「解決元」と「開く場所」が別になるため
    */
   tabBaseCwd?: string;
+  /** 起動時に組み直すとき、前回の終了時に実行中だったコマンドを引き継ぐための情報 */
+  resume?: LayoutResumeContext;
+}
+
+export interface LayoutResumeContext {
+  /** 前回の終了時に実行中だったコマンド。キーはタブのlayoutSlot（slotPath） */
+  commands: Record<string, string>;
+  /** Boardの手動の切り替え。nullは設定（プリセット・タブのresume）に従う */
+  override: BoardResumeOverride;
+  /** 設定のresume.allow */
+  allow: readonly string[];
 }
 
 export type ApplyLayoutResult = { ok: true; boardId: BoardId } | { ok: false; error: string };
@@ -116,6 +132,8 @@ interface BuildContext {
   profiles: ShellProfile[];
   boardId: BoardId;
   focusTarget: { tileId: TileId; tabId: TabId } | null;
+  presetResume: boolean | undefined;
+  resume: LayoutResumeContext | undefined;
   /**
    * tabConfig.cwd未指定時のデフォルトであり、相対cwdの解決基準。
    * プロジェクトローカル由来のプリセットならprojectRoot、そうでなければ
@@ -163,12 +181,36 @@ function alignPlaceholderCwd(ctx: BuildContext, tabId: TabId): void {
   ctx.workspaceManager.respawnTab(tabId, undefined, ctx.baseCwd);
 }
 
+/**
+ * プリセット内でのタブ定義の位置（例: "first.second.tabs.1"）。組み直したタブと前回のタブを
+ * 対応付けるキーで、タブ名のようにユーザーが書き換えるものではなく構造から決まる値を使う
+ */
+function slotPath(nodePath: string, tabIndex: number): string {
+  return `${nodePath}tabs.${tabIndex}`;
+}
+
+/** そのタブで前回実行中だったコマンドを、commandの代わりに打ち直すならそのコマンド */
+function resumeCommandFor(
+  ctx: BuildContext,
+  slot: string,
+  tabConfig: LayoutTabConfig,
+): string | null {
+  const resume = ctx.resume;
+  const previous = resume?.commands[slot];
+  if (resume === undefined || previous === undefined) return null;
+  if (!isLayoutTabResumeEnabled(resume.override, tabConfig.resume, ctx.presetResume)) return null;
+  const decision = decideResumeCommand(previous, resume.allow);
+  return decision.ok ? decision.command : null;
+}
+
 function configureTab(
   ctx: BuildContext,
   tileId: TileId,
   tabId: TabId,
   tabConfig: LayoutTabConfig,
+  slot: string,
 ): void {
+  ctx.workspaceManager.setTabLayoutSlot(tabId, slot);
   if (tabConfig.name) ctx.workspaceManager.setTabName(tabId, tabConfig.name);
 
   if (tabConfig.vars) {
@@ -177,7 +219,15 @@ function configureTab(
     }
   }
 
-  if (tabConfig.command) {
+  const resumed = resumeCommandFor(ctx, slot, tabConfig);
+  if (resumed !== null) {
+    const delay = tabConfig.delay ?? 0;
+    if (delay > 0) {
+      setTimeout(() => ctx.workspaceManager.sendResumeCommand(tabId, resumed), delay);
+    } else {
+      ctx.workspaceManager.sendResumeCommand(tabId, resumed);
+    }
+  } else if (tabConfig.command) {
     const command = tabConfig.command;
     const delay = tabConfig.delay ?? 0;
     // handleInputではなくsendInitialCommandを使う: 分割で作ったタイルのタブはPTY起動が
@@ -192,19 +242,25 @@ function configureTab(
   if (tabConfig.focus) ctx.focusTarget = { tileId, tabId };
 }
 
-function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): void {
+function buildTile(
+  ctx: BuildContext,
+  tileId: TileId,
+  node: LayoutTileConfig,
+  nodePath: string,
+): void {
   const placeholderTabId = getSoleTabId(ctx, tileId);
   const tabIds: TabId[] = [];
   let placeholderReused = false;
 
   for (const [i, tabConfig] of node.tabs.entries()) {
+    const slot = slotPath(nodePath, i);
     if (i === 0 && canReusePlaceholder(tabConfig)) {
       alignPlaceholderCwd(ctx, placeholderTabId);
-      configureTab(ctx, tileId, placeholderTabId, tabConfig);
+      configureTab(ctx, tileId, placeholderTabId, tabConfig, slot);
       tabIds.push(placeholderTabId);
       placeholderReused = true;
     } else {
-      tabIds.push(createTab(ctx, tileId, tabConfig));
+      tabIds.push(createTab(ctx, tileId, tabConfig, slot));
     }
   }
 
@@ -217,7 +273,12 @@ function buildTile(ctx: BuildContext, tileId: TileId, node: LayoutTileConfig): v
   if (activeTabId !== undefined) ctx.workspaceManager.switchTab(tileId, activeTabId);
 }
 
-function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig): TabId {
+function createTab(
+  ctx: BuildContext,
+  tileId: TileId,
+  tabConfig: LayoutTabConfig,
+  slot: string,
+): TabId {
   const resolved = resolveShellProfileCommand(ctx.profiles, tabConfig.shellProfile);
   const shellOverride = resolved.ok ? resolved.command : undefined;
   const tabId = ctx.workspaceManager.newTab(
@@ -226,20 +287,25 @@ function createTab(ctx: BuildContext, tileId: TileId, tabConfig: LayoutTabConfig
     resolveTabCwd(tabConfig.cwd, ctx.baseCwd),
   );
   if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
-  configureTab(ctx, tileId, tabId, tabConfig);
+  configureTab(ctx, tileId, tabId, tabConfig, slot);
   return tabId;
 }
 
-function buildNode(ctx: BuildContext, tileId: TileId, node: LayoutNodeConfig): void {
+function buildNode(
+  ctx: BuildContext,
+  tileId: TileId,
+  node: LayoutNodeConfig,
+  nodePath: string,
+): void {
   if (node.kind === "tile") {
-    buildTile(ctx, tileId, node);
+    buildTile(ctx, tileId, node, nodePath);
     return;
   }
   const result = ctx.workspaceManager.splitTile(tileId, node.orientation, node.ratio, ctx.baseCwd);
   if (!result) throw new Error(`internal error: failed to split tile ${tileId}`);
   // splitTileはfirst=既存(tileIdのまま)/second=新規(result.tileId)で分割する（tile-layout.ts参照）
-  buildNode(ctx, tileId, node.first);
-  buildNode(ctx, result.tileId, node.second);
+  buildNode(ctx, tileId, node.first, `${nodePath}first.`);
+  buildNode(ctx, result.tileId, node.second, `${nodePath}second.`);
 }
 
 /** boardIdのBoardを、単一タイル・単一タブへ畳む（既存のcloseTabの繰り返しのみで実現する） */
@@ -299,13 +365,15 @@ export function applyLayoutPreset(
     profiles,
     boardId,
     focusTarget: null,
+    presetResume: preset.resume,
+    resume: options.resume,
     // プロジェクトローカル由来のプリセットはprojectRootを基準にする。リポジトリへコミットした
     // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため。
     // tabBaseCwdはこれを打ち消す（開く場所が指定されているワークツリーのBoard向け）
     baseCwd: options.tabBaseCwd ?? options.projectRoot ?? options.invocationCwd,
   };
   try {
-    buildNode(ctx, getRootTileId(workspaceManager, boardId), preset.layout);
+    buildNode(ctx, getRootTileId(workspaceManager, boardId), preset.layout, "");
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultAppearance,
   defaultBoardConfig,
+  defaultResumeConfig,
   defaultBrowserConfig,
   defaultMouseConfig,
   defaultSidebarConfig,
@@ -33,6 +34,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     },
     workspaceDefaultCwd: undefined,
     board: defaultBoardConfig,
+    resume: defaultResumeConfig,
     sidebar: defaultSidebarConfig,
     terminal: defaultTerminalConfig,
     statusBar: { visible: false, css: "", components: [] },
@@ -69,6 +71,7 @@ describe("buildConfigSummary", () => {
       "layouts",
       "browser",
       "board",
+      "resume",
       "sidebar",
       "terminal",
       "workspace",

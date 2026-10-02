@@ -508,6 +508,30 @@ function parseBoardPhaseBody(body: unknown): BoardPhaseRequestBody | null {
   return result;
 }
 
+/** `niwa board resume`。boardId省略時はアクティブBoardへ向ける */
+interface BoardResumeRequestBody {
+  boardId?: string;
+  mode: "set" | "clear" | "show";
+  /** mode: "set"のみ必須 */
+  resume?: boolean;
+}
+
+function parseBoardResumeBody(body: unknown): BoardResumeRequestBody | null {
+  const b = body as { boardId?: unknown; mode?: unknown; resume?: unknown };
+  if (b.mode !== "set" && b.mode !== "clear" && b.mode !== "show") return null;
+  const result: BoardResumeRequestBody = { mode: b.mode };
+  if (b.boardId !== undefined) {
+    if (typeof b.boardId !== "string" || b.boardId.length === 0) return null;
+    result.boardId = b.boardId;
+  }
+  if (b.resume !== undefined) {
+    if (typeof b.resume !== "boolean") return null;
+    result.resume = b.resume;
+  }
+  if (b.mode === "set" && result.resume === undefined) return null;
+  return result;
+}
+
 interface MoveBoardRequestBody extends BoardIdRequestBody {
   direction: "up" | "down";
 }
@@ -1210,6 +1234,31 @@ function buildApp(
       workspaceManager.setBoardPhase(boardId, null);
     }
     return c.json({ ok: true, boardId, phase: workspaceManager.getBoardPhase(boardId) });
+  });
+
+  app.post("/board-resume", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === undefined) return c.json({ ok: false, error: "invalid JSON body" }, 400);
+    const parsed = parseBoardResumeBody(body);
+    if (!parsed) {
+      return c.json(
+        {
+          ok: false,
+          error: 'expected { mode: "set"|"clear"|"show", boardId?: string, resume?: boolean }',
+        },
+        400,
+      );
+    }
+    const boardId = parsed.boardId ?? activeBoardId(c);
+    if (!boardId || !workspaceManager.hasBoard(boardId)) {
+      return c.json({ ok: false, error: `board not found: ${parsed.boardId ?? ""}` }, 404);
+    }
+    if (parsed.mode === "set") {
+      workspaceManager.setBoardResume(boardId, parsed.resume as boolean);
+    } else if (parsed.mode === "clear") {
+      workspaceManager.setBoardResume(boardId, null);
+    }
+    return c.json({ ok: true, boardId, resume: workspaceManager.getBoardResume(boardId) });
   });
 
   app.post("/board-startup", async (c) => {

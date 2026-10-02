@@ -30,11 +30,39 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && command -v niwa >/dev/null 2>&1; then
   # starship等が自前でOSC 133を出す環境で二重に出ても、同じ行に同じマークが付くだけで実害は無い
   _niwaterm_mark_prompt() { printf '\e]133;A\a'; }
 
+  # 次に履歴へ入るコマンドの番号。PS0の時点で履歴の末尾がこの番号なら、それが今から実行する
+  # コマンドだと分かる（先頭が空白・直前と同じ等で履歴に残らなかったコマンドは末尾が1つ前のまま）
+  _niwaterm_record_histno() { _NIWATERM_HISTNO=$HISTCMD; }
+
+  # コマンド実行の開始（OSC 133のC）。実行するコマンド行を付ける（kittyの拡張cmdline_url）。
+  # niwatermはアプリ終了時に実行中だったコマンドを覚えておき、設定のresume.allowに載っていれば
+  # 次回起動時に打ち直す。区切りの;・エスケープの%・制御文字だけをパーセントエンコードする。
+  # 履歴に残らなかったコマンドはコマンド行を送らない（先頭空白で履歴から外す慣習を尊重する）
+  _niwaterm_mark_output() {
+    local entry num cmd
+    entry=$(HISTTIMEFORMAT= builtin history 1)
+    entry=${entry#"${entry%%[![:space:]]*}"}
+    num=${entry%%[[:space:]]*}
+    # historyの出力は「番号・空白2つ・コマンド行」
+    cmd=${entry#"$num  "}
+    if [[ -z "$num" || "$num" != "$_NIWATERM_HISTNO" || -z "$cmd" || "$cmd" == ' '* ]]; then
+      printf '\e]133;C\a'
+      return
+    fi
+    cmd=${cmd//\%/%25}
+    cmd=${cmd//;/%3B}
+    cmd=${cmd//$'\n'/%0A}
+    cmd=${cmd//$'\r'/%0D}
+    cmd=${cmd//$'\e'/%1B}
+    cmd=${cmd//$'\a'/%07}
+    printf '\e]133;C;cmdline_url=%s\a' "$cmd"
+  }
+
   # 既存のPROMPT_COMMANDを壊さないよう先頭に追加する（bash 3.2でも動く文字列連結形式）
-  PROMPT_COMMAND="_niwaterm_mark_prompt;_niwaterm_report_branch;_niwaterm_report_pwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-  # コマンド実行の開始（OSC 133のC）。PS0はコマンドを読み取った直後・実行直前に展開されるため、
-  # 他のツールと奪い合うDEBUGトラップを張らずに済む。PS0が無いbash 3.2では単に無視され、
+  PROMPT_COMMAND="_niwaterm_mark_prompt;_niwaterm_record_histno;_niwaterm_report_branch;_niwaterm_report_pwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+  # PS0はコマンドを読み取った直後・実行直前に展開されるため、他のツールと奪い合うDEBUGトラップを
+  # 張らずに済む。展開時点で履歴には今のコマンドが入っている。PS0が無いbash 3.2では単に無視され、
   # コマンド出力の行がプロンプトの継続行として記録される（ジャンプ自体は動く）
-  PS0='\e]133;C\a'"${PS0}"
+  PS0='$(_niwaterm_mark_output)'"${PS0}"
   _niwaterm_report_pwd
 fi

@@ -119,6 +119,12 @@ export type BoardOptions = {
   getMaxScrollback?: () => number;
   /** タブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: (tabId: TabId) => void;
+  /**
+   * 復元したタブで前回実行中だったコマンドを、打ち直すコマンドへ変換する。打ち直さないならnull。
+   * 判定（Boardの切り替え・許可リスト）は呼び出し側の責務。PTYを起動する瞬間に呼ぶので、
+   * 設定の読み込みより先にBoardを復元しても最新の設定で判定される
+   */
+  resolveResumeCommand?: (command: string) => string | null;
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: typeof createTerminalSession;
 };
@@ -138,6 +144,11 @@ export function createBoard(opts: BoardOptions) {
   // タブ・タイル名。getPersistableTabs/listTileNames経由で永続化対象になる
   const tabNames = new Map<TabId, string>();
   const tileNames = new Map<TileId, string>();
+  // シェル統合が報告した、タブで今実行中のコマンド行。永続化して次回起動時の打ち直しに使う
+  const runningCommandByTabId = new Map<TabId, string>();
+  // レイアウトプリセットのどのタブ定義から作られたか（layout-apply.tsのslotPath）。プリセットで
+  // 組み直す起動時に、前回のタブの実行中コマンドを同じ定義のタブへ引き継ぐ対応付けに使う
+  const layoutSlotByTabId = new Map<TabId, string>();
   // 一時的にズーム表示中のtileId。tree構造自体は変更しない（表示上どのleafを全画面表示するかという
   // 描画側の関心事のため）。closeTile/splitTile/focus変更で対象が意味を失う場合はクリアする
   let zoomedTileId: TileId | null = null;
@@ -156,7 +167,19 @@ export function createBoard(opts: BoardOptions) {
   // 同じ理由）。正しいサイズが判明するまでPTY自体を起動しないことでこの競合を避ける
   const pendingSpawnByTabId = new Map<
     TabId,
-    { shellOverride?: string; cwd?: string; command?: string; initialCommands?: string[] }
+    {
+      shellOverride?: string;
+      cwd?: string;
+      command?: string;
+      initialCommands?: string[];
+      /** 前回の終了時に実行中だったコマンド。起動時に打ち直す */
+      resumeCommand?: string;
+      /**
+       * resumeCommandを打ち直すと決定済みか。falseならPTY起動時にresolveResumeCommandで判定する
+       * （trueはレイアウトプリセットで組み直したタブで、判定を済ませてから渡される）
+       */
+      resumeApproved?: boolean;
+    }
   >();
 
   /** webview側の初回resize到達まで実際のPTY起動を保留する。sizeByTabIdはまだ確定しない */
@@ -197,8 +220,16 @@ export function createBoard(opts: BoardOptions) {
       // OSC 7等で報告された実際のcwdをtabVarsへ反映する（split-tile/newTabのcwd省略時デフォルトにも使う）
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
       onBell: () => opts.onBell?.(tabId),
+      onRunningCommandChanged: (command) => setRunningCommand(tabId, command),
     });
     sessions.set(tabId, session);
+  }
+
+  function setRunningCommand(tabId: TabId, command: string | null): void {
+    if (command === null) runningCommandByTabId.delete(tabId);
+    else runningCommandByTabId.set(tabId, command);
+    // 描画は変わらないが、終了時に何が動いていたかを保存させるためにdirtyを立てる
+    opts.onDirty();
   }
 
   /**
@@ -223,6 +254,10 @@ export function createBoard(opts: BoardOptions) {
     const rawCwd = meta?.vars?.["cwd"];
     const cwd = rawCwd !== undefined ? resolveActualCwd(rawCwd, shell) : opts.getDefaultCwd?.();
     spawnSessionPending(tabId, shell, cwd);
+    if (meta?.kind !== "terminal") return;
+    if (meta.layoutSlot !== undefined) layoutSlotByTabId.set(tabId, meta.layoutSlot);
+    const pending = pendingSpawnByTabId.get(tabId);
+    if (pending && meta.runningCommand !== undefined) pending.resumeCommand = meta.runningCommand;
   }
 
   let tree: TileNode;
@@ -258,6 +293,8 @@ export function createBoard(opts: BoardOptions) {
       browserTabs.delete(tabId);
       pendingSpawnByTabId.delete(tabId);
       exitedTabs.delete(tabId);
+      runningCommandByTabId.delete(tabId);
+      layoutSlotByTabId.delete(tabId);
     }
   }
 
@@ -417,8 +454,11 @@ export function createBoard(opts: BoardOptions) {
       onExit: (code) => handleTabProcessExit(tabId, code),
       onPwdChanged: (cwd) => setTabVar(tabId, "cwd", cwd),
       onBell: () => opts.onBell?.(tabId),
+      onRunningCommandChanged: (command) => setRunningCommand(tabId, command),
     });
     sessions.set(tabId, session);
+    const running = session.getRunningCommand();
+    if (running !== null) runningCommandByTabId.set(tabId, running);
     sizeByTabId.set(tabId, { cols: meta.cols, rows: meta.rows });
     shellByTabId.set(tabId, meta.shell);
     if (meta.vars) tabVars.set(tabId, new Map(Object.entries(meta.vars)));
@@ -596,6 +636,7 @@ export function createBoard(opts: BoardOptions) {
     sessions.get(tabId)?.dispose();
     sessions.delete(tabId);
     exitedTabs.delete(tabId);
+    runningCommandByTabId.delete(tabId);
     spawnSession(tabId, size.cols, size.rows, shellOverride, resolvedCwd, command);
     opts.onDirty();
     return true;
@@ -620,6 +661,24 @@ export function createBoard(opts: BoardOptions) {
     const pending = pendingSpawnByTabId.get(tabId);
     if (pending) {
       (pending.initialCommands ??= []).push(command);
+      return true;
+    }
+    const session = sessions.get(tabId);
+    if (!session) return false;
+    session.runCommandWhenReady(command);
+    return true;
+  }
+
+  /**
+   * 前回の終了時に実行中だったコマンドを打ち直す（打ち直すと判定済みのもの）。sendInitialCommandとの違いは、
+   * PTY起動を保留している間も実行中のコマンドとして保存され続けること。表示されないまま終了しても
+   * 次回の打ち直しの対象から外れない。tabIdが存在しない場合はfalseを返す
+   */
+  function sendResumeCommand(tabId: TabId, command: string): boolean {
+    const pending = pendingSpawnByTabId.get(tabId);
+    if (pending) {
+      pending.resumeCommand = command;
+      pending.resumeApproved = true;
       return true;
     }
     const session = sessions.get(tabId);
@@ -697,6 +756,13 @@ export function createBoard(opts: BoardOptions) {
       for (const command of pending.initialCommands ?? []) {
         sessions.get(tabId)?.runCommandWhenReady(command);
       }
+      const resume =
+        pending.resumeCommand === undefined
+          ? null
+          : pending.resumeApproved
+            ? pending.resumeCommand
+            : (opts.resolveResumeCommand?.(pending.resumeCommand) ?? null);
+      if (resume !== null) sessions.get(tabId)?.runCommandWhenReady(resume);
       opts.onDirty();
       return;
     }
@@ -763,6 +829,13 @@ export function createBoard(opts: BoardOptions) {
       const tab: PersistedTerminalTab = { kind: "terminal" };
       const shell = shellByTabId.get(tabId);
       if (shell !== undefined) tab.shell = shell;
+      // 一度も表示されず起動を保留したままのタブ（裏のBoard）は、前回から持ち越した分を
+      // 保存し直す。落とすと、表示しないまま終了しただけで打ち直す対象が消える
+      const running =
+        runningCommandByTabId.get(tabId) ?? pendingSpawnByTabId.get(tabId)?.resumeCommand;
+      if (running !== undefined) tab.runningCommand = running;
+      const layoutSlot = layoutSlotByTabId.get(tabId);
+      if (layoutSlot !== undefined) tab.layoutSlot = layoutSlot;
       const name = tabNames.get(tabId);
       if (name !== undefined) tab.name = name;
       const vars = tabVars.get(tabId);
@@ -868,6 +941,13 @@ export function createBoard(opts: BoardOptions) {
     return vars ? Object.fromEntries(vars) : {};
   }
 
+  /** レイアウトプリセットのどのタブ定義から作ったかを記録する（layout-apply.tsのslotPath） */
+  function setTabLayoutSlot(tabId: TabId, slot: string): boolean {
+    if (!hasTab(tabId)) return false;
+    layoutSlotByTabId.set(tabId, slot);
+    return true;
+  }
+
   /** 空文字列（trim後）を渡すとデフォルトの連番ラベルへ戻す */
   function setTabName(tabId: TabId, name: string): boolean {
     if (!hasAnyTab(tabId)) return false;
@@ -915,6 +995,8 @@ export function createBoard(opts: BoardOptions) {
     tabVars.clear();
     tabNames.clear();
     tileNames.clear();
+    runningCommandByTabId.clear();
+    layoutSlotByTabId.clear();
   }
 
   return {
@@ -938,6 +1020,7 @@ export function createBoard(opts: BoardOptions) {
     respawnTab,
     handleInput,
     sendInitialCommand,
+    sendResumeCommand,
     handleMouseEvent,
     enterCopyMode,
     handleCopyModeKey,
@@ -963,6 +1046,7 @@ export function createBoard(opts: BoardOptions) {
     listTabVars,
     setTabName,
     setTileName,
+    setTabLayoutSlot,
     listTabNames,
     listTileNames,
     getPersistableTabs,

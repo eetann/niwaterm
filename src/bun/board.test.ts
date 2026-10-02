@@ -85,6 +85,7 @@ function createFakeSessionFactory() {
         mouseAnyMotion: false,
       }),
       dumpText: () => "",
+      getRunningCommand: () => null,
       showNotice: (text: string) => {
         record.notices.push(text);
       },

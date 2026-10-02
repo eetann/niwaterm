@@ -2269,6 +2269,7 @@ function renderSidebar(
       ),
       boardPhases,
       onSetBoardPhase: setSidebarBoardPhase,
+      onSetBoardResume: (boardId, resume) => sendMessage("setBoardResume", { boardId, resume }),
       onSelectWorkspaceHeader: activateSidebarWorkspace,
       onSelectBoard: activateSidebarBoard,
       onSelectPopup: activateSidebarPopup,

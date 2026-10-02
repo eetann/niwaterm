@@ -83,6 +83,7 @@ function createTestWorkspaceManager(): {
         mouseAnyMotion: false,
       }),
       dumpText: () => `screen-text-${index}`,
+      getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {},
@@ -3540,7 +3541,9 @@ describe("GET /layouts, POST /apply-layout", () => {
 
     const body = (await res.json()) as { boardId: string };
     expect(mgr.getBoardStartup(body.boardId)).toEqual({ preset: "dev", restoreMode: "layout" });
-    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId: body.boardId, preset: "dev" }]);
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId: body.boardId, preset: "dev", resumeOverride: null, resumeCommands: {} },
+    ]);
   });
 
   test("POST /apply-layout: tabCwdは起動時レイアウトの紐づけにも記録される", async () => {
@@ -3572,6 +3575,8 @@ describe("GET /layouts, POST /apply-layout", () => {
         preset: "dev",
         cwd: "/repo/main",
         tabCwd: "/repo/work/feature",
+        resumeOverride: null,
+        resumeCommands: {},
       },
     ]);
   });
@@ -3661,6 +3666,46 @@ describe("GET /layouts, POST /apply-layout", () => {
       body: JSON.stringify({ mode: "set", phase: "   " }),
     });
     expect(blank.status).toBe(400);
+  });
+
+  test("POST /board-resume: set・show・clearで切り替えを操作し、boardId省略時はアクティブBoardが対象", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const post = (body: unknown) =>
+      fetch("http://localhost/board-resume", {
+        unix: socketPath,
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    const set = await post({ mode: "set", resume: false });
+    expect(await set.json()).toEqual({ ok: true, boardId, resume: false });
+    expect(mgr.getBoardResume(boardId)).toBe(false);
+
+    const show = await post({ mode: "show", boardId });
+    expect(await show.json()).toEqual({ ok: true, boardId, resume: false });
+
+    const clear = await post({ mode: "clear" });
+    expect(await clear.json()).toEqual({ ok: true, boardId, resume: null });
+    expect(mgr.getBoardResume(boardId)).toBeNull();
+  });
+
+  test("POST /board-resume: mode:setでresumeが真偽値でなければ400、存在しないboardIdは404", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const post = (body: unknown) =>
+      fetch("http://localhost/board-resume", {
+        unix: socketPath,
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    expect((await post({ mode: "set" })).status).toBe(400);
+    expect((await post({ mode: "set", resume: "on" })).status).toBe(400);
+    expect((await post({ mode: "show", boardId: "board-nope" })).status).toBe(404);
   });
 
   test("POST /board-phase: 存在しないboardIdは404を返す", async () => {
@@ -3785,7 +3830,9 @@ describe("GET /layouts, POST /apply-layout", () => {
       boardId,
       startup: { preset: "dev", restoreMode: "layout" },
     });
-    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId, preset: "dev" }]);
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId, preset: "dev", resumeOverride: null, resumeCommands: {} },
+    ]);
   });
 
   test("POST /board-startup: preset省略時は既に紐づいているプリセットを引き継ぐ", async () => {
@@ -3974,7 +4021,13 @@ describe("GET /layouts, POST /apply-layout", () => {
       projectRoot,
     });
     expect(mgr.listStartupLayoutBoards()).toEqual([
-      { boardId: body.boardId, preset: "dev", projectRoot },
+      {
+        boardId: body.boardId,
+        preset: "dev",
+        projectRoot,
+        resumeOverride: null,
+        resumeCommands: {},
+      },
     ]);
   });
 
@@ -4013,7 +4066,9 @@ describe("GET /layouts, POST /apply-layout", () => {
       restoreMode: "layout",
       cwd,
     });
-    expect(mgr.listStartupLayoutBoards()).toEqual([{ boardId: body.boardId, preset: "dev", cwd }]);
+    expect(mgr.listStartupLayoutBoards()).toEqual([
+      { boardId: body.boardId, preset: "dev", cwd, resumeOverride: null, resumeCommands: {} },
+    ]);
   });
 
   test("POST /board-startup: プロジェクトローカルのpresetはtrust無しだとneedsTrustを返す", async () => {
@@ -4417,6 +4472,7 @@ describe("ウィンドウ（複数OSウィンドウ）", () => {
         kittyImages: [],
       }),
       dumpText: () => "",
+      getRunningCommand: () => null,
       showNotice: () => {},
       isCopyMode: () => false,
       enterCopyMode: () => {},

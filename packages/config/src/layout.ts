@@ -20,6 +20,12 @@ export interface LayoutTabConfig {
   vars?: Record<string, string>;
   /** このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる */
   focus?: boolean;
+  /**
+   * 起動時にこのプリセットで組み直すとき、前回の終了時にこのタブで実行中だったコマンドを
+   * commandより優先して打ち直す。打ち直すのは設定のresume.allowに載ったコマンドだけで、
+   * 該当しなければcommandを実行する。省略時はプリセットのresumeに従う
+   */
+  resume?: boolean;
 }
 
 export interface LayoutTileConfig {
@@ -44,6 +50,8 @@ export type LayoutNodeConfig = LayoutTileConfig | LayoutSplitConfig;
 export interface LayoutPreset {
   /** `niwa layout list`に表示する説明文 */
   description?: string;
+  /** 全タブのresumeの既定値。省略時はfalse（commandをそのまま実行する） */
+  resume?: boolean;
   layout: LayoutNodeConfig;
 }
 

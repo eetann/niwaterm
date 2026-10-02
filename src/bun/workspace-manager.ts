@@ -5,6 +5,7 @@ import {
   type PersistedBoard,
   type PersistedBoardStartup,
   type PersistedState,
+  type PersistedTileNode,
 } from "./persistence";
 import type { PopupGeometry } from "../shared/popup-geometry";
 import type { BoardId } from "./board";
@@ -76,6 +77,32 @@ export interface StartupLayoutBoard {
   cwd?: string;
   /** タブを開く基準ディレクトリ。projectRoot・cwdより優先される（ワークツリーのBoard） */
   tabCwd?: string;
+  /** 打ち直しの手動の切り替え。nullは設定（プリセット・タブのresume）に従う */
+  resumeOverride: boolean | null;
+  /** 前回の終了時に実行中だったコマンド。キーはタブのlayoutSlot */
+  resumeCommands: Record<string, string>;
+}
+
+/**
+ * 保存した骨格から、layoutSlotごとの実行中だったコマンドを集める。同じslotが複数あれば先勝ち
+ * （プリセットを適用した後に同じタブ定義由来のタブを複製することは無いが、念のため一意にする）
+ */
+export function collectSlotRunningCommands(node: PersistedTileNode): Record<string, string> {
+  const result: Record<string, string> = {};
+  function walk(n: PersistedTileNode): void {
+    if (n.kind === "split") {
+      walk(n.first);
+      walk(n.second);
+      return;
+    }
+    for (const tab of n.tabs) {
+      if (tab.kind !== "terminal") continue;
+      if (tab.layoutSlot === undefined || tab.runningCommand === undefined) continue;
+      if (!(tab.layoutSlot in result)) result[tab.layoutSlot] = tab.runningCommand;
+    }
+  }
+  walk(node);
+  return result;
 }
 
 export interface TabLocation {
@@ -119,6 +146,8 @@ export interface WorkspaceManagerOptions {
   getMaxScrollback?: WorkspaceOptions["getMaxScrollback"];
   /** いずれかのタブのPTYがBEL文字(0x07)を出力した時に呼ばれる。マーク・通知の要否判断は呼び出し側の責務 */
   onBell?: WorkspaceOptions["onBell"];
+  /** 復元したタブで前回実行中だったコマンドを打ち直すかの判定。省略時は何も打ち直さない */
+  resolveResumeCommand?: WorkspaceOptions["resolveResumeCommand"];
   /** テスト時にfakeへ差し替えるためのDI */
   createSession?: WorkspaceOptions["createSession"];
 }
@@ -160,6 +189,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
       getBoardNaming: opts.getBoardNaming,
       getMaxScrollback: opts.getMaxScrollback,
       onBell: opts.onBell,
+      resolveResumeCommand: opts.resolveResumeCommand,
       createSession: opts.createSession,
     });
     workspaces.set(id, ws);
@@ -196,11 +226,15 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
         if (persistedBoard.worktreePath !== undefined)
           initialBoard.worktreePath = persistedBoard.worktreePath;
         if (persistedBoard.phase !== undefined) initialBoard.phase = persistedBoard.phase;
+        if (persistedBoard.resume !== undefined) initialBoard.resume = persistedBoard.resume;
         // 起動時にプリセットで組み直すBoardは骨格を復元しない。単一タブの
         // まっさらな状態で作り、bun/index.tsが設定読み込み後にapplyLayoutPresetで組み立てる。
         // 骨格を復元してから畳むと前回セッションのタブ名・vars・cwdがプリセット適用後も
         // 残ってしまうため（layout-apply.tsのプレースホルダー使い回しを参照）
-        if (persistedBoard.startup?.restoreMode === "layout") return initialBoard;
+        if (persistedBoard.startup?.restoreMode === "layout") {
+          initialBoard.startupResumeCommands = collectSlotRunningCommands(persistedBoard.layout);
+          return initialBoard;
+        }
         const restored = buildTreeFromPersisted(persistedBoard.layout, genTileId, genTabId);
         initialBoard.tree = restored.tree;
         initialBoard.restoredMeta = {
@@ -447,6 +481,15 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByBoardId(boardId)?.getBoardPhase(boardId) ?? null;
   }
 
+  /** nullを渡すと手動の切り替えを解除する */
+  function setBoardResume(boardId: BoardId, resume: boolean | null): boolean {
+    return findOwnerByBoardId(boardId)?.setBoardResume(boardId, resume) ?? false;
+  }
+
+  function getBoardResume(boardId: BoardId): boolean | null {
+    return findOwnerByBoardId(boardId)?.getBoardResume(boardId) ?? null;
+  }
+
   function getBoardFocusedCwd(boardId: BoardId): string | undefined {
     return findOwnerByBoardId(boardId)?.getBoardFocusedCwd(boardId);
   }
@@ -470,6 +513,10 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           const entry: StartupLayoutBoard = {
             boardId: board.boardId,
             preset: board.startup.preset,
+            resumeOverride: board.resume,
+            resumeCommands: (workspaces.get(ws) as Workspace).takeStartupResumeCommands(
+              board.boardId,
+            ),
           };
           if (board.startup.projectRoot !== undefined) {
             entry.projectRoot = board.startup.projectRoot;
@@ -671,6 +718,15 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     return findOwnerByTabId(tabId)?.sendInitialCommand(tabId, command) ?? false;
   }
 
+  /** board.tsのsendResumeCommand参照 */
+  function sendResumeCommand(tabId: TabId, command: string): boolean {
+    return findOwnerByTabId(tabId)?.sendResumeCommand(tabId, command) ?? false;
+  }
+
+  function setTabLayoutSlot(tabId: TabId, slot: string): boolean {
+    return findOwnerByTabId(tabId)?.setTabLayoutSlot(tabId, slot) ?? false;
+  }
+
   function handlePaste(tabId: TabId, data: string): void {
     findOwnerByTabId(tabId)?.handlePaste(tabId, data);
   }
@@ -848,6 +904,7 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
           if (b.startup !== undefined) board.startup = b.startup;
           if (b.worktreePath !== undefined) board.worktreePath = b.worktreePath;
           if (b.phase !== undefined) board.phase = b.phase;
+          if (b.resume !== undefined) board.resume = b.resume;
           return board;
         });
         const name = workspaceNames.get(id);
@@ -890,6 +947,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     setBoardName,
     setBoardPhase,
     getBoardPhase,
+    setBoardResume,
+    getBoardResume,
     setBoardStartup,
     getBoardStartup,
     setBoardWorktreePath,
@@ -928,6 +987,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     swapWorkspaces,
     handleInput,
     sendInitialCommand,
+    sendResumeCommand,
+    setTabLayoutSlot,
     handleMouseEvent,
     enterCopyMode,
     handleCopyModeKey,

@@ -28,6 +28,7 @@ import {
   type MouseEventInput,
   type PromptLocation,
 } from "./ghostty";
+import { createCommandTracker } from "./command-tracker";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
@@ -40,6 +41,11 @@ export type TerminalSessionCallbacks = {
   onPwdChanged?: (cwd: string) => void;
   /** BEL文字(0x07)を受け取った時に呼ばれる */
   onBell?: () => void;
+  /**
+   * シェル統合が報告した実行中のコマンド行が変わった時に呼ばれる。nullは実行中のコマンドが無い
+   * （プロンプトへ戻った）状態。詳細: command-tracker.ts
+   */
+  onRunningCommandChanged?: (command: string | null) => void;
 };
 
 export type TerminalSessionOptions = PtyOptions &
@@ -173,7 +179,15 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     onExit: opts.onExit,
     onPwdChanged: opts.onPwdChanged,
     onBell: opts.onBell,
+    onRunningCommandChanged: opts.onRunningCommandChanged,
   };
+  let runningCommand: string | null = null;
+  const commandTracker = createCommandTracker((event) => {
+    const next = event.kind === "start" ? event.cmdline : null;
+    if (next === runningCommand) return;
+    runningCommand = next;
+    callbacks.onRunningCommandChanged?.(next);
+  });
 
   // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
   term.onWritePty((data) => {
@@ -201,6 +215,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   // （詳細: docs/known-issues/windows-pty-dispose-use-after-free.md）
   pty.onData((data) => {
     if (disposed) return;
+    commandTracker.feed(data);
     term.write(data);
     // シェルがまだ出力中＝初期化の途中とみなし、積んである初期コマンドの送出を先送りする
     if (pendingInitialCommands.length > 0) scheduleInitialCommandFlush();
@@ -681,6 +696,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     };
   }
 
+  /** シェル統合が報告した、今実行中のコマンド行。無ければnull */
+  function getRunningCommand(): string | null {
+    return runningCommand;
+  }
+
   /** 現在の画面内容をプレーンテキストとして取り出す（CLIの`tab capture`相当） */
   function dumpText(): string {
     return term.dumpText();
@@ -723,6 +743,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     jumpPrompt,
     renderState,
     dumpText,
+    getRunningCommand,
     showNotice,
     setCallbacks,
     dispose,

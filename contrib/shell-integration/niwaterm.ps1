@@ -23,12 +23,22 @@ if ($env:NIWATERM_TAB_ID -and (Get-Command niwa -ErrorAction SilentlyContinue)) 
 
     # コマンド実行の開始（OSC 133のC）。PowerShellにはpreexecに当たるフックが無いため、
     # PSReadLineが1行読み終えた直後を差し込み口にする。Cを出さないとコマンド出力の行まで
-    # プロンプトの継続行として記録される
+    # プロンプトの継続行として記録される。
+    # Cには実行するコマンド行を付ける（kittyの拡張cmdline_url）。niwatermはアプリ終了時に実行中だった
+    # コマンドを覚えておき、設定のresume.allowに載っていれば次回起動時に打ち直す。
+    # 区切りの;・エスケープの%・制御文字だけをパーセントエンコードする。
+    # 先頭が空白のコマンド（履歴に残さない慣習）はコマンド行を送らない
     $script:NiwatermOriginalReadLine = $function:PSConsoleHostReadLine
     if ($script:NiwatermOriginalReadLine) {
         function global:PSConsoleHostReadLine {
             $line = & $script:NiwatermOriginalReadLine
-            [Console]::Write($script:NiwatermOscOutputStart)
+            if ([string]::IsNullOrEmpty($line) -or $line.StartsWith(" ")) {
+                [Console]::Write($script:NiwatermOscOutputStart)
+            } else {
+                $cmd = $line.Replace("%", "%25").Replace(";", "%3B").Replace("`n", "%0A").Replace("`r", "%0D")
+                $cmd = $cmd.Replace([string][char]27, "%1B").Replace([string][char]7, "%07")
+                [Console]::Write("$([char]27)]133;C;cmdline_url=$cmd$([char]7)")
+            }
             $line
         }
     }

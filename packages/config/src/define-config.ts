@@ -8,6 +8,7 @@ import type { LayoutsConfig } from "./layout";
 import type { LinkConfig } from "./link";
 import type { MouseConfig } from "./mouse";
 import type { Niwa } from "./niwa";
+import type { ResumeConfig } from "./resume";
 import type { ShellConfig } from "./shell";
 import type { SidebarConfig } from "./sidebar";
 import type { StatusBarConfig } from "./status-bar";
@@ -108,6 +109,13 @@ export interface NiwatermConfig {
    * 例: { newTabCwd: "worktree" }
    */
   board?: BoardConfig;
+  /**
+   * アプリ終了時にタブで実行中だったコマンドを、次回起動時に打ち直す設定。
+   * 打ち直すのはallowに載せたコマンドだけで、既定は何も打ち直さない。
+   * コマンドの記録にはシェル統合（contrib/shell-integration/）の導入が要る。
+   * 例: { allow: ["nvim", "claude", "lazygit"] }
+   */
+  resume?: ResumeConfig;
   /**
    * サイドバーの表示設定。ワークスペース一覧のBoard行に出すステータスライン（Board名の下の行）へ
    * 並べる項目と順番を指定する。未指定ならフェーズ・ブランチ・エージェント状態の3つが出る。

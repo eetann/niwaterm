@@ -28,8 +28,26 @@ if [[ -n "$NIWATERM_TAB_ID" ]] && (( $+commands[niwa] )); then
   # Aがプロンプトの開始、Cがコマンド実行の開始。Cを出さないとコマンド出力の行まで
   # プロンプトの継続行として記録される。
   # starship等が自前でOSC 133を出す環境で二重に出ても、同じ行に同じマークが付くだけで実害は無い
+  #
+  # Cには実行するコマンド行を付ける（kittyの拡張cmdline_url）。niwatermはアプリ終了時に実行中だった
+  # コマンドを覚えておき、設定のresume.allowに載っていれば次回起動時に打ち直す。
+  # 区切りの;・エスケープの%・制御文字だけをパーセントエンコードする。
+  # 先頭が空白のコマンド（HIST_IGNORE_SPACEで履歴に残さない慣習）はコマンド行を送らない
   _niwaterm_mark_prompt() { print -n '\e]133;A\a'; }
-  _niwaterm_mark_output() { print -n '\e]133;C\a'; }
+  _niwaterm_mark_output() {
+    local cmd=$1
+    if [[ -z "$cmd" || "$cmd" == ' '* ]]; then
+      print -n '\e]133;C\a'
+      return
+    fi
+    cmd=${cmd//\%/%25}
+    cmd=${cmd//;/%3B}
+    cmd=${cmd//$'\n'/%0A}
+    cmd=${cmd//$'\r'/%0D}
+    cmd=${cmd//$'\e'/%1B}
+    cmd=${cmd//$'\a'/%07}
+    print -rn -- $'\e]133;C;cmdline_url='"$cmd"$'\a'
+  }
   add-zsh-hook precmd _niwaterm_mark_prompt
   add-zsh-hook preexec _niwaterm_mark_output
 

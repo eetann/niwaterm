@@ -59,6 +59,7 @@ function createFakeSessionFactory() {
         mouseAnyMotion: false,
       }),
       dumpText: () => "",
+      getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
       dispose: () => {
@@ -1621,8 +1622,8 @@ describe("Boardの起動時レイアウト設定(setBoardStartup/getBoardStartup
     mgr.setBoardStartup(otherLayoutBoardId, { preset: "docs", restoreMode: "layout" });
 
     expect(mgr.listStartupLayoutBoards()).toEqual([
-      { boardId: layoutBoardId, preset: "dev" },
-      { boardId: otherLayoutBoardId, preset: "docs" },
+      { boardId: layoutBoardId, preset: "dev", resumeOverride: null, resumeCommands: {} },
+      { boardId: otherLayoutBoardId, preset: "docs", resumeOverride: null, resumeCommands: {} },
     ]);
   });
 
@@ -1645,8 +1646,20 @@ describe("Boardの起動時レイアウト設定(setBoardStartup/getBoardStartup
     });
 
     expect(mgr.listStartupLayoutBoards()).toEqual([
-      { boardId: projectBoardId, preset: "dev", projectRoot: "/home/me/repo" },
-      { boardId: globalBoardId, preset: "dev", cwd: "/home/me/dotfiles" },
+      {
+        boardId: projectBoardId,
+        preset: "dev",
+        projectRoot: "/home/me/repo",
+        resumeOverride: null,
+        resumeCommands: {},
+      },
+      {
+        boardId: globalBoardId,
+        preset: "dev",
+        cwd: "/home/me/dotfiles",
+        resumeOverride: null,
+        resumeCommands: {},
+      },
     ]);
   });
 

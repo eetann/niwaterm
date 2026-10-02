@@ -27,6 +27,7 @@ import type {
   ResolvedHoverButtonConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
+  ResolvedResumeConfig,
   ResolvedSidebarBoardStatusItem,
   ResolvedSidebarConfig,
   ResolvedStatusBarConfig,
@@ -35,9 +36,15 @@ import type {
   StatusBarContext,
   StatusBarValue,
 } from "@niwaterm/config";
-import { defaultBoardConfig, defaultSidebarConfig, scaleLineHeight } from "@niwaterm/config";
+import {
+  defaultBoardConfig,
+  defaultResumeConfig,
+  defaultSidebarConfig,
+  scaleLineHeight,
+} from "@niwaterm/config";
 import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
+import { decideResumeCommand, isBoardResumeEnabled } from "./resume-command";
 import { isBuiltinLayoutName } from "./builtin-layouts";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
@@ -257,6 +264,8 @@ export type NiwaRPC = {
        * phaseはboard.phasesのidか任意の文字列で、nullは解除
        */
       setBoardPhase: { boardId: BoardId; phase: string | null };
+      /** サイドバーの右クリックからの、実行中だったコマンドの打ち直しの切り替え。nullは設定に従う */
+      setBoardResume: { boardId: BoardId; resume: boolean | null };
       /**
        * サイドバーの右クリックからのレイアウト適用。選んだプリセットをそのBoardへ今すぐ適用し、
        * 起動時レイアウトとしても紐づける（CLIの`layout apply --replace --startup`と同じ）。
@@ -824,6 +833,7 @@ let browser: ResolvedBrowserConfig;
 // 復元したBoardの自動名は設定の読み込みより前に決まる（windowManagerの生成時）ため、
 // 未読込の間も方式を引けるよう既定値で初期化しておく
 let boardConfig: ResolvedBoardConfig = defaultBoardConfig;
+let resumeConfig: ResolvedResumeConfig = defaultResumeConfig;
 let sidebarConfig: ResolvedSidebarConfig = defaultSidebarConfig;
 let terminalConfig: ResolvedTerminalConfig;
 let customViews: ResolvedCustomViewConfig[];
@@ -916,6 +926,12 @@ const windowManager = createWindowManager({
     resolveBoardNewTabCwd(boardConfig.newTabCwd, worktreePath, dirExistsSync),
   getBoardNaming: () => boardConfig.naming,
   getMaxScrollback: () => terminalConfig.scrollback,
+  // PTYを起動する瞬間（Boardを初めて表示した時）に判定するので、設定の読み込みが済んだ後の値が使われる
+  resolveResumeCommand: (command, override) => {
+    if (!isBoardResumeEnabled(override, resumeConfig.enabled)) return null;
+    const decision = decideResumeCommand(command, resumeConfig.allow);
+    return decision.ok ? decision.command : null;
+  },
   isWorktreeMissing: (worktreePath) => worktreeExistence.isMissing(worktreePath),
   onBell: handleBell,
   onWindowOpened: (windowId) => {
@@ -1014,6 +1030,7 @@ function currentConfigSummary(): ConfigSummary {
     mouse,
     workspaceDefaultCwd,
     board: boardConfig,
+    resume: resumeConfig,
     sidebar: sidebarConfig,
     terminal: terminalConfig,
     statusBar: statusBarDefinition,
@@ -1057,6 +1074,7 @@ async function refreshConfig(): Promise<void> {
     appearance,
     browser,
     board: boardConfig,
+    resume: resumeConfig,
     sidebar: sidebarConfig,
     terminal: terminalConfig,
     statusBar: statusBarDefinition,
@@ -1118,6 +1136,8 @@ async function applyStartupLayouts(): Promise<void> {
     projectRoot,
     cwd,
     tabCwd,
+    resumeOverride,
+    resumeCommands,
   } of windowManager.listStartupLayoutBoards()) {
     // ビルトインは同名のユーザー定義プリセットが無いときだけ効く（resolveLayoutPresetByNameと同じ優先順位）
     const builtinName =
@@ -1133,6 +1153,7 @@ async function applyStartupLayouts(): Promise<void> {
         ...(projectRoot ? { projectRoot } : {}),
         ...(cwd !== undefined ? { invocationCwd: cwd } : {}),
         ...(tabCwd !== undefined ? { tabBaseCwd: tabCwd } : {}),
+        resume: { commands: resumeCommands, override: resumeOverride, allow: resumeConfig.allow },
       });
     } else {
       const source = projectRoot ? `${projectRoot}の.niwaterm/config.ts` : "設定";
@@ -1518,6 +1539,9 @@ function createWindowRpc(windowId: WindowId) {
         },
         setBoardPhase: ({ boardId, phase }: { boardId: BoardId; phase: string | null }) => {
           windowManager.setBoardPhase(boardId, phase);
+        },
+        setBoardResume: ({ boardId, resume }: { boardId: BoardId; resume: boolean | null }) => {
+          windowManager.setBoardResume(boardId, resume);
         },
         setBoardWorktreePath: ({ boardId, path }: { boardId: BoardId; path: string | null }) => {
           // 入力欄の初期値はそのBoardのフォーカス中タブのcwdなので、相対パスもそのタブ起点で解決する

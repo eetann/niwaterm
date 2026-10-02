@@ -55,6 +55,8 @@ export interface SidebarWorkspaceListProps {
   boardPhases: readonly ResolvedBoardPhase[];
   /** Board行の右クリックからの作業フェーズの切り替え。nullは解除 */
   onSetBoardPhase: (boardId: BoardId, phase: string | null) => void;
+  /** Board行の右クリックからの、実行中だったコマンドの打ち直しの切り替え。nullは設定に従う */
+  onSetBoardResume: (boardId: BoardId, resume: boolean | null) => void;
   onSelectWorkspaceHeader: (workspaceId: WorkspaceId) => void;
   onSelectBoard: (workspaceId: WorkspaceId, boardId: BoardId) => void;
   onSelectPopup: (workspaceId: WorkspaceId) => void;
@@ -209,6 +211,7 @@ export function SidebarWorkspaceList({
   workspaces,
   boardPhases,
   onSetBoardPhase,
+  onSetBoardResume,
   onSelectWorkspaceHeader,
   onSelectBoard,
   onSelectPopup,
@@ -563,6 +566,34 @@ export function SidebarWorkspaceList({
   }
 
   /**
+   * 実行中だったコマンドの打ち直しのサブメニュー。CLIの`board resume set/clear`と同じく、
+   * 手動の切り替えは設定（resume.enabled・プリセットのresume）より優先される
+   */
+  function renderBoardResumeMenu(board: SidebarBoardItem) {
+    const options: Array<{ value: boolean | null; label: string }> = [
+      { value: null, label: "設定に従う" },
+      { value: true, label: "打ち直す" },
+      { value: false, label: "打ち直さない" },
+    ];
+    return (
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>実行中コマンドの打ち直し</ContextMenuSubTrigger>
+        <ContextMenuSubContent className="max-w-72">
+          {options.map((option) => (
+            <ContextMenuCheckboxItem
+              key={String(option.value)}
+              checked={board.resume === option.value}
+              onSelect={() => onSetBoardResume(board.boardId, option.value)}
+            >
+              {option.label}
+            </ContextMenuCheckboxItem>
+          ))}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+    );
+  }
+
+  /**
    * ステータスラインの1行。並び・取捨選択・接頭辞・文字色は設定（sidebar.boardStatus）で決まり、
    * ここは渡された1行を描くだけ。色の指定が無い行はTailwindのクラスで既定色を当てる
    */
@@ -762,6 +793,7 @@ export function SidebarWorkspaceList({
           </ContextMenuItem>
           {renderBoardPhaseMenu(board)}
           {renderStartupLayoutMenu(board)}
+          {renderBoardResumeMenu(board)}
           <ContextMenuItem
             variant="destructive"
             disabled={!canClose}

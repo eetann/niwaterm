@@ -34,7 +34,7 @@ export default defineConfig({
         { label: "見た目", items: ["appearance"] },
         {
           label: "Boardと画面",
-          items: ["boards", "status-bar", "layouts", "layouts/project-local"],
+          items: ["boards", "status-bar", "layouts", "layouts/project-local", "resume"],
         },
         { label: "ワークツリー", items: ["worktrees", "worktrees/hooks"] },
         { label: "マウスとリンク", items: ["mouse-and-links", "browser"] },
