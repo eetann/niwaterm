@@ -3452,6 +3452,13 @@ window.addEventListener("blur", endSelectionDrag);
 document.addEventListener("dragend", endSelectionDrag);
 document.addEventListener("pointerup", endSelectionDrag);
 document.addEventListener("pointercancel", endSelectionDrag);
+// 解除の入口をすべて取りこぼしても、打鍵したならドラッグ中ではない。上限の2秒を待つと
+// 打った文字だけが遅れて出る（カーソルは別経路なので先に動く）ため、ここで打ち切る。
+// 修飾キー単体はShift+ドラッグの途中でも押されうるので除く
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
+  endSelectionDrag();
+});
 
 // ---- マウスホイール（スクロールバック閲覧 / マウスレポート）----
 // トラックパッドの細かいpxイベントを取りこぼさないよう、tabIdごとに端数を蓄積してから
