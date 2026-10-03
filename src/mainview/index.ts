@@ -1385,9 +1385,11 @@ const SELECTION_DRAG_MAX_MS = 2000;
 
 function setTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
   const saved = saveTermSelection(termEl);
+  const savedMenuRange = saveSelectionMenuRange(termEl);
   termEl.innerHTML = html;
   fixGlyphs(termEl);
   if (saved) restoreTermSelection(termEl, saved);
+  if (savedMenuRange) restoreSelectionMenuRange(termEl, savedMenuRange);
   termLinesByTabId.delete(tabId);
   // 表示が変わればホバー中のリンクの位置もずれるので、下線を出しているときだけ取り直す
   if (linkModifierDown) refreshLinkHover();
@@ -1398,14 +1400,33 @@ interface SavedTermSelection {
   offsets: TextSelectionOffsets;
 }
 
+/** DOM上の範囲の端（Selectionのanchor/focus、Rangeのstart/endに相当） */
+interface TermBoundary {
+  node: Node;
+  offset: number;
+}
+
 /** 両端が.termの中にある選択を、画面テキスト上の位置として控える */
 function saveTermSelection(termEl: HTMLElement): SavedTermSelection | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed) return null;
   const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
   if (!anchorNode || !focusNode) return null;
-  if (!termEl.contains(anchorNode) || !termEl.contains(focusNode)) return null;
-  const textOffset = (node: Node, offset: number) => {
+  return saveTermRange(
+    termEl,
+    { node: anchorNode, offset: anchorOffset },
+    { node: focusNode, offset: focusOffset },
+  );
+}
+
+/** 両端が.termの中にある範囲を、画面テキスト上の位置として控える */
+function saveTermRange(
+  termEl: HTMLElement,
+  anchor: TermBoundary,
+  focus: TermBoundary,
+): SavedTermSelection | null {
+  if (!termEl.contains(anchor.node) || !termEl.contains(focus.node)) return null;
+  const textOffset = ({ node, offset }: TermBoundary) => {
     const range = document.createRange();
     range.setStart(termEl, 0);
     range.setEnd(node, offset);
@@ -1413,15 +1434,12 @@ function saveTermSelection(termEl: HTMLElement): SavedTermSelection | null {
   };
   return {
     text: termEl.textContent ?? "",
-    offsets: {
-      anchor: textOffset(anchorNode, anchorOffset),
-      focus: textOffset(focusNode, focusOffset),
-    },
+    offsets: { anchor: textOffset(anchor), focus: textOffset(focus) },
   };
 }
 
 /** 画面テキスト上の位置を、それを含むテキストノードと節内の位置へ戻す */
-function textBoundaryAt(termEl: HTMLElement, offset: number): { node: Node; offset: number } {
+function textBoundaryAt(termEl: HTMLElement, offset: number): TermBoundary {
   const walker = document.createTreeWalker(termEl, NodeFilter.SHOW_TEXT);
   let consumed = 0;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -1432,11 +1450,23 @@ function textBoundaryAt(termEl: HTMLElement, offset: number): { node: Node; offs
   return { node: termEl, offset: termEl.childNodes.length };
 }
 
-function restoreTermSelection(termEl: HTMLElement, saved: SavedTermSelection): void {
+/** 控えた範囲を、差し替え後の.termの中の位置へ移す。範囲の文字が変わっていたらnull */
+function remapTermRange(
+  termEl: HTMLElement,
+  saved: SavedTermSelection,
+): { anchor: TermBoundary; focus: TermBoundary } | null {
   const moved = remapSelection(saved.text, termEl.textContent ?? "", saved.offsets);
+  if (!moved) return null;
+  return {
+    anchor: textBoundaryAt(termEl, moved.anchor),
+    focus: textBoundaryAt(termEl, moved.focus),
+  };
+}
+
+function restoreTermSelection(termEl: HTMLElement, saved: SavedTermSelection): void {
+  const moved = remapTermRange(termEl, saved);
   if (!moved) return;
-  const anchor = textBoundaryAt(termEl, moved.anchor);
-  const focus = textBoundaryAt(termEl, moved.focus);
+  const { anchor, focus } = moved;
   window.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
 }
 
@@ -4405,6 +4435,46 @@ let selectionMenuItems: SelectionMenuUserItem[] = [];
 // 問い合わせ中に右クリックし直された・閉じられた場合に、遅れて届いた結果で開かないための世代番号
 let selectionMenuRequestId = 0;
 
+// WebKitは選択を含まない要素へフォーカスが移ると選択そのものを解除するため、メニューが
+// フォーカスを取った時点で選択範囲の描画が消える。メニューのキー操作にはフォーカスが要るので
+// 選択を保つのは諦め、開いている間は控えた範囲をCSS Custom Highlight APIで塗って代わりに見せる
+const SELECTION_MENU_HIGHLIGHT = "selection-menu";
+let selectionMenuRange: Range | null = null;
+
+function showSelectionMenuHighlight(range: Range): void {
+  selectionMenuRange = range;
+  CSS.highlights.set(SELECTION_MENU_HIGHLIGHT, new Highlight(range));
+}
+
+function hideSelectionMenuHighlight(): void {
+  if (!selectionMenuRange) return;
+  selectionMenuRange = null;
+  CSS.highlights.delete(SELECTION_MENU_HIGHLIGHT);
+}
+
+/** 塗っている範囲が.termの中にあれば、innerHTMLの差し替えで失う前に位置を控える */
+function saveSelectionMenuRange(termEl: HTMLElement): SavedTermSelection | null {
+  const range = selectionMenuRange;
+  if (!range) return null;
+  return saveTermRange(
+    termEl,
+    { node: range.startContainer, offset: range.startOffset },
+    { node: range.endContainer, offset: range.endOffset },
+  );
+}
+
+function restoreSelectionMenuRange(termEl: HTMLElement, saved: SavedTermSelection): void {
+  const moved = remapTermRange(termEl, saved);
+  if (!moved) {
+    hideSelectionMenuHighlight();
+    return;
+  }
+  const range = document.createRange();
+  range.setStart(moved.anchor.node, moved.anchor.offset);
+  range.setEnd(moved.focus.node, moved.focus.offset);
+  showSelectionMenuHighlight(range);
+}
+
 function renderSelectionMenu(): void {
   selectionMenuRoot.renderOnEvent(
     createElement(SelectionMenu, {
@@ -4430,6 +4500,7 @@ function closeSelectionMenu(): void {
   if (!selectionMenuOpen) return;
   selectionMenuOpen = false;
   selectionMenuItems = [];
+  hideSelectionMenuHighlight();
   renderSelectionMenu();
   imeEl.focus({ preventScroll: true });
 }
@@ -4443,6 +4514,11 @@ async function openSelectionMenu(tabId: TabId, text: string, x: number, y: numbe
     sendMessage("log", { msg: `[warn] selectionMenuItems failed: ${String(err)}` });
   }
   if (requestId !== selectionMenuRequestId) return;
+  // 問い合わせ中に描画が差し替わっても選択は保たれるので、控えるのはメニューを開く直前でよい
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+    showSelectionMenuHighlight(selection.getRangeAt(0).cloneRange());
+  }
   selectionMenuOpen = true;
   selectionMenuX = x;
   selectionMenuY = y;

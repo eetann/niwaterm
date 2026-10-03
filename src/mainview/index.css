@@ -1160,6 +1160,15 @@ html.has-status-bar {
   text-decoration-color: currentColor;
 }
 
+/*
+ * 選択範囲の右クリックメニューを開いている間、消えた選択の代わりに範囲を塗る
+ * （mainview/index.tsのshowSelectionMenuHighlight）。WebViewの選択と同じ色に見せるため、
+ * テーマのトークンではなくシステムカラーのHighlightを使う
+ */
+::highlight(selection-menu) {
+  background-color: Highlight;
+}
+
 /* 全角文字を必ず2セル幅に揃える（CJKフォールバックグリフの実幅は2×セル幅と一致しないため） */
 .wide {
   display: inline-block;
