@@ -16,6 +16,12 @@ export interface LayoutTabConfig {
   command?: string;
   /** commandを送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 */
   delay?: number;
+  /**
+   * trueならcommandを対話シェルへ入力せず、シェル経由で直接実行する（`zsh -l -i -c <command>`等）。
+   * コマンドが終了するとタブも閉じる（終了コードが0以外なら、終了した旨を表示してキー入力で閉じる）。
+   * commandが必須で、delayとは併用できない
+   */
+  closeOnExit?: boolean;
   /** タブごとのkey-value変数（`tab var set`相当で注入） */
   vars?: Record<string, string>;
   /** このタブに最終フォーカスを当てる。プリセット全体で1つまで指定できる */

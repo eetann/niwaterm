@@ -167,6 +167,19 @@ describe("createWindowManager", () => {
     expect(mgr.getTabName(secondTabId)).toBe("second-tab");
   });
 
+  test("newTabのcommandを持ち主のウィンドウのタブ起動まで渡す", () => {
+    const { created, factory } = createFakeSessionFactory();
+    const mgr = createWindowManager(baseOpts({ createSession: factory }));
+    const tabId = soleTabId(mgr, mgr.mainWindowId);
+    // 既存タブの起動を確定させ、newTabが保留せずその場で起動するサイズを持たせる
+    mgr.handleResize(tabId, 80, 24, 8, 18);
+    const layout = mgr.snapshotOf(mgr.mainWindowId)!.workspaces[0].boards[0].layout;
+    if (layout.kind !== "leaf") throw new Error("expected a single leaf");
+
+    expect(mgr.newTab(layout.id, undefined, undefined, "make build")).not.toBeNull();
+    expect(created.at(-1)?.opts.command).toBe("make build");
+  });
+
   test("id省略の操作はフォーカス中ウィンドウに効く", () => {
     const { factory } = createFakeSessionFactory();
     const mgr = createWindowManager(baseOpts({ createSession: factory }));

@@ -139,6 +139,90 @@ describe("validateLayoutPreset", () => {
     };
     expect(validateLayoutPreset(preset, [])).not.toBeNull();
   });
+
+  test("commandの無いタブにcloseOnExitを付けるとエラーを返す", () => {
+    const preset: LayoutPreset = {
+      layout: { kind: "tile", tabs: [{ closeOnExit: true }] },
+    };
+    expect(validateLayoutPreset(preset, [])).toContain("closeOnExit requires command");
+  });
+
+  test("closeOnExitとdelayは併用できない", () => {
+    const preset: LayoutPreset = {
+      layout: { kind: "tile", tabs: [{ command: "make", closeOnExit: true, delay: 100 }] },
+    };
+    expect(validateLayoutPreset(preset, [])).toContain("delay cannot be used with closeOnExit");
+  });
+});
+
+describe("applyLayoutPreset (closeOnExit)", () => {
+  test("commandを入力せず、セッションの起動コマンドとして渡す", () => {
+    const { mgr, writes, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        // 最初のタブはプレースホルダーを使い回し、2つ目以降はnewTabで作る
+        first: {
+          kind: "tile",
+          tabs: [
+            { name: "build", command: "make build", closeOnExit: true },
+            { name: "test", command: "make test", closeOnExit: true },
+          ],
+        },
+        second: { kind: "tile", tabs: [{ name: "shell", command: "ls" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    const commands = sessionOpts.map((o) => o.command);
+    expect(commands).toContain("make build");
+    expect(commands).toContain("make test");
+    // closeOnExitでないタブは従来どおり対話シェルへ入力する
+    expect(commands).not.toContain("ls");
+    const flat = writes.flat();
+    expect(flat).toContain("ls");
+    expect(flat).not.toContain("make build");
+    expect(flat).not.toContain("make test");
+  });
+
+  test('"replace"で使い回す既存タブも、commandを起動コマンドにして起動し直す', () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    resolvePending(mgr);
+    const preset: LayoutPreset = {
+      layout: { kind: "tile", tabs: [{ command: "make build", closeOnExit: true }] },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "replace", boardId);
+
+    expect(result.ok).toBe(true);
+    expect(sessionOpts.at(-1)?.command).toBe("make build");
+  });
+
+  test("コマンドが終了コード0で終わるとタブが閉じる", () => {
+    const { mgr, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "tile",
+        tabs: [{ name: "shell" }, { name: "build", command: "make build", closeOnExit: true }],
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
+    resolvePending(mgr);
+    expect(result.ok).toBe(true);
+    sessionOpts.find((o) => o.command === "make build")?.onExit?.(0);
+
+    const leaf = findBoardEntry(mgr, boardId)?.layout as TileLeaf;
+    expect(leaf.tabIds.length).toBe(1);
+    expect(findBoardEntry(mgr, boardId)?.tabNames[leaf.tabIds[0] as string]).toBe("shell");
+  });
 });
 
 describe("applyLayoutPreset (target: new-board)", () => {
@@ -416,7 +500,7 @@ describe("applyLayoutPreset (target: new-board)", () => {
     resolvePending(mgr);
 
     expect(result.ok).toBe(true);
-    // 使い回したタブがホームのまま取り残されない（alignPlaceholderCwd）
+    // 使い回したタブがホームのまま取り残されない（preparePlaceholder）
     expect(sessionOpts.filter((o) => o.cwd === "/home/me").length).toBe(1);
     expect(sessionOpts.filter((o) => o.cwd === "/proj").length).toBeGreaterThanOrEqual(2);
   });

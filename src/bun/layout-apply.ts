@@ -83,6 +83,13 @@ function validateNode(
       if (tab.cwd !== undefined && tab.cwd.length === 0) {
         return `${path}.tabs[${i}]: cwd must not be empty`;
       }
+      if (tab.closeOnExit && !tab.command) {
+        return `${path}.tabs[${i}]: closeOnExit requires command`;
+      }
+      // closeOnExitはシェルの起動を待たずにcommandを直接実行するため、待つ時間に意味が無い
+      if (tab.closeOnExit && tab.delay !== undefined) {
+        return `${path}.tabs[${i}]: delay cannot be used with closeOnExit`;
+      }
     }
     if (node.activeTab !== undefined) {
       if (
@@ -162,7 +169,7 @@ function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
 }
 
 /**
- * 使い回すプレースホルダーのcwdをbaseCwdへ揃える。
+ * 使い回すプレースホルダーのcwdをbaseCwdへ揃え、directCommandがあれば対話シェルの代わりにそれを起動する。
  *
  * "replace"時のプレースホルダーは適用前のBoardに元からあったタブそのもので、PTYは以前のcwdの
  * まま動いている（ホームディレクトリのままになる等）。他のタブだけがbaseCwdで作られるため、
@@ -176,9 +183,13 @@ function canReusePlaceholder(tabConfig: LayoutTabConfig): boolean {
  * respawnTabは保留中タブへ積んだ初期コマンドを引き継がないため、必ずconfigureTab（commandの
  * sendInitialCommand）より前に呼ぶこと。
  */
-function alignPlaceholderCwd(ctx: BuildContext, tabId: TabId): void {
-  if (ctx.baseCwd === undefined) return;
-  ctx.workspaceManager.respawnTab(tabId, undefined, ctx.baseCwd);
+function preparePlaceholder(
+  ctx: BuildContext,
+  tabId: TabId,
+  directCommand: string | undefined,
+): void {
+  if (ctx.baseCwd === undefined && directCommand === undefined) return;
+  ctx.workspaceManager.respawnTab(tabId, undefined, ctx.baseCwd, directCommand);
 }
 
 /**
@@ -203,6 +214,19 @@ function resumeCommandFor(
   return decision.ok ? decision.command : null;
 }
 
+/**
+ * closeOnExitのタブで、対話シェルの代わりに直接実行するコマンド。前回の終了時のコマンドを
+ * 打ち直すときはcommandより優先する。closeOnExitでなければundefined
+ */
+function directCommandFor(
+  ctx: BuildContext,
+  slot: string,
+  tabConfig: LayoutTabConfig,
+): string | undefined {
+  if (!tabConfig.closeOnExit) return undefined;
+  return resumeCommandFor(ctx, slot, tabConfig) ?? tabConfig.command;
+}
+
 function configureTab(
   ctx: BuildContext,
   tileId: TileId,
@@ -218,6 +242,11 @@ function configureTab(
       ctx.workspaceManager.setTabVar(tabId, key, value);
     }
   }
+
+  if (tabConfig.focus) ctx.focusTarget = { tileId, tabId };
+
+  // closeOnExitのタブはcommandを起動時に渡し済み（directCommandFor）
+  if (tabConfig.closeOnExit) return;
 
   const resumed = resumeCommandFor(ctx, slot, tabConfig);
   if (resumed !== null) {
@@ -238,8 +267,6 @@ function configureTab(
       ctx.workspaceManager.sendInitialCommand(tabId, command);
     }
   }
-
-  if (tabConfig.focus) ctx.focusTarget = { tileId, tabId };
 }
 
 function buildTile(
@@ -255,7 +282,7 @@ function buildTile(
   for (const [i, tabConfig] of node.tabs.entries()) {
     const slot = slotPath(nodePath, i);
     if (i === 0 && canReusePlaceholder(tabConfig)) {
-      alignPlaceholderCwd(ctx, placeholderTabId);
+      preparePlaceholder(ctx, placeholderTabId, directCommandFor(ctx, slot, tabConfig));
       configureTab(ctx, tileId, placeholderTabId, tabConfig, slot);
       tabIds.push(placeholderTabId);
       placeholderReused = true;
@@ -285,6 +312,7 @@ function createTab(
     tileId,
     shellOverride,
     resolveTabCwd(tabConfig.cwd, ctx.baseCwd),
+    directCommandFor(ctx, slot, tabConfig),
   );
   if (!tabId) throw new Error(`internal error: failed to create tab in tile ${tileId}`);
   configureTab(ctx, tileId, tabId, tabConfig, slot);
@@ -343,7 +371,7 @@ function getRootTileId(workspaceManager: WorkspaceManager, boardId: BoardId): Ti
  * 検証エラー時はBoardに一切触れずエラーを返す。組み立て中の内部エラー（通常発生しない）も
  * ok:falseで返すが、その時点までに行った操作はロールバックされない。
  * cwdの基準はoptionsで決まる（ApplyLayoutOptions参照）。"replace"時に使い回す既存タブも
- * alignPlaceholderCwdでbaseCwdへ揃えるため、タイル間でcwdが食い違うことはない
+ * preparePlaceholderでbaseCwdへ揃えるため、タイル間でcwdが食い違うことはない
  */
 export function applyLayoutPreset(
   workspaceManager: WorkspaceManager,

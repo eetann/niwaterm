@@ -689,8 +689,13 @@ export function createWorkspace(opts: WorkspaceOptions) {
     return findBoardOwnerByTileId(tileId)?.splitTile(tileId, orientation, ratio, cwd) ?? null;
   }
 
-  function newTab(tileId: TileId, shellOverride?: string, cwd?: string): TabId | null {
-    return findBoardOwnerByTileId(tileId)?.newTab(tileId, shellOverride, cwd) ?? null;
+  function newTab(
+    tileId: TileId,
+    shellOverride?: string,
+    cwd?: string,
+    command?: string,
+  ): TabId | null {
+    return findBoardOwnerByTileId(tileId)?.newTab(tileId, shellOverride, cwd, command) ?? null;
   }
 
   function newBrowserTab(tileId: TileId, url: string): TabId | null {

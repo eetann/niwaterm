@@ -359,8 +359,8 @@ export function createWindowManager(opts: WindowManagerOptions) {
       [...entries.values()].flatMap((entry) => entry.workspaces.listStartupLayoutBoards()),
     splitTile: (tileId: TileId, orientation: SplitOrientation, ratio?: number, cwd?: string) =>
       byTile(tileId)?.splitTile(tileId, orientation, ratio, cwd) ?? null,
-    newTab: (tileId: TileId, shellOverride?: string, cwd?: string) =>
-      byTile(tileId)?.newTab(tileId, shellOverride, cwd) ?? null,
+    newTab: (tileId: TileId, shellOverride?: string, cwd?: string, command?: string) =>
+      byTile(tileId)?.newTab(tileId, shellOverride, cwd, command) ?? null,
     newBrowserTab: (tileId: TileId, url: string) =>
       byTile(tileId)?.newBrowserTab(tileId, url) ?? null,
     setBrowserTabUrl: (tabId: TabId, url: string) =>

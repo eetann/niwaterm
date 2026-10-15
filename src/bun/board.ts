@@ -183,8 +183,13 @@ export function createBoard(opts: BoardOptions) {
   >();
 
   /** webview側の初回resize到達まで実際のPTY起動を保留する。sizeByTabIdはまだ確定しない */
-  function spawnSessionPending(tabId: TabId, shellOverride?: string, cwd?: string): void {
-    pendingSpawnByTabId.set(tabId, { shellOverride, cwd });
+  function spawnSessionPending(
+    tabId: TabId,
+    shellOverride?: string,
+    cwd?: string,
+    command?: string,
+  ): void {
+    pendingSpawnByTabId.set(tabId, { shellOverride, cwd, command });
     shellByTabId.set(tabId, shellOverride ?? opts.getDefaultShell?.());
   }
 
@@ -397,7 +402,13 @@ export function createBoard(opts: BoardOptions) {
     return { tileId: newTileId, tabId: newTabId };
   }
 
-  function newTab(tileId: TileId, shellOverride?: string, cwd?: string): TabId | null {
+  /** commandを渡すと、対話シェルの代わりにそのコマンドを実行するタブになる（respawnTabのcommandと同じ） */
+  function newTab(
+    tileId: TileId,
+    shellOverride?: string,
+    cwd?: string,
+    command?: string,
+  ): TabId | null {
     const target = findNode(tree, tileId);
     if (!target || target.kind !== "leaf") return null;
     const newTabId = genTabId();
@@ -410,9 +421,9 @@ export function createBoard(opts: BoardOptions) {
     const size = sizeByTabId.get(target.activeTabId);
     const tabCwd = cwd ?? opts.getNewTabCwd?.() ?? actualCwdOf(target.activeTabId);
     if (size) {
-      spawnSession(newTabId, size.cols, size.rows, shellOverride, tabCwd);
+      spawnSession(newTabId, size.cols, size.rows, shellOverride, tabCwd, command);
     } else {
-      spawnSessionPending(newTabId, shellOverride, tabCwd);
+      spawnSessionPending(newTabId, shellOverride, tabCwd, command);
     }
     opts.onDirty();
     return newTabId;
