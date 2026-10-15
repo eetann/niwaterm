@@ -164,6 +164,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   let currentCols = opts.cols;
   let currentRows = opts.rows;
   let disposed = false;
+  let exited = false;
   // runCommandWhenReadyで積んだ、シェルの起動待ち中のコマンド（layoutsプリセットのcommand等）
   let pendingInitialCommands: string[] = [];
   /** 初期コマンドを一度流した後か。以降のrunCommandWhenReadyは待たずに即実行する */
@@ -231,6 +232,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   // ガード無しだとhandleTabProcessExitがtreeからタブを削除してしまい、最後の1タブなら
   // アプリごと終了してしまう）
   pty.onExit((code) => {
+    exited = true;
     if (disposed) return;
     callbacks.onExit?.(code);
   });
@@ -671,7 +673,9 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     currentCols = cols;
     currentRows = rows;
     term.resize(cols, rows, cellWidthPx, cellHeightPx);
-    pty.resize(cols, rows);
+    // 終了したプロセスのPTYはリサイズしない。WindowsのConPTYはリサイズのたびに自分が覚えている
+    // 画面を描き直して送ってくるため、showNoticeで画面へ直接書いた案内が上書きされて消える
+    if (!exited) pty.resize(cols, rows);
     return true;
   }
 
