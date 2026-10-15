@@ -50,6 +50,9 @@ export const AGENT_STATUS_TAB_VAR = "agent_status";
 
 export type TabRenderState = TerminalRenderState | BrowserRenderState;
 
+/** タブの種別と、種別ごとに一覧へ出す状態 */
+export type TabKindEntry = { kind: "terminal"; exited: boolean } | { kind: "browser"; url: string };
+
 export interface BoardRenderState {
   layout: TileNode;
   focusedTileId: TileId;
@@ -833,6 +836,18 @@ export function createBoard(opts: BoardOptions) {
     return Object.fromEntries(tileNames);
   }
 
+  /** 一覧（niwa list）用の軽量な参照。PTY内容のrenderStateは計算しない */
+  function listTabKinds(): Record<TabId, TabKindEntry> {
+    const result: Record<TabId, TabKindEntry> = {};
+    for (const tabId of new Set([...sessions.keys(), ...pendingSpawnByTabId.keys()])) {
+      result[tabId] = { kind: "terminal", exited: exitedTabs.has(tabId) };
+    }
+    for (const [tabId, state] of browserTabs) {
+      result[tabId] = { kind: "browser", url: state.url };
+    }
+    return result;
+  }
+
   /** 永続化用の軽量スナップショット（PTY内容は含まない）。terminal/browser問わず全タブの現在状態を返す */
   function getPersistableTabs(): Record<TabId, PersistedTab> {
     const result: Record<TabId, PersistedTab> = {};
@@ -1060,6 +1075,7 @@ export function createBoard(opts: BoardOptions) {
     setTabLayoutSlot,
     listTabNames,
     listTileNames,
+    listTabKinds,
     getPersistableTabs,
     setOnAllTabsClosed,
     applyMaxScrollback,

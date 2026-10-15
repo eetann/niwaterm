@@ -505,6 +505,31 @@ describe("niwa.workspace", () => {
   });
 });
 
+describe("niwa.list", () => {
+  test("ワークスペースからタブまでを辿れる形で返す", () => {
+    const { niwa } = createTestSetup();
+    const workspaceId = niwa.workspace.current();
+    const tile = niwa.tile.current();
+    const tab = niwa.tab.current();
+    niwa.tab.var.set(tab?.tabId as string, "role", "editor");
+
+    const [workspace] = niwa.list().workspaces;
+    expect(workspace?.id).toBe(workspaceId);
+    expect(workspace?.active).toBe(true);
+    const board = workspace?.boards[0];
+    expect(board?.tiles.map((t) => [t.id, t.focused])).toEqual([[tile?.id, true]]);
+    expect(board?.tabs).toEqual([
+      expect.objectContaining({
+        id: tab?.tabId,
+        tileId: tile?.id,
+        kind: "terminal",
+        active: true,
+        vars: expect.objectContaining({ role: "editor" }),
+      }),
+    ]);
+  });
+});
+
 describe("niwa.shell.run", () => {
   test("コマンドを実行して結果を返す", async () => {
     const { niwa } = createTestSetup({}, () => [

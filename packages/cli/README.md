@@ -18,7 +18,7 @@ bun link
 ```sh
 niwa ping              # niwatermアプリとの疎通確認
 niwa init              # 設定ディレクトリ(~/.config/niwaterm/)のセットアップ
-niwa list              # ワークスペース・タイル・タブの一覧
+niwa list              # ワークスペース・タイル・タブの一覧（--jsonでJSON）
 niwa worktree list     # gitのワークツリー一覧（アプリ未起動でも動く）
 niwa worktree open dev # 既存ワークツリーをBoardとして開く
 niwa docs list         # 利用可能なドキュメントトピックの一覧（--jsonでパース向けの出力）

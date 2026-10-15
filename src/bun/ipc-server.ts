@@ -24,6 +24,7 @@ import { changeBoardStartup, checkLayoutTrust, startupCwdFields } from "./board-
 import type { ConfigSummary } from "./config-summary";
 import { applyBuiltinLayout, applyLayoutPreset, type ApplyLayoutTarget } from "./layout-apply";
 import { buildKeybindList } from "./keybind-list";
+import { buildListTree } from "./list-tree";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
@@ -863,6 +864,9 @@ function buildApp(
   // 一覧は呼び出し元のウィンドウぶんだけ返す（サイドバーに出ているものと一致させる）。
   // ウィンドウをまたいだ俯瞰は`niwa window list`が担う
   app.get("/list", (c) => c.json({ workspaces: scoped(c).listWorkspaces() }));
+
+  // niwa list（表示・--json）用。/listはサイドバーと同じ形のまま、補完などの既存の呼び出し元が使う
+  app.get("/list-tree", (c) => c.json(buildListTree(scoped(c).listWorkspaces())));
 
   app.get("/windows", (c) => c.json({ ok: true, windows: windowOps.listWindows() }));
 

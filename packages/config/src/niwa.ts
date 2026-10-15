@@ -184,6 +184,87 @@ export interface NiwaWorkspaceApi {
   current(): string;
 }
 
+/** `niwa.list()`・`niwa list --json`が返す、ワークスペースからタブまでの一覧 */
+export interface NiwaListTree {
+  /** サイドバーの並び順 */
+  workspaces: NiwaListWorkspace[];
+}
+
+export interface NiwaListWorkspace {
+  id: string;
+  /** ユーザーが付けた名前。未設定はnull */
+  name: string | null;
+  active: boolean;
+  /** サイドバーの並び順 */
+  boards: NiwaListBoard[];
+}
+
+export interface NiwaListBoard {
+  id: string;
+  /** ユーザー・CLIが付けた名前。未設定はnull */
+  name: string | null;
+  /** 名前の無いBoardへ設定（board.naming）が自動で付けた名前。付けられなければnull */
+  autoName: string | null;
+  /** 所属するワークスペースで表示中のBoardか */
+  active: boolean;
+  /** 作業フェーズ（`board phase set`）。未設定はnull */
+  phase: string | null;
+  /** 紐づくgitワークツリーの絶対パス。未設定はnull */
+  worktreePath: string | null;
+  /** 紐づけ先のディレクトリが見つからないか。紐づけの無いBoardは常にfalse */
+  worktreeMissing: boolean;
+  /** 紐づくレイアウトプリセットと起動時の組み直し方。未設定はnull */
+  startup: { preset: string; restoreMode: "layout" | "restore" } | null;
+  /** タイルの分割の木。葉の`id`は`tiles`の`id`と対応する */
+  layout: NiwaListLayoutNode;
+  /** 左上から右下への並び順 */
+  tiles: NiwaListTile[];
+  /** タイルの並び順、タイルの中ではタブバーの並び順 */
+  tabs: NiwaListTab[];
+}
+
+export type NiwaListLayoutNode =
+  | { kind: "leaf"; id: string }
+  | {
+      kind: "split";
+      id: string;
+      orientation: SplitOrientationValue;
+      /** 0〜1。firstが占める比率 */
+      ratio: number;
+      first: NiwaListLayoutNode;
+      second: NiwaListLayoutNode;
+    };
+
+export interface NiwaListTile {
+  id: string;
+  /** ユーザーが付けた名前。未設定はnull */
+  name: string | null;
+  /** Boardの中でフォーカスを持つタイルか */
+  focused: boolean;
+  /** ズーム表示中か */
+  zoomed: boolean;
+  activeTabId: string;
+  tabIds: string[];
+}
+
+export interface NiwaListTab {
+  id: string;
+  tileId: string;
+  kind: "terminal" | "browser";
+  /** ユーザー・レイアウトプリセットが付けた名前。未設定はnull */
+  name: string | null;
+  /** タイルの中で表示中のタブか */
+  active: boolean;
+  /** シェル統合が報告した作業ディレクトリ（タブ変数`cwd`）。未報告はnull */
+  cwd: string | null;
+  /** ブラウザタブの表示中のURL。ターミナルのタブはnull */
+  url: string | null;
+  /** プログラムが終了したまま残っているターミナルのタブか */
+  exited: boolean;
+  /** タブ変数（`cwd`・`branch`・`agent_status`などを含む） */
+  vars: Record<string, string>;
+}
+
 export interface NiwaNotifyOptions {
   title: string;
   body?: string;
@@ -349,6 +430,8 @@ export interface Niwa {
    * 差し替え前の登録内容のまま最後まで走る（handlerRegistryの参照を握っているため）
    */
   reloadConfig(): Promise<void>;
+  /** このウィンドウのワークスペース・Board・タイル・タブを返す（`niwa list --json`と同じ形） */
+  list(): NiwaListTree;
   tile: NiwaTileApi;
   tab: NiwaTabApi;
   bell: NiwaBellApi;

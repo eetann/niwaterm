@@ -15,6 +15,7 @@ import {
   type BoardOptions,
   type BoardRenderState,
   type GetTabVarResult,
+  type TabKindEntry,
 } from "./board";
 import { directoryName, isSequentialName, nextSequentialName } from "./board-naming";
 import type { PopupGeometry } from "../shared/popup-geometry";
@@ -86,6 +87,7 @@ export interface BoardListEntry {
   tabVars: Record<TabId, Record<string, string>>;
   tabNames: Record<TabId, string>;
   tileNames: Record<TileId, string>;
+  tabKinds: Record<TabId, TabKindEntry>;
   /** ユーザー・CLIが明示的に付けたBoard名。未設定はnull（表示側はautoNameへフォールバックする） */
   name: string | null;
   /** 名前を付けていないBoardへ設定（board.naming）が自動で付けた名前。付けられなければnull */
@@ -960,6 +962,7 @@ export function createWorkspace(opts: WorkspaceOptions) {
         tabVars,
         tabNames: board.listTabNames(),
         tileNames: board.listTileNames(),
+        tabKinds: board.listTabKinds(),
         name: boardNames.get(id) ?? null,
         autoName: boardAutoNames.get(id) ?? null,
         zoomedTileId: board.getZoomedTileId(),

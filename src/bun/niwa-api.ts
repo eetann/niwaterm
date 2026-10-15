@@ -24,6 +24,7 @@ import type {
 } from "@niwaterm/config";
 import { BELL_TAB_VAR } from "./board";
 import { readClipboardText, writeClipboardText } from "./clipboard";
+import { buildListTree } from "./list-tree";
 import { isBrowserTabUrl } from "./open-link";
 import { resolveShellProfileCommand } from "./shell-profiles";
 import { runShellCommand } from "./shell-run";
@@ -174,6 +175,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     },
     reloadConfig() {
       return deps.reloadConfig();
+    },
+    list() {
+      return buildListTree(workspaceManager.listWorkspaces());
     },
     tile: {
       // getFocusedTileIdはアクティブワークスペースがBoard 0個のときnullを返す。

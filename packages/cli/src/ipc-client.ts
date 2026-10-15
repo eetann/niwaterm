@@ -464,6 +464,79 @@ export async function listWorkspaces(endpoint: IpcEndpoint): Promise<ListResult>
   }
 }
 
+// `/list-tree`の形。正本は@niwaterm/configのNiwaListTree（niwa.list()と同じ形）。
+// CLIは@niwaterm/configに依存しないため、ここへ書き写している。変更時は両方揃えること
+export interface ListTree {
+  workspaces: ListTreeWorkspace[];
+}
+
+export interface ListTreeWorkspace {
+  id: string;
+  name: string | null;
+  active: boolean;
+  boards: ListTreeBoard[];
+}
+
+export interface ListTreeBoard {
+  id: BoardId;
+  name: string | null;
+  autoName: string | null;
+  active: boolean;
+  phase: string | null;
+  worktreePath: string | null;
+  worktreeMissing: boolean;
+  startup: { preset: string; restoreMode: "layout" | "restore" } | null;
+  layout: ListTreeLayoutNode;
+  tiles: ListTreeTile[];
+  tabs: ListTreeTab[];
+}
+
+export type ListTreeLayoutNode =
+  | { kind: "leaf"; id: TileId }
+  | {
+      kind: "split";
+      id: TileId;
+      orientation: "horizontal" | "vertical";
+      ratio: number;
+      first: ListTreeLayoutNode;
+      second: ListTreeLayoutNode;
+    };
+
+export interface ListTreeTile {
+  id: TileId;
+  name: string | null;
+  focused: boolean;
+  zoomed: boolean;
+  activeTabId: TabId;
+  tabIds: TabId[];
+}
+
+export interface ListTreeTab {
+  id: TabId;
+  tileId: TileId;
+  kind: "terminal" | "browser";
+  name: string | null;
+  active: boolean;
+  cwd: string | null;
+  url: string | null;
+  exited: boolean;
+  vars: Record<string, string>;
+}
+
+export type ListTreeResult = { ok: true; tree: ListTree } | { ok: false; error: string };
+
+export async function getListTree(endpoint: IpcEndpoint): Promise<ListTreeResult> {
+  try {
+    const res = await ipcFetch(endpoint, ipcUrl(endpoint, "/list-tree"), ipcFetchInit(endpoint));
+    if (!res.ok) return { ok: false, error: `unexpected status ${res.status}` };
+    const body = (await res.json()) as { workspaces?: unknown };
+    if (!Array.isArray(body.workspaces)) return { ok: false, error: "malformed response" };
+    return { ok: true, tree: body as ListTree };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export type WorkspaceId = string;
 
 export type WindowId = string;

@@ -26,7 +26,20 @@ workspace-1 "dev" (active)
     tab-3 "server" (active)
 ```
 
-名前を付けたものは、idのあとに`"名前"`が出る。今表示しているワークスペース・Board・タブには`(active)`、フォーカス中のタイルには`(focused)`が付く。Boardが1つだけのワークスペースでは、サイドバーと同じくBoardの行を省く。
+名前を付けたものは、idのあとに`"名前"`が出る。今表示しているワークスペース・Board・タブには`(active)`、フォーカス中のタイルには`(focused)`が付く。ブラウザタブにはURL、プログラムが終了したまま残っているタブには`(exited)`が付く。Boardが1つだけのワークスペースでは、サイドバーと同じくBoardの行を省く。
+
+端末で実行すると、名前や状態の印に色が付く。パイプやファイルへ出力したときは色を付けない。環境変数`NO_COLOR`を付けると端末でも色を消せ、`FORCE_COLOR=1`を付けるとパイプでも色を付けられる。
+
+### スクリプトから使う（`--json`）
+
+`niwa list --json`で、同じ内容をJSONで出力する。タブごとに種類（`terminal` / `browser`）・作業ディレクトリ・URL・[タブ変数](#タブ変数tab-var)まで入るので、jqなどで絞り込んで使える。
+
+```sh
+# エージェントが応答を待っているタブのidを並べる
+niwa list --json | jq -r '.workspaces[].boards[].tabs[] | select(.vars.agent_status == "blocked") | .id'
+```
+
+Boardごとに、タイルは`tiles`、タブは`tabs`という1つの配列にまとまっている。分割の形は`layout`に木で入る。キーバインドの関数からは、同じ形を[`niwa.list()`](/niwaterm/keybindings/api/#そのほか)で受け取れる。
 
 **idはniwatermを起動し直すたびに振り直される**。スクリプトにidを書いておいても、次に起動したあとには使えない。決まったタブを探したいときは、[タブ変数](#タブ変数tab-var)で目印を付けておく。
 
