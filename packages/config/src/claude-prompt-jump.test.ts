@@ -35,6 +35,32 @@ describe("claudePromptJump", () => {
     expect(calls.slice(1)).toEqual(["var tab-1 agent_jump u-1", "keys tab-1 C-]"]);
   });
 
+  test("質問はプロンプトの直後に並べ、押すとtool_useのidをジャンプ先にする", async () => {
+    const calls: string[] = [];
+    const question = {
+      toolUseId: "toolu_1",
+      items: [{ header: "方式", question: "どっちで作る？", answer: "CLI" }],
+    };
+    const niwa = fakeNiwa(calls, [
+      { index: 1, uuid: "u-1", text: "作りたい", questions: [question] },
+    ]);
+    const items = await claudePromptJump().items(ctx({}), niwa);
+    expect(items.map((item) => item.label)).toEqual(["1. 作りたい", "? 方式", "最新へ"]);
+    expect(items[1]?.tooltip).toBe("どっちで作る？ → CLI");
+    await items[1]?.run();
+    expect(calls.slice(1)).toEqual(["var tab-1 agent_jump toolu_1", "keys tab-1 C-]"]);
+  });
+
+  test("questions: falseなら質問を並べない", async () => {
+    const question = { toolUseId: "toolu_1", items: [{ header: "方式", question: "どっち？" }] };
+    const niwa = fakeNiwa([], [{ index: 1, uuid: "u-1", text: "作りたい", questions: [question] }]);
+    const items = await claudePromptJump({ questions: false, latestKey: false }).items(
+      ctx({}),
+      niwa,
+    );
+    expect(items).toHaveLength(1);
+  });
+
   test("末尾の「最新へ」はタブ変数を触らずClaude Codeの最下部へ移すキーだけを送る", async () => {
     const calls: string[] = [];
     const items = await claudePromptJump().items(ctx({}), fakeNiwa(calls));
@@ -49,12 +75,14 @@ describe("claudePromptJump", () => {
   });
 });
 
-function fakeNiwa(calls: string[]): Niwa {
+function fakeNiwa(
+  calls: string[],
+  prompts: unknown[] = [{ index: 1, uuid: "u-1", text: "<b>fix</b>\n bug" }],
+): Niwa {
   return {
     shell: {
       run: async (command: string) => {
         calls.push(command);
-        const prompts = [{ index: 1, uuid: "u-1", text: "<b>fix</b>\n bug" }];
         return {
           exitCode: 0,
           stdout: `\u001b]7;file:///x\u0007${JSON.stringify(prompts)}`,

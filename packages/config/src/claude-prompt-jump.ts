@@ -31,6 +31,8 @@ export interface ClaudePromptJumpOptions extends Omit<HoverButtonConfig, "items"
    * （ctrl+end）。falseなら「最新へ」を出さない
    */
   latestKey?: string | false;
+  /** Claudeが投げた質問（AskUserQuestion）も、そのプロンプトの下へ並べる */
+  questions?: boolean;
 }
 
 /** ジャンプ先のプロンプトのuuidを渡すタブ変数。modが`niwa tab var get`で読む */
@@ -74,6 +76,15 @@ const CSS = `
 .claude-prompt-jump-latest {
   opacity: 0.8;
 }
+.claude-prompt-jump-question {
+  flex: none;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.7;
+}
 .claude-prompt-jump-text {
   margin-left: 6px;
   max-width: 24ch;
@@ -83,10 +94,17 @@ const CSS = `
 }
 `;
 
+interface ClaudeQuestion {
+  toolUseId: string;
+  items: { header: string; question: string; answer?: string }[];
+}
+
 interface ClaudePrompt {
   index: number;
   uuid: string;
   text: string;
+  /** 古いCLIは持たない */
+  questions?: ClaudeQuestion[];
 }
 
 /**
@@ -117,6 +135,17 @@ function clip(text: string, chars: number): string {
   return glyphs.length > chars ? `${glyphs.slice(0, chars).join("")}…` : text;
 }
 
+/** 質問の短い見出し。headerは選択肢の上に出るチップの文言で、無ければ質問文で代える */
+function questionLabel(question: ClaudeQuestion): string {
+  return question.items.map((item) => oneLine(item.header || item.question)).join(" / ");
+}
+
+function questionTooltip(question: ClaudeQuestion): string {
+  return question.items
+    .map((item) => oneLine(item.answer ? `${item.question} → ${item.answer}` : item.question))
+    .join(" / ");
+}
+
 /** プロンプトの長さが何段階目か */
 function lengthLevel(text: string): number {
   return LENGTH_STEPS.filter((step) => [...text].length >= step).length;
@@ -143,6 +172,7 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
     labelChars = 20,
     tooltipChars = 140,
     latestKey = "C-End",
+    questions = true,
     css,
     ...button
   } = options;
@@ -164,6 +194,41 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
     return `${mark}<span class="claude-prompt-jump-text">${escapeHtml(clip(flat, labelChars))}</span>`;
   }
 
+  function questionHtml(question: ClaudeQuestion): string {
+    const mark = `<span class="claude-prompt-jump-question"></span>`;
+    if (itemStyle === "mark") return mark;
+    return `${mark}<span class="claude-prompt-jump-text">${escapeHtml(clip(questionLabel(question), labelChars))}</span>`;
+  }
+
+  /** ジャンプ先をタブ変数へ置いてmodのButtonを押す。プロンプトも質問も同じ経路で飛べる */
+  function jump(niwa: Niwa, tabId: string, requestId: string): void {
+    niwa.tab.var.set(tabId, JUMP_VAR, requestId);
+    niwa.tab.sendKeys(tabId, jumpKey);
+  }
+
+  function promptItems(prompt: ClaudePrompt, tabId: string, niwa: Niwa): HoverButtonItem[] {
+    const items: HoverButtonItem[] = [
+      {
+        label: `${prompt.index}. ${clip(oneLine(prompt.text), labelChars)}`,
+        html: itemHtml(prompt),
+        tooltip: `${prompt.index}. ${clip(oneLine(prompt.text), tooltipChars)}`,
+        // transcriptのuuidはmodから見たプロンプト行のrequestIdと同じ値なので、そのまま渡せる
+        run: () => jump(niwa, tabId, prompt.uuid),
+      },
+    ];
+    if (!questions) return items;
+    for (const question of prompt.questions ?? []) {
+      items.push({
+        label: `? ${clip(questionLabel(question), labelChars)}`,
+        html: questionHtml(question),
+        tooltip: clip(questionTooltip(question), tooltipChars),
+        // tool_useのidはmodから見たツール行のrequestIdと同じ値
+        run: () => jump(niwa, tabId, question.toolUseId),
+      });
+    }
+    return items;
+  }
+
   return {
     id: "claude-prompt-jump",
     show: isClaudeTab,
@@ -173,16 +238,7 @@ export function claudePromptJump(options: ClaudePromptJumpOptions = {}): HoverBu
       const prompts: ClaudePrompt[] = JSON.parse(
         await runCli(niwa, `claude prompt list --json --tab ${ctx.tabId}`),
       );
-      const items: HoverButtonItem[] = prompts.map((prompt) => ({
-        label: `${prompt.index}. ${clip(oneLine(prompt.text), labelChars)}`,
-        html: itemHtml(prompt),
-        tooltip: `${prompt.index}. ${clip(oneLine(prompt.text), tooltipChars)}`,
-        // transcriptのuuidはmodから見たプロンプト行のrequestIdと同じ値なので、そのまま渡せる
-        run: () => {
-          niwa.tab.var.set(ctx.tabId, JUMP_VAR, prompt.uuid);
-          niwa.tab.sendKeys(ctx.tabId, jumpKey);
-        },
-      }));
+      const items = prompts.flatMap((prompt) => promptItems(prompt, ctx.tabId, niwa));
       if (latestKey === false || items.length === 0) return items;
       // 一番下へ移すだけなのでmodを通さず、Claude Code自身のキー操作に任せる
       items.push({

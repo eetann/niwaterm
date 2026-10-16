@@ -5,6 +5,8 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 - タブの右端の取っ手を押すと、そのセッションで打ったプロンプトが縦に並ぶ（もう一度取っ手を押す・外側を押す・Escで閉じる）
 - 1項目は「印＋本文の頭」で、**印の濃さがそのプロンプトの長さ**を表す（GitHubの草と同じ見せ方）。
   `ok`のような一言と長い指示を見分けられるので、目当ての場所を思い出しやすい
+- Claudeが選択肢で質問してきたところ（AskUserQuestion）も、○の印でそのプロンプトの下に並ぶ。
+  マウスを載せると質問と選んだ答えが出て、クリックするとその質問の位置へ移る
 - マウスを載せるとプロンプトの冒頭がツールチップで出る
 - クリックすると、そのプロンプトが画面の先頭に来る位置までClaude Codeの表示が移動する
 - 目次の末尾の「最新へ」を押すと、Claude Codeの表示が一番下（最新の応答）へ戻る
@@ -24,7 +26,7 @@ Claude Codeのタブの端にプロンプトの目次を出し、クリックし
 | `claudePromptJump`（`@niwaterm/config`） | niwatermの設定 | transcriptを読んで目次を並べ、クリックでタブ変数`agent_jump`へプロンプトのuuidを書き、キーを送る |
 | `mod/` | Claude Codeのプラグイン | そのキーを受けてタブ変数を読み、`$.ui.scroll`でtranscriptの表示を移す |
 
-プロンプト行の`requestId`はtranscript（jsonl）のuuidと同じ値なので、
+プロンプト行の`requestId`はtranscript（jsonl）のuuidと、質問の行の`requestId`はtool_useのidと同じ値なので、
 `niwa claude prompt list`が見せている一覧の値をそのまま渡せる。画面の文字を
 読み合わせる必要はない。
 
@@ -105,6 +107,7 @@ export default defineConfig({
 | `itemStyle` | `"text"` | 本文を出さず印だけ並べたいなら`"mark"` |
 | `labelChars` | `20` | 項目に出す本文の量を増やす・減らす |
 | `tooltipChars` | `140` | ツールチップで読める量を増やす・減らす |
+| `questions` | `true` | 質問（AskUserQuestion）を目次に並べたくないなら`false` |
 | `latestKey` | `C-End` | 目次の末尾の「最新へ」で送るキー。Claude Codeの`scroll:bottom`の割り当てを変えたら揃える。`false`で「最新へ」を出さない |
 | `show` | `agent`が`claude-code`のタブだけ | 他のエージェントのタブにも出したい |
 | `position` | `"bottom-right"` | 目次を出す場所を変えたい |

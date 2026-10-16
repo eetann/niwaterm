@@ -50,6 +50,14 @@ export default define({
       console.log(
         `${String(prompt.index).padStart(width)}  ${promptLabel(prompt.text, labelChars)}`,
       );
+      for (const question of prompt.questions) {
+        for (const item of question.items) {
+          const answer = item.answer === undefined ? "" : ` → ${item.answer}`;
+          console.log(
+            `${" ".repeat(width)}    ? ${promptLabel(`${item.question}${answer}`, labelChars)}`,
+          );
+        }
+      }
     }
   },
 });

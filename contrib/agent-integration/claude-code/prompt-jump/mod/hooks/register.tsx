@@ -4,8 +4,9 @@
 // engineが弾く（`deny: "not person-initiated"`）。そのためniwaterm側はジャンプ先を
 // タブ変数へ置いてからキーを送り、このButtonの押下として受け取る。
 //
-// プロンプト行のrequestIdはtranscript（jsonl）のuuidと同じ値なので、niwatermが
-// `niwa claude prompt list`で見せている一覧の値をそのまま渡せる。
+// プロンプト行のrequestIdはtranscript（jsonl）のuuidと、ツール行（AskUserQuestion等）の
+// requestIdはtool_useのidと同じ値なので、niwatermが`niwa claude prompt list`で
+// 見せている一覧の値をそのまま渡せる。
 
 import type { Hook, Register } from 'claude-code'
 

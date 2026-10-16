@@ -16,6 +16,13 @@ function userPrompt(uuid: string, text: string, source = "typed"): TranscriptRow
   return { type: "user", uuid, promptSource: source, message: { role: "user", content: text } };
 }
 
+function askQuestion(id: string, questions: { header: string; question: string }[]): TranscriptRow {
+  return {
+    type: "assistant",
+    message: { content: [{ type: "tool_use", id, name: "AskUserQuestion", input: { questions } }] },
+  };
+}
+
 function assistantText(text: string): TranscriptRow {
   return { type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] } };
 }
@@ -92,6 +99,90 @@ describe("listPrompts", () => {
 
   test("本文が空のプロンプトは並べない", () => {
     expect(listPrompts(parseJsonl(jsonl(userPrompt("u1", "   "))))).toEqual([]);
+  });
+
+  test("スラッシュコマンドで呼んだスキルは打ったときの形で並べ、ローカルコマンドは外す", () => {
+    const rows = parseJsonl(
+      jsonl(
+        {
+          type: "user",
+          uuid: "clear",
+          message: {
+            content: "<command-name>/clear</command-name>\n<command-args></command-args>",
+          },
+        },
+        {
+          type: "user",
+          uuid: "skill",
+          origin: { kind: "human" },
+          message: {
+            content:
+              "<command-message>design</command-message>\n<command-name>/design</command-name>\n<command-args>画面を考えたい</command-args>",
+          },
+        },
+        { type: "user", uuid: "expanded", isMeta: true, message: { content: "スキルの本文" } },
+        {
+          type: "user",
+          uuid: "bare",
+          origin: { kind: "human" },
+          message: {
+            content: "<command-name>/commit</command-name>\n<command-args></command-args>",
+          },
+        },
+      ),
+    );
+    expect(listPrompts(rows).map((p) => [p.uuid, p.source, p.text])).toEqual([
+      ["skill", "command", "/design 画面を考えたい"],
+      ["bare", "command", "/commit"],
+    ]);
+  });
+
+  test("promptSourceの無い行はoriginがhumanのときだけ拾う", () => {
+    const rows = parseJsonl(
+      jsonl(
+        {
+          type: "user",
+          uuid: "n1",
+          origin: { kind: "task-notification" },
+          message: { content: "通知" },
+        },
+        { type: "user", uuid: "h1", origin: { kind: "human" }, message: { content: "質問" } },
+      ),
+    );
+    expect(listPrompts(rows).map((p) => p.uuid)).toEqual(["h1"]);
+  });
+
+  test("AskUserQuestionを直前のプロンプトの下へ答えと一緒に並べる", () => {
+    const rows = parseJsonl(
+      jsonl(
+        userPrompt("u1", "作りたい"),
+        askQuestion("toolu_1", [
+          { header: "方式", question: "どっちで作る？" },
+          { header: "名前", question: "名前は？" },
+        ]),
+        {
+          type: "user",
+          message: { content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "…" }] },
+          toolUseResult: { answers: { "どっちで作る？": "CLI" } },
+        },
+        userPrompt("s1", "<task-notification>", "system"),
+        askQuestion("toolu_2", [{ header: "続行", question: "続ける？" }]),
+        { ...askQuestion("toolu_side", [{ header: "x", question: "サブ" }]), isSidechain: true },
+        userPrompt("u2", "次"),
+      ),
+    );
+    const prompts = listPrompts(rows);
+    expect(prompts[0]?.questions).toEqual([
+      {
+        toolUseId: "toolu_1",
+        items: [
+          { header: "方式", question: "どっちで作る？", answer: "CLI" },
+          { header: "名前", question: "名前は？" },
+        ],
+      },
+      { toolUseId: "toolu_2", items: [{ header: "続行", question: "続ける？" }] },
+    ]);
+    expect(prompts[1]?.questions).toEqual([]);
   });
 });
 
@@ -190,7 +281,14 @@ describe("promptTurn", () => {
 
   test("transcriptに無いプロンプトは空配列", () => {
     expect(
-      promptTurn(rows, { index: 9, uuid: "none", source: "typed", timestamp: "", text: "" }),
+      promptTurn(rows, {
+        index: 9,
+        uuid: "none",
+        source: "typed",
+        timestamp: "",
+        text: "",
+        questions: [],
+      }),
     ).toEqual([]);
   });
 });

@@ -11,7 +11,14 @@ export interface TranscriptRow {
   isSidechain?: boolean;
   /** ユーザー入力の由来。この項目を持つ行がプロンプトの境界になる */
   promptSource?: string;
+  /**
+   * 行の発生源。スラッシュコマンドで呼んだスキルの行はpromptSourceを持たず、
+   * こちらの`kind: "human"`だけで人の入力だと分かる
+   */
+  origin?: { kind?: string };
   message?: { role?: string; content?: unknown };
+  /** tool_resultの行に付く、ツールが返した構造化済みの結果 */
+  toolUseResult?: unknown;
   [key: string]: unknown;
 }
 
@@ -26,6 +33,18 @@ export interface TranscriptPrompt {
   source: string;
   timestamp: string;
   text: string;
+  /** このプロンプトから次のプロンプトまでの間にClaudeが投げた質問（AskUserQuestion） */
+  questions: TranscriptQuestion[];
+}
+
+/**
+ * AskUserQuestionの1回の呼び出し。1回で複数の質問をまとめて出せるので、
+ * ジャンプ先（toolUseId）は呼び出し単位で1つになる
+ */
+export interface TranscriptQuestion {
+  /** Claude Code上でのその行のrequestIdと同じ値 */
+  toolUseId: string;
+  items: { header: string; question: string; answer?: string }[];
 }
 
 /** ターンの中身を表示用に平らにしたもの。整形は呼び出し側（customViewのHTML等）に委ねる */
@@ -60,16 +79,45 @@ export function parseJsonl(text: string): TranscriptRow[] {
   return rows;
 }
 
+/** promptSourceの無い行のうち、人の入力として扱うoriginの種類 */
+const HUMAN_ORIGIN_KIND = "human";
+
+/** 目次でスラッシュコマンドから呼んだ行を見分けるためのsource */
+const COMMAND_PROMPT_SOURCE = "command";
+
+const QUESTION_TOOL = "AskUserQuestion";
+
 /**
  * プロンプトの境界となる行か。サブエージェント（isSidechain）の内部やりとりは
- * 本人のプロンプトではないので境界に数えない
+ * 本人のプロンプトではないので境界に数えない。
+ * /clear・/compactのようなローカルコマンドの行はどちらの項目も持たず、
+ * Claudeの応答も始まらないので境界にしない
  */
 function isPromptBoundary(row: TranscriptRow): boolean {
-  return row.type === "user" && typeof row.promptSource === "string" && !row.isSidechain;
+  if (row.type !== "user" || row.isSidechain || row.isMeta) return false;
+  return typeof row.promptSource === "string" || typeof row.origin?.kind === "string";
 }
 
 function isUserPrompt(row: TranscriptRow): boolean {
-  return isPromptBoundary(row) && row.promptSource !== SYSTEM_PROMPT_SOURCE;
+  if (!isPromptBoundary(row)) return false;
+  if (typeof row.promptSource === "string") return row.promptSource !== SYSTEM_PROMPT_SOURCE;
+  return row.origin?.kind === HUMAN_ORIGIN_KIND;
+}
+
+/**
+ * スラッシュコマンドの行は`<command-name>/foo</command-name><command-args>…</command-args>`の
+ * タグ付きで記録されるので、打ったときの`/foo …`の形へ戻す。コマンドでなければnull
+ */
+function commandPromptText(text: string): string | null {
+  const name = /<command-name>([\s\S]*?)<\/command-name>/.exec(text)?.[1]?.trim();
+  if (!name) return null;
+  const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1]?.trim() ?? "";
+  return args ? `${name} ${args}` : name;
+}
+
+function promptText(row: TranscriptRow): string {
+  const text = contentText(row.message?.content);
+  return commandPromptText(text) ?? text;
 }
 
 /** contentが文字列でも配列でも、表示に使えるテキストを1本にまとめる */
@@ -96,20 +144,84 @@ export function promptLabel(text: string, maxChars: number): string {
  * （同一セッションでも前後する行が実在する）ため、追記された順をそのまま使う
  */
 export function listPrompts(rows: TranscriptRow[]): TranscriptPrompt[] {
+  const answers = questionAnswers(rows);
   const prompts: TranscriptPrompt[] = [];
   for (const row of rows) {
-    if (!isUserPrompt(row)) continue;
-    const text = contentText(row.message?.content);
-    if (!text.trim()) continue;
-    prompts.push({
-      index: prompts.length + 1,
-      uuid: typeof row.uuid === "string" ? row.uuid : "",
-      source: String(row.promptSource),
-      timestamp: typeof row.timestamp === "string" ? row.timestamp : "",
-      text,
-    });
+    if (row.isSidechain) continue;
+    if (isUserPrompt(row)) {
+      const raw = contentText(row.message?.content);
+      const command = commandPromptText(raw);
+      const text = command ?? raw;
+      if (!text.trim()) continue;
+      prompts.push({
+        index: prompts.length + 1,
+        uuid: typeof row.uuid === "string" ? row.uuid : "",
+        source:
+          row.promptSource ?? (command !== null ? COMMAND_PROMPT_SOURCE : String(row.origin?.kind)),
+        timestamp: typeof row.timestamp === "string" ? row.timestamp : "",
+        text,
+        questions: [],
+      });
+      continue;
+    }
+    // task-notification等のターン中に来た質問も、直前に打ったプロンプトの下へ並べる。
+    // 目次はファイルの行順に並ぶので、どこへ付けても前後関係は崩れない
+    const current = prompts.at(-1);
+    if (current && row.type === "assistant") current.questions.push(...rowQuestions(row, answers));
   }
   return prompts;
+}
+
+/** AskUserQuestionのtool_use_idから、質問文→選んだ答えの対応を引けるようにする */
+function questionAnswers(rows: TranscriptRow[]): Map<string, Record<string, string>> {
+  const answers = new Map<string, Record<string, string>>();
+  for (const row of rows) {
+    if (row.type !== "user" || !Array.isArray(row.message?.content)) continue;
+    const result = row.toolUseResult as { answers?: unknown } | undefined;
+    if (result === null || typeof result !== "object") continue;
+    if (result.answers === null || typeof result.answers !== "object") continue;
+    for (const part of row.message.content as { type?: string; tool_use_id?: unknown }[]) {
+      if (part?.type === "tool_result" && typeof part.tool_use_id === "string") {
+        answers.set(part.tool_use_id, result.answers as Record<string, string>);
+      }
+    }
+  }
+  return answers;
+}
+
+function rowQuestions(
+  row: TranscriptRow,
+  answers: Map<string, Record<string, string>>,
+): TranscriptQuestion[] {
+  const content = row.message?.content;
+  if (!Array.isArray(content)) return [];
+  const questions: TranscriptQuestion[] = [];
+  for (const part of content) {
+    if (part === null || typeof part !== "object") continue;
+    const block = part as { type?: string; id?: unknown; name?: unknown; input?: unknown };
+    if (block.type !== "tool_use" || block.name !== QUESTION_TOOL) continue;
+    if (typeof block.id !== "string") continue;
+    const answered = answers.get(block.id) ?? {};
+    const items = questionInputs(block.input).map(({ header, question }) => {
+      const answer = answered[question];
+      return typeof answer === "string" ? { header, question, answer } : { header, question };
+    });
+    if (items.length > 0) questions.push({ toolUseId: block.id, items });
+  }
+  return questions;
+}
+
+function questionInputs(input: unknown): { header: string; question: string }[] {
+  const questions = (input as { questions?: unknown } | null)?.questions;
+  if (!Array.isArray(questions)) return [];
+  const items: { header: string; question: string }[] = [];
+  for (const q of questions) {
+    if (q === null || typeof q !== "object") continue;
+    const { header, question } = q as { header?: unknown; question?: unknown };
+    if (typeof question !== "string" || !question.trim()) continue;
+    items.push({ header: typeof header === "string" ? header : "", question });
+  }
+  return items;
 }
 
 /** uuid（前方一致でも可）か1始まりの通し番号でプロンプトを引く */
@@ -126,6 +238,8 @@ export function findPrompt(prompts: TranscriptPrompt[], key: string): Transcript
 
 function toolInput(input: unknown): string {
   if (input === null || typeof input !== "object") return "";
+  const questions = questionInputs(input);
+  if (questions.length > 0) return questions.map((q) => q.question).join(" / ");
   const values = input as Record<string, unknown>;
   // コマンド・パス・パターンが分かれば何をしたかは読めるので、代表的な項目だけを拾う
   for (const key of ["command", "file_path", "pattern", "url", "description", "prompt"]) {
@@ -146,7 +260,7 @@ function truncate(text: string, maxChars: number): { text: string; truncated: bo
 function rowBlocks(row: TranscriptRow, maxResultChars: number): TurnBlock[] {
   const content = row.message?.content;
   if (row.type === "user") {
-    if (isUserPrompt(row)) return [{ kind: "prompt", text: contentText(content) }];
+    if (isUserPrompt(row)) return [{ kind: "prompt", text: promptText(row) }];
     // tool_resultはuser roleの配列として入っている
     const blocks: TurnBlock[] = [];
     if (Array.isArray(content)) {
