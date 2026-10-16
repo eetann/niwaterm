@@ -164,6 +164,23 @@ export {
   type WorktreeRemoveHookContext,
 } from "./worktree";
 export {
+  COPY_MODE_ACTIONS,
+  COPY_MODE_SEARCH_ACTIONS,
+  compileCopyModeKeymap,
+  type CompiledCopyModeBinding,
+  type CompiledCopyModeKeymap,
+  type CompiledCopyModeTable,
+  type CopyModeAction,
+  type CopyModeBindingEntry,
+  type CopyModeKeymapMode,
+  type CopyModeSearchAction,
+  isCopyModeAction,
+  isCopyModeSearchAction,
+  isValidCopyModeKey,
+  parseCopyModeKeySequence,
+  resolveCopyModeBindingEntry,
+} from "./copy-mode-keybindings";
+export {
   canonicalizeParsed,
   canonicalizeSecondKey,
   compileKeybindings,
@@ -200,6 +217,7 @@ export {
 } from "./keybindings";
 export {
   type FocusDirection,
+  type CopyModeKeybindOptions,
   type KeybindHandler,
   type KeybindOptions,
   type Niwa,

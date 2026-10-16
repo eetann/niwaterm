@@ -406,6 +406,35 @@ describe("resolveKeybindings", () => {
     }
   });
 
+  test("copyMode・copyModeSearchもキー単位で上書きでき、不正なエントリだけ除外する", () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const diag = createConfigDiagnostics();
+      const resolved = resolveKeybindings(
+        {
+          keybindings: {
+            copyMode: { "ctrl+v": "copy-select-char", x: "close-tile" as never },
+            copyModeSearch: { "a b": "copy-search-confirm" },
+          },
+        },
+        createTestNiwaApi(),
+        diag,
+      );
+      expect(resolved.copyMode?.["ctrl+v"]).toBe("copy-select-char");
+      expect(resolved.copyMode?.["x"]).toBeUndefined();
+      expect(resolved.copyModeSearch?.["a b"]).toBeUndefined();
+      // 上書きしていないキーはデフォルトのまま
+      expect(resolved.copyMode?.["g g"]).toBe("copy-top");
+      expect(resolved.copyModeSearch?.["enter"]).toBe("copy-search-confirm");
+      expect(diag.list().map((d) => d.scope)).toEqual([
+        'keybindings.copyMode["x"]',
+        'keybindings.copyModeSearch["a b"]',
+      ]);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test("ユーザー設定でbindingsの一部のキーを上書きできる", () => {
     expect(platformDefaults.bindings?.["d"]).toBe("split-vertical");
     const resolved = resolveKeybindings(

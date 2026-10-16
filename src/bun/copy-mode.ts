@@ -10,6 +10,14 @@
 // 列は「グリッドの桁」であって文字数ではない（全角文字は2桁を占める）。行テキストと桁の
 // 対応付けはcellStarts()に集約する。
 
+import {
+  type CompiledCopyModeBinding,
+  type CompiledCopyModeKeymap,
+  type CompiledCopyModeTable,
+  type CopyModeAction,
+  type CopyModeSearchAction,
+  isCustomBindingRef,
+} from "@niwaterm/config";
 import { charWidth, splitCells } from "../shared/wide-char";
 
 export type CopyModeSelectionMode = "none" | "char" | "line";
@@ -53,8 +61,8 @@ export interface CopyModeState {
    * 短い行を通過しても元の桁に戻れるようにするため、カーソルの桁とは別に持つ
    */
   desiredX: number;
-  /** ggの1打目のgを受け取った状態か */
-  pendingG: boolean;
+  /** 連続キー（"g g"等）の途中まで打ったキー列（canonical表記）。途中でなければ空 */
+  pendingKeys: string[];
   /** 検索文字列の入力中（/ か ? を押してからEnter/Escapeまで）。入力中でなければnull */
   searchInput: CopyModeSearch | null;
   /** 直近に実行した検索。n/Nで繰り返すために保持する */
@@ -93,6 +101,8 @@ export type CopyModeEffect =
    * グリッドにしか無く行テキストからは分からないため、探索は呼び出し側が行う
    */
   | { type: "jumpPrompt"; direction: "up" | "down" }
+  /** niwa.keybindでコピーモードの表へ割り当てた関数ハンドラを呼ぶ。handlerIdはniwa-api.tsのレジストリのキー */
+  | { type: "custom"; handlerId: string }
   | { type: "exit" };
 
 export interface CopyModeKeyResult {
@@ -102,11 +112,25 @@ export interface CopyModeKeyResult {
   handled: boolean;
 }
 
-/** キー入力の最小表現。webviewのKeyboardEventから必要な分だけを写して渡す */
+/** キー入力の最小表現。webview側でKeyboardEventから組み立てて渡す */
 export interface CopyModeKey {
-  /** KeyboardEvent.key相当（"g"/"G"/"$"/"ArrowDown"/"Escape"など。大文字小文字を区別する） */
-  key: string;
-  ctrl: boolean;
+  /**
+   * キーを@niwaterm/configのcanonicalizeParsed表記にした候補。Shiftで打つ記号（$ { 等）は
+   * shift+付きと無しの両方を入れ、先頭から順に表を引く。検索文字列だけを足す入力（IME確定・ペースト）は空
+   */
+  keys: string[];
+  /** 検索文字列の入力中に表で引けなかったとき、検索文字列へ足す1文字。足すものが無ければnull */
+  text: string | null;
+}
+
+/**
+ * terminal-sessionへ渡す1打分の入力。キーの解釈に使う表と、関数ハンドラを実行する手段を添える
+ * （どちらも設定ファイルから作られ、bun側のメインプロセスが持つため）
+ */
+export interface CopyModeKeyPress {
+  key: CopyModeKey;
+  keymap: CompiledCopyModeKeymap;
+  runHandler: (handlerId: string) => void;
 }
 
 export function createCopyModeState(cursor: CopyModePoint): CopyModeState {
@@ -115,7 +139,7 @@ export function createCopyModeState(cursor: CopyModePoint): CopyModeState {
     anchor: null,
     selectionMode: "none",
     desiredX: cursor.x,
-    pendingG: false,
+    pendingKeys: [],
     searchInput: null,
     lastSearch: null,
   };
@@ -513,391 +537,265 @@ export function clampCopyModeCursor(state: CopyModeState, ctx: CopyModeContext):
 
 // ---- キー処理 ----
 
-/** ArrowLeft等のKeyboardEvent.key表記をコピーモード内部の名前へ寄せる（1文字キーはそのまま） */
-function normalizeKey(key: string): string {
-  switch (key) {
-    case "ArrowLeft":
-      return "left";
-    case "ArrowRight":
-      return "right";
-    case "ArrowUp":
-      return "up";
-    case "ArrowDown":
-      return "down";
-    case "Escape":
-      return "escape";
-    case "Backspace":
-      return "backspace";
-    case "Enter":
-      return "enter";
-    case "Home":
-      return "home";
-    case "End":
-      return "end";
-    case "PageUp":
-      return "pageup";
-    case "PageDown":
-      return "pagedown";
-    default:
-      return key;
-  }
-}
-
 function withMotion(state: CopyModeState, motion: Motion): CopyModeState {
   return {
     ...state,
     cursor: motion.cursor,
     desiredX: motion.updateDesiredX ? motion.cursor.x : state.desiredX,
-    pendingG: false,
   };
 }
 
+function handled(
+  state: CopyModeState,
+  effect: CopyModeEffect = { type: "none" },
+): CopyModeKeyResult {
+  return { state, effect, handled: true };
+}
+
 function unhandled(state: CopyModeState): CopyModeKeyResult {
-  return { state: { ...state, pendingG: false }, effect: { type: "none" }, handled: false };
+  return { state: { ...state, pendingKeys: [] }, effect: { type: "none" }, handled: false };
+}
+
+function lookupBinding<A extends string>(
+  table: CompiledCopyModeTable<A>,
+  prefix: readonly string[],
+  keys: readonly string[],
+): CompiledCopyModeBinding<A> | undefined {
+  for (const k of keys) {
+    const entry = table.bindings.get([...prefix, k].join(" "));
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+type SequenceMatch<A extends string> =
+  | { kind: "match"; binding: CompiledCopyModeBinding<A> }
+  | { kind: "pending"; keys: string[] }
+  | { kind: "none" };
+
+/**
+ * 途中まで打った連続キーに今のキーを足して表を引く。完全一致を連続キーの途中より優先する
+ * （"g"と"g g"の両方があれば"g"が即座に発火する）。続きとして成り立たないキーが来たら、
+ * 途中までの列を捨ててそのキー単独で引き直す（viでgの後にjを押すとjとして動くのと同じ）
+ */
+function matchSequence<A extends string>(
+  table: CompiledCopyModeTable<A>,
+  pending: readonly string[],
+  keys: readonly string[],
+): SequenceMatch<A> {
+  const binding = lookupBinding(table, pending, keys);
+  if (binding) return { kind: "match", binding };
+  for (const k of keys) {
+    const sequence = [...pending, k];
+    if (table.pendingPrefixes.has(sequence.join(" "))) return { kind: "pending", keys: sequence };
+  }
+  if (pending.length > 0) return matchSequence(table, [], keys);
+  return { kind: "none" };
 }
 
 function withoutSearchInput(state: CopyModeState): CopyModeKeyResult {
-  return { state: { ...state, searchInput: null }, effect: { type: "none" }, handled: true };
+  return handled({ ...state, searchInput: null });
 }
 
-/**
- * 検索文字列の入力中（/ ? の後）のキー処理。移動キーとしては解釈せず、
- * 未割当のキーも飲み込む（PTYへ抜けて画面が動くと入力中の文脈が壊れるため）
- */
-function applySearchInputKey(state: CopyModeState, key: CopyModeKey): CopyModeKeyResult {
-  const input = state.searchInput;
-  if (!input) return unhandled(state);
-  const name = normalizeKey(key.key);
-  const dropLastChar = (query: string): string => [...query].slice(0, -1).join("");
-
-  if (key.ctrl) {
-    switch (name) {
-      case "c":
-      case "[":
-        return withoutSearchInput(state);
-      case "u":
-        return {
-          state: { ...state, searchInput: { ...input, query: "" } },
-          effect: { type: "none" },
-          handled: true,
-        };
-      case "h":
-        return {
-          state: { ...state, searchInput: { ...input, query: dropLastChar(input.query) } },
-          effect: { type: "none" },
-          handled: true,
-        };
-      default:
-        return { state, effect: { type: "none" }, handled: true };
-    }
-  }
-
-  switch (name) {
-    case "escape":
+function runSearchInputAction(
+  state: CopyModeState,
+  input: CopyModeSearch,
+  action: CopyModeSearchAction,
+): CopyModeKeyResult {
+  switch (action) {
+    case "copy-search-cancel":
       return withoutSearchInput(state);
-    case "backspace":
-      // 空の状態でのBackspaceは検索そのものを取りやめる（vimのコマンドラインと同じ）
+    case "copy-search-clear":
+      return handled({ ...state, searchInput: { ...input, query: "" } });
+    case "copy-search-delete-char":
+      // 空の状態で消そうとしたら検索そのものを取りやめる（vimのコマンドラインと同じ）
       if (input.query === "") return withoutSearchInput(state);
-      return {
-        state: { ...state, searchInput: { ...input, query: dropLastChar(input.query) } },
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "enter": {
-      // 空のままEnterは直前の検索文字列を使い回す（vimの / + Enter と同じ）
+      return handled({
+        ...state,
+        searchInput: { ...input, query: [...input.query].slice(0, -1).join("") },
+      });
+    case "copy-search-confirm": {
+      // 空のまま確定すると直前の検索文字列を使い回す（vimの / + Enter と同じ）
       const query = input.query !== "" ? input.query : (state.lastSearch?.query ?? "");
       if (query === "") return withoutSearchInput(state);
       const search: CopyModeSearch = { direction: input.direction, query };
-      return {
-        state: { ...state, searchInput: null, lastSearch: search },
-        effect: { type: "search", search },
-        handled: true,
-      };
+      return handled(
+        { ...state, searchInput: null, lastSearch: search },
+        { type: "search", search },
+      );
     }
-    default:
-      break;
+    default: {
+      const exhaustive: never = action;
+      throw new Error(`unknown copy mode search action: ${String(exhaustive)}`);
+    }
   }
-
-  // 1文字のキー（記号・空白・IME確定済みの日本語1文字を含む）だけを検索文字列へ足す
-  if ([...key.key].length === 1) {
-    return {
-      state: { ...state, searchInput: { ...input, query: input.query + key.key } },
-      effect: { type: "none" },
-      handled: true,
-    };
-  }
-  return { state, effect: { type: "none" }, handled: true };
 }
 
 /**
- * コピーモード中の1キーを処理する。副作用（スクロール・クリップボード・検索の走査）は起こさず、
- * 次の状態と呼び出し側にやってほしいこと（CopyModeEffect）だけを返す
+ * 検索文字列の入力中（/ ? の後）のキー処理。表に無いキーは移動キーとしては解釈せず、
+ * 1文字なら検索文字列へ足し、それ以外も飲み込む（PTYへ抜けて画面が動くと入力中の文脈が壊れるため）
  */
-export function applyCopyModeKey(
+function applySearchInputKey(
   state: CopyModeState,
   key: CopyModeKey,
+  table: CompiledCopyModeTable<CopyModeSearchAction>,
+): CopyModeKeyResult {
+  const input = state.searchInput;
+  if (!input) return unhandled(state);
+  const binding = lookupBinding(table, [], key.keys);
+  if (binding) {
+    if (isCustomBindingRef(binding.target)) {
+      return handled(state, { type: "custom", handlerId: binding.target.id });
+    }
+    return runSearchInputAction(state, input, binding.target);
+  }
+  if (key.text !== null) {
+    return handled({ ...state, searchInput: { ...input, query: input.query + key.text } });
+  }
+  return handled(state);
+}
+
+function toggleSelection(state: CopyModeState, mode: "char" | "line"): CopyModeState {
+  if (state.selectionMode === mode) return { ...state, selectionMode: "none", anchor: null };
+  return { ...state, selectionMode: mode, anchor: state.anchor ?? { ...state.cursor } };
+}
+
+/** コピーモードのアクション1つを実行する。stateは連続キーの途中状態を解除済みで渡す */
+function runCopyModeAction(
+  state: CopyModeState,
+  action: CopyModeAction,
   ctx: CopyModeContext,
 ): CopyModeKeyResult {
-  if (state.searchInput) return applySearchInputKey(state, key);
-
-  const name = normalizeKey(key.key);
   const halfPage = Math.max(Math.floor(ctx.viewportRows / 2), 1);
   const fullPage = Math.max(ctx.viewportRows - 1, 1);
+  const moveRows = (delta: number) =>
+    handled(withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, delta)));
+  const moveToRow = (y: number) => moveRows(y - state.cursor.y);
 
-  if (key.ctrl) {
-    switch (name) {
-      case "u":
-        return {
-          state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, -halfPage)),
-          effect: { type: "none" },
-          handled: true,
-        };
-      case "d":
-        return {
-          state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, halfPage)),
-          effect: { type: "none" },
-          handled: true,
-        };
-      case "b":
-        return {
-          state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, -fullPage)),
-          effect: { type: "none" },
-          handled: true,
-        };
-      case "f":
-        return {
-          state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, fullPage)),
-          effect: { type: "none" },
-          handled: true,
-        };
-      case "c":
-      case "[":
-        return { state, effect: { type: "exit" }, handled: true };
-      default:
-        return unhandled(state);
-    }
-  }
-
-  // ggの2打目待ち。g以外が来たら待ちを解除して、そのキーを通常どおり解釈する
-  if (state.pendingG) {
-    const cleared = { ...state, pendingG: false };
-    if (name === "g") {
-      return {
-        state: withMotion(cleared, { cursor: { x: 0, y: 0 }, updateDesiredX: true }),
-        effect: { type: "none" },
-        handled: true,
-      };
-    }
-    return applyCopyModeKey(cleared, key, ctx);
-  }
-
-  switch (name) {
-    case "h":
-    case "left":
-      return {
-        state: withMotion(state, horizontalMove(ctx, state.cursor, -1)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "l":
-    case "right":
-      return {
-        state: withMotion(state, horizontalMove(ctx, state.cursor, 1)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "j":
-    case "down":
-      return {
-        state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, 1)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "k":
-    case "up":
-      return {
-        state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, -1)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "0":
-    case "home":
-      return {
-        state: withMotion(state, lineStart(state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "^":
-      return {
-        state: withMotion(state, firstNonBlank(ctx, state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "$":
-    case "end":
-      return {
-        state: withMotion(state, lastNonBlank(ctx, state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "w":
-      return {
-        state: withMotion(state, wordForward(ctx, state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "b":
-      return {
-        state: withMotion(state, wordBackward(ctx, state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "e":
-      return {
-        state: withMotion(state, wordEnd(ctx, state.cursor)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "g":
-      return { state: { ...state, pendingG: true }, effect: { type: "none" }, handled: true };
-    case "G":
-      return {
-        state: withMotion(state, {
+  switch (action) {
+    case "copy-cursor-left":
+      return handled(withMotion(state, horizontalMove(ctx, state.cursor, -1)));
+    case "copy-cursor-right":
+      return handled(withMotion(state, horizontalMove(ctx, state.cursor, 1)));
+    case "copy-cursor-down":
+      return moveRows(1);
+    case "copy-cursor-up":
+      return moveRows(-1);
+    case "copy-line-start":
+      return handled(withMotion(state, lineStart(state.cursor)));
+    case "copy-first-non-blank":
+      return handled(withMotion(state, firstNonBlank(ctx, state.cursor)));
+    case "copy-line-end":
+      return handled(withMotion(state, lastNonBlank(ctx, state.cursor)));
+    case "copy-word-forward":
+      return handled(withMotion(state, wordForward(ctx, state.cursor)));
+    case "copy-word-backward":
+      return handled(withMotion(state, wordBackward(ctx, state.cursor)));
+    case "copy-word-end":
+      return handled(withMotion(state, wordEnd(ctx, state.cursor)));
+    case "copy-top":
+      return handled(withMotion(state, { cursor: { x: 0, y: 0 }, updateDesiredX: true }));
+    case "copy-bottom":
+      return handled(
+        withMotion(state, {
           cursor: { x: 0, y: Math.max(ctx.totalRows - 1, 0) },
           updateDesiredX: true,
         }),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "H":
-      return {
-        state: withMotion(
-          state,
-          verticalMove(ctx, state.cursor, state.desiredX, ctx.viewportOffset - state.cursor.y),
-        ),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "M": {
-      const middle = ctx.viewportOffset + Math.floor((ctx.viewportRows - 1) / 2);
-      return {
-        state: withMotion(
-          state,
-          verticalMove(ctx, state.cursor, state.desiredX, middle - state.cursor.y),
-        ),
-        effect: { type: "none" },
-        handled: true,
-      };
-    }
-    case "L": {
-      const bottom = ctx.viewportOffset + ctx.viewportRows - 1;
-      return {
-        state: withMotion(
-          state,
-          verticalMove(ctx, state.cursor, state.desiredX, bottom - state.cursor.y),
-        ),
-        effect: { type: "none" },
-        handled: true,
-      };
-    }
-    case "pageup":
-      return {
-        state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, -fullPage)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "pagedown":
-      return {
-        state: withMotion(state, verticalMove(ctx, state.cursor, state.desiredX, fullPage)),
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "/":
-    case "?":
-      return {
-        state: {
-          ...state,
-          pendingG: false,
-          searchInput: { direction: name === "/" ? "forward" : "backward", query: "" },
+      );
+    case "copy-screen-top":
+      return moveToRow(ctx.viewportOffset);
+    case "copy-screen-middle":
+      return moveToRow(ctx.viewportOffset + Math.floor((ctx.viewportRows - 1) / 2));
+    case "copy-screen-bottom":
+      return moveToRow(ctx.viewportOffset + ctx.viewportRows - 1);
+    case "copy-half-page-up":
+      return moveRows(-halfPage);
+    case "copy-half-page-down":
+      return moveRows(halfPage);
+    case "copy-page-up":
+      return moveRows(-fullPage);
+    case "copy-page-down":
+      return moveRows(fullPage);
+    case "copy-search-forward":
+    case "copy-search-backward":
+      return handled({
+        ...state,
+        searchInput: {
+          direction: action === "copy-search-forward" ? "forward" : "backward",
+          query: "",
         },
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "n":
-    case "N": {
+      });
+    case "copy-search-next":
+    case "copy-search-prev": {
       const last = state.lastSearch;
-      const cleared = { ...state, pendingG: false };
-      if (!last) return { state: cleared, effect: { type: "none" }, handled: true };
-      // Nは「直前の検索の逆向き」。lastSearch自体の向きは上書きしない（vimと同じ）
+      if (!last) return handled(state);
+      // prevは「直前の検索の逆向き」。lastSearch自体の向きは上書きしない（vimのNと同じ）
       const direction: CopyModeSearchDirection =
-        name === "n" ? last.direction : last.direction === "forward" ? "backward" : "forward";
-      return {
-        state: cleared,
-        effect: { type: "search", search: { direction, query: last.query } },
-        handled: true,
-      };
+        action === "copy-search-next"
+          ? last.direction
+          : last.direction === "forward"
+            ? "backward"
+            : "forward";
+      return handled(state, { type: "search", search: { direction, query: last.query } });
     }
-    // viの段落移動（{ }）に充てる。シェルのプロンプトはセッションの段落の切れ目そのもので、
-    // tmuxのコピーモードも{ }を段落移動に使っている
-    case "{":
-      return {
-        state: { ...state, pendingG: false },
-        effect: { type: "jumpPrompt", direction: "up" },
-        handled: true,
-      };
-    case "}":
-      return {
-        state: { ...state, pendingG: false },
-        effect: { type: "jumpPrompt", direction: "down" },
-        handled: true,
-      };
-    case "v":
-      return {
-        state: {
-          ...state,
-          pendingG: false,
-          ...(state.selectionMode === "char"
-            ? { selectionMode: "none" as const, anchor: null }
-            : { selectionMode: "char" as const, anchor: state.anchor ?? { ...state.cursor } }),
-        },
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "V":
-      return {
-        state: {
-          ...state,
-          pendingG: false,
-          ...(state.selectionMode === "line"
-            ? { selectionMode: "none" as const, anchor: null }
-            : { selectionMode: "line" as const, anchor: state.anchor ?? { ...state.cursor } }),
-        },
-        effect: { type: "none" },
-        handled: true,
-      };
-    case "y":
-    case "enter": {
-      // 選択していない状態のyは、viの「カーソル行をヤンク」と同じく1行コピーとして扱う
+    case "copy-prompt-up":
+      return handled(state, { type: "jumpPrompt", direction: "up" });
+    case "copy-prompt-down":
+      return handled(state, { type: "jumpPrompt", direction: "down" });
+    case "copy-select-char":
+      return handled(toggleSelection(state, "char"));
+    case "copy-select-line":
+      return handled(toggleSelection(state, "line"));
+    case "copy-yank": {
+      // 選択していない状態のヤンクは、viの「カーソル行をヤンク」と同じく1行コピーとして扱う
       const range = copyModeRange(state, ctx.cols) ?? {
         start: { x: 0, y: state.cursor.y },
         end: { x: Math.max(ctx.cols - 1, 0), y: state.cursor.y },
         mode: "line" as const,
       };
-      return { state, effect: { type: "yank", range }, handled: true };
+      return handled(state, { type: "yank", range });
     }
-    case "escape":
-      // 選択中のEscapeは選択解除だけ（viのvisualモード離脱と同じ）。選択していなければコピーモードを抜ける
+    case "copy-cancel":
+      // 選択中なら選択解除だけ（viのvisualモード離脱と同じ）。選択していなければコピーモードを抜ける
       if (state.selectionMode !== "none") {
-        return {
-          state: { ...state, selectionMode: "none", anchor: null, pendingG: false },
-          effect: { type: "none" },
-          handled: true,
-        };
+        return handled({ ...state, selectionMode: "none", anchor: null });
       }
-      return { state, effect: { type: "exit" }, handled: true };
-    case "q":
-      return { state, effect: { type: "exit" }, handled: true };
-    default:
+      return handled(state, { type: "exit" });
+    case "copy-exit":
+      return handled(state, { type: "exit" });
+    default: {
+      // COPY_MODE_ACTIONSへ足したアクションのcase書き忘れをコンパイル時に弾く
+      const exhaustive: never = action;
+      throw new Error(`unknown copy mode action: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * コピーモード中の1キーを処理する。副作用（スクロール・クリップボード・検索の走査・関数ハンドラの実行）は
+ * 起こさず、次の状態と呼び出し側にやってほしいこと（CopyModeEffect）だけを返す
+ */
+export function applyCopyModeKey(
+  state: CopyModeState,
+  key: CopyModeKey,
+  ctx: CopyModeContext,
+  keymap: CompiledCopyModeKeymap,
+): CopyModeKeyResult {
+  if (state.searchInput) return applySearchInputKey(state, key, keymap.search);
+
+  const match = matchSequence(keymap.normal, state.pendingKeys, key.keys);
+  switch (match.kind) {
+    case "none":
       return unhandled(state);
+    case "pending":
+      return handled({ ...state, pendingKeys: match.keys });
+    case "match": {
+      const cleared = { ...state, pendingKeys: [] };
+      const { target } = match.binding;
+      if (isCustomBindingRef(target)) {
+        return handled(cleared, { type: "custom", handlerId: target.id });
+      }
+      return runCopyModeAction(cleared, target, ctx);
+    }
   }
 }

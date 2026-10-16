@@ -103,7 +103,13 @@ import { isLightBackground } from "./theme-mode";
 import { tileContentInset } from "./tile-corner";
 import { syncScrollbarMode } from "./scrollbar-mode";
 import { resolveTileDropZone, splitForDropZone, type TileDropZone } from "./tile-drop-zone";
-import { actionToTileCommand, createKeybindResolver, type TileCommand } from "./tile-keybindings";
+import {
+  actionToTileCommand,
+  copyModeTextFromEvent,
+  createKeybindResolver,
+  keyboardEventToCopyModeKeys,
+  type TileCommand,
+} from "./tile-keybindings";
 import {
   type CellGlyphTransform,
   computeCellGlyphTransform,
@@ -3939,8 +3945,9 @@ document.addEventListener("keydown", (e) => {
       return;
     }
     e.preventDefault();
-    if (!MODIFIER_ONLY_KEYS.has(e.key)) {
-      sendMessage("copyModeKey", { tabId: currentTabId, key: e.key, ctrl: e.ctrlKey });
+    const keys = keyboardEventToCopyModeKeys(e);
+    if (keys.length > 0) {
+      sendMessage("copyModeKey", { tabId: currentTabId, keys, text: copyModeTextFromEvent(e) });
     }
     return;
   }
@@ -3951,9 +3958,6 @@ document.addEventListener("keydown", (e) => {
     sendMessage("input", { tabId: currentTabId, data: bytes });
   }
 });
-
-// 修飾キー単体のkeydown（Shiftを押しただけでもe.key === "Shift"で発火する）
-const MODIFIER_ONLY_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 
 // キーバインド1回分のフォントサイズ増減量（px）。上下限のクランプ・実際の適用はbun側が担う
 const FONT_SIZE_STEP = 1;
@@ -4277,7 +4281,7 @@ imeEl.addEventListener("compositionend", (e) => {
 function sendTextToCopyModeSearch(tabId: TabId, text: string): boolean {
   if (!copyModeSearchTabIds.has(tabId)) return false;
   for (const ch of text) {
-    sendMessage("copyModeKey", { tabId, key: ch, ctrl: false });
+    sendMessage("copyModeKey", { tabId, keys: [], text: ch });
   }
   return true;
 }

@@ -40,6 +40,43 @@ describe("buildKeybindList", () => {
     ]);
   });
 
+  test("コピーモードの表はmode付きでdirect側の後に並び、不正なエントリは除外する", () => {
+    const config: KeybindingsConfig = {
+      copyMode: {
+        "g g": "copy-top",
+        x: { kind: "custom", id: "handler-0" },
+        z: "split-vertical" as never,
+      },
+      copyModeSearch: { enter: "copy-search-confirm", "a b": "copy-search-clear" },
+    };
+    expect(buildKeybindList(config).entries).toEqual([
+      {
+        key: "g g",
+        action: "copy-top",
+        description: undefined,
+        repeat: false,
+        noPrefix: true,
+        mode: "copy",
+      },
+      {
+        key: "x",
+        action: "function",
+        description: undefined,
+        repeat: false,
+        noPrefix: true,
+        mode: "copy",
+      },
+      {
+        key: "enter",
+        action: "copy-search-confirm",
+        description: undefined,
+        repeat: false,
+        noPrefix: true,
+        mode: "copy-search",
+      },
+    ]);
+  });
+
   test("グループ内はキー表記順に並ぶ（登録順・数字キーの並びに引きずられない）", () => {
     const config: KeybindingsConfig = {
       bindings: { z: "toggle-zoom", "0": "reset-font-size", d: "split-vertical" },

@@ -91,3 +91,37 @@ description: キーバインドに割り当てられる動作の名前と、デ�
 | `show-config`                                                   | [今の設定](/niwaterm/getting-started/#現在の設定値を確認する)を表示する              | `i`              |
 | `reload-config`                                                 | 設定ファイルを読み込み直す                                                           | —                |
 | `quit-app`                                                      | niwatermを終了する。開いていた画面は次に起動したときに元に戻る（実行前に確認が出る） | —                |
+
+## コピーモード
+
+[コピーモード](/niwaterm/jump-and-copy/#コピーモードvi風のキーボード選択)の中で押すキーに割り当てるアクション。`niwa.keybind("ctrl+v", "copy-select-char", { mode: "copy" })`のように`mode: "copy"`を付けて割り当てる（[コピーモードのキーを変える](/niwaterm/keybindings/#コピーモードのキーを変える)）。デフォルトのキーは、コピーモードの中でprefixキーを押さずに押すキー。
+
+| アクション                                                                       | 動作                                                                     | デフォルトのキー                          |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------- |
+| `copy-cursor-left` / `copy-cursor-down` / `copy-cursor-up` / `copy-cursor-right` | カーソルを動かす                                                         | `h` / `j` / `k` / `l`、矢印キー           |
+| `copy-word-forward` / `copy-word-backward` / `copy-word-end`                     | 次の単語の先頭 / 前の単語の先頭 / 単語の末尾へ                           | `w` / `b` / `e`                           |
+| `copy-line-start` / `copy-first-non-blank` / `copy-line-end`                     | 行頭 / 行の最初の非空白 / 行の最後の非空白へ                             | `0`・`home` / `^` / `$`・`end`            |
+| `copy-top` / `copy-bottom`                                                       | スクロールバックの先頭 / 最新行へ                                        | `g g` / `shift+g`                         |
+| `copy-screen-top` / `copy-screen-middle` / `copy-screen-bottom`                  | 画面の上端 / 中央 / 下端へ                                               | `shift+h` / `shift+m` / `shift+l`         |
+| `copy-half-page-up` / `copy-half-page-down`                                      | 半画面ずつ上 / 下へ                                                      | `ctrl+u` / `ctrl+d`                       |
+| `copy-page-up` / `copy-page-down`                                                | 1画面ずつ上 / 下へ                                                       | `pageup`・`ctrl+b` / `pagedown`・`ctrl+f` |
+| `copy-search-forward` / `copy-search-backward`                                   | 下 / 上へ向かって検索する文字を打ち始める                                | `/` / `?`                                 |
+| `copy-search-next` / `copy-search-prev`                                          | 直前の検索を同じ向き / 逆向きで繰り返す                                  | `n` / `shift+n`                           |
+| `copy-prompt-up` / `copy-prompt-down`                                            | 1つ前 / 次のプロンプトへ飛ぶ                                             | `{` / `}`                                 |
+| `copy-select-char` / `copy-select-line`                                          | 文字選択 / 行選択を始める・やめる                                        | `v` / `shift+v`                           |
+| `copy-yank`                                                                      | 選択範囲をコピーしてコピーモードを抜ける（選択していなければカーソル行） | `y`・`enter`                              |
+| `copy-cancel`                                                                    | 選択中なら選択をやめ、選択していなければコピーモードを抜ける             | `escape`                                  |
+| `copy-exit`                                                                      | コピーモードを抜ける                                                     | `q`・`ctrl+c`・`ctrl+[`                   |
+
+デフォルトのprefixキーは`ctrl+b`なので、コピーモードの中で`ctrl+b`を押すとprefixキーとして扱われる。`copy-page-up`の`ctrl+b`は、prefixキーを変えたときだけ使える。
+
+### 検索する文字を打っているあいだ
+
+`/`や`?`のあと、検索する文字を打っているあいだのキーに割り当てるアクション。`mode: "copy-search"`を付けて割り当てる。
+
+| アクション                | 動作                                                     | デフォルトのキー             |
+| ------------------------- | -------------------------------------------------------- | ---------------------------- |
+| `copy-search-confirm`     | 検索する（何も打っていなければ直前の検索をもう一度行う） | `enter`                      |
+| `copy-search-cancel`      | 検索をやめる                                             | `escape`・`ctrl+c`・`ctrl+[` |
+| `copy-search-delete-char` | 1文字消す（何も打っていなければ検索をやめる）            | `backspace`・`ctrl+h`        |
+| `copy-search-clear`       | 打った文字をすべて消す                                   | `ctrl+u`                     |

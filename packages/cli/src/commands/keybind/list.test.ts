@@ -28,6 +28,31 @@ describe("formatKeybindList", () => {
     ]);
   });
 
+  test("コピーモードの表はprefixを前置せず、表ごとのグループに分けて並べる", () => {
+    const lines = formatKeybindList({
+      ok: true,
+      prefix: "ctrl+b",
+      repeatTimeoutMs: 500,
+      entries: [
+        entry({ key: "v", action: "copy-mode" }),
+        entry({ key: "g g", action: "copy-top", noPrefix: true, mode: "copy" }),
+        entry({ key: "enter", action: "copy-search-confirm", noPrefix: true, mode: "copy-search" }),
+      ],
+    });
+    expect(lines).toEqual([
+      "prefix: ctrl+b (repeat-timeout: 500ms)",
+      "",
+      "[prefix]",
+      "ctrl+b v  copy-mode",
+      "",
+      "[copy-mode]",
+      "g g       copy-top",
+      "",
+      "[copy-mode search]",
+      "enter     copy-search-confirm",
+    ]);
+  });
+
   test("descriptionがあればアクション名（関数ハンドラのfunction含む）の代わりに表示する", () => {
     const lines = formatKeybindList({
       ok: true,

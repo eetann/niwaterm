@@ -4,7 +4,7 @@
 // ポップアップ（ADR 0005）はBoardをまたいでも同じものを使えるよう、Board単位ではなくこの層で
 // popup.tsのcreatePopupインスタンスを1つだけ保持する（ADR 0006）。
 import type { BoardNaming } from "@niwaterm/config";
-import type { CopyModeKey } from "./copy-mode";
+import type { CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { PersistedBoardStartup, RestoredTreeMeta } from "./persistence";
 import { toPersistedTileNode, type PersistedTileNode } from "./persistence";
@@ -893,9 +893,9 @@ export function createWorkspace(opts: WorkspaceOptions) {
     findBoardOwnerByTabId(tabId)?.enterCopyMode(tabId);
   }
 
-  function handleCopyModeKey(tabId: TabId, key: CopyModeKey): boolean {
-    if (popup.hasTab(tabId)) return popup.handleCopyModeKey(key);
-    return findBoardOwnerByTabId(tabId)?.handleCopyModeKey(tabId, key) ?? false;
+  function handleCopyModeKey(tabId: TabId, press: CopyModeKeyPress): boolean {
+    if (popup.hasTab(tabId)) return popup.handleCopyModeKey(press);
+    return findBoardOwnerByTabId(tabId)?.handleCopyModeKey(tabId, press) ?? false;
   }
 
   function handleScroll(tabId: TabId, deltaLines: number): void {

@@ -6,6 +6,7 @@
 // 実装（createNiwaApi相当）はsrc/bun側が持つ。このファイルは型のみで、bun側実装への依存を持たない
 // （このパッケージはmainview側からもimportされるため）。
 
+import type { CopyModeAction, CopyModeSearchAction } from "./copy-mode-keybindings";
 import type { KeyBindingString, KeybindAction, SecondKeyString } from "./keybindings";
 
 export type FocusDirection = "up" | "down" | "left" | "right";
@@ -380,6 +381,19 @@ export interface KeybindOptions {
    * または`function`（関数ハンドラ）が表示されるため、関数ハンドラには何をするバインドなのかを書いておく
    */
   description?: string;
+  /** prefixの表へ登録する（省略時と同じ）。コピーモードの表へは`"copy"`・`"copy-search"`を指定する */
+  mode?: "prefix";
+}
+
+/**
+ * コピーモードの表へ登録するときのオプション。`"copy"`はコピーモード中、`"copy-search"`は
+ * 検索文字列（`/` `?`の後）を入力している間の表。キーは修飾なし・ctrl/cmd付きのどちらも書け、
+ * `"copy"`の表に限り空白区切りで連続キーを書ける（例: `"g g"`）
+ */
+export interface CopyModeKeybindOptions {
+  mode: "copy" | "copy-search";
+  /** キーバインド一覧（`niwa keybind list`）に表示する説明 */
+  description?: string;
 }
 
 /**
@@ -404,8 +418,23 @@ export interface Niwa {
     action: KeybindAction | KeybindHandler,
     opts?: KeybindOptions,
   ): void;
+  /** コピーモード中のキーにコピーモードのアクション（`copy-`で始まる名前）か関数ハンドラを割り当てる */
+  keybind(
+    key: string,
+    action: CopyModeAction | KeybindHandler,
+    opts: CopyModeKeybindOptions & { mode: "copy" },
+  ): void;
+  /** 検索文字列の入力中のキーに、検索入力のアクション（`copy-search-`で始まる名前）か関数ハンドラを割り当てる */
+  keybind(
+    key: string,
+    action: CopyModeSearchAction | KeybindHandler,
+    opts: CopyModeKeybindOptions & { mode: "copy-search" },
+  ): void;
   /** keybindで割り当てたバインドを解除する */
-  unbind(key: SecondKeyString | KeyBindingString, opts?: KeybindOptions): void;
+  unbind(
+    key: SecondKeyString | KeyBindingString,
+    opts?: KeybindOptions | Pick<CopyModeKeybindOptions, "mode">,
+  ): void;
   /**
    * ターミナル側で起きた出来事に対する処理を登録する。同じイベントへ複数回呼ぶと後勝ちで上書きされる。
    * ハンドラを登録するとそのイベントの既定の処理は走らなくなるため、既定の挙動を残したい場合は

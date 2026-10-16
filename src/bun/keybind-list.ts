@@ -6,7 +6,12 @@
 // 一覧の用途は「今どう割り当たっているか」の確認であり、発火しないものを混ぜると確認にならないため。
 
 import {
+  type CopyModeKeymapMode,
+  isCopyModeAction,
+  isCopyModeSearchAction,
   isCustomBindingRef,
+  isValidCopyModeKey,
+  resolveCopyModeBindingEntry,
   parseKeyBindingString,
   parseSecondKeyString,
   resolveBindingEntry,
@@ -25,15 +30,17 @@ export interface KeybindEntryInfo {
   /** niwa.keybindのopts.descriptionで付けた説明。未指定はundefined */
   description?: string;
   repeat: boolean;
-  /** trueならprefix不要で即時発火する */
+  /** trueならprefix不要で即時発火する（コピーモードの表もprefixを介さないのでtrue） */
   noPrefix: boolean;
+  /** コピーモードの表のエントリなら、どちらの表か。prefix・directの表はundefined */
+  mode?: CopyModeKeymapMode;
 }
 
 export interface KeybindListInfo {
   /** prefixキー。未設定・不正な表記はnull（この場合noPrefix:falseのバインドは発火しない） */
   prefix: string | null;
   repeatTimeoutMs: number;
-  /** prefix側→direct側の順、各グループ内はキー表記順 */
+  /** prefix側→direct側→コピーモード→検索入力中の順、各グループ内はキー表記順 */
   entries: KeybindEntryInfo[];
 }
 
@@ -51,14 +58,35 @@ function toEntry(key: string, rawEntry: unknown, noPrefix: boolean): KeybindEntr
   };
 }
 
+function toCopyModeEntry(
+  key: string,
+  rawEntry: unknown,
+  mode: CopyModeKeymapMode,
+): KeybindEntryInfo | null {
+  if (!isValidCopyModeKey(key, mode)) return null;
+  const resolved = resolveCopyModeBindingEntry<string>(
+    rawEntry,
+    mode === "copy" ? isCopyModeAction : isCopyModeSearchAction,
+  );
+  if (!resolved) return null;
+  return {
+    key,
+    action: isCustomBindingRef(resolved.target) ? CUSTOM_HANDLER_ACTION : resolved.target,
+    description: resolved.description,
+    repeat: false,
+    noPrefix: true,
+    mode,
+  };
+}
+
 function collect(
   source: Partial<Record<string, unknown>> | undefined,
-  noPrefix: boolean,
+  toInfo: (key: string, rawEntry: unknown) => KeybindEntryInfo | null,
 ): KeybindEntryInfo[] {
   const entries: KeybindEntryInfo[] = [];
   for (const [key, rawEntry] of Object.entries(source ?? {})) {
     if (rawEntry === undefined) continue;
-    const entry = toEntry(key, rawEntry, noPrefix);
+    const entry = toInfo(key, rawEntry);
     if (entry) entries.push(entry);
   }
   // 登録順は「デフォルト→ユーザー設定」の重ね順で、しかも数字キー("0")がオブジェクトの
@@ -76,6 +104,11 @@ export function buildKeybindList(config: KeybindingsConfig): KeybindListInfo {
   return {
     prefix,
     repeatTimeoutMs,
-    entries: [...collect(config.bindings, false), ...collect(config.direct, true)],
+    entries: [
+      ...collect(config.bindings, (key, raw) => toEntry(key, raw, false)),
+      ...collect(config.direct, (key, raw) => toEntry(key, raw, true)),
+      ...collect(config.copyMode, (key, raw) => toCopyModeEntry(key, raw, "copy")),
+      ...collect(config.copyModeSearch, (key, raw) => toCopyModeEntry(key, raw, "copy-search")),
+    ],
   };
 }

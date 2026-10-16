@@ -6,6 +6,12 @@
 // も別枠で持てる。altを含むdirectはtmuxの`bind-key -n M-key`相当で、押した瞬間ターミナル側の
 // Metaキー入力（bashのreadlineショートカット等）より優先してniwaterm側が横取りする点に注意
 
+import type {
+  CopyModeAction,
+  CopyModeBindingEntry,
+  CopyModeSearchAction,
+} from "./copy-mode-keybindings";
+
 type ModifierToken = "cmd" | "ctrl" | "shift" | "alt";
 
 const MODIFIER_TOKENS: ReadonlySet<string> = new Set<ModifierToken>([
@@ -149,6 +155,10 @@ export interface KeybindingsConfig {
    * 未指定・不正値はDEFAULT_REPEAT_TIMEOUT_MS
    */
   repeatTimeoutMs?: number;
+  /** コピーモード中のキー→コピーモードのアクションのマップ。空白区切りで連続キーを書ける（例: "g g"） */
+  copyMode?: Partial<Record<string, CopyModeBindingEntry<CopyModeAction>>>;
+  /** コピーモードで検索文字列を入力している間のキー→アクションのマップ */
+  copyModeSearch?: Partial<Record<string, CopyModeBindingEntry<CopyModeSearchAction>>>;
 }
 
 // prefix・2打目キーともOS共通（prefixキー自体でOS差異を吸収できるため）。
@@ -220,10 +230,72 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
 /** repeatTimeoutMs未指定・不正値の場合のフォールバック値(ms)。tmuxのrepeat-time既定と同じ500ms */
 export const DEFAULT_REPEAT_TIMEOUT_MS = 500;
 
+// vimの操作をそのまま踏襲する。英大文字はshift+英小文字で書く（prefixの表と同じ表記）
+const defaultCopyModeBindings: Partial<Record<string, CopyModeBindingEntry<CopyModeAction>>> = {
+  h: "copy-cursor-left",
+  left: "copy-cursor-left",
+  l: "copy-cursor-right",
+  right: "copy-cursor-right",
+  k: "copy-cursor-up",
+  up: "copy-cursor-up",
+  j: "copy-cursor-down",
+  down: "copy-cursor-down",
+  w: "copy-word-forward",
+  b: "copy-word-backward",
+  e: "copy-word-end",
+  "0": "copy-line-start",
+  home: "copy-line-start",
+  "^": "copy-first-non-blank",
+  $: "copy-line-end",
+  end: "copy-line-end",
+  "g g": "copy-top",
+  "shift+g": "copy-bottom",
+  "shift+h": "copy-screen-top",
+  "shift+m": "copy-screen-middle",
+  "shift+l": "copy-screen-bottom",
+  "ctrl+u": "copy-half-page-up",
+  "ctrl+d": "copy-half-page-down",
+  pageup: "copy-page-up",
+  "ctrl+b": "copy-page-up",
+  pagedown: "copy-page-down",
+  "ctrl+f": "copy-page-down",
+  "/": "copy-search-forward",
+  "?": "copy-search-backward",
+  n: "copy-search-next",
+  "shift+n": "copy-search-prev",
+  // viの段落移動（{ }）に充てる。シェルのプロンプトはセッションの段落の切れ目そのもので、
+  // tmuxのコピーモードも{ }を段落移動に使っている
+  "{": "copy-prompt-up",
+  "}": "copy-prompt-down",
+  v: "copy-select-char",
+  "shift+v": "copy-select-line",
+  y: "copy-yank",
+  enter: "copy-yank",
+  escape: "copy-cancel",
+  q: "copy-exit",
+  "ctrl+c": "copy-exit",
+  "ctrl+[": "copy-exit",
+};
+
+// vimのコマンドラインの編集キーに合わせる
+const defaultCopyModeSearchBindings: Partial<
+  Record<string, CopyModeBindingEntry<CopyModeSearchAction>>
+> = {
+  enter: "copy-search-confirm",
+  escape: "copy-search-cancel",
+  "ctrl+c": "copy-search-cancel",
+  "ctrl+[": "copy-search-cancel",
+  backspace: "copy-search-delete-char",
+  "ctrl+h": "copy-search-delete-char",
+  "ctrl+u": "copy-search-clear",
+};
+
 export const defaultKeybindings: KeybindingsConfig = {
   prefix: "ctrl+b",
   bindings: commonBindings,
   repeatTimeoutMs: DEFAULT_REPEAT_TIMEOUT_MS,
+  copyMode: defaultCopyModeBindings,
+  copyModeSearch: defaultCopyModeSearchBindings,
 };
 
 export const defaultWindowsKeybindings: KeybindingsConfig = {
@@ -234,6 +306,8 @@ export const defaultWindowsKeybindings: KeybindingsConfig = {
     "ctrl+shift+v": "paste-clipboard",
   },
   repeatTimeoutMs: DEFAULT_REPEAT_TIMEOUT_MS,
+  copyMode: defaultCopyModeBindings,
+  copyModeSearch: defaultCopyModeSearchBindings,
 };
 
 /** 実行プラットフォームに対応するデフォルトキーバインド（値はprocess.platformと同じ表記） */

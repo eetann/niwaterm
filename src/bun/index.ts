@@ -9,33 +9,35 @@ import Electrobun, {
 } from "electrobun/bun";
 import type { PopupGeometry } from "../shared/popup-geometry";
 import { APP_VARIANT } from "./app-variant.generated";
-import type {
-  KeybindingsConfig,
-  LayoutsConfig,
-  NiwaBellEvent,
-  NiwaBellHandler,
-  NiwaLinkEvent,
-  NiwaLinkHandler,
-  NiwaNotifyOptions,
-  ResolvedAppearanceConfig,
-  ResolvedBoardConfig,
-  ResolvedBoardPhase,
-  ResolvedBrowserConfig,
-  HoverButtonContext,
-  HoverButtonPosition,
-  ResolvedCustomViewConfig,
-  ResolvedHoverButtonConfig,
-  ResolvedLinkConfig,
-  ResolvedMouseConfig,
-  ResolvedResumeConfig,
-  ResolvedSidebarBoardStatusItem,
-  ResolvedSidebarConfig,
-  ResolvedSidebarToolbarConfig,
-  ResolvedStatusBarConfig,
-  ResolvedTerminalConfig,
-  ShellProfile,
-  StatusBarContext,
-  StatusBarValue,
+import {
+  type CompiledCopyModeKeymap,
+  compileCopyModeKeymap,
+  type KeybindingsConfig,
+  type LayoutsConfig,
+  type NiwaBellEvent,
+  type NiwaBellHandler,
+  type NiwaLinkEvent,
+  type NiwaLinkHandler,
+  type NiwaNotifyOptions,
+  type ResolvedAppearanceConfig,
+  type ResolvedBoardConfig,
+  type ResolvedBoardPhase,
+  type ResolvedBrowserConfig,
+  type HoverButtonContext,
+  type HoverButtonPosition,
+  type ResolvedCustomViewConfig,
+  type ResolvedHoverButtonConfig,
+  type ResolvedLinkConfig,
+  type ResolvedMouseConfig,
+  type ResolvedResumeConfig,
+  type ResolvedSidebarBoardStatusItem,
+  type ResolvedSidebarConfig,
+  type ResolvedSidebarToolbarConfig,
+  type ResolvedStatusBarConfig,
+  type ResolvedTerminalConfig,
+  type ShellProfile,
+  type StatusBarContext,
+  type StatusBarValue,
 } from "@niwaterm/config";
 import {
   defaultBoardConfig,
@@ -186,7 +188,8 @@ export type NiwaRPC = {
       /** vi風コピーモードへ入る（キーバインド・コマンドパレットから） */
       enterCopyMode: { tabId: TabId };
       /** コピーモード中のキー入力。未割当キーはbun側で無視する */
-      copyModeKey: { tabId: TabId; key: string; ctrl: boolean };
+      /** keysはキーをcanonicalizeParsed表記にした候補、textは検索文字列へ足す1文字（無ければnull） */
+      copyModeKey: { tabId: TabId; keys: string[]; text: string | null };
       scroll: { tabId: TabId; deltaLines: number };
       scrollToTop: { tabId: TabId };
       scrollToBottom: { tabId: TabId };
@@ -843,6 +846,9 @@ let configLoadError: string | null = null;
 /** 今効いている設定を解決したときに出た警告。読み込みに失敗した回のぶんでは上書きしない */
 let configDiagnostics: ConfigDiagnostic[] = [];
 let keybindings: KeybindingsConfig;
+// コピーモード中の打鍵ごとにコンパイルし直さないよう、keybindingsが差し替わったときだけ作り直す
+let copyModeKeymapCache: { source: KeybindingsConfig; keymap: CompiledCopyModeKeymap } | null =
+  null;
 let appearance: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 // 復元したBoardの自動名は設定の読み込みより前に決まる（windowManagerの生成時）ため、
@@ -1042,6 +1048,13 @@ function handleOpenLink(tabId: TabId, url: string, text: string): void {
   Promise.resolve(linkHandler(event)).catch((err: unknown) => {
     console.log(`[bun] open-link handler failed: ${String(err)}`);
   });
+}
+
+function currentCopyModeKeymap(): CompiledCopyModeKeymap {
+  if (copyModeKeymapCache?.source !== keybindings) {
+    copyModeKeymapCache = { source: keybindings, keymap: compileCopyModeKeymap(keybindings) };
+  }
+  return copyModeKeymapCache.keymap;
 }
 
 function currentConfigSummary(): ConfigSummary {
@@ -1373,8 +1386,24 @@ function createWindowRpc(windowId: WindowId) {
         enterCopyMode: ({ tabId }: { tabId: TabId }) => {
           windowManager.enterCopyMode(tabId);
         },
-        copyModeKey: ({ tabId, key, ctrl }: { tabId: TabId; key: string; ctrl: boolean }) => {
-          windowManager.handleCopyModeKey(tabId, { key, ctrl });
+        copyModeKey: ({
+          tabId,
+          keys,
+          text,
+        }: {
+          tabId: TabId;
+          keys: string[];
+          text: string | null;
+        }) => {
+          windowManager.handleCopyModeKey(tabId, {
+            key: { keys, text },
+            keymap: currentCopyModeKeymap(),
+            runHandler: (handlerId) => {
+              runKeybindHandler(handlerId).catch((err: unknown) => {
+                console.log(`[bun] keybind handler error: ${String(err)}`);
+              });
+            },
+          });
         },
         scroll: ({ tabId, deltaLines }: { tabId: TabId; deltaLines: number }) => {
           windowManager.handleScroll(tabId, deltaLines);

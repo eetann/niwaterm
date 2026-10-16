@@ -9,7 +9,7 @@ import {
 
 /** 実際に押すキー表記。prefix側はprefixキーを前置した2打分の表記にする */
 function keyLabel(entry: KeybindEntry, prefix: string | null): string {
-  if (entry.noPrefix) return entry.key;
+  if (entry.noPrefix || entry.mode !== undefined) return entry.key;
   return prefix === null ? entry.key : `${prefix} ${entry.key}`;
 }
 
@@ -36,11 +36,13 @@ export function formatKeybindList(result: Extract<ListKeybindingsResult, { ok: t
     lines.push("(キーバインドが設定されていません)");
     return lines;
   }
-  // 2打目キーとdirectでは同じキー表記でも意味が違うため、混ぜずにグループを分けて表示する
+  // 表ごとに同じキー表記でも意味が違うため、混ぜずにグループを分けて表示する
   const keyWidth = Math.max(...entries.map((e) => keyLabel(e, prefix).length));
   for (const [heading, group] of [
-    ["[prefix]", entries.filter((e) => !e.noPrefix)],
-    ["[direct]", entries.filter((e) => e.noPrefix)],
+    ["[prefix]", entries.filter((e) => !e.noPrefix && e.mode === undefined)],
+    ["[direct]", entries.filter((e) => e.noPrefix && e.mode === undefined)],
+    ["[copy-mode]", entries.filter((e) => e.mode === "copy")],
+    ["[copy-mode search]", entries.filter((e) => e.mode === "copy-search")],
   ] as const) {
     if (group.length === 0) continue;
     lines.push("", heading, ...entryLines(group, prefix, keyWidth));

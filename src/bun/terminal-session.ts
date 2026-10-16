@@ -12,7 +12,7 @@ import {
   findCopyModeMatches,
   firstNonBlankColumn,
   type CopyModeContext,
-  type CopyModeKey,
+  type CopyModeKeyPress,
   type CopyModeMatch,
   type CopyModePoint,
   type CopyModeSearch,
@@ -557,9 +557,9 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
    * コピーモード中の1キーを処理する。コピーモードでない・未割当のキーならfalseを返す
    * （呼び出し側が通常の入力として扱えるようにするため）
    */
-  function handleCopyModeKey(key: CopyModeKey): boolean {
+  function handleCopyModeKey(press: CopyModeKeyPress): boolean {
     if (!copyMode) return false;
-    const result = applyCopyModeKey(copyMode, key, copyModeContext());
+    const result = applyCopyModeKey(copyMode, press.key, copyModeContext(), press.keymap);
     if (!result.handled) return false;
     // メッセージは次のキー入力まで（キーを1つ処理したら消す）
     copyModeMessage = null;
@@ -615,6 +615,10 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       }
       case "exit":
         exitCopyMode();
+        return true;
+      case "custom":
+        copyMode = syncCopyModeViewport(result.state);
+        press.runHandler(result.effect.handlerId);
         return true;
       default:
         copyMode = syncCopyModeViewport(result.state);

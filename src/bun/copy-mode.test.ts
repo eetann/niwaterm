@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { compileCopyModeKeymap, defaultKeybindings } from "@niwaterm/config";
+import { copyModeTextFromEvent, keyboardEventToCopyModeKeys } from "../mainview/tile-keybindings";
 import {
   applyCopyModeKey,
   cellStarts,
@@ -27,15 +29,22 @@ function ctxOf(lines: string[], cols = 20, viewportRows = lines.length): CopyMod
   };
 }
 
+const keymap = compileCopyModeKeymap(defaultKeybindings);
+
+const SHIFTED_SYMBOLS = '~!@#$%^&*()_+{}|:"<>?';
+
+/** webviewと同じ正規化を通して、vi表記のキー（"G"・"$"・"Escape"）をコピーモードへ渡す形にする */
 function key(k: string, ctrl = false): CopyModeKey {
-  return { key: k, ctrl };
+  const shiftKey = k.length === 1 && (k !== k.toLowerCase() || SHIFTED_SYMBOLS.includes(k));
+  const e = { key: k, code: "", metaKey: false, ctrlKey: ctrl, altKey: false, shiftKey };
+  return { keys: keyboardEventToCopyModeKeys(e), text: copyModeTextFromEvent(e) };
 }
 
 /** キー列をまとめて適用する（テストの見通しを良くするためのヘルパー） */
 function press(state: CopyModeState, ctx: CopyModeContext, ...keys: string[]): CopyModeState {
   let current = state;
   for (const k of keys) {
-    current = applyCopyModeKey(current, key(k), ctx).state;
+    current = applyCopyModeKey(current, key(k), ctx, keymap).state;
   }
   return current;
 }
@@ -113,8 +122,8 @@ describe("垂直移動", () => {
     const lines = Array.from({ length: 20 }, (_, i) => `line${i}`);
     const ctx = { ...ctxOf(lines, 20, 10), viewportRows: 10 };
     const state = createCopyModeState({ x: 0, y: 0 });
-    expect(applyCopyModeKey(state, key("d", true), ctx).state.cursor.y).toBe(5);
-    expect(applyCopyModeKey(state, key("f", true), ctx).state.cursor.y).toBe(9);
+    expect(applyCopyModeKey(state, key("d", true), ctx, keymap).state.cursor.y).toBe(5);
+    expect(applyCopyModeKey(state, key("f", true), ctx, keymap).state.cursor.y).toBe(9);
   });
 
   test("gg/Gで画面全体（スクロールバック込み）の先頭・末尾へ飛ぶ", () => {
@@ -129,7 +138,7 @@ describe("垂直移動", () => {
     const ctx = ctxOf(["abc", "def"]);
     const state = createCopyModeState({ x: 0, y: 0 });
     const after = press(state, ctx, "g", "j");
-    expect(after.pendingG).toBe(false);
+    expect(after.pendingKeys).toEqual([]);
     expect(after.cursor).toEqual({ x: 0, y: 1 });
   });
 
@@ -259,7 +268,7 @@ describe("ヤンク・終了", () => {
   test("yは選択範囲のヤンクを要求する", () => {
     const ctx = ctxOf(["abcdef"], 10);
     const state = press(createCopyModeState({ x: 1, y: 0 }), ctx, "v", "l");
-    const result = applyCopyModeKey(state, key("y"), ctx);
+    const result = applyCopyModeKey(state, key("y"), ctx, keymap);
     expect(result.effect).toEqual({
       type: "yank",
       range: { start: { x: 1, y: 0 }, end: { x: 2, y: 0 }, mode: "char" },
@@ -269,7 +278,7 @@ describe("ヤンク・終了", () => {
   test("選択していない状態のyはカーソル行をヤンクする", () => {
     const ctx = ctxOf(["abc", "def"], 10);
     const state = createCopyModeState({ x: 1, y: 1 });
-    const result = applyCopyModeKey(state, key("y"), ctx);
+    const result = applyCopyModeKey(state, key("y"), ctx, keymap);
     expect(result.effect).toEqual({
       type: "yank",
       range: { start: { x: 0, y: 1 }, end: { x: 9, y: 1 }, mode: "line" },
@@ -279,23 +288,27 @@ describe("ヤンク・終了", () => {
   test("選択中のEscapeは選択解除、選択していなければコピーモードを抜ける", () => {
     const ctx = ctxOf(["abc"], 10);
     const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "v");
-    const cleared = applyCopyModeKey(selecting, key("Escape"), ctx);
+    const cleared = applyCopyModeKey(selecting, key("Escape"), ctx, keymap);
     expect(cleared.effect).toEqual({ type: "none" });
     expect(cleared.state.selectionMode).toBe("none");
-    expect(applyCopyModeKey(cleared.state, key("Escape"), ctx).effect).toEqual({ type: "exit" });
+    expect(applyCopyModeKey(cleared.state, key("Escape"), ctx, keymap).effect).toEqual({
+      type: "exit",
+    });
   });
 
   test("q・Ctrl+cはいつでもコピーモードを抜ける", () => {
     const ctx = ctxOf(["abc"], 10);
     const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "v");
-    expect(applyCopyModeKey(selecting, key("q"), ctx).effect).toEqual({ type: "exit" });
-    expect(applyCopyModeKey(selecting, key("c", true), ctx).effect).toEqual({ type: "exit" });
+    expect(applyCopyModeKey(selecting, key("q"), ctx, keymap).effect).toEqual({ type: "exit" });
+    expect(applyCopyModeKey(selecting, key("c", true), ctx, keymap).effect).toEqual({
+      type: "exit",
+    });
   });
 
   test("未割当キーはhandled=falseで何も起きない", () => {
     const ctx = ctxOf(["abc"], 10);
     const state = createCopyModeState({ x: 0, y: 0 });
-    const result = applyCopyModeKey(state, key("Z"), ctx);
+    const result = applyCopyModeKey(state, key("Z"), ctx, keymap);
     expect(result.handled).toBe(false);
     expect(result.state.cursor).toEqual({ x: 0, y: 0 });
   });
@@ -503,20 +516,20 @@ describe("検索キー（/ ? n N）", () => {
 
   test("Escapeで入力を取りやめてもコピーモードは抜けない", () => {
     const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f");
-    const result = applyCopyModeKey(typed, key("Escape"), ctx);
+    const result = applyCopyModeKey(typed, key("Escape"), ctx, keymap);
     expect(result.effect).toEqual({ type: "none" });
     expect(result.state.searchInput).toBeNull();
   });
 
   test("Ctrl+uで入力中の文字列を全部消す・Ctrl+cで取りやめる", () => {
     const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o");
-    expect(applyCopyModeKey(typed, key("u", true), ctx).state.searchInput?.query).toBe("");
-    expect(applyCopyModeKey(typed, key("c", true), ctx).state.searchInput).toBeNull();
+    expect(applyCopyModeKey(typed, key("u", true), ctx, keymap).state.searchInput?.query).toBe("");
+    expect(applyCopyModeKey(typed, key("c", true), ctx, keymap).state.searchInput).toBeNull();
   });
 
   test("Enterで検索エフェクトを返し、直前の検索として覚える", () => {
     const typed = press(createCopyModeState({ x: 0, y: 0 }), ctx, "?", "f", "o", "o");
-    const result = applyCopyModeKey(typed, key("Enter"), ctx);
+    const result = applyCopyModeKey(typed, key("Enter"), ctx, keymap);
     expect(result.effect).toEqual({
       type: "search",
       search: { direction: "backward", query: "foo" },
@@ -527,7 +540,7 @@ describe("検索キー（/ ? n N）", () => {
 
   test("空のままEnterは直前の検索文字列を使い回す", () => {
     const searched = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o", "o", "Enter");
-    const result = applyCopyModeKey(press(searched, ctx, "/"), key("Enter"), ctx);
+    const result = applyCopyModeKey(press(searched, ctx, "/"), key("Enter"), ctx, keymap);
     expect(result.effect).toEqual({
       type: "search",
       search: { direction: "forward", query: "foo" },
@@ -539,6 +552,7 @@ describe("検索キー（/ ? n N）", () => {
       press(createCopyModeState({ x: 0, y: 0 }), ctx, "/"),
       key("Enter"),
       ctx,
+      keymap,
     );
     expect(result.effect).toEqual({ type: "none" });
     expect(result.state.searchInput).toBeNull();
@@ -546,11 +560,11 @@ describe("検索キー（/ ? n N）", () => {
 
   test("nは直前の検索と同じ向き、Nは逆向きで検索する", () => {
     const searched = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "f", "o", "o", "Enter");
-    expect(applyCopyModeKey(searched, key("n"), ctx).effect).toEqual({
+    expect(applyCopyModeKey(searched, key("n"), ctx, keymap).effect).toEqual({
       type: "search",
       search: { direction: "forward", query: "foo" },
     });
-    const reversed = applyCopyModeKey(searched, key("N"), ctx);
+    const reversed = applyCopyModeKey(searched, key("N"), ctx, keymap);
     expect(reversed.effect).toEqual({
       type: "search",
       search: { direction: "backward", query: "foo" },
@@ -560,14 +574,14 @@ describe("検索キー（/ ? n N）", () => {
   });
 
   test("まだ検索していない状態のn/Nは何もしない", () => {
-    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("n"), ctx);
+    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("n"), ctx, keymap);
     expect(result.handled).toBe(true);
     expect(result.effect).toEqual({ type: "none" });
   });
 
   test("yankと違い検索ではコピーモードを抜けない（選択は保ったまま）", () => {
     const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "v", "/", "f", "o", "o");
-    const result = applyCopyModeKey(selecting, key("Enter"), ctx);
+    const result = applyCopyModeKey(selecting, key("Enter"), ctx, keymap);
     expect(result.state.selectionMode).toBe("char");
     expect(result.state.anchor).toEqual({ x: 0, y: 0 });
   });
@@ -577,27 +591,27 @@ describe("プロンプトジャンプ（{ }）", () => {
   const ctx = ctxOf(["$ one", "out", "$ two", "out"]);
 
   test("{で上方向・}で下方向のジャンプを依頼する", () => {
-    const up = applyCopyModeKey(createCopyModeState({ x: 0, y: 2 }), key("{"), ctx);
+    const up = applyCopyModeKey(createCopyModeState({ x: 0, y: 2 }), key("{"), ctx, keymap);
     expect(up.effect).toEqual({ type: "jumpPrompt", direction: "up" });
-    const down = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("}"), ctx);
+    const down = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("}"), ctx, keymap);
     expect(down.effect).toEqual({ type: "jumpPrompt", direction: "down" });
   });
 
   test("行のマークは呼び出し側しか知らないため、カーソルはこの場では動かさない", () => {
-    const result = applyCopyModeKey(createCopyModeState({ x: 3, y: 2 }), key("{"), ctx);
+    const result = applyCopyModeKey(createCopyModeState({ x: 3, y: 2 }), key("{"), ctx, keymap);
     expect(result.state.cursor).toEqual({ x: 3, y: 2 });
   });
 
   test("選択中でも選択は解除しない（V + }でコマンド1つぶんを選べる）", () => {
     const selecting = press(createCopyModeState({ x: 0, y: 0 }), ctx, "V");
-    const result = applyCopyModeKey(selecting, key("}"), ctx);
+    const result = applyCopyModeKey(selecting, key("}"), ctx, keymap);
     expect(result.state.selectionMode).toBe("line");
     expect(result.state.anchor).toEqual({ x: 0, y: 0 });
   });
 
   test("gの2打目待ちは解除する", () => {
     const pending = press(createCopyModeState({ x: 0, y: 0 }), ctx, "g");
-    expect(applyCopyModeKey(pending, key("}"), ctx).state.pendingG).toBe(false);
+    expect(applyCopyModeKey(pending, key("}"), ctx, keymap).state.pendingKeys).toEqual([]);
   });
 });
 
@@ -615,5 +629,85 @@ describe("firstNonBlankColumn", () => {
   test("空行・空白だけの行は0", () => {
     expect(firstNonBlankColumn("")).toBe(0);
     expect(firstNonBlankColumn("    ")).toBe(0);
+  });
+});
+
+describe("キーの割り当て替え", () => {
+  const ctx = ctxOf(["abc def", "ghi"]);
+
+  test("表に書いたキーで、そのアクションが動く", () => {
+    const custom = compileCopyModeKeymap({ copyMode: { "ctrl+n": "copy-cursor-down" } });
+    const result = applyCopyModeKey(
+      createCopyModeState({ x: 0, y: 0 }),
+      key("n", true),
+      ctx,
+      custom,
+    );
+    expect(result.handled).toBe(true);
+    expect(result.state.cursor).toEqual({ x: 0, y: 1 });
+  });
+
+  test("表から外したキーは未割当になる", () => {
+    const custom = compileCopyModeKeymap({ copyMode: { k: "copy-cursor-up" } });
+    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("j"), ctx, custom);
+    expect(result.handled).toBe(false);
+  });
+
+  test("空白区切りの連続キーは途中まで打つと続きを待ち、打ち切ると発火する", () => {
+    const custom = compileCopyModeKeymap({ copyMode: { "space l": "copy-line-end" } });
+    const waiting = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key(" "), ctx, custom);
+    expect(waiting.handled).toBe(true);
+    expect(waiting.state.pendingKeys).toEqual(["0000:space"]);
+    const fired = applyCopyModeKey(waiting.state, key("l"), ctx, custom);
+    expect(fired.state.cursor).toEqual({ x: 6, y: 0 });
+    expect(fired.state.pendingKeys).toEqual([]);
+  });
+
+  test("単独のキーと連続キーの両方があれば、単独のキーが即座に発火する", () => {
+    const custom = compileCopyModeKeymap({
+      copyMode: { g: "copy-bottom", "g g": "copy-top" },
+    });
+    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("g"), ctx, custom);
+    expect(result.state.cursor).toEqual({ x: 0, y: 1 });
+    expect(result.state.pendingKeys).toEqual([]);
+  });
+
+  test("関数ハンドラを割り当てたキーはcustomの効果を返す", () => {
+    const custom = compileCopyModeKeymap({ copyMode: { x: { kind: "custom", id: "handler-0" } } });
+    const result = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("x"), ctx, custom);
+    expect(result.effect).toEqual({ type: "custom", handlerId: "handler-0" });
+  });
+
+  test("検索入力中の表も差し替えられ、表に無い1文字は検索文字列へ足す", () => {
+    const custom = compileCopyModeKeymap({
+      copyMode: { "/": "copy-search-forward" },
+      copyModeSearch: { tab: "copy-search-confirm" },
+    });
+    let state = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("/"), ctx, custom).state;
+    state = applyCopyModeKey(state, key("d"), ctx, custom).state;
+    state = applyCopyModeKey(state, key("Enter"), ctx, custom).state;
+    expect(state.searchInput?.query).toBe("d");
+    const confirmed = applyCopyModeKey(state, key("Tab"), ctx, custom);
+    expect(confirmed.effect).toEqual({
+      type: "search",
+      search: { direction: "forward", query: "d" },
+    });
+  });
+
+  test("検索入力中の関数ハンドラはcustomの効果を返し、入力中のまま残る", () => {
+    const custom = compileCopyModeKeymap({
+      copyMode: { "/": "copy-search-forward" },
+      copyModeSearch: { "ctrl+r": { kind: "custom", id: "handler-1" } },
+    });
+    const searching = applyCopyModeKey(createCopyModeState({ x: 0, y: 0 }), key("/"), ctx, custom);
+    const result = applyCopyModeKey(searching.state, key("r", true), ctx, custom);
+    expect(result.effect).toEqual({ type: "custom", handlerId: "handler-1" });
+    expect(result.state.searchInput).not.toBeNull();
+  });
+
+  test("IME確定・ペーストのように文字だけを送る入力は、表を引かずに検索文字列へ足す", () => {
+    const searching = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/");
+    const result = applyCopyModeKey(searching, { keys: [], text: "あ" }, ctx, keymap);
+    expect(result.state.searchInput?.query).toBe("あ");
   });
 });

@@ -191,7 +191,9 @@ function appearanceSection(
 function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySection {
   const list = buildKeybindList(keybindings);
   const prefixEntries = list.entries.filter((e) => !e.noPrefix).length;
-  const directEntries = list.entries.length - prefixEntries;
+  const directEntries = list.entries.filter((e) => e.noPrefix && e.mode === undefined).length;
+  const copyModeEntries = list.entries.filter((e) => e.mode === "copy").length;
+  const copyModeSearchEntries = list.entries.filter((e) => e.mode === "copy-search").length;
   return {
     name: "keybindings",
     entries: [
@@ -205,6 +207,12 @@ function keybindingsSection(keybindings: KeybindingsConfig): ConfigSummarySectio
         note: "一覧は niwa keybind list",
       },
       { key: "direct", value: `${directEntries}件`, note: "prefix不要で即時発火するバインド" },
+      { key: "copyMode", value: `${copyModeEntries}件`, note: "コピーモード中のバインド" },
+      {
+        key: "copyModeSearch",
+        value: `${copyModeSearchEntries}件`,
+        note: "コピーモードで検索文字列を入力している間のバインド",
+      },
     ],
   };
 }

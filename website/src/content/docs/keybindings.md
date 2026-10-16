@@ -104,6 +104,31 @@ keybindings: (niwa) => {
 
 この例なら、`ctrl+b`→`h`→`h`→`j`のように続けて押せる。`repeat`を付けたキーどうしなら、別のキーに移っても続けられる。続けて押せる時間はデフォルトで500ミリ秒で、`niwa.repeatTimeout(300)`のように変えられる。
 
+### コピーモードのキーを変える
+
+[コピーモード](/niwaterm/jump-and-copy/#コピーモードvi風のキーボード選択)の中で押すキーも変えられる。`mode: "copy"`を付けて、コピーモードのアクションか関数を割り当てる。
+
+```ts
+keybindings: (niwa) => {
+  // ctrl+vで文字選択を始める
+  niwa.keybind("ctrl+v", "copy-select-char", { mode: "copy" });
+  // space → lで行の最後へ飛ぶ
+  niwa.keybind("space l", "copy-line-end", { mode: "copy" });
+  // qでは抜けないようにする
+  niwa.unbind("q", { mode: "copy" });
+},
+```
+
+コピーモードのキーは、prefixキーを押さずにそのまま押す。そのため`j`のような修飾キーなしのキーにも、`ctrl+u`のような`ctrl`付きのキーにも割り当てられる。`"g g"`のように空白で区切ると、続けて押すキーになる。
+
+`/`や`?`で検索する文字を打っているあいだのキーは、`mode: "copy-search"`で変える。割り当てていない文字は、そのまま検索する文字として入る。
+
+```ts
+niwa.keybind("tab", "copy-search-confirm", { mode: "copy-search" });
+```
+
+使えるアクションは[アクション一覧のコピーモード](/niwaterm/keybindings/actions/#コピーモード)にある。
+
 ### 一覧に説明を出す
 
 `niwa keybind list`の一覧には、関数を割り当てたキーは`function`としか出ない。`description`を付けておくと、その説明が出る。
@@ -147,6 +172,7 @@ export default defineConfig({
 
 - **prefixのあとに押すキー**には、`shift`と`alt`だけを付けられる。`ctrl`や`cmd`を付けたキーは割り当てられない
 - **prefixキーと`noPrefix`のキー**には、`cmd`・`ctrl`・`alt`のどれかを含める
+- **コピーモードのキー**には、`cmd`・`ctrl`・`shift`・`alt`のどれでも付けられ、付けなくてもよい。スペースキーは`space`と書く
 - **`|`や`:`のようにShiftを押して打つ記号**は、`shift+`を付けずにその記号をそのまま書く（`niwa.keybind("|", ...)`）。英字は`d`と`shift+d`を区別する
 - **macOSで`alt`（Option）を使うとき**は、英字と数字のキーなら`alt+n`のように書けば動く。`alt+;`のような記号のキーは、キーボード配列によっては反応しないことがある
 - **macOSのJIS配列で`\`を割り当てたとき**は、`option+¥`で打つか、入力ソースの設定で`¥`キーの入力を`\`に変える

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PopupGeometry } from "../shared/popup-geometry";
 import { clampPopupGeometry } from "../shared/popup-geometry";
-import type { CopyModeKey } from "./copy-mode";
+import type { CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { APP_VARIANT } from "./app-variant.generated";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
@@ -305,8 +305,8 @@ export function createPopup(opts: PopupOptions) {
   }
 
   /** コピーモード中のキー。コピーモードでない・未割当のキーならfalseを返す */
-  function handleCopyModeKey(key: CopyModeKey): boolean {
-    if (!session?.handleCopyModeKey(key)) return false;
+  function handleCopyModeKey(press: CopyModeKeyPress): boolean {
+    if (!session?.handleCopyModeKey(press)) return false;
     opts.onDirty();
     return true;
   }

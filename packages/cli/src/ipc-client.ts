@@ -924,6 +924,8 @@ export interface KeybindEntry {
   description?: string;
   repeat: boolean;
   noPrefix: boolean;
+  /** コピーモードの表のエントリなら"copy"（検索入力中の表は"copy-search"）。prefix・directの表は省略 */
+  mode?: "copy" | "copy-search";
 }
 
 export type ListKeybindingsResult =

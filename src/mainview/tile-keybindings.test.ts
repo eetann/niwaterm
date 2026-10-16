@@ -4,7 +4,13 @@ import {
   defaultKeybindings,
   defaultWindowsKeybindings,
 } from "@niwaterm/config";
-import { actionToTileCommand, createKeybindResolver, type KeydownResult } from "./tile-keybindings";
+import {
+  actionToTileCommand,
+  copyModeTextFromEvent,
+  createKeybindResolver,
+  keyboardEventToCopyModeKeys,
+  type KeydownResult,
+} from "./tile-keybindings";
 
 function key(
   k: string,
@@ -728,5 +734,49 @@ describe("createKeybindResolver（repeat機構: tmuxのbind-key -r相当）", ()
     expect(resolver.isRepeating()).toBe(false);
     resolver.handleKeydown(prefix());
     expect(resolver.isRepeating()).toBe(false);
+  });
+});
+
+describe("keyboardEventToCopyModeKeys", () => {
+  const ev = (
+    k: string,
+    opts: { code?: string; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean } = {},
+  ) => ({
+    key: k,
+    code: opts.code ?? "",
+    metaKey: false,
+    ctrlKey: opts.ctrlKey ?? false,
+    altKey: opts.altKey ?? false,
+    shiftKey: opts.shiftKey ?? false,
+  });
+
+  test("英大文字はshift+英小文字になる", () => {
+    expect(keyboardEventToCopyModeKeys(ev("G", { shiftKey: true }))).toEqual(["0010:g"]);
+  });
+
+  test("Shiftで打つ記号はe.codeに寄せず、shift付きと無しの両方を候補にする", () => {
+    expect(keyboardEventToCopyModeKeys(ev("{", { code: "BracketLeft", shiftKey: true }))).toEqual([
+      "0010:{",
+      "0000:{",
+    ]);
+  });
+
+  test("ctrl付き・名前付きのキー・空白を正規化する", () => {
+    expect(keyboardEventToCopyModeKeys(ev("[", { code: "BracketLeft", ctrlKey: true }))).toEqual([
+      "0100:[",
+    ]);
+    expect(keyboardEventToCopyModeKeys(ev("ArrowDown"))).toEqual(["0000:down"]);
+    expect(keyboardEventToCopyModeKeys(ev("Escape"))).toEqual(["0000:escape"]);
+    expect(keyboardEventToCopyModeKeys(ev(" "))).toEqual(["0000:space"]);
+  });
+
+  test("修飾キー単体は空配列", () => {
+    expect(keyboardEventToCopyModeKeys(ev("Shift", { shiftKey: true }))).toEqual([]);
+  });
+
+  test("検索文字列へ足せるのはctrl/cmdを伴わない1文字だけ", () => {
+    expect(copyModeTextFromEvent(ev("a"))).toBe("a");
+    expect(copyModeTextFromEvent(ev("u", { ctrlKey: true }))).toBeNull();
+    expect(copyModeTextFromEvent(ev("Enter"))).toBeNull();
   });
 });

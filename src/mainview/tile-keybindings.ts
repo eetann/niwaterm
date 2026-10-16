@@ -185,6 +185,58 @@ function keyboardEventToSecondKeyCanonicals(e: KeyboardEventLike): string[] {
     : [toCanonical(e.shiftKey)];
 }
 
+// コピーモードの表を引くためのキー本体。prefixの表と違い[ ] `をe.codeから復元しない。
+// コピーモードの既定は{ }のようにShiftで打つ記号そのものを割り当てており、e.codeから"["へ寄せると
+// 「shift+[」になって一致しなくなるため
+function copyModeKeyBodyFromEvent(e: KeyboardEventLike): string {
+  if (e.altKey) {
+    const fromCode = altKeyBodyFromCode(e.code);
+    if (fromCode !== null) return fromCode;
+  }
+  switch (e.key) {
+    case "ArrowUp":
+      return "up";
+    case "ArrowDown":
+      return "down";
+    case "ArrowLeft":
+      return "left";
+    case "ArrowRight":
+      return "right";
+    case " ":
+      return "space";
+    default:
+      return e.key.toLowerCase();
+  }
+}
+
+/**
+ * コピーモード中のkeydownを、bun側のコピーモードの表（@niwaterm/configのparseCopyModeKeySequenceで
+ * 正規化済み）と突き合わせるcanonical表記の候補へ変換する。修飾キー単体のkeydownは空配列
+ */
+export function keyboardEventToCopyModeKeys(e: KeyboardEventLike): string[] {
+  if (MODIFIER_KEY_NAMES.has(e.key)) return [];
+  const toCanonical = (shift: boolean) =>
+    canonicalizeParsed({
+      cmd: e.metaKey,
+      ctrl: e.ctrlKey,
+      shift,
+      alt: e.altKey,
+      key: copyModeKeyBodyFromEvent(e),
+    });
+  const shiftAbsorbed =
+    e.shiftKey &&
+    e.key.length === 1 &&
+    e.key.toLowerCase() === e.key.toUpperCase() &&
+    !(e.altKey && altKeyBodyFromCode(e.code) !== null);
+  return shiftAbsorbed ? [toCanonical(true), toCanonical(false)] : [toCanonical(e.shiftKey)];
+}
+
+/** コピーモードの検索文字列へ足せる1文字。ctrl/cmdを伴うキー・名前付きのキー（Enter等）はnull */
+export function copyModeTextFromEvent(e: KeyboardEventLike): string | null {
+  if (e.ctrlKey || e.metaKey) return null;
+  return [...e.key].length === 1 ? e.key : null;
+}
+
 function lookup<T>(map: ReadonlyMap<string, T>, canonicals: string[]): T | undefined {
   for (const c of canonicals) {
     const entry = map.get(c);

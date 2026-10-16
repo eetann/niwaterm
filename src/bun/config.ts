@@ -27,7 +27,10 @@ import {
   type HoverButtonItemsFn,
   isHoverButtonPosition,
   isBoardNaming,
+  isCopyModeAction,
+  isCopyModeSearchAction,
   isKeybindAction,
+  isValidCopyModeKey,
   isLinkModifier,
   type LinkRule,
   isLinkOpenTarget,
@@ -51,6 +54,7 @@ import {
   normalizeSidebarBoardStatus,
   parseKeyBindingString,
   parseSecondKeyString,
+  resolveCopyModeBindingEntry,
   platformDefaultKeybindings,
   resolveBindingEntry,
   type ResolvedAppearanceConfig,
@@ -365,7 +369,7 @@ export function resolveKeybindings(
   return niwaApi.extractKeybindingsConfig();
 }
 
-/** KeybindingsConfig（prefix/bindings/direct/repeatTimeoutMs）の内容をniwa.keybind呼び出し列に変換して登録する */
+/** KeybindingsConfig（prefix/bindings/direct/repeatTimeoutMs/copyMode/copyModeSearch）の内容をniwa.keybind呼び出し列に変換して登録する */
 function applyKeybindingsObject(
   niwa: Niwa,
   config: KeybindingsConfig,
@@ -422,6 +426,34 @@ function applyKeybindingsObject(
       repeat: resolved.repeat,
       description: resolved.description,
     });
+  }
+  for (const [key, rawEntry] of Object.entries(config.copyMode ?? {})) {
+    if (rawEntry === undefined) continue;
+    const resolved = resolveCopyModeBindingEntry(rawEntry, isCopyModeAction);
+    if (!isValidCopyModeKey(key, "copy") || !resolved || !isCopyModeAction(resolved.target)) {
+      diag.warn(
+        `${source}.copyMode["${key}"]`,
+        `キーかアクション名が不正なためこのエントリだけ無視します: ${describeValue(rawEntry)}`,
+      );
+      continue;
+    }
+    niwa.keybind(key, resolved.target, { mode: "copy", description: resolved.description });
+  }
+  for (const [key, rawEntry] of Object.entries(config.copyModeSearch ?? {})) {
+    if (rawEntry === undefined) continue;
+    const resolved = resolveCopyModeBindingEntry(rawEntry, isCopyModeSearchAction);
+    if (
+      !isValidCopyModeKey(key, "copy-search") ||
+      !resolved ||
+      !isCopyModeSearchAction(resolved.target)
+    ) {
+      diag.warn(
+        `${source}.copyModeSearch["${key}"]`,
+        `キーかアクション名が不正なためこのエントリだけ無視します: ${describeValue(rawEntry)}`,
+      );
+      continue;
+    }
+    niwa.keybind(key, resolved.target, { mode: "copy-search", description: resolved.description });
   }
 }
 

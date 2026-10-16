@@ -7,8 +7,14 @@
 import type {
   BindingEntry,
   BindingTarget,
+  CopyModeAction,
+  CopyModeBindingEntry,
+  CopyModeSearchAction,
+  CustomBindingRef,
   DetailedBinding,
   KeyBindingString,
+  CopyModeKeybindOptions,
+  KeybindAction,
   KeybindHandler,
   KeybindOptions,
   KeybindingsConfig,
@@ -103,6 +109,12 @@ export interface NiwaApiHandle {
   runDefaultOpenLink(event: NiwaLinkEvent): void;
 }
 
+function isCopyModeOptions<T extends { mode?: string }>(
+  opts: T | undefined,
+): opts is T & Pick<CopyModeKeybindOptions, "mode"> {
+  return opts?.mode === "copy" || opts?.mode === "copy-search";
+}
+
 export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   const { workspaceManager } = deps;
 
@@ -110,6 +122,8 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
   let repeatTimeoutMs: number | undefined;
   const bindings = new Map<SecondKeyString, BindingEntry>();
   const direct = new Map<KeyBindingString, BindingEntry>();
+  const copyMode = new Map<string, CopyModeBindingEntry<CopyModeAction>>();
+  const copyModeSearch = new Map<string, CopyModeBindingEntry<CopyModeSearchAction>>();
   const handlerRegistry = new Map<string, KeybindHandler>();
   let handlerIdCounter = 0;
   let bellHandler: NiwaBellHandler | null = null;
@@ -126,11 +140,18 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     return entry;
   }
 
-  function toBindingTarget(action: Parameters<Niwa["keybind"]>[1]): BindingTarget {
+  function toBindingTarget<A extends string>(action: A | KeybindHandler): A | CustomBindingRef {
     if (typeof action !== "function") return action;
     const id = `handler-${handlerIdCounter++}`;
     handlerRegistry.set(id, action);
     return { kind: "custom", id };
+  }
+
+  function toCopyModeEntry<A extends string>(
+    target: A | CustomBindingRef,
+    description: string | undefined,
+  ): CopyModeBindingEntry<A> {
+    return description === undefined ? target : { target, description };
   }
 
   function focusedTileCwd(tileId: string): string | undefined {
@@ -147,8 +168,22 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
     repeatTimeout(ms) {
       repeatTimeoutMs = ms;
     },
-    keybind(key, action, opts) {
-      const target = toBindingTarget(action);
+    keybind(
+      key: string,
+      action: KeybindAction | CopyModeAction | CopyModeSearchAction | KeybindHandler,
+      opts?: KeybindOptions | CopyModeKeybindOptions,
+    ) {
+      if (isCopyModeOptions(opts)) {
+        if (opts.mode === "copy") {
+          const target = toBindingTarget(action as CopyModeAction | KeybindHandler);
+          copyMode.set(key, toCopyModeEntry(target, opts.description));
+        } else {
+          const target = toBindingTarget(action as CopyModeSearchAction | KeybindHandler);
+          copyModeSearch.set(key, toCopyModeEntry(target, opts.description));
+        }
+        return;
+      }
+      const target = toBindingTarget(action as KeybindAction | KeybindHandler);
       const entry = toBindingEntry(target, opts);
       if (opts?.noPrefix) {
         direct.set(key as KeyBindingString, entry);
@@ -161,7 +196,9 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       if (event === "open-link") linkHandler = handler as NiwaLinkHandler;
     },
     unbind(key, opts) {
-      if (opts?.noPrefix) {
+      if (isCopyModeOptions(opts)) {
+        (opts.mode === "copy" ? copyMode : copyModeSearch).delete(key);
+      } else if (opts !== undefined && "noPrefix" in opts && opts.noPrefix) {
         direct.delete(key as KeyBindingString);
       } else {
         bindings.delete(key);
@@ -403,6 +440,8 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       bindings: Object.fromEntries(bindings),
       direct: Object.fromEntries(direct),
       repeatTimeoutMs,
+      copyMode: Object.fromEntries(copyMode),
+      copyModeSearch: Object.fromEntries(copyModeSearch),
     };
   }
 

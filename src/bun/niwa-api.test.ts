@@ -139,6 +139,24 @@ describe("niwa.keybind / niwa.prefix / niwa.unbind（登録フェーズ）", () 
     expect(config.direct?.["cmd+shift+c"]).toBe("copy-selection");
   });
 
+  test('mode:"copy"・"copy-search"はコピーモードの表へ登録され、unbindも同じmodeで消せる', () => {
+    const { niwa, extractKeybindingsConfig } = createTestSetup();
+    niwa.keybind("ctrl+v", "copy-select-char", { mode: "copy" });
+    niwa.keybind("tab", "copy-search-confirm", { mode: "copy-search", description: "確定" });
+    niwa.keybind("x", () => {}, { mode: "copy" });
+    let config = extractKeybindingsConfig();
+    expect(config.bindings?.["ctrl+v"]).toBeUndefined();
+    expect(config.copyMode?.["ctrl+v"]).toBe("copy-select-char");
+    expect(config.copyMode?.["x"]).toMatchObject({ kind: "custom" });
+    expect(config.copyModeSearch?.["tab"]).toEqual({
+      target: "copy-search-confirm",
+      description: "確定",
+    });
+    niwa.unbind("ctrl+v", { mode: "copy" });
+    config = extractKeybindingsConfig();
+    expect(config.copyMode?.["ctrl+v"]).toBeUndefined();
+  });
+
   test("同じkeyへの再登録は後勝ちで上書きされる", () => {
     const { niwa, extractKeybindingsConfig } = createTestSetup();
     niwa.keybind("d", "split-horizontal");
