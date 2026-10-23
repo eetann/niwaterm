@@ -28,6 +28,7 @@ import { buildListTree } from "./list-tree";
 import { listResolvedLayouts, resolveLayoutPresetByName } from "./project-config";
 import { DEFAULT_RESIZE_AMOUNT } from "./niwa-api";
 import { resolveShellProfileCommand } from "./shell-profiles";
+import { describeTab } from "./tab-info";
 import type { SplitOrientation, TabId } from "./tile-layout";
 import { tmuxKeysToBytes } from "./tmux-keys";
 import type { WindowId, WindowOps } from "./window-manager";
@@ -924,6 +925,17 @@ function buildApp(
         : workspaceManager.getActiveTabId(tileId);
     if (!tabId) return c.json({ ok: false, error: `active tab not found in tile: ${tileId}` }, 404);
     return c.json({ ok: true, workspaceId, boardId, tileId, tabId });
+  });
+
+  // `niwa tab show`用。/resolve-targetと違い、見つからないtabIdをフォールバックせず404にする
+  // （明示指定されたタブの情報を、別のタブの情報とすり替えて返さないため）
+  app.get("/tab-info", (c) => {
+    const tabId = c.req.query("tabId");
+    if (!tabId) return c.json({ ok: false, error: "expected ?tabId=<tabId>" }, 400);
+    const owner = windowOps.managerOf(windowOps.windowIdOfTab(tabId));
+    const info = describeTab(owner.listWorkspaces(), tabId);
+    if (!info) return c.json({ ok: false, error: `tab not found: ${tabId}` }, 404);
+    return c.json({ ok: true, ...info });
   });
 
   app.post("/new-workspace", (c) => {

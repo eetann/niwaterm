@@ -23,6 +23,7 @@ niwatermは、`niwa`コマンド（CLI）からも操作できる。タイルを
 | `board worktree set` / `clear` / `show`                     | Boardに紐づくワークツリーを設定する                                 | [ワークツリー](/niwaterm/worktrees/#boardに紐づくワークツリー)               |
 | `tile split` / `focus` / `resize` / `zoom`                  | タイルを分割・移動・拡大する                                        | [基本のコマンド](/niwaterm/cli/commands/)                                    |
 | `tab new` / `close` / `restart` / `switch`                  | タブを作る・閉じる・再起動する・切り替える                          | [基本のコマンド](/niwaterm/cli/commands/)                                    |
+| `tab show`                                                  | タブが居るワークスペース・Board・タイルのidと名前を出す             | [基本のコマンド](/niwaterm/cli/commands/#タブの居場所を調べるtab-show)       |
 | `tab send-keys`                                             | タブへキーを送る                                                    | [基本のコマンド](/niwaterm/cli/commands/#キーを送るtab-send-keys)            |
 | `tab capture`                                               | タブの画面の内容をテキストで取る                                    | [基本のコマンド](/niwaterm/cli/commands/#画面の内容を取るtab-capture)        |
 | `tab var set` / `get` / `list` / `find`                     | タブごとの変数を読み書きする                                        | [基本のコマンド](/niwaterm/cli/commands/#タブ変数tab-var)                    |

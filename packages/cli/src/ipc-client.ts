@@ -1582,6 +1582,53 @@ export async function getTabVar(
   }
 }
 
+export interface TabInfoItem {
+  id: string;
+  /** 未設定はnull。Boardは自動名へフォールバックした値 */
+  name: string | null;
+}
+
+/** タブの所在とそれぞれの名前。src/bun/tab-info.tsのTabInfoと揃えること */
+export interface TabInfo {
+  workspace: TabInfoItem;
+  /** Boardが1つも無いワークスペースのポップアップではnull */
+  board: TabInfoItem | null;
+  /** ポップアップのタブはnull */
+  tile: TabInfoItem | null;
+  tab: TabInfoItem;
+}
+
+export type GetTabInfoResult = { ok: true; info: TabInfo } | { ok: false; error: string };
+
+export async function getTabInfo(endpoint: IpcEndpoint, tabId: TabId): Promise<GetTabInfoResult> {
+  try {
+    const res = await ipcFetch(
+      endpoint,
+      ipcUrl(endpoint, `/tab-info?tabId=${encodeURIComponent(tabId)}`),
+      ipcFetchInit(endpoint),
+    );
+    const body = (await res.json().catch(() => null)) as
+      | (Partial<TabInfo> & { error?: unknown })
+      | null;
+    if (
+      res.ok &&
+      body?.workspace &&
+      body.tab &&
+      body.board !== undefined &&
+      body.tile !== undefined
+    ) {
+      return {
+        ok: true,
+        info: { workspace: body.workspace, board: body.board, tile: body.tile, tab: body.tab },
+      };
+    }
+    const error = typeof body?.error === "string" ? body.error : `unexpected status ${res.status}`;
+    return { ok: false, error };
+  } catch (err) {
+    return { ok: false, error: describeError(endpoint, err) };
+  }
+}
+
 export type ListTabVarsResult =
   | { ok: true; vars: Record<string, string> }
   | { ok: false; error: string };

@@ -299,6 +299,64 @@ describe("GET /resolve-target", () => {
   });
 });
 
+describe("GET /tab-info", () => {
+  let dir: string;
+  let socketPath: string;
+  let server: IpcServer | null;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "niwaterm-ipc-test-"));
+    socketPath = join(dir, "niwaterm.sock");
+    server = null;
+  });
+
+  afterEach(async () => {
+    server?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("タブの所在と名前を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const workspaceId = mgr.listWorkspaces()[0]?.workspaceId as string;
+    const boardId = mgr.listWorkspaces()[0]?.activeBoardId as string;
+    const leaf = mgr.snapshot().workspace.board!.layout as TileLeaf;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/tab-info?tabId=${leaf.activeTabId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      workspace: { id: workspaceId },
+      board: { id: boardId },
+      tile: { id: leaf.id, name: null },
+      tab: { id: leaf.activeTabId, name: null },
+    });
+  });
+
+  test("ポップアップのタブはtileをnullで返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    const popupTabId = mgr.openPopup() as string;
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch(`http://localhost/tab-info?tabId=${popupTabId}`, {
+      unix: socketPath,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, tile: null, tab: { id: popupTabId } });
+  });
+
+  test("存在しないtabIdはフォールバックせず404を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+
+    const res = await fetch("http://localhost/tab-info?tabId=not-found", { unix: socketPath });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: "tab not found: not-found" });
+  });
+});
+
 describe("POST /send-keys", () => {
   let dir: string;
   let socketPath: string;

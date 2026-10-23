@@ -43,6 +43,33 @@ Boardごとに、タイルは`tiles`、タブは`tabs`という1つの配列に�
 
 **idはniwatermを起動し直すたびに振り直される**。スクリプトにidを書いておいても、次に起動したあとには使えない。決まったタブを探したいときは、[タブ変数](#タブ変数tab-var)で目印を付けておく。
 
+## タブの居場所を調べる（`tab show`）
+
+タブが居るワークスペース・Board・タイルのidと名前は、`tab show`で出せる。niwatermの中のシェルから実行すると、そのタブ自身の居場所が出る。
+
+```
+$ niwa tab show
+workspace.id: workspace-1
+workspace.name: dev
+board.id: board-2
+board.name: feature-x
+tile.id: tile-3
+tile.name:
+tab.id: tab-5
+tab.name: editor
+```
+
+`--field`で項目を1つ指定すると、その値だけを出す。シェルスクリプトで、今いるBoardやタイルのidをほかのコマンドへ渡すときに使う。
+
+```sh
+board=$(niwa tab show --field board.id)
+niwa board switch --board board-5
+# ...別のBoardで作業してから戻る
+niwa board switch --board "$board"
+```
+
+名前を付けていないタイル・タブの`name`は空になる。Boardの`name`は、名前を付けていなければ自動で付いた名前になる。ポップアップから実行したときは、タイルに属していないので`tile.id`・`tile.name`が空になる。`--json`を付けると、同じ内容をJSONで出力する。
+
 ## メインウィンドウと一時ウィンドウ
 
 ウィンドウは2種類ある。
