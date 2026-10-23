@@ -331,6 +331,7 @@ function createTestWorkspaceManager(): WorkspaceManager {
         viewportPinned: true,
         mouseTracking: false,
         mouseAnyMotion: false,
+        paletteCss: null,
         copyMode: null,
         kittyPlacements: [],
         kittyImages: [],
@@ -339,6 +340,11 @@ function createTestWorkspaceManager(): WorkspaceManager {
       getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
+      jumpPrompt: () => false,
+      isCopyMode: () => false,
+      enterCopyMode: () => {},
+      exitCopyMode: () => {},
+      handleCopyModeKey: () => false,
       dispose: () => {},
     };
   };
@@ -354,9 +360,9 @@ function createTestWorkspaceManager(): WorkspaceManager {
 describe("applyAndBindStartupLayout", () => {
   test("プリセットをその場で適用し、起動時レイアウトとしても紐づける", async () => {
     const mgr = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
     // 適用前に分割しておき、replaceで畳み直されることを確かめる
-    mgr.splitTile((mgr.snapshot().workspace.board.layout as TileLeaf).id, "vertical");
+    mgr.splitTile((mgr.snapshot().workspace.board!.layout as TileLeaf).id, "vertical");
 
     const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
       boardId,
@@ -369,14 +375,14 @@ describe("applyAndBindStartupLayout", () => {
       startup: { preset: "named", restoreMode: "layout" },
     });
     expect(mgr.getBoardStartup(boardId)).toEqual({ preset: "named", restoreMode: "layout" });
-    const leaf = mgr.snapshot().workspace.board.layout as TileLeaf;
+    const leaf = mgr.snapshot().workspace.board!.layout as TileLeaf;
     expect(leaf.kind).toBe("leaf");
-    expect(mgr.snapshot().workspace.board.tabNames[leaf.tabIds[0] as string]).toBe("editor");
+    expect(mgr.snapshot().workspace.board!.tabNames[leaf.tabIds[0] as string]).toBe("editor");
   });
 
   test("グローバル設定由来のプリセットは適用時のcwdを紐づけにも残す", async () => {
     const mgr = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
     const cwd = await mkdtemp(join(tmpdir(), "niwaterm-startup-cwd-"));
 
     const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
@@ -399,7 +405,7 @@ describe("applyAndBindStartupLayout", () => {
 
   test("存在しないpresetは適用も紐づけもしない", async () => {
     const mgr = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
 
     const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
       boardId,
@@ -424,8 +430,8 @@ describe("applyAndBindStartupLayout", () => {
   test("プロジェクトローカル由来のpresetはtrust無しだと適用も紐づけもしない", async () => {
     const root = await createProjectRoot("local");
     const mgr = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
-    const tabsBefore = (mgr.snapshot().workspace.board.layout as TileLeaf).tabIds.length;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
+    const tabsBefore = (mgr.snapshot().workspace.board!.layout as TileLeaf).tabIds.length;
 
     const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
       boardId,
@@ -435,13 +441,13 @@ describe("applyAndBindStartupLayout", () => {
 
     expect(result).toMatchObject({ ok: false, needsTrust: { projectRoot: root, preset: "local" } });
     expect(mgr.getBoardStartup(boardId)).toBeNull();
-    expect((mgr.snapshot().workspace.board.layout as TileLeaf).tabIds.length).toBe(tabsBefore);
+    expect((mgr.snapshot().workspace.board!.layout as TileLeaf).tabIds.length).toBe(tabsBefore);
   });
 
   test("trust: trueならプロジェクトローカル由来でも適用し、解決元ごと紐づける", async () => {
     const root = await createProjectRoot("local");
     const mgr = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
 
     const result = await applyAndBindStartupLayout(mgr, [], NAMED_LAYOUTS, {
       boardId,

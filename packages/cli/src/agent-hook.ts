@@ -32,8 +32,8 @@ function text(value: unknown): string {
 }
 
 function toolText(payload: JsonObject): string {
-  const name = text(payload.tool_name);
-  const input = object(payload.tool_input);
+  const name = text(payload["tool_name"]);
+  const input = object(payload["tool_input"]);
   const detail = ["file_path", "command", "cmd", "pattern", "url", "description"]
     .map((key) => text(input[key]))
     .find(Boolean);
@@ -44,9 +44,9 @@ export function agentState(agent: Agent, input: unknown): AgentState | null {
   const payload = object(input);
   let status: string;
   let summary = "";
-  switch (payload.hook_event_name) {
+  switch (payload["hook_event_name"]) {
     case "SessionStart":
-      if (agent === "codex-cli" && payload.source === "compact") return null;
+      if (agent === "codex-cli" && payload["source"] === "compact") return null;
       status = "idle";
       break;
     case "UserPromptSubmit":
@@ -66,16 +66,19 @@ export function agentState(agent: Agent, input: unknown): AgentState | null {
       if (agent !== "codex-cli") return null;
       status = "blocked";
       summary =
-        text(object(payload.tool_input).description) || text(payload.tool_name) || "確認が必要です";
+        text(object(payload["tool_input"])["description"]) ||
+        text(payload["tool_name"]) ||
+        "確認が必要です";
       break;
     case "Notification":
-      if (agent !== "claude-code" || payload.notification_type !== "permission_prompt") return null;
+      if (agent !== "claude-code" || payload["notification_type"] !== "permission_prompt")
+        return null;
       status = "blocked";
-      summary = text(payload.message) || "確認が必要です";
+      summary = text(payload["message"]) || "確認が必要です";
       break;
     case "Stop":
       status = "idle";
-      summary = text(payload.last_assistant_message);
+      summary = text(payload["last_assistant_message"]);
       break;
     case "Interrupt":
       if (agent !== "codex-cli") return null;
@@ -100,10 +103,10 @@ export function agentState(agent: Agent, input: unknown): AgentState | null {
  */
 export function agentTranscript(input: unknown): string | null {
   const payload = object(input);
-  switch (payload.hook_event_name) {
+  switch (payload["hook_event_name"]) {
     case "SessionStart":
     case "UserPromptSubmit":
-      return text(payload.transcript_path) || null;
+      return text(payload["transcript_path"]) || null;
     case "SessionEnd":
       return "";
     default:

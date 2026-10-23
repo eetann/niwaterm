@@ -7,7 +7,13 @@ import type {
   TerminalSessionCallbacks,
   TerminalSessionOptions,
 } from "./terminal-session";
-import { listLeaves, type TileLeaf, type TileNode, type TileSplit } from "./tile-layout";
+import {
+  listLeaves,
+  type TabId,
+  type TileLeaf,
+  type TileNode,
+  type TileSplit,
+} from "./tile-layout";
 import { BELL_TAB_VAR, createBoard, type Board, type BoardOptions } from "./board";
 
 function idGen(prefix: string): () => string {
@@ -83,6 +89,10 @@ function createFakeSessionFactory() {
         viewportPinned: true,
         mouseTracking: false,
         mouseAnyMotion: false,
+        paletteCss: null,
+        copyMode: null,
+        kittyPlacements: [],
+        kittyImages: [],
       }),
       dumpText: () => "",
       getRunningCommand: () => null,
@@ -92,6 +102,11 @@ function createFakeSessionFactory() {
       setCallbacks: (next) => {
         record.callbacks = next;
       },
+      jumpPrompt: () => false,
+      isCopyMode: () => false,
+      enterCopyMode: () => {},
+      exitCopyMode: () => {},
+      handleCopyModeKey: () => false,
       dispose: () => {
         record.disposed = true;
       },

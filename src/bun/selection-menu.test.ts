@@ -34,8 +34,8 @@ describe("createSelectionMenu", () => {
   });
 
   test("選択範囲の情報とniwaを関数へ渡す", async () => {
-    let received: SelectionMenuContext | null = null;
-    let receivedNiwa: Niwa | null = null;
+    let received = null as SelectionMenuContext | null;
+    let receivedNiwa = null as Niwa | null;
     const menu = createSelectionMenu((sel, api) => {
       received = sel;
       receivedNiwa = api;

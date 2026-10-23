@@ -849,7 +849,8 @@ let keybindings: KeybindingsConfig;
 // コピーモード中の打鍵ごとにコンパイルし直さないよう、keybindingsが差し替わったときだけ作り直す
 let copyModeKeymapCache: { source: KeybindingsConfig; keymap: CompiledCopyModeKeymap } | null =
   null;
-let appearance: ResolvedAppearanceConfig;
+// 起動時のrefreshConfig()は未適用なら必ず適用するので、トップレベルで読む時点では代入済み
+let appearance!: ResolvedAppearanceConfig;
 let browser: ResolvedBrowserConfig;
 // 復元したBoardの自動名は設定の読み込みより前に決まる（windowManagerの生成時）ため、
 // 未読込の間も方式を引けるよう既定値で初期化しておく

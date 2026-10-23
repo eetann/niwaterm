@@ -111,7 +111,7 @@ describe("buildKeybindList", () => {
     const config: KeybindingsConfig = {
       // 2打目キーにcmd/ctrlは使えず、directには修飾子必須
       bindings: { "ctrl+x": "split-vertical", d: "not-a-real-action" as "split-vertical" },
-      direct: { d: "copy-selection" as "ctrl+c" },
+      direct: { d: "copy-selection" } as never,
     };
     expect(buildKeybindList(config).entries).toEqual([]);
   });

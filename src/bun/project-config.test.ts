@@ -141,8 +141,11 @@ describe("resolveLayoutPresetByName", () => {
   test("同名プリセットはプロジェクト側が勝つ", async () => {
     await writeProjectConfig(root, DEV_PRESET_SOURCE);
     const resolved = await resolveLayoutPresetByName("dev", root, GLOBAL);
-    expect(resolved?.projectRoot).toBe(root);
-    expect(resolved?.preset.description).toBe("project dev");
+    expect(resolved).toMatchObject({
+      kind: "config",
+      projectRoot: root,
+      preset: { description: "project dev" },
+    });
   });
 
   test("プロジェクトに無ければグローバルへフォールバックし、projectRootはnullになる", async () => {
@@ -153,8 +156,11 @@ describe("resolveLayoutPresetByName", () => {
 
   test(".niwaterm/が無ければグローバルのみで解決する", async () => {
     const resolved = await resolveLayoutPresetByName("dev", root, GLOBAL);
-    expect(resolved?.projectRoot).toBeNull();
-    expect(resolved?.preset.description).toBe("global dev");
+    expect(resolved).toMatchObject({
+      kind: "config",
+      projectRoot: null,
+      preset: { description: "global dev" },
+    });
   });
 
   test("どちらにも無ければnull", async () => {

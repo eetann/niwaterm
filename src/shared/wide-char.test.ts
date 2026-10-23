@@ -62,7 +62,7 @@ describe("charWidth", () => {
     ["́", 0],
     ["️", 0],
   ])("charWidth(%p) -> %p", (ch, expected) => {
-    expect(charWidth(ch)).toBe(expected);
+    expect(charWidth(ch)).toBe(expected as 0 | 1 | 2);
   });
 });
 

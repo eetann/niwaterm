@@ -5,7 +5,7 @@ import { getAgentProfile } from "gunshi/agent";
  * process.argv[1]からは起動名を復元できず、環境変数で受け取る
  */
 export function cliName(): string {
-  return process.env.NIWATERM_CLI_NAME || "niwa";
+  return process.env["NIWATERM_CLI_NAME"] || "niwa";
 }
 
 /** ドキュメントコマンドへの導線。helpのフッター・--version・エラー時に出す */

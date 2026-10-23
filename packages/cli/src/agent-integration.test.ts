@@ -258,10 +258,10 @@ describe("agent setup", () => {
       },
     };
     const merged = mergeAgentHooks(current, "codex-cli", "niwa-dev");
-    expect(merged.model).toBe("keep");
-    expect(merged.hooks?.Stop?.[0]?.hooks).toEqual([other]);
-    expect(merged.hooks?.SubagentStop).toEqual(current.hooks.SubagentStop);
-    expect(merged.hooks?.Stop?.[1]?.hooks[0]?.command).toStartWith("niwa-dev _hook codex-cli");
+    expect(merged["model"]).toBe("keep");
+    expect(merged.hooks?.["Stop"]?.[0]?.hooks).toEqual([other]);
+    expect(merged.hooks?.["SubagentStop"]).toEqual(current.hooks.SubagentStop);
+    expect(merged.hooks?.["Stop"]?.[1]?.hooks[0]?.command).toStartWith("niwa-dev _hook codex-cli");
     expect(mergeAgentHooks(merged, "codex-cli", "niwa-dev")).toEqual(merged);
     expect(current.hooks.Stop[0]?.hooks).toHaveLength(2);
   });
@@ -283,8 +283,8 @@ describe("agent setup", () => {
       },
     };
     const merged = mergeAgentHooks(current, "claude-code", "niwa-dev");
-    expect(merged.hooks?.Stop?.[0]?.hooks).toEqual([other]);
-    expect(merged.hooks?.Stop).toHaveLength(2);
+    expect(merged.hooks?.["Stop"]?.[0]?.hooks).toEqual([other]);
+    expect(merged.hooks?.["Stop"]).toHaveLength(2);
   });
   test("旧コマンド名niwatermで入れたhookを置き換える", () => {
     const current = {
@@ -294,7 +294,7 @@ describe("agent setup", () => {
     };
     const merged = mergeAgentHooks(current, "claude-code", "niwa");
     expect(JSON.stringify(merged)).not.toContain("niwaterm _hook");
-    expect(merged.hooks?.Stop?.[0]?.hooks[0]?.command).toStartWith("niwa _hook claude-code");
+    expect(merged.hooks?.["Stop"]?.[0]?.hooks[0]?.command).toStartWith("niwa _hook claude-code");
   });
   test("リンク切れの設定先を置き換えない", async () => {
     const directory = await mkdtemp(join(tmpdir(), "niwaterm-agent-"));

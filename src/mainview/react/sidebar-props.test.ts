@@ -46,6 +46,7 @@ function board(
     layout,
     tabVars: options.tabVars ?? {},
     tabNames: {},
+    tabKinds: {},
     tileNames: {},
     name: options.name ?? null,
     autoName: options.autoName ?? null,

@@ -57,11 +57,20 @@ function createTestWorkspaceManager(): {
         viewportPinned: true,
         mouseTracking: false,
         mouseAnyMotion: false,
+        paletteCss: null,
+        copyMode: null,
+        kittyPlacements: [],
+        kittyImages: [],
       }),
       dumpText: () => `screen-text-${index}`,
       getRunningCommand: () => null,
       showNotice: () => {},
       setCallbacks: () => {},
+      jumpPrompt: () => false,
+      isCopyMode: () => false,
+      enterCopyMode: () => {},
+      exitCopyMode: () => {},
+      handleCopyModeKey: () => false,
       dispose: () => {},
     };
   };
@@ -555,9 +564,9 @@ describe("applyLayoutPreset (target: replace)", () => {
     })();
 
     // 既存のBoardを2タイルへ分割しておく
-    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board!.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
     const workspaceCountBefore = mgr.snapshot().workspaceIds.length;
 
     const preset: LayoutPreset = {
@@ -583,28 +592,28 @@ describe("applyLayoutPreset (target: replace)", () => {
 
   test("バリデーションに失敗した場合は既存のBoardに一切手を触れない", () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board!.layout as TileLeaf).id;
     mgr.splitTile(firstTileId, "vertical");
-    const boardId = mgr.snapshot().workspace.activeBoardId;
-    const before = mgr.snapshot().workspace.board.layout;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
+    const before = mgr.snapshot().workspace.board!.layout;
 
     const preset: LayoutPreset = { layout: { kind: "tile", tabs: [] } };
     const result = applyLayoutPreset(mgr, [], preset, "replace", boardId);
 
     expect(result.ok).toBe(false);
-    expect(mgr.snapshot().workspace.board.layout).toEqual(before);
+    expect(mgr.snapshot().workspace.board!.layout).toEqual(before);
   });
 });
 
 describe("applyBuiltinLayout (empty)", () => {
   test("複数タイル・複数タブのBoardをタイル1つ・タブ1つへ畳む", () => {
     const { mgr } = createTestWorkspaceManager();
-    const firstTileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
+    const firstTileId = (mgr.snapshot().workspace.board!.layout as TileLeaf).id;
     const split = mgr.splitTile(firstTileId, "vertical");
     if (!split) throw new Error("unreachable");
     mgr.newTab(firstTileId);
     mgr.newTab(split.tileId);
-    const boardId = mgr.snapshot().workspace.activeBoardId;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
 
     const result = applyBuiltinLayout(mgr, "empty", boardId);
     resolvePending(mgr);
@@ -617,8 +626,8 @@ describe("applyBuiltinLayout (empty)", () => {
 
   test("残す1タブもPTYを起動し直し、cwdだけ引き継ぐ", () => {
     const { mgr, sessionOpts } = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
-    const leafBefore = mgr.snapshot().workspace.board.layout as TileLeaf;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
+    const leafBefore = mgr.snapshot().workspace.board!.layout as TileLeaf;
     const tabId = leafBefore.tabIds[0] as string;
     resolvePending(mgr);
     // 起動中のシェルがOSC 7で報告したcwd相当
@@ -634,9 +643,9 @@ describe("applyBuiltinLayout (empty)", () => {
 
   test("タブ名・タイル名・タブ変数は消える（cwdだけ残る）", () => {
     const { mgr } = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
-    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
-    const tabId = (mgr.snapshot().workspace.board.layout as TileLeaf).tabIds[0] as string;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
+    const tileId = (mgr.snapshot().workspace.board!.layout as TileLeaf).id;
+    const tabId = (mgr.snapshot().workspace.board!.layout as TileLeaf).tabIds[0] as string;
     resolvePending(mgr);
     mgr.setTabName(tabId, "server");
     mgr.setTileName(tileId, "right");
@@ -655,9 +664,9 @@ describe("applyBuiltinLayout (empty)", () => {
 
   test("残るのがブラウザタブならterminalタブへ置き換える", () => {
     const { mgr } = createTestWorkspaceManager();
-    const boardId = mgr.snapshot().workspace.activeBoardId;
-    const tileId = (mgr.snapshot().workspace.board.layout as TileLeaf).id;
-    const terminalTabId = (mgr.snapshot().workspace.board.layout as TileLeaf).tabIds[0] as string;
+    const boardId = mgr.snapshot().workspace.activeBoardId as string;
+    const tileId = (mgr.snapshot().workspace.board!.layout as TileLeaf).id;
+    const terminalTabId = (mgr.snapshot().workspace.board!.layout as TileLeaf).tabIds[0] as string;
     const browserTabId = mgr.newBrowserTab(tileId, "https://example.com");
     if (!browserTabId) throw new Error("unreachable");
     // ブラウザタブだけが残るよう、先にterminalタブを閉じておく

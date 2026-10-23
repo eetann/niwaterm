@@ -2007,7 +2007,10 @@ export async function createIpcServer(
     revealHoverButton,
     statusBarOps,
   );
-  const server = Bun.serve({ unix: path, idleTimeout: IPC_SERVE_IDLE_TIMEOUT, fetch: app.fetch });
+  // bun-typesはidleTimeoutをTCP側(hostname/port)の型にしか載せていないが、unixソケットでも効く。
+  // 型の上ではunix指定時にidleTimeoutを渡せないため、型を通さないspreadで渡す
+  const unixServeExtras: object = { idleTimeout: IPC_SERVE_IDLE_TIMEOUT };
+  const server = Bun.serve({ unix: path, fetch: app.fetch, ...unixServeExtras });
   const tcpServers = process.platform === "win32" ? startWslBridge(app) : [];
   wslBridgePort = tcpServers[0]?.port ?? null;
   if (wslBridgePort !== null) await writeFile(portFile, String(wslBridgePort));

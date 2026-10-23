@@ -149,8 +149,8 @@ describe("createHoverButtons", () => {
   });
 
   test("タブの状況とniwaを関数へ渡す", async () => {
-    let received: HoverButtonContext | null = null;
-    let receivedNiwa: Niwa | null = null;
+    let received = null as HoverButtonContext | null;
+    let receivedNiwa = null as Niwa | null;
     const buttons = createHoverButtons(
       [
         group({

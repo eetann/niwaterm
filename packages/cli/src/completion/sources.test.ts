@@ -13,6 +13,7 @@ function workspace(overrides: Partial<WorkspaceListEntry> = {}): WorkspaceListEn
         boardId: "board-1",
         active: true,
         focusedTileId: "tile-2",
+        tabNames: {},
         name: "niwaterm",
         autoName: null,
         startup: null,

@@ -26,12 +26,12 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function validateConfig(value: unknown): asserts value is Config {
   if (!isObject(value)) throw new Error("設定のルートはJSONオブジェクトである必要があります");
-  if (value.hooks === undefined) return;
-  if (!isObject(value.hooks)) throw new Error("hooksはJSONオブジェクトである必要があります");
-  for (const groups of Object.values(value.hooks)) {
+  if (value["hooks"] === undefined) return;
+  if (!isObject(value["hooks"])) throw new Error("hooksはJSONオブジェクトである必要があります");
+  for (const groups of Object.values(value["hooks"])) {
     if (!Array.isArray(groups)) throw new Error("hookイベントの設定は配列である必要があります");
     for (const group of groups) {
-      if (!isObject(group) || !Array.isArray(group.hooks) || !group.hooks.every(isObject)) {
+      if (!isObject(group) || !Array.isArray(group["hooks"]) || !group["hooks"].every(isObject)) {
         throw new Error("hookのmatcherグループまたはhandlerが不正です");
       }
     }

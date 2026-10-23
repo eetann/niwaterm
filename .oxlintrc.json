@@ -9,7 +9,20 @@
   "categories": {
     "correctness": "error"
   },
-  "rules": {},
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
+  "rules": {
+    "typescript/unbound-method": "off",
+    "typescript/no-misused-spread": "off",
+    "typescript/no-floating-promises": "off",
+    "typescript/await-thenable": "off",
+    "typescript/no-redundant-type-constituents": "off",
+    "typescript/no-implied-eval": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/no-base-to-string": "off"
+  },
   "env": {
     "builtin": true
   }
