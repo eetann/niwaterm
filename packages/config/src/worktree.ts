@@ -42,6 +42,10 @@ export interface WorktreeOpenHookContext {
   created: boolean;
   workspaceId: string;
   boardId: string;
+  /** Boardに明示的に付いている名前（`--name`・ブランチ名・`board rename`）。未設定はnull */
+  boardName: string | null;
+  /** 名前を付けていないBoardへ`board.naming`が自動で付けた名前。付けられなければnull */
+  boardAutoName: string | null;
   /** Boardのタブ（レイアウトプリセット適用後）。タイルの並び順 */
   tabIds: string[];
 }

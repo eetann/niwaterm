@@ -150,11 +150,21 @@ async function runOpenHooks(hooks: WorktreeOpenHook[], opts: RunOpenHooksOptions
       `${opts.commandName}に失敗しました: Boardを開いた後のフックに渡すタブを取得できませんでした: ${list.error}\n${boardNote}`,
     );
   }
-  let target: { workspaceId: string; tabIds: string[] } | null = null;
+  let target: {
+    workspaceId: string;
+    boardName: string | null;
+    boardAutoName: string | null;
+    tabIds: string[];
+  } | null = null;
   for (const workspace of list.workspaces) {
     const board = workspace.boards.find((entry) => entry.boardId === opts.boardId);
     if (board) {
-      target = { workspaceId: workspace.workspaceId, tabIds: collectTabIds(board.layout) };
+      target = {
+        workspaceId: workspace.workspaceId,
+        boardName: board.name,
+        boardAutoName: board.autoName,
+        tabIds: collectTabIds(board.layout),
+      };
       break;
     }
   }
@@ -172,6 +182,8 @@ async function runOpenHooks(hooks: WorktreeOpenHook[], opts: RunOpenHooksOptions
           ...opts.context,
           workspaceId: target.workspaceId,
           boardId: opts.boardId,
+          boardName: target.boardName,
+          boardAutoName: target.boardAutoName,
           // 前のフックが配列を書き換えても次のフックへ波及しないよう、毎回複製して渡す
           tabIds: [...target.tabIds],
         }),

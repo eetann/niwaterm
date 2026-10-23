@@ -65,17 +65,33 @@ worktree: {
 },
 ```
 
-| `ctx`の項目    | 内容                                                                     |
-| -------------- | ------------------------------------------------------------------------ |
-| `repoRoot`     | メインのワークツリーのパス                                               |
-| `worktreePath` | 開いたワークツリーのパス                                                 |
-| `branch`       | ブランチ名。ブランチに乗っていないワークツリーでは`null`                 |
-| `created`      | 今回の`worktree new`でワークツリーを作ったか。`worktree open`では`false` |
-| `workspaceId`  | Boardがあるワークスペースのid                                            |
-| `boardId`      | 開いたBoardのid                                                          |
-| `tabIds`       | Boardのタブのid                                                          |
+| `ctx`の項目     | 内容                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| `repoRoot`      | メインのワークツリーのパス                                                                                   |
+| `worktreePath`  | 開いたワークツリーのパス                                                                                     |
+| `branch`        | ブランチ名。ブランチに乗っていないワークツリーでは`null`                                                     |
+| `created`       | 今回の`worktree new`でワークツリーを作ったか。`worktree open`では`false`                                     |
+| `workspaceId`   | Boardがあるワークスペースのid                                                                                |
+| `boardId`       | 開いたBoardのid                                                                                              |
+| `boardName`     | Boardに付けた名前（`--name`、なければブランチ名）。どちらもなければ`null`                                    |
+| `boardAutoName` | Boardに自動で付いた名前（[`board.naming`](/niwaterm/boards/#boardに自動で付く名前)）。付いていなければ`null` |
+| `tabIds`        | Boardのタブのid                                                                                              |
 
 `niwa`コマンドで操作するときは、`--board ${ctx.boardId}`のようにidを必ず渡す。省略すると、開いたBoardではなく、`worktree new`を実行したタブが対象になる。
+
+`ctx.branch`と`ctx.boardName`を使うと、条件に合わせてBoardの名前を付け直せる。たとえば、`feat/`で始まるブランチのBoardだけ接頭辞を外して短くするなら、次のように書く。
+
+```ts
+worktree: {
+  onOpen: async (ctx) => {
+    if (ctx.branch?.startsWith("feat/") && ctx.boardName === ctx.branch) {
+      await Bun.$`niwa board rename --board ${ctx.boardId} ${ctx.branch.slice("feat/".length)}`;
+    }
+  },
+},
+```
+
+`ctx.boardName === ctx.branch`で比べているのは、`--name`で名前を指定したときに上書きしないため。
 
 `worktree new`と`worktree open`のどちらでも実行されるので、作ったときだけの処理は`ctx.created`で分ける。すでに開いていたBoardへ切り替えただけのときと、`--open none`・`--open current-tab`のときは実行されない。
 

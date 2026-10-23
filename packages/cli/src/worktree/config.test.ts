@@ -403,6 +403,8 @@ describe("フック（onCreate・onOpen・onBeforeRemove・onRemove）の解決"
           created: true,
           workspaceId: "ws-1",
           boardId: "board-1",
+          boardName: "x",
+          boardAutoName: null,
           tabIds: [],
         });
         calls.push(await Bun.file(markerFile).text());
