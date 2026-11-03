@@ -72,7 +72,7 @@ docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 ## bun:ffiのハマりどころ
 
 - **構造体の値渡し非対応**。値渡しAPI（ghostty_formatter_terminal_new等）はsrc/native/shim.cでスカラー引数に展開する。値渡しAPIが増えたらシムに追加
-- **引数10個以上の関数は正しく呼べない**（9個まで。10個目以降がゴミ値になり、ポインタ引数ならセグフォで落ちる。macOSではBun 1.4.0以降で解消済みだが、Windowsは未検証なので9個以下を守る）。項目が多いAPIはint32を並べた構造体をポインタ1つで渡す（`niwa_dump_selection`がこの形）。詳細: docs/known-issues/bun-ffi-breaks-with-ten-or-more-args.md
+- **引数10個以上の関数は正しく呼べない**（9個まで。10個目以降がゴミ値になり、ポインタ引数ならセグフォで落ちる。同梱Bun 1.4.4ではmacOS・Windowsとも解消済みだが、テストやCLIは手元の古いBunで動くことがあるので9個以下を守る）。項目が多いAPIはint32を並べた構造体をポインタ1つで渡す（`niwa_dump_selection`がこの形）。詳細: docs/known-issues/bun-ffi-breaks-with-ten-or-more-args.md
 - コールバックはJSCallbackで渡せる（ghostty_terminal_setのWRITE_PTYで使用中）
 - libghostty-vtのAPIは未安定でシンボルが消えることがある。dlopen時に存在しないシンボルを要求すると
   起動時に落ちるため、vendor更新後は`nm -D --defined-only`でエクスポートを確認する
