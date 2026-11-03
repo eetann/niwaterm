@@ -31,6 +31,13 @@
 # 他タスクからしか呼ばれない実処理は`hide = true`で`mise tasks`・補完から隠している
 # （直接`mise run`することは可能）。
 
+# libghostty-vtのビルドに使うghosttyのリリースタグとZigのバージョン。ghosttyのbuild.zig.zonの
+# minimum_zig_versionとZigを揃える必要があるため、ghosttyを上げるときは両方を一緒に見直す。
+# ghosttyはmainだとAPIが予告なく変わるため、リリースタグに固定している
+[vars]
+ghostty_ref = "v1.4.0"
+zig_version = "0.17.0"
+
 # ネイティブ成果物（libghostty-vtのシム・PTYの制御端末ラッパー）のビルド。何を作るかは
 # 実行環境で決まる（macOSはローカル向けの.dylib、WSLはzigでWindows向けの.dllへクロスビルド）ため、
 # ここで判別して実処理タスクへ振り分ける。
@@ -67,14 +74,14 @@ cc -dynamiclib -fobjc-arc -framework Foundation -framework UserNotifications \
 hide = true
 description = "shimとウィンドウ透過ヘルパーをWindows向けにクロスビルドする（build:nativeから呼ばれる）"
 run = '''
-mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
+mise exec zig@{{vars.zig_version}} -- zig cc -target x86_64-windows-gnu -shared \
   -Ivendor/libghostty/include \
   src/native/shim.c \
   -Lvendor/libghostty/lib -lghostty-vt \
   -o vendor/libghostty/bin/niwashim.dll
 # ウィンドウ透過はlibghostty-vtと無関係なのでDLLを分ける（shimはvt本体へ依存するため、
 # 透過だけ使いたい場面でもvtのロードを強制してしまう）
-mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
+mise exec zig@{{vars.zig_version}} -- zig cc -target x86_64-windows-gnu -shared \
   src/native/winwindow.c \
   -ldwmapi -lgdi32 -luser32 \
   -o vendor/libghostty/bin/niwawin.dll
@@ -91,11 +98,11 @@ mise exec zig@0.16.0 -- zig cc -target x86_64-windows-gnu -shared \
 [tasks."build:vendor:mac"]
 description = "libghostty-vt本体をmacOS向けにビルドする（niwaterm用パッチ適用込み。vendor更新時のみ。要 opensrc でのghosttyソース取得）"
 run = '''
-SRC="$(opensrc path ghostty-org/ghostty)"
+SRC="$(opensrc path ghostty-org/ghostty@{{vars.ghostty_ref}})"
 DEST="$PWD/vendor/libghostty"
 bun scripts/patch-ghostty-formatter.ts "$SRC"
 cd "$SRC"
-mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
+mise exec zig@{{vars.zig_version}} -- zig build -Demit-lib-vt \
   -Doptimize=ReleaseFast \
   --prefix "$DEST"
 # dyldはパスごとにコード署名を記憶しており、同じパスのdylibを差し替えるとadhoc署名が
@@ -110,7 +117,7 @@ bun scripts/patch-ghostty-formatter.ts vendor/libghostty
 cd vendor/libghostty
 # -Dtargetの`-gnu`は必須。ghosttyのbuild.zigはWindowsターゲット時にABIをMSVCへ自動で
 # 切り替えるため、省略するとWSL上に無いMSVCツールチェーンを要求されて失敗する
-mise exec zig@0.16.0 -- zig build -Demit-lib-vt \
+mise exec zig@{{vars.zig_version}} -- zig build -Demit-lib-vt \
   -Dtarget=x86_64-windows-gnu \
   -Doptimize=ReleaseFast \
   --prefix "$PWD"

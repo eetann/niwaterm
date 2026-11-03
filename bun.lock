@@ -9,7 +9,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
-        "electrobun": "2.0.1",
+        "electrobun": "2.0.5",
         "hono": "^4.12.32",
         "lucide-react": "^1.31.0",
         "radix-ui": "^1.6.7",
@@ -732,7 +732,7 @@
 
     "dom-accessibility-api": ["dom-accessibility-api@0.5.16", "", {}, "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg=="],
 
-    "electrobun": ["electrobun@2.0.1", "", { "bin": { "electrobun": "bin/electrobun.cjs" } }, "sha512-1+OjJ0tMemjVrUEsh/AhmxnqUNpyCfJslCbcWOvkogFJuNVMmTlWMzyZem/Ts/7lg8f7ULWu8uuQBsKeGQsu7A=="],
+    "electrobun": ["electrobun@2.0.5", "", { "bin": { "electrobun": "bin/electrobun.cjs" } }, "sha512-/4Vp0p6LgdD7bySSblnoqM0rtcQT5uYsGeqZPhsOESeSxMGeiKsfQkBjNwMnjFI5z4StJKXfs386ay2mpif1BA=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.439", "", {}, "sha512-qu6QIPXhsb+CRcAiTMNjR4A1y/7tCYKkKjr5CZXRVih6qkDf79peZ2BpEU3qoDBNCRrcy3Mra3X9nG5oruuA7Q=="],
 

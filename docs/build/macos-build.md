@@ -29,10 +29,12 @@ electrobun dev  ← アプリ起動
 | Bun                              | ランタイム                                                                        | `bun --version`                       |
 | Xcode Command Line Tools（`cc`） | shim（`src/native/shim.c`）のビルド                                               | `cc --version`                        |
 | mise                             | Zigのバージョン管理                                                               | `mise --version`                      |
-| Zig 0.16.0以上                   | libghostty-vtのビルド（`build.zig` が `minimum_zig_version = 0.16.0` を要求する） | `mise exec zig@0.16.0 -- zig version` |
+| Zig 0.17.0以上                   | libghostty-vtのビルド（`build.zig.zon` が `minimum_zig_version = 0.17.0` を要求する） | `mise exec zig@0.17.0 -- zig version` |
 
 Zigはmiseがオンデマンドでインストールしてくれるので、事前に個別インストールする必要はない
-（`mise exec zig@0.16.0 -- ...` の初回実行時に自動で入る）。
+（`mise exec zig@0.17.0 -- ...` の初回実行時に自動で入る）。
+使うghosttyのリリースタグとZigのバージョンは`mise.toml`の`[vars]`（`ghostty_ref`・`zig_version`）にまとめてある。
+ghosttyを上げるときは、新しいタグの`build.zig.zon`の`minimum_zig_version`に合わせて両方を見直す。
 
 ## 2. ネイティブライブラリをビルドする
 
@@ -41,15 +43,15 @@ Zigはmiseがオンデマンドでインストールしてくれるので、事�
 ### 2-1. ghosttyのソースを取得する
 
 ```bash
-opensrc path ghostty-org/ghostty   # 取得先パスが返る
+opensrc path ghostty-org/ghostty@v1.4.0   # 取得先パスが返る（タグはmise.tomlのghostty_ref）
 ```
 
 初回は数分かかる（ghosttyリポジトリはそこそこ大きい）。
 
-> **キャッシュが古いと気づかず古いAPIのままビルドしてしまう**。
-> `opensrc path` は一度取得済みだとキャッシュされたパスを即座に返すだけで、
-> 最新化はしてくれない。libghostty-vt側でAPI変更があった後にvendorを再生成したい場合は、
-> 先にキャッシュを消してから取り直す:
+> `opensrc path` は一度取得済みだとキャッシュされたパスを即座に返すだけで、最新化はしない。
+> タグ指定（`@v1.4.0`）ならタグごとに別のキャッシュになるので問題ないが、タグを付けずに
+> `ghostty-org/ghostty`（main）を取った場合は古いままのことがある。mainを取り直すときは
+> 先にキャッシュを消す:
 >
 > ```bash
 > opensrc remove ghostty-org/ghostty
@@ -162,7 +164,7 @@ grep -n -A3 "ghostty_terminal_new" vendor/libghostty/include/ghostty/vt/terminal
 
 | 症状                                                                        | 原因・対処                                                                                 |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `zig build` が `does not meet the required build version of v0.16.0` で失敗 | Zig 0.15系を使っている。`mise exec zig@0.16.0 --` を使う                                   |
+| `zig build` が `does not meet the required build version of v0.17.0` で失敗 | Zig 0.16系以前を使っている。`mise exec zig@0.17.0 --` を使う                                   |
 | `cc: command not found`                                                     | Xcode Command Line Toolsが未導入。`xcode-select --install`                                 |
 | `vendor/libghostty/lib が見つからない`（`ghostty.ts` の起動時エラー）       | `mise run build:native` の前に「2-2. libghostty-vt をビルドする」が未実施                  |
 | 起動はするがターミナル入出力がおかしい・即クラッシュする                    | vendorがコードより古い可能性が高い。上記「vendorの更新が必要かどうかの見分け方」で確認する |

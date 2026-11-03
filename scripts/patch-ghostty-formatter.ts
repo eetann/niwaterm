@@ -2,9 +2,10 @@
 // 第1引数にghosttyのソースディレクトリを取る（省略時は vendor/libghostty）。
 //
 // 素のフォーマッタは、背景色を設定したままカーソルを右へ飛ばす出力（CHA・CUFなど）で
-// 飛び越えられた空セルを、直前のセルのスタイルを開いたまま空白として書き出す。
+// 飛び越えられた空セルを、HTML出力では直前のセルのスタイルを開いたまま空白として書き出す。
 // niwatermはこのHTMLをそのまま描画するため、何も書かれていないセルが直前の背景色で
 // 塗られて見える。Claude Codeの起動バナーが典型例で、ロゴとテキストの間が黒く残る。
+// VT出力は上流が空セルをCUFで飛ばす（行をまたぐ分はスタイルを閉じる）ため、HTML出力だけに当てる。
 // 詳細: docs/known-issues/libghostty-vt-formatter-bleeds-bg-into-skipped-cells.md
 //
 // vendor/libghostty はgitignore対象でリポジトリへ含められないため、パッチは差分ファイルでは
@@ -23,23 +24,25 @@ const REPLACEMENTS: [string, string][] = [
                     }`,
     `                    if (comptime formatStyled(emit)) {
                         if (style_id == invalid_style_id) break :fast;
+                    }
 
-                        // Accumulated blanks come from unstyled empty cells.
-                        // The fast path writes them under the currently open
-                        // style, so fall back to the slow path which closes
-                        // the style first.
+                    // Accumulated blanks come from unstyled empty cells.
+                    // The fast path writes them as spaces under the
+                    // currently open style, so fall back to the slow path
+                    // which closes the style first.
+                    if (comptime emit == .html) {
                         if (blank_cells > 0 and !style.default()) break :fast;
                     }`,
   ],
   [
     `                if (blank_cells > 0) {
-                    try writer.splatByteAll(' ', blank_cells);`,
+                    // Blank cells have no hyperlink.`,
     `                if (blank_cells > 0) {
                     // Reset style before emitting the blanks to prevent
                     // background colors from bleeding into unstyled empty
                     // cells, e.g. cells a cursor move jumped over while a
                     // background color was set.
-                    if (comptime formatStyled(emit)) {
+                    if (comptime emit == .html) {
                         if (!style.default()) {
                             try self.formatStyleClose(emit, writer);
                             style = .{};
@@ -47,7 +50,7 @@ const REPLACEMENTS: [string, string][] = [
                         }
                     }
 
-                    try writer.splatByteAll(' ', blank_cells);`,
+                    // Blank cells have no hyperlink.`,
   ],
 ];
 

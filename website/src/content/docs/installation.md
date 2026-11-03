@@ -59,7 +59,7 @@ cd niwaterm
 mise trust
 bun install
 mkdir -p vendor/libghostty
-cp -r "$(opensrc path ghostty-org/ghostty)/." vendor/libghostty/
+cp -r "$(opensrc path ghostty-org/ghostty@v1.4.0)/." vendor/libghostty/
 mise run build:vendor:win
 mise run build:native
 ```

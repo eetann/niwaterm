@@ -51,6 +51,10 @@ HTMLを見ないと切り分けられない。
 ghostty側でフォーマッタの実装が変わって想定の箇所が見つからなくなった場合、パッチスクリプトは
 エラーで止まる。その時点で同じ問題がまだ残っているかを確認し、残っていればスクリプトを直す。
 
+ghostty v1.4.0ではVT出力側だけが上流で直った（行内の空セルはCUFで飛ばし、行をまたいで持ち越す空白の前では
+スタイルを閉じる）。HTML出力は直っていないため、パッチはHTML出力にだけ当てている
+（v1.4.0で、パッチを当てずにビルドすると`src/bun/ghostty.test.ts`の該当テストが落ちることを確認した）。
+
 明示的に背景色を塗った空白（`ESC[48;5;16m   `）やEL（`ESC[K`）で塗られた行末は、空セルではなく
 背景色を持つセルとして扱われるため、このパッチの影響を受けない。
 
@@ -68,5 +72,5 @@ WSLだけでテストが落ちることがある。その場合は`-Dtarget`を�
 ```sh
 bun scripts/patch-ghostty-formatter.ts vendor/libghostty
 cd vendor/libghostty
-mise exec zig@0.16.0 -- zig build -Demit-lib-vt -Doptimize=ReleaseFast --prefix "$PWD"
+mise exec zig@0.17.0 -- zig build -Demit-lib-vt -Doptimize=ReleaseFast --prefix "$PWD"
 ```
