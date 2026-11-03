@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -251,7 +251,7 @@ async function gitOutput(cwd: string, ...args: string[]): Promise<string> {
 
 describe("listWorktrees", () => {
   test("実際のリポジトリでメインとリンクされたワークツリーを列挙する", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-test-")));
     try {
       const repo = join(dir, "repo");
       await git(dir, "init", "-b", "main", "repo");
@@ -279,7 +279,7 @@ describe("listWorktrees", () => {
   });
 
   test("gitリポジトリ外はnot-a-repositoryを返す", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-test-")));
     try {
       const result = await listWorktrees(dir);
       expect(result.ok).toBe(false);
@@ -301,7 +301,7 @@ describe("listWorktrees", () => {
 describe("addWorktree", () => {
   /** commit済みのリポジトリを1つ作って渡す */
   async function withRepo(fn: (dir: string, repo: string) => Promise<void>): Promise<void> {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-add-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-add-test-")));
     try {
       const repo = join(dir, "repo");
       await git(dir, "init", "-b", "main", "repo");
@@ -388,7 +388,7 @@ describe("addWorktree", () => {
 
 describe("gitConfigSection", () => {
   test("prefix配下のキーだけをprefixを除いて返す", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-")));
     try {
       await git(dir, "init", "-b", "main");
       await git(dir, "config", "niwaterm.worktree.dir", ".worktrees/${branch}");
@@ -404,7 +404,7 @@ describe("gitConfigSection", () => {
   });
 
   test("値に空白が入っても壊れない", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-")));
     try {
       await git(dir, "init", "-b", "main");
       await git(dir, "config", "niwaterm.worktree.dir", "../with space/${branch}");
@@ -417,7 +417,7 @@ describe("gitConfigSection", () => {
   });
 
   test("設定が1件も無ければ空のMap", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-gitconfig-test-")));
     try {
       await git(dir, "init", "-b", "main");
       expect((await gitConfigSection("niwaterm.worktree", dir)).size).toBe(0);
@@ -473,7 +473,7 @@ describe("addWorktreeArgs", () => {
 describe("リモート追跡ブランチ", () => {
   /** bareリモートを1つ持ち、feat/xはリモートにしか無いリポジトリを作って渡す */
   async function withRemoteRepo(fn: (dir: string, repo: string) => Promise<void>): Promise<void> {
-    const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-remote-test-"));
+    const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-remote-test-")));
     try {
       const repo = join(dir, "repo");
       await git(dir, "init", "--bare", "remote.git");

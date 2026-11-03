@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import {
@@ -41,7 +41,7 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 async function withRepo(
   fn: (ctx: { dir: string; repo: string; worktree: string }) => Promise<void>,
 ): Promise<void> {
-  const dir = await mkdtemp(join(tmpdir(), "niwaterm-worktree-remove-test-"));
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "niwaterm-worktree-remove-test-")));
   try {
     const repo = join(dir, "repo");
     const worktree = join(dir, "repo@feature");
