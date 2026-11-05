@@ -211,6 +211,51 @@ describe("onSemanticPrompt", () => {
   });
 });
 
+describe("scrollPrompt", () => {
+  // 2行プロンプト＋10行の出力を3回繰り返し、最後に入力待ちのプロンプトを置く。
+  // プロンプトの1行目は0・12・24・36行目で、5行の画面ならアクティブエリアの先頭は33行目
+  const prompt = "\x1b]133;A\x07info\r\n$ \x1b]133;B\x07";
+  const block = (n: number) =>
+    `${prompt}cmd${n}\r\n\x1b]133;C\x07${Array.from({ length: 10 }, (_, i) => `out${n}-${i}`).join("\r\n")}\r\n\x1b]133;D;0\x07`;
+  const input = `${block(0)}${block(1)}${block(2)}${prompt}`;
+
+  /** scrollPromptを順に呼び、呼ぶたびのビューポート先頭の行を返す */
+  function offsetsAfter(deltas: number[]): number[] {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.write(encoder.encode(input));
+      return deltas.map((delta) => {
+        term.scrollPrompt(delta);
+        return term.scrollbar().offset;
+      });
+    } finally {
+      term.free();
+    }
+  }
+
+  test("前のプロンプトの1行目へ1つずつ戻り、先頭より前へは動かない", () => {
+    expect(offsetsAfter([-1, -1, -1, -1])).toEqual([24, 12, 0, 0]);
+  });
+
+  test("次のプロンプトへは継続行に止まらず進み、アクティブエリア内のプロンプトでは最下部に留まる", () => {
+    expect(offsetsAfter([-3, 1, 1, 1, 1])).toEqual([0, 12, 24, 33, 33]);
+  });
+
+  test("プロンプトマークが無ければ動かない", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      term.write(encoder.encode(Array.from({ length: 30 }, (_, i) => `${i}`).join("\r\n")));
+      term.scrollToRow(10);
+      term.scrollPrompt(-1);
+      expect(term.scrollbar().offset).toBe(10);
+      term.scrollPrompt(1);
+      expect(term.scrollbar().offset).toBe(10);
+    } finally {
+      term.free();
+    }
+  });
+});
+
 describe("searchMatches", () => {
   /** 端末を作ってinputを流し込み、fnに渡す */
   function withTerminal<T>(

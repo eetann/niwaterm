@@ -493,13 +493,11 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
    */
   function jumpPrompt(direction: "up" | "down"): boolean {
     const before = term.scrollbar().offset;
-    const found = term.findPrompt(before, direction);
-    if (found === null) return false;
-    // ビューポートはブロックの先頭行（プロンプトの1行目）に合わせる。
+    // ビューポートはブロックの先頭行（プロンプトの1行目）に合わさる。
     // コマンド行に合わせるとプロンプトの装飾が画面の上へ切れて文脈が分かりにくくなるため
-    term.scrollToRow(found.row);
-    // 最後の1画面ぶんに収まるプロンプトはどれを指してもビューポートが同じ位置で
-    // クランプされる。動かなかったなら、その先はもう見せるものが無い
+    term.scrollPrompt(direction === "up" ? -1 : 1);
+    // 最後の1画面ぶんに収まるプロンプトはどれを指してもビューポートがアクティブエリアに
+    // 留まる。動かなかったなら、その先はもう見せるものが無い
     return term.scrollbar().offset !== before;
   }
 

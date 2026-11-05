@@ -100,9 +100,9 @@ int niwa_dump_screen(GhosttyTerminal term, int emit, int use_viewport, uint8_t *
 
 // ghostty_terminal_scroll_viewportもGhosttyTerminalScrollViewportを値渡しするため、
 // tag+valueをスカラー引数に展開してshim側で組み立てる。
-// tag: GhosttyTerminalScrollViewportTag (0=TOP, 1=BOTTOM, 2=DELTA, 3=ROW)
-// value: DELTAならintptr_tの相対行数（上がマイナス）、ROWならsize_tの絶対行オフセット。
-//        TOP/BOTTOMでは無視される
+// tag: GhosttyTerminalScrollViewportTag (0=TOP, 1=BOTTOM, 2=DELTA, 3=ROW, 4=DELTA_PROMPT)
+// value: DELTAならintptr_tの相対行数（上がマイナス）、ROWならsize_tの絶対行オフセット、
+//        DELTA_PROMPTならintptr_tの相対プロンプト数（前がマイナス）。TOP/BOTTOMでは無視される
 void niwa_scroll_viewport(GhosttyTerminal term, int32_t tag, int64_t value) {
   GhosttyTerminalScrollViewport behavior;
   memset(&behavior, 0, sizeof(behavior));
@@ -111,6 +111,8 @@ void niwa_scroll_viewport(GhosttyTerminal term, int32_t tag, int64_t value) {
     behavior.value.delta = (intptr_t)value;
   } else if (tag == GHOSTTY_SCROLL_VIEWPORT_ROW) {
     behavior.value.row = (size_t)value;
+  } else if (tag == GHOSTTY_SCROLL_VIEWPORT_DELTA_PROMPT) {
+    behavior.value.delta_prompt = (intptr_t)value;
   }
   ghostty_terminal_scroll_viewport(term, behavior);
 }

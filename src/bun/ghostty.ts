@@ -430,6 +430,7 @@ const SCROLL_VIEWPORT_TOP = 0;
 const SCROLL_VIEWPORT_BOTTOM = 1;
 const SCROLL_VIEWPORT_DELTA = 2;
 const SCROLL_VIEWPORT_ROW = 3;
+const SCROLL_VIEWPORT_DELTA_PROMPT = 4;
 
 // GhosttyPointTag
 const POINT_TAG_SCREEN = 2;
@@ -1277,6 +1278,20 @@ export function createGhosttyTerminal(
     shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_DELTA, BigInt(Math.trunc(lines)));
   }
 
+  /**
+   * ビューポートの先頭を、OSC 133でマークされたプロンプトの1行目へ相対プロンプト数だけ動かす
+   * （前がマイナス）。複数行プロンプトの継続行には止まらず、プロンプトが無ければ何もしない。
+   * アクティブエリア内のプロンプトを指したときはアクティブエリアへ戻る（それより下へはスクロールできないため）
+   */
+  function scrollPrompt(delta: number): void {
+    if (delta === 0) return;
+    shim.symbols.niwa_scroll_viewport(
+      term,
+      SCROLL_VIEWPORT_DELTA_PROMPT,
+      BigInt(Math.trunc(delta)),
+    );
+  }
+
   /** ビューポートをスクロールバックの先頭へ移動する */
   function scrollToTop(): void {
     shim.symbols.niwa_scroll_viewport(term, SCROLL_VIEWPORT_TOP, 0n);
@@ -1342,6 +1357,7 @@ export function createGhosttyTerminal(
     viewportPinned,
     scrollDelta,
     scrollToRow,
+    scrollPrompt,
     scrollToTop,
     scrollToBottom,
     setScrollbackMaxLines,
