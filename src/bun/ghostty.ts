@@ -1,5 +1,14 @@
 // libghostty-vt の bun:ffi バインディング
-import { dlopen, FFIType, JSCallback, type Pointer, ptr, read, toArrayBuffer } from "bun:ffi";
+import {
+  CFunction,
+  dlopen,
+  FFIType,
+  JSCallback,
+  type Pointer,
+  ptr,
+  read,
+  toArrayBuffer,
+} from "bun:ffi";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { findNativeArtifact } from "./native-artifacts";
@@ -235,6 +244,42 @@ const OPT_SIZE = 6;
 const OPT_KITTY_IMAGE_STORAGE_LIMIT = 15;
 const OPT_KITTY_IMAGE_MEDIUM_FILE = 16;
 const OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE = 17;
+
+// GhosttyClipboardWriteResult
+const CLIPBOARD_WRITE_RESULT_SUCCESS = 0;
+
+// GhosttyClipboardWriteReply { size_t size; i32 result; bool remember } = 16バイト
+const clipboardWriteReplyBuf = new Uint8Array(16);
+const clipboardWriteReplyView = new DataView(clipboardWriteReplyBuf.buffer);
+clipboardWriteReplyView.setBigUint64(0, 16n, true);
+
+// GhosttyClipboardWrite::replyの関数ポインタはlibghostty-vt内の固定の関数なので、
+// 書き込みのたびにCFunctionを作らないようポインタ値ごとに使い回す
+let clipboardWriteReplyFn: { ptr: number; call: ReturnType<typeof CFunction> } | null = null;
+
+/**
+ * クリップボード書き込み要求へ応答する。応答せずにコールバックから戻ると
+ * libghostty-vtは書き込み拒否として扱い、OSC 5522ではEPERMがプログラムへ返る。
+ * replyは要求のコールバック実行中に呼ぶ必要がある。
+ */
+function replyClipboardWrite(writePtr: Pointer, result: number): void {
+  // GhosttyClipboardWrite::reply（size 8 + location 8 + contents 8 + contents_len 8
+  // + name 16 + granted/can_remember 8 + ctx 8 の後ろ）
+  const replyPtr = Number(read.ptr(writePtr, 64));
+  if (!replyPtr) return;
+  if (clipboardWriteReplyFn?.ptr !== replyPtr) {
+    clipboardWriteReplyFn?.call.close();
+    const call = CFunction({
+      ptr: replyPtr as Pointer,
+      args: [FFIType.ptr, FFIType.ptr],
+      returns: FFIType.void,
+    });
+    clipboardWriteReplyFn = { ptr: replyPtr, call };
+  }
+  clipboardWriteReplyView.setInt32(8, result, true);
+  clipboardWriteReplyBuf[12] = 0; // remember
+  clipboardWriteReplyFn.call(writePtr, ptr(clipboardWriteReplyBuf));
+}
 
 // GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。DEC privateなモードはフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
@@ -657,34 +702,38 @@ export function createGhosttyTerminal(
    * fnにはtext/plain表現のバイト列を渡す（text/plainがなければ先頭の表現）。
    */
   function onClipboardWrite(fn: (data: Uint8Array) => void): void {
-    // GhosttyClipboardWrite { size_t size; i32 location; GhosttyClipboardContent* contents; size_t contents_len }
+    // GhosttyClipboardWrite { size_t size; i32 location; GhosttyClipboardContent* contents; size_t contents_len; ... }
     // GhosttyClipboardContent { GhosttyString mime; GhosttyString data } / GhosttyString { ptr; size_t len } = 32バイト
     clipboardCallback = new JSCallback(
       (_term: Pointer, _userdata: Pointer, writePtr: Pointer) => {
         const contents = read.ptr(writePtr, 16) as Pointer;
         const len = Number(read.u64(writePtr, 24));
-        if (!contents || len === 0) return 0; // SUCCESS（クリアは無視）
-        let chosen = 0;
-        for (let i = 0; i < len; i++) {
-          const mimePtr = read.ptr(contents, i * 32) as Pointer;
-          const mimeLen = Number(read.u64(contents, i * 32 + 8));
-          if (!mimePtr) continue;
-          const mime = new TextDecoder().decode(new Uint8Array(toArrayBuffer(mimePtr, 0, mimeLen)));
-          if (mime === "text/plain") {
-            chosen = i;
-            break;
+        // クリア要求（len=0）は何もしないが、拒否扱いにはせず成功を返す
+        if (contents && len > 0) {
+          let chosen = 0;
+          for (let i = 0; i < len; i++) {
+            const mimePtr = read.ptr(contents, i * 32) as Pointer;
+            const mimeLen = Number(read.u64(contents, i * 32 + 8));
+            if (!mimePtr) continue;
+            const mime = new TextDecoder().decode(
+              new Uint8Array(toArrayBuffer(mimePtr, 0, mimeLen)),
+            );
+            if (mime === "text/plain") {
+              chosen = i;
+              break;
+            }
+          }
+          const dataPtr = read.ptr(contents, chosen * 32 + 16) as Pointer;
+          const dataLen = Number(read.u64(contents, chosen * 32 + 24));
+          if (dataPtr && dataLen > 0) {
+            fn(new Uint8Array(toArrayBuffer(dataPtr, 0, dataLen)).slice());
           }
         }
-        const dataPtr = read.ptr(contents, chosen * 32 + 16) as Pointer;
-        const dataLen = Number(read.u64(contents, chosen * 32 + 24));
-        if (dataPtr && dataLen > 0) {
-          fn(new Uint8Array(toArrayBuffer(dataPtr, 0, dataLen)).slice());
-        }
-        return 0; // GHOSTTY_CLIPBOARD_WRITE_RESULT_SUCCESS
+        replyClipboardWrite(writePtr, CLIPBOARD_WRITE_RESULT_SUCCESS);
       },
       {
         args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
-        returns: FFIType.i32,
+        returns: FFIType.void,
       },
     );
     vt.symbols.ghostty_terminal_set(term, OPT_CLIPBOARD_WRITE, clipboardCallback.ptr);

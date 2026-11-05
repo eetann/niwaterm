@@ -139,3 +139,34 @@ describe("kittyGraphics", () => {
     }
   });
 });
+
+describe("onClipboardWrite", () => {
+  test("OSC 52の書き込みでtext/plainのバイト列を受け取る", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      const copied: string[] = [];
+      term.onClipboardWrite((data) => copied.push(new TextDecoder().decode(data)));
+      term.write(encoder.encode("\x1b]52;c;R2hvc3R0eQ==\x1b\\")); // "Ghostty"
+      expect(copied).toEqual(["Ghostty"]);
+    } finally {
+      term.free();
+    }
+  });
+  test("OSC 5522の書き込みに成功（DONE）を返す", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      const copied: string[] = [];
+      const responses: string[] = [];
+      term.onWritePty((data) => responses.push(new TextDecoder().decode(data)));
+      term.onClipboardWrite((data) => copied.push(new TextDecoder().decode(data)));
+      term.write(encoder.encode("\x1b]5522;type=write:id=42\x1b\\"));
+      term.write(encoder.encode("\x1b]5522;type=wdata:mime=dGV4dC9odG1s;PGI+aGk8L2I+\x1b\\")); // text/html
+      term.write(encoder.encode("\x1b]5522;type=wdata:mime=dGV4dC9wbGFpbg==;R2hvc3R0eQ==\x1b\\")); // text/plain
+      term.write(encoder.encode("\x1b]5522;type=wdata\x1b\\"));
+      expect(copied).toEqual(["Ghostty"]);
+      expect(responses.join("")).toBe("\x1b]5522;type=write:status=DONE:id=42\x1b\\");
+    } finally {
+      term.free();
+    }
+  });
+});
