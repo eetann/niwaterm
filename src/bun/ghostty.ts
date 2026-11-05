@@ -244,6 +244,24 @@ const OPT_SIZE = 6;
 const OPT_KITTY_IMAGE_STORAGE_LIMIT = 15;
 const OPT_KITTY_IMAGE_MEDIUM_FILE = 16;
 const OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE = 17;
+const OPT_SEMANTIC_PROMPT = 42;
+
+// GhosttySemanticPromptKind。未知の値（将来の追加分）は無視する
+const SEMANTIC_PROMPT_KINDS = {
+  1: "promptStart",
+  2: "inputStart",
+  3: "outputStart",
+  4: "commandEnd",
+} as const;
+
+/** シェル統合がOSC 133で報告したコマンドの段階 */
+export interface SemanticPromptEvent {
+  kind: (typeof SEMANTIC_PROMPT_KINDS)[keyof typeof SEMANTIC_PROMPT_KINDS];
+  /** outputStartで実行されるコマンド行（kittyの`cmdline_url`等をデコード済み）。送られなければ空文字列 */
+  command: string;
+  /** commandEndで報告された終了コード。報告が無ければnull */
+  exitCode: number | null;
+}
 
 // GhosttyClipboardWriteResult
 const CLIPBOARD_WRITE_RESULT_SUCCESS = 0;
@@ -519,6 +537,7 @@ export function createGhosttyTerminal(
   let clipboardCallback: JSCallback | null = null;
   let pwdChangedCallback: JSCallback | null = null;
   let bellCallback: JSCallback | null = null;
+  let semanticPromptCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
   // GhosttyTerminalScrollbar（uint64 x 3）の受け皿
   const scrollbarBuf = new Uint8Array(24);
@@ -778,6 +797,32 @@ export function createGhosttyTerminal(
       },
     );
     vt.symbols.ghostty_terminal_set(term, OPT_BELL, bellCallback.ptr);
+  }
+
+  /** シェル統合のOSC 133（プロンプト開始・入力開始・出力開始・コマンド終了）を受けるコールバックを登録する */
+  function onSemanticPrompt(fn: (event: SemanticPromptEvent) => void): void {
+    // GhosttyTerminalSemanticPrompt { size_t size; i32 kind; i32 prompt_kind; bool has_exit_code;
+    //   i32 exit_code; GhosttyString command; GhosttyString error } = 56バイト。文字列はコールバック中のみ有効
+    semanticPromptCallback = new JSCallback(
+      (_term: Pointer, _userdata: Pointer, eventPtr: Pointer) => {
+        const kind =
+          SEMANTIC_PROMPT_KINDS[read.i32(eventPtr, 8) as keyof typeof SEMANTIC_PROMPT_KINDS];
+        if (!kind) return;
+        const commandPtr = read.ptr(eventPtr, 24) as Pointer;
+        const commandLen = Number(read.u64(eventPtr, 32));
+        const command =
+          commandPtr && commandLen > 0
+            ? new TextDecoder().decode(new Uint8Array(toArrayBuffer(commandPtr, 0, commandLen)))
+            : "";
+        const exitCode = read.u8(eventPtr, 16) !== 0 ? read.i32(eventPtr, 20) : null;
+        fn({ kind, command, exitCode });
+      },
+      {
+        args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+        returns: FFIType.void,
+      },
+    );
+    vt.symbols.ghostty_terminal_set(term, OPT_SEMANTIC_PROMPT, semanticPromptCallback.ptr);
   }
 
   // GhosttyTerminalModeConfig { GhosttyMode mode(uint16); bool value; } のレイアウト（4バイト）。
@@ -1174,6 +1219,7 @@ export function createGhosttyTerminal(
     clipboardCallback?.close();
     pwdChangedCallback?.close();
     bellCallback?.close();
+    semanticPromptCallback?.close();
     sizeCallback.close();
   }
 
@@ -1182,6 +1228,7 @@ export function createGhosttyTerminal(
     onClipboardWrite,
     onPwdChanged,
     onBell,
+    onSemanticPrompt,
     bracketedPaste,
     encodePaste,
     mouseTracking,

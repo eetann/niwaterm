@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createGhosttyTerminal } from "./ghostty";
+import { createGhosttyTerminal, type SemanticPromptEvent } from "./ghostty";
 
 const encoder = new TextEncoder();
 
@@ -167,6 +167,46 @@ describe("onClipboardWrite", () => {
       expect(responses.join("")).toBe("\x1b]5522;type=write:status=DONE:id=42\x1b\\");
     } finally {
       term.free();
+    }
+  });
+});
+
+describe("onSemanticPrompt", () => {
+  function collect(chunks: string[]) {
+    const term = createGhosttyTerminal(40, 5);
+    try {
+      const events: SemanticPromptEvent[] = [];
+      term.onSemanticPrompt((e) => events.push(e));
+      for (const chunk of chunks) term.write(encoder.encode(chunk));
+      return events;
+    } finally {
+      term.free();
+    }
+  }
+
+  test("OSC 133の各段階を受け取る（BEL終端・ST終端とも）", () => {
+    expect(
+      collect(["\x1b]133;A\x07$ \x1b]133;B\x1b\\", "\x1b]133;C\x07out\r\n\x1b]133;D;1\x07"]),
+    ).toEqual([
+      { kind: "promptStart", command: "", exitCode: null },
+      { kind: "inputStart", command: "", exitCode: null },
+      { kind: "outputStart", command: "", exitCode: null },
+      { kind: "commandEnd", command: "", exitCode: 1 },
+    ]);
+  });
+
+  test("Cのcmdline_urlをデコードしたコマンド行で受け取る", () => {
+    expect(collect(["\x1b]133;C;cmdline_url=nvim%20%E3%83%A1%E3%83%A2.md%3Bx\x07"])).toEqual([
+      { kind: "outputStart", command: "nvim メモ.md;x", exitCode: null },
+    ]);
+  });
+
+  test("チャンクの境目で切れたシーケンスも受け取る", () => {
+    const seq = "\x1b]133;C;cmdline_url=claude%20--continue\x07";
+    for (let cut = 1; cut < seq.length; cut++) {
+      expect(collect([`x${seq.slice(0, cut)}`, `${seq.slice(cut)}y`])).toEqual([
+        { kind: "outputStart", command: "claude --continue", exitCode: null },
+      ]);
     }
   });
 });

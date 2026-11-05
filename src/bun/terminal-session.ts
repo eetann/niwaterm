@@ -28,7 +28,6 @@ import {
   type MouseEventInput,
   type PromptLocation,
 } from "./ghostty";
-import { createCommandTracker } from "./command-tracker";
 import { createPty, type PtyOptions } from "./pty";
 import { decodePwdReport } from "./pwd-report";
 
@@ -43,7 +42,7 @@ export type TerminalSessionCallbacks = {
   onBell?: () => void;
   /**
    * シェル統合が報告した実行中のコマンド行が変わった時に呼ばれる。nullは実行中のコマンドが無い
-   * （プロンプトへ戻った）状態。詳細: command-tracker.ts
+   * （プロンプトへ戻った）状態。シェル統合のOSC 133から拾う
    */
   onRunningCommandChanged?: (command: string | null) => void;
 };
@@ -183,12 +182,6 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     onRunningCommandChanged: opts.onRunningCommandChanged,
   };
   let runningCommand: string | null = null;
-  const commandTracker = createCommandTracker((event) => {
-    const next = event.kind === "start" ? event.cmdline : null;
-    if (next === runningCommand) return;
-    runningCommand = next;
-    callbacks.onRunningCommandChanged?.(next);
-  });
 
   // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
   term.onWritePty((data) => {
@@ -211,12 +204,30 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     callbacks.onBell?.();
   });
 
+  // シェル統合はコマンド実行の開始（OSC 133のC）にkittyの拡張`cmdline_url`でコマンド行を付けて送り、
+  // 次のプロンプトの開始（A）・コマンドの終了（D）で実行中でなくなる。
+  // PTY出力と同じストリームに乗るので、CLIを経由する通知と違って開始と終了が入れ替わって届くことが無い
+  term.onSemanticPrompt((event) => {
+    let next: string | null;
+    if (event.kind === "promptStart" || event.kind === "commandEnd") {
+      next = null;
+    } else if (event.kind === "outputStart" && event.command !== "") {
+      next = event.command;
+    } else {
+      // コマンド行の付かないC（他のシェル統合が出すもの）は何も変えない。素のCで記録を消すと、
+      // 自前のCの直後に別のツールがCを出す環境で、記録したコマンド行がすぐ失われる
+      return;
+    }
+    if (next === runningCommand) return;
+    runningCommand = next;
+    callbacks.onRunningCommandChanged?.(next);
+  });
+
   // Windows実機ではPTYプロセスのonExit発火後にもdataコールバックが非同期に遅延発火することがあり、
   // dispose()でGhosttyTerminalを解放した後にterm.write()するとuse-after-freeでクラッシュする
   // （詳細: docs/known-issues/windows-pty-dispose-use-after-free.md）
   pty.onData((data) => {
     if (disposed) return;
-    commandTracker.feed(data);
     term.write(data);
     // シェルがまだ出力中＝初期化の途中とみなし、積んである初期コマンドの送出を先送りする
     if (pendingInitialCommands.length > 0) scheduleInitialCommandFlush();
