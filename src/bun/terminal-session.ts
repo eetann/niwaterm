@@ -7,14 +7,14 @@ import {
   clampCopyModeCursor,
   copyModeRange,
   copyModeSelectionRows,
+  copyModeMatchRows,
   createCopyModeState,
-  findCopyModeMatch,
-  findCopyModeMatches,
   firstNonBlankColumn,
+  isCaseSensitiveQuery,
+  pickCopyModeMatch,
   type CopyModeContext,
   type CopyModeKeyPress,
   type CopyModeMatch,
-  type CopyModePoint,
   type CopyModeSearch,
   type CopyModeSelectionMode,
   type CopyModeState,
@@ -422,72 +422,36 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   }
 
   /**
-   * 1回のダンプで走査する行数。スクロールバック全体を一度に文字列化すると重いので、
-   * カーソルに近い側から少しずつ取り出して最初の一致で打ち切る
+   * smartcaseのクエリ（大文字を含む）向けに、一致の文字列が大文字小文字まで揃っているかを返す。
+   * libghostty-vtの検索はASCIIの英字を常に区別しないため、区別したいときはここで絞り込む。
+   * 区別しないクエリならundefinedを返す
    */
-  const SEARCH_CHUNK_ROWS = 200;
-
-  /** 画面座標の[startY, endY]をチャンクに割ってダンプし、最初の一致を返す */
-  function scanRowsForMatch(
-    startY: number,
-    endY: number,
-    search: CopyModeSearch,
-    from: CopyModePoint | null,
-  ): CopyModeMatch | null {
-    if (endY < startY) return null;
-    const chunks: Array<[number, number]> = [];
-    for (let y = startY; y <= endY; y += SEARCH_CHUNK_ROWS) {
-      chunks.push([y, Math.min(y + SEARCH_CHUNK_ROWS - 1, endY)]);
-    }
-    // 後方検索は下のチャンクから見ていく（カーソルに近い一致を先に見つけるため）
-    if (search.direction === "backward") chunks.reverse();
-    for (const [chunkStart, chunkEnd] of chunks) {
-      const dumped = term.dumpScreenRange({
-        startX: 0,
-        startY: chunkStart,
-        endX: Math.max(currentCols - 1, 0),
-        endY: chunkEnd,
-      });
-      if (dumped === "") continue;
-      const match = findCopyModeMatch({
-        lines: dumped.split("\n"),
-        firstLineRow: chunkStart,
-        query: search.query,
-        direction: search.direction,
-        from,
-      });
-      if (match) return match;
-    }
-    return null;
+  function exactCaseFilter(query: string): ((match: CopyModeMatch) => boolean) | undefined {
+    if (!isCaseSensitiveQuery(query)) return undefined;
+    // 折り返し行をまたぐ一致も1つの文字列として比べたいのでunwrapする
+    return (m) =>
+      term.dumpScreenRange({
+        startX: m.start.x,
+        startY: m.start.y,
+        endX: m.end.x,
+        endY: m.end.y,
+        unwrap: true,
+      }) === query;
   }
 
   /**
-   * スクロールバックを含む画面全体を走査してカーソルを次の一致へ移す（見つからなければnull）。
-   * 端まで行ったら反対の端から折り返して起点まで探す（vimのwrapscan相当）
+   * スクロールバックを含む画面全体からカーソルの次の一致を探して移す（見つからなければnull）。
+   * 端まで行ったら反対の端から折り返して探す（vimのwrapscan相当）
    */
   function searchCopyMode(state: CopyModeState, search: CopyModeSearch): CopyModeState | null {
-    const bar = term.scrollbar();
-    const lastRow = Math.max(bar.total, 1) - 1;
-    const cursor = state.cursor;
-    const cursorRow = Math.min(Math.max(cursor.y, 0), lastRow);
-    // [走査範囲, 起点]の並び。2つ目が折り返しぶんで、起点の行をもう一度含める
-    const segments: Array<[number, number, CopyModePoint | null]> =
-      search.direction === "forward"
-        ? [
-            [cursorRow, lastRow, cursor],
-            [0, cursorRow, null],
-          ]
-        : [
-            [0, cursorRow, cursor],
-            [cursorRow, lastRow, null],
-          ];
-    for (const [startY, endY, from] of segments) {
-      const match = scanRowsForMatch(startY, endY, search, from);
-      if (match) {
-        return { ...state, cursor: { x: match.startX, y: match.y }, desiredX: match.startX };
-      }
-    }
-    return null;
+    const match = pickCopyModeMatch({
+      matches: term.searchMatches(search.query, "all"),
+      from: state.cursor,
+      direction: search.direction,
+      accept: exactCaseFilter(search.query),
+    });
+    if (!match) return null;
+    return { ...state, cursor: { ...match.start }, desiredX: match.start.x };
   }
 
   /**
@@ -561,6 +525,8 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (!copyMode) return;
     copyMode = null;
     copyModeMessage = null;
+    // 検索文字列を残したままだと、libghostty-vtが一致の追跡を続けて出力のたびに手間が掛かる
+    term.clearSearch();
     term.scrollToBottom();
   }
 
@@ -646,9 +612,14 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   ): Array<{ y: number; startX: number; endX: number }> {
     const query = copyMode?.searchInput?.query ?? copyMode?.lastSearch?.query ?? "";
     if (query === "") return [];
-    return findCopyModeMatches({ lines: ctx.lines, firstLineRow: ctx.firstLineRow, query })
-      .filter((m) => m.y >= ctx.viewportOffset && m.y < ctx.viewportOffset + ctx.viewportRows)
-      .map((m) => ({ y: m.y - ctx.viewportOffset, startX: m.startX, endX: m.endX }));
+    const lastRow = ctx.viewportOffset + ctx.viewportRows - 1;
+    // ビューポート向けの一致には同じページに載った画面外の一致も混ざるため、先に見える範囲へ絞ってから
+    // 大文字小文字を確かめる（確認は1件ごとに文字列を取り出すので、件数を減らしてから行う）
+    const visible = term
+      .searchMatches(query, "viewport")
+      .filter((m) => m.end.y >= ctx.viewportOffset && m.start.y <= lastRow);
+    const accept = exactCaseFilter(query);
+    return copyModeMatchRows(accept ? visible.filter(accept) : visible, ctx);
   }
 
   function copyModeRenderState(): CopyModeRenderState | null {

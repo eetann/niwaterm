@@ -8,9 +8,11 @@ import {
   copyModeRange,
   copyModeSelectionRows,
   createCopyModeState,
-  findCopyModeMatch,
-  findCopyModeMatches,
+  copyModeMatchRows,
+  isCaseSensitiveQuery,
   firstNonBlankColumn,
+  pickCopyModeMatch,
+  type CopyModeMatch,
   type CopyModeContext,
   type CopyModeKey,
   type CopyModeState,
@@ -377,120 +379,94 @@ describe("copyModeSelectionRows", () => {
   });
 });
 
-describe("findCopyModeMatches", () => {
-  test("行内の一致をすべて桁区間で返す", () => {
-    const matches = findCopyModeMatches({
-      lines: ["foo bar foo", "baz"],
-      firstLineRow: 10,
-      query: "foo",
-    });
-    expect(matches).toEqual([
-      { y: 10, startX: 0, endX: 2 },
-      { y: 10, startX: 8, endX: 10 },
-    ]);
-  });
+/** 1行に収まる一致を作る */
+function matchAt(y: number, startX: number, endX: number): CopyModeMatch {
+  return { start: { x: startX, y }, end: { x: endX, y } };
+}
 
-  test("全角文字を含む行でも桁で返す（1文字2桁）", () => {
-    const matches = findCopyModeMatches({
-      lines: ["あいbc"],
-      firstLineRow: 0,
-      query: "bc",
-    });
-    expect(matches).toEqual([{ y: 0, startX: 4, endX: 5 }]);
-  });
-
-  test("小文字のみのクエリは大文字小文字を区別しない（smartcase）", () => {
-    expect(findCopyModeMatches({ lines: ["Foo"], firstLineRow: 0, query: "foo" })).toEqual([
-      { y: 0, startX: 0, endX: 2 },
-    ]);
-    expect(findCopyModeMatches({ lines: ["Foo"], firstLineRow: 0, query: "Foo" })).toEqual([
-      { y: 0, startX: 0, endX: 2 },
-    ]);
-  });
-
-  test("大文字を含むクエリは大文字小文字を区別する（smartcase）", () => {
-    expect(findCopyModeMatches({ lines: ["foo"], firstLineRow: 0, query: "Foo" })).toEqual([]);
-  });
-
-  test("空のクエリは何にも一致しない", () => {
-    expect(findCopyModeMatches({ lines: ["foo"], firstLineRow: 0, query: "" })).toEqual([]);
-  });
-});
-
-describe("findCopyModeMatch", () => {
-  const lines = ["foo one", "bar foo", "foo two"];
+describe("pickCopyModeMatch", () => {
+  // libghostty-vtは新しい順（下から上）で返すので、並び順に頼らないことも併せて確かめる
+  const matches = [matchAt(2, 0, 2), matchAt(1, 4, 6), matchAt(0, 0, 2)];
 
   test("前方検索は起点より後の最初の一致を返す（起点そのものは含まない）", () => {
-    expect(
-      findCopyModeMatch({
-        lines,
-        firstLineRow: 0,
-        query: "foo",
-        direction: "forward",
-        from: { x: 0, y: 0 },
-      }),
-    ).toEqual({ y: 1, startX: 4, endX: 6 });
+    expect(pickCopyModeMatch({ matches, from: { x: 0, y: 0 }, direction: "forward" })).toEqual(
+      matchAt(1, 4, 6),
+    );
   });
 
   test("後方検索は起点より前の最も近い一致を返す", () => {
-    expect(
-      findCopyModeMatch({
-        lines,
-        firstLineRow: 0,
-        query: "foo",
-        direction: "backward",
-        from: { x: 0, y: 2 },
-      }),
-    ).toEqual({ y: 1, startX: 4, endX: 6 });
-  });
-
-  test("起点がnullなら前方検索は先頭から、後方検索は末尾から探す", () => {
-    expect(
-      findCopyModeMatch({ lines, firstLineRow: 0, query: "foo", direction: "forward", from: null }),
-    ).toEqual({ y: 0, startX: 0, endX: 2 });
-    expect(
-      findCopyModeMatch({
-        lines,
-        firstLineRow: 0,
-        query: "foo",
-        direction: "backward",
-        from: null,
-      }),
-    ).toEqual({ y: 2, startX: 0, endX: 2 });
+    expect(pickCopyModeMatch({ matches, from: { x: 0, y: 2 }, direction: "backward" })).toEqual(
+      matchAt(1, 4, 6),
+    );
   });
 
   test("同じ行の中でも起点の桁より後・前で絞り込む", () => {
-    const same = ["foo foo foo"];
+    const same = [matchAt(0, 8, 10), matchAt(0, 4, 6), matchAt(0, 0, 2)];
     expect(
-      findCopyModeMatch({
-        lines: same,
-        firstLineRow: 0,
-        query: "foo",
-        direction: "forward",
-        from: { x: 4, y: 0 },
-      }),
-    ).toEqual({ y: 0, startX: 8, endX: 10 });
+      pickCopyModeMatch({ matches: same, from: { x: 4, y: 0 }, direction: "forward" }),
+    ).toEqual(matchAt(0, 8, 10));
     expect(
-      findCopyModeMatch({
-        lines: same,
-        firstLineRow: 0,
-        query: "foo",
-        direction: "backward",
-        from: { x: 4, y: 0 },
-      }),
-    ).toEqual({ y: 0, startX: 0, endX: 2 });
+      pickCopyModeMatch({ matches: same, from: { x: 4, y: 0 }, direction: "backward" }),
+    ).toEqual(matchAt(0, 0, 2));
   });
 
-  test("一致が無ければnull（折り返しは呼び出し側の責務）", () => {
+  test("端まで行ったら反対の端から折り返す", () => {
+    expect(pickCopyModeMatch({ matches, from: { x: 0, y: 2 }, direction: "forward" })).toEqual(
+      matchAt(0, 0, 2),
+    );
+    expect(pickCopyModeMatch({ matches, from: { x: 0, y: 0 }, direction: "backward" })).toEqual(
+      matchAt(2, 0, 2),
+    );
+  });
+
+  test("一致が起点の1つしか無ければそれを返す", () => {
+    const only = [matchAt(1, 4, 6)];
     expect(
-      findCopyModeMatch({
-        lines,
-        firstLineRow: 0,
-        query: "foo",
+      pickCopyModeMatch({ matches: only, from: { x: 4, y: 1 }, direction: "forward" }),
+    ).toEqual(matchAt(1, 4, 6));
+  });
+
+  test("acceptが偽を返す一致は飛ばす", () => {
+    expect(
+      pickCopyModeMatch({
+        matches,
+        from: { x: 0, y: 0 },
         direction: "forward",
-        from: { x: 0, y: 2 },
+        accept: (m) => m.start.y !== 1,
       }),
+    ).toEqual(matchAt(2, 0, 2));
+  });
+
+  test("一致が無ければnull", () => {
+    expect(
+      pickCopyModeMatch({ matches: [], from: { x: 0, y: 0 }, direction: "forward" }),
     ).toBeNull();
+  });
+});
+
+describe("copyModeMatchRows", () => {
+  test("ビューポート座標の行ごとの桁区間にする", () => {
+    const ctx = { cols: 10, viewportRows: 3, viewportOffset: 5 };
+    expect(copyModeMatchRows([matchAt(6, 2, 4)], ctx)).toEqual([{ y: 1, startX: 2, endX: 4 }]);
+  });
+
+  test("折り返し行をまたぐ一致は行ごとに分け、ビューポート外の行は落とす", () => {
+    const ctx = { cols: 10, viewportRows: 3, viewportOffset: 5 };
+    const wrapped: CopyModeMatch = { start: { x: 7, y: 4 }, end: { x: 2, y: 5 } };
+    const inside: CopyModeMatch = { start: { x: 8, y: 6 }, end: { x: 1, y: 7 } };
+    expect(copyModeMatchRows([wrapped, inside], ctx)).toEqual([
+      { y: 0, startX: 0, endX: 2 },
+      { y: 1, startX: 8, endX: 9 },
+      { y: 2, startX: 0, endX: 1 },
+    ]);
+  });
+});
+
+describe("isCaseSensitiveQuery", () => {
+  test("大文字を含むクエリだけ大文字小文字を区別する（smartcase）", () => {
+    expect(isCaseSensitiveQuery("foo")).toBe(false);
+    expect(isCaseSensitiveQuery("Foo")).toBe(true);
+    expect(isCaseSensitiveQuery("あいう")).toBe(false);
   });
 });
 

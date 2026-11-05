@@ -18,7 +18,7 @@ import {
   type CopyModeSearchAction,
   isCustomBindingRef,
 } from "@niwaterm/config";
-import { charWidth, splitCells } from "../shared/wide-char";
+import { splitCells } from "../shared/wide-char";
 
 export type CopyModeSelectionMode = "none" | "char" | "line";
 
@@ -43,12 +43,13 @@ export interface CopyModeSearch {
   query: string;
 }
 
-/** 検索の一致箇所。桁は両端とも含む（startXが一致の先頭セル、endXが末尾セル） */
+/**
+ * 検索の一致箇所。画面座標で、桁は両端とも含む（startが一致の先頭セル、endが末尾セル）。
+ * 折り返された行をまたいで一致するとstartとendの行が分かれる
+ */
 export interface CopyModeMatch {
-  /** 画面座標の行 */
-  y: number;
-  startX: number;
-  endX: number;
+  start: CopyModePoint;
+  end: CopyModePoint;
 }
 
 export interface CopyModeState {
@@ -419,92 +420,44 @@ export function copyModeSelectionRows(
  * 大文字を含むクエリのときだけ大文字小文字を区別する（vimのsmartcase）。
  * ターミナルのログはパス・オプション名など小文字が主体で、常に区別ありだと打ちづらいため
  */
-function isCaseSensitiveQuery(query: string): boolean {
+export function isCaseSensitiveQuery(query: string): boolean {
   return query !== query.toLowerCase();
 }
 
-/** 文字列インデックス→桁の対応表（末尾に行全体の幅を1つ余分に持つ） */
-function columnMap(line: string): number[] {
-  const map: number[] = Array.from({ length: line.length + 1 }, () => 0);
-  let col = 0;
-  let index = 0;
-  for (const ch of line) {
-    for (let k = 0; k < ch.length; k++) map[index + k] = col;
-    index += ch.length;
-    col += charWidth(ch);
-  }
-  map[line.length] = col;
-  return map;
-}
-
-/** 1行の中の一致をすべて桁区間で返す（左から順） */
-function matchesInLine(line: string, query: string): Array<{ startX: number; endX: number }> {
-  const results: Array<{ startX: number; endX: number }> = [];
-  if (query === "") return results;
-  const caseSensitive = isCaseSensitiveQuery(query);
-  const lowered = line.toLowerCase();
-  // toLowerCaseで長さが変わる文字（İなど）が含まれる行は桁の対応が崩れるため区別ありで探す
-  const usable = !caseSensitive && lowered.length === line.length;
-  const haystack = usable ? lowered : line;
-  const needle = usable ? query.toLowerCase() : query;
-  const map = columnMap(line);
-  let from = 0;
-  for (;;) {
-    const index = haystack.indexOf(needle, from);
-    if (index < 0) return results;
-    const startX = map[index] ?? 0;
-    const endX = Math.max((map[index + needle.length] ?? startX + 1) - 1, startX);
-    results.push({ startX, endX });
-    // 重なり合う一致も拾えるよう1文字だけ進める
-    from = index + 1;
-  }
-}
-
-/** 与えられた行テキストの中の一致をすべて返す（ハイライト用） */
-export function findCopyModeMatches(params: {
-  lines: string[];
-  firstLineRow: number;
-  query: string;
-}): CopyModeMatch[] {
-  const matches: CopyModeMatch[] = [];
-  params.lines.forEach((line, i) => {
-    for (const m of matchesInLine(line, params.query)) {
-      matches.push({ y: params.firstLineRow + i, startX: m.startX, endX: m.endX });
-    }
-  });
-  return matches;
-}
-
 /**
- * 与えられた行テキストの中から、fromの次（forward）／前（backward）の一致を1つ返す。
- * fromがnullなら範囲の端から探す（折り返し検索の2周目で使う）
+ * 一致の中から、fromの次（forward）／前（backward）にあるものを1つ選ぶ。端まで行ったら
+ * 反対の端から折り返す（vimのwrapscan相当）ので、一致がfromの位置にしか無ければそれを返す。
+ * acceptが偽を返す一致は飛ばす（smartcaseで大文字小文字まで一致するかの確認に使う）
  */
-export function findCopyModeMatch(params: {
-  lines: string[];
-  firstLineRow: number;
-  query: string;
+export function pickCopyModeMatch(params: {
+  matches: CopyModeMatch[];
+  from: CopyModePoint;
   direction: CopyModeSearchDirection;
-  /** この位置ちょうどは一致とみなさない起点。範囲全体を探すならnull */
-  from: CopyModePoint | null;
+  accept?: (match: CopyModeMatch) => boolean;
 }): CopyModeMatch | null {
-  const { lines, firstLineRow, query, direction, from } = params;
-  if (query === "") return null;
-  const forward = direction === "forward";
-  for (
-    let i = forward ? 0 : lines.length - 1;
-    forward ? i < lines.length : i >= 0;
-    i += forward ? 1 : -1
-  ) {
-    const y = firstLineRow + i;
-    if (from && (forward ? y < from.y : y > from.y)) continue;
-    const found = matchesInLine(lines[i] ?? "", query);
-    const ordered = forward ? found : [...found].reverse();
-    for (const m of ordered) {
-      if (from && y === from.y && (forward ? m.startX <= from.x : m.startX >= from.x)) continue;
-      return { y, startX: m.startX, endX: m.endX };
-    }
-  }
-  return null;
+  const { from, direction, accept } = params;
+  const sorted = [...params.matches].sort((a, b) => comparePoints(a.start, b.start));
+  const ordered =
+    direction === "forward"
+      ? [
+          ...sorted.filter((m) => comparePoints(m.start, from) > 0),
+          ...sorted.filter((m) => comparePoints(m.start, from) <= 0),
+        ]
+      : [
+          ...sorted.filter((m) => comparePoints(m.start, from) < 0).reverse(),
+          ...sorted.filter((m) => comparePoints(m.start, from) >= 0).reverse(),
+        ];
+  return ordered.find((m) => !accept || accept(m)) ?? null;
+}
+
+/** 一致をハイライト用にビューポート内の行ごとの桁区間へ落とす。折り返し行をまたぐ一致は行ごとに分ける */
+export function copyModeMatchRows(
+  matches: CopyModeMatch[],
+  ctx: Pick<CopyModeContext, "cols" | "viewportRows" | "viewportOffset">,
+): Array<{ y: number; startX: number; endX: number }> {
+  return matches.flatMap((m) =>
+    copyModeSelectionRows({ start: m.start, end: m.end, mode: "char" }, ctx),
+  );
 }
 
 // ---- スクロール・クランプ ----

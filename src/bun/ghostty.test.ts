@@ -210,3 +210,83 @@ describe("onSemanticPrompt", () => {
     }
   });
 });
+
+describe("searchMatches", () => {
+  /** 端末を作ってinputを流し込み、fnに渡す */
+  function withTerminal<T>(
+    cols: number,
+    rows: number,
+    input: string,
+    fn: (term: ReturnType<typeof createGhosttyTerminal>) => T,
+  ): T {
+    const term = createGhosttyTerminal(cols, rows);
+    try {
+      term.write(encoder.encode(input));
+      return fn(term);
+    } finally {
+      term.free();
+    }
+  }
+
+  const byStart = (
+    a: { start: { y: number; x: number } },
+    b: { start: { y: number; x: number } },
+  ) => a.start.y - b.start.y || a.start.x - b.start.x;
+
+  test("スクロールバックの一致も画面座標で返す", () => {
+    const lines = Array.from({ length: 50 }, (_, i) =>
+      i === 3 || i === 40 ? `x needle ${i}` : `${i}`,
+    );
+    const matches = withTerminal(20, 5, lines.join("\r\n"), (term) =>
+      term.searchMatches("needle", "all"),
+    );
+    expect(matches.sort(byStart)).toEqual([
+      { start: { x: 2, y: 3 }, end: { x: 7, y: 3 } },
+      { start: { x: 2, y: 40 }, end: { x: 7, y: 40 } },
+    ]);
+  });
+
+  test("ASCIIの英字は大文字小文字を区別せずに一致する", () => {
+    const matches = withTerminal(20, 3, "Foo foo FOO", (term) => term.searchMatches("foo", "all"));
+    expect(matches).toHaveLength(3);
+  });
+
+  test("折り返された行をまたぐ一致は開始と終了の行が分かれる", () => {
+    const matches = withTerminal(10, 3, "0123456foobar", (term) =>
+      term.searchMatches("foobar", "all"),
+    );
+    expect(matches).toEqual([{ start: { x: 7, y: 0 }, end: { x: 2, y: 1 } }]);
+  });
+
+  test("全角文字は1文字2桁の座標で返す", () => {
+    const matches = withTerminal(20, 3, "あいbc", (term) => term.searchMatches("いb", "all"));
+    expect(matches).toEqual([{ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } }]);
+  });
+
+  test("viewportはスクロール先のビューポートに掛かる一致を含む", () => {
+    const lines = Array.from({ length: 2000 }, (_, i) => (i === 1500 ? "here" : `${i}`));
+    const matches = withTerminal(20, 5, lines.join("\r\n"), (term) => {
+      term.scrollToRow(1498);
+      return term.searchMatches("here", "viewport");
+    });
+    expect(matches).toContainEqual({ start: { x: 0, y: 1500 }, end: { x: 3, y: 1500 } });
+  });
+
+  test("書き込みで増えた一致も同じ検索文字列のまま拾う", () => {
+    const counts = withTerminal(20, 3, "foo\r\n", (term) => {
+      const before = term.searchMatches("foo", "all").length;
+      term.write(encoder.encode("foo\r\n"));
+      return [before, term.searchMatches("foo", "all").length];
+    });
+    expect(counts).toEqual([1, 2]);
+  });
+
+  test("空文字列やclearSearchの後は何も返さない", () => {
+    withTerminal(20, 3, "foo", (term) => {
+      expect(term.searchMatches("", "all")).toEqual([]);
+      expect(term.searchMatches("foo", "all")).toHaveLength(1);
+      term.clearSearch();
+      expect(term.searchMatches("bar", "all")).toEqual([]);
+    });
+  });
+});

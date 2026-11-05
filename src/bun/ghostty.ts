@@ -130,6 +130,15 @@ const vt = dlopen(join(libDir, nativeLayout.vt), {
     args: [FFIType.ptr, FFIType.i32, FFIType.ptr],
     returns: FFIType.i32,
   },
+  // スクロールバックを含む画面の文字列検索。一致の読み出しと座標変換はshimのniwa_search_matchesで行う
+  ghostty_search_new: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  ghostty_search_free: {
+    args: [FFIType.ptr],
+    returns: FFIType.void,
+  },
   // プロセス全体の設定（PNGデコーダ）。PNGデコーダへ渡されるアロケータで出力を確保する
   ghostty_sys_set: {
     args: [FFIType.i32, FFIType.ptr],
@@ -229,6 +238,15 @@ const shim = dlopen(join(libDir, nativeLayout.shim), {
   // 結果はNiwaPromptLocation（int32が3個）のポインタで受け取る
   niwa_find_prompt: {
     args: [FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.u32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  niwa_search_set_needle: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.u64],
+    returns: FFIType.i32,
+  },
+  // 結果はNiwaSearchMatch（int32が4個）を並べた領域へ書き込まれる
+  niwa_search_matches: {
+    args: [FFIType.ptr, FFIType.ptr, FFIType.i32, FFIType.ptr, FFIType.u64, FFIType.ptr],
     returns: FFIType.i32,
   },
 });
@@ -503,6 +521,15 @@ export interface PromptLocation {
   inputRow: number;
 }
 
+/** searchMatchesが返す一致。画面座標（スクロールバックを含む絶対行）で、桁は両端とも含む */
+export interface SearchMatch {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+}
+
+// GhosttyResult
+const RESULT_OUT_OF_SPACE = -3;
+
 export function createGhosttyTerminal(
   cols: number,
   rows: number,
@@ -549,6 +576,11 @@ export function createGhosttyTerminal(
   const i32Out = new Int32Array(1);
   // NiwaPromptLocation（int32 x 2）の受け皿。呼び出しごとに使い回す
   const promptLocation = new Int32Array(2);
+  // GhosttySearchは初めて検索したときに作る。端末1つにつき1つを使い回し、検索文字列だけ差し替える
+  let search: Pointer | null = null;
+  let searchNeedle = "";
+  // NiwaSearchMatch（int32 x 4）の並び。足りなければ必要数に合わせて作り直す
+  let searchMatchBuf = new Int32Array(4 * 256);
 
   // ---- Kitty graphics protocol ----
   vt.symbols.ghostty_terminal_set(
@@ -1152,6 +1184,64 @@ export function createGhosttyTerminal(
     return { row: promptLocation[0] ?? 0, inputRow: promptLocation[1] ?? 0 };
   }
 
+  /** 検索文字列を差し替える。同じ文字列なら何もしない（libghostty-vt側の走査結果を捨てないため） */
+  function setSearchNeedle(needle: string): boolean {
+    if (search === null) {
+      if (needle === "") return true;
+      const searchHandle = new BigUint64Array(1);
+      if (vt.symbols.ghostty_search_new(null, ptr(searchHandle), term) !== 0) return false;
+      search = read.ptr(ptr(searchHandle)) as Pointer;
+    }
+    if (needle === searchNeedle) return true;
+    // ptr()は長さ0の配列を受け付けないため、空文字列のときもダミーの1バイトを指す
+    // （shim側はlenが0ならNULLとして検索を止める）
+    const bytes = needle === "" ? new Uint8Array(1) : new TextEncoder().encode(needle);
+    const len = needle === "" ? 0 : bytes.length;
+    if (shim.symbols.niwa_search_set_needle(search, ptr(bytes), BigInt(len)) !== 0) return false;
+    searchNeedle = needle;
+    return true;
+  }
+
+  /**
+   * スクロールバックを含む画面からneedleの一致を探す。ASCIIの英字だけは大文字小文字を区別しない。
+   * scopeが"all"ならスクロールバック全体を走査し終えるまでブロックし、"viewport"ならビューポートに
+   * 掛かる一致だけを軽く集める（後者は同じページに載ったビューポート外の一致も含むことがある）。
+   * 同じneedleで呼び直すと、前回までの走査結果へ端末の変化分だけを反映して返す
+   */
+  function searchMatches(needle: string, scope: "all" | "viewport"): SearchMatch[] {
+    if (needle === "" || !setSearchNeedle(needle) || search === null) return [];
+    for (;;) {
+      const rc = shim.symbols.niwa_search_matches(
+        term,
+        search,
+        scope === "viewport" ? 1 : 0,
+        ptr(searchMatchBuf),
+        BigInt(searchMatchBuf.length / 4),
+        ptr(writtenBuf),
+      );
+      const count = Number(writtenBuf[0]);
+      if (rc === RESULT_OUT_OF_SPACE && count * 4 > searchMatchBuf.length) {
+        searchMatchBuf = new Int32Array(count * 4);
+        continue;
+      }
+      if (rc !== 0) return [];
+      const matches: SearchMatch[] = [];
+      for (let i = 0; i < count; i++) {
+        const o = i * 4;
+        matches.push({
+          start: { x: searchMatchBuf[o] ?? 0, y: searchMatchBuf[o + 1] ?? 0 },
+          end: { x: searchMatchBuf[o + 2] ?? 0, y: searchMatchBuf[o + 3] ?? 0 },
+        });
+      }
+      return matches;
+    }
+  }
+
+  /** 検索をやめる。検索文字列を外すと、libghostty-vtが端末内に持つ追跡用の状態も解放される */
+  function clearSearch(): void {
+    setSearchNeedle("");
+  }
+
   /**
    * ビューポートの位置と全体の行数（GhosttyTerminalScrollbar）。
    * offsetはビューポート先頭の画面座標行で、scrollToRowへそのまま渡せる同じ行空間
@@ -1208,6 +1298,9 @@ export function createGhosttyTerminal(
   }
 
   function free(): void {
+    // 端末より先に解放すると、検索が端末内に持つ追跡用の状態もここで片付く
+    if (search) vt.symbols.ghostty_search_free(search);
+    search = null;
     if (mouseEvent) vt.symbols.ghostty_mouse_event_free(mouseEvent);
     if (mouseEncoder) vt.symbols.ghostty_mouse_encoder_free(mouseEncoder);
     mouseEvent = null;
@@ -1243,6 +1336,8 @@ export function createGhosttyTerminal(
     dumpText,
     dumpScreenRange,
     findPrompt,
+    searchMatches,
+    clearSearch,
     scrollbar,
     viewportPinned,
     scrollDelta,

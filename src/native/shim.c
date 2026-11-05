@@ -208,3 +208,69 @@ int niwa_find_prompt(GhosttyTerminal term, uint32_t from_y, int32_t direction, u
 
   return GHOSTTY_NO_VALUE;
 }
+
+// GhosttyStringの値を組み立てて検索文字列へ渡す。lenが0なら検索を止める（NULL扱い）
+int niwa_search_set_needle(GhosttySearch search, const uint8_t *needle, size_t len) {
+  if (len == 0) return ghostty_search_set(search, GHOSTTY_SEARCH_OPT_NEEDLE, NULL);
+  GhosttyString value = {needle, len};
+  return ghostty_search_set(search, GHOSTTY_SEARCH_OPT_NEEDLE, &value);
+}
+
+// niwa_search_matchesの結果1件。画面座標で、桁は両端とも含む
+typedef struct {
+  int32_t start_x;
+  int32_t start_y;
+  int32_t end_x;
+  int32_t end_y;
+} NiwaSearchMatch;
+
+// 検索を端末の現状へ追いつかせ、一致を画面座標へ変換してoutへ書き込む。
+// viewport_onlyが0ならスクロールバック全体を最後まで走査し（ghostty_search_run）、
+// 0以外ならビューポートに掛かる一致だけを1回分のfeedで集める（描画のたびに呼ぶハイライト用）。
+// 一致はGhosttySelectionで返るがgrid refは次の端末操作で無効になるため、
+// JS側へ持ち出す前にここで座標へ落としておく。
+// *out_lenには変換できた一致の総数を書き、capを超えていればcap件だけ書いてGHOSTTY_OUT_OF_SPACEを返す
+int niwa_search_matches(GhosttyTerminal term, GhosttySearch search, int32_t viewport_only,
+                        NiwaSearchMatch *out, size_t cap, size_t *out_len) {
+  *out_len = 0;
+  GhosttyResult rc = viewport_only ? ghostty_search_feed(search) : ghostty_search_run(search);
+  if (rc != GHOSTTY_SUCCESS) return rc;
+
+  GhosttySearchData data =
+      viewport_only ? GHOSTTY_SEARCH_DATA_VIEWPORT_MATCHES : GHOSTTY_SEARCH_DATA_MATCHES;
+  GhosttySelectionBuffer probe = {NULL, 0, 0};
+  rc = ghostty_search_get(search, data, &probe);
+  if (rc == GHOSTTY_SUCCESS) return GHOSTTY_SUCCESS;
+  if (rc != GHOSTTY_OUT_OF_SPACE) return rc;
+
+  size_t total = probe.len;
+  GhosttySelection *selections = malloc(sizeof(GhosttySelection) * total);
+  if (selections == NULL) return GHOSTTY_OUT_OF_MEMORY;
+  GhosttySelectionBuffer buf = {selections, total, 0};
+  rc = ghostty_search_get(search, data, &buf);
+  if (rc != GHOSTTY_SUCCESS) {
+    free(selections);
+    return rc;
+  }
+
+  size_t count = 0;
+  for (size_t i = 0; i < buf.len; i++) {
+    GhosttyPointCoordinate start, end;
+    if (ghostty_terminal_point_from_grid_ref(term, &selections[i].start, GHOSTTY_POINT_TAG_SCREEN,
+                                             &start) != GHOSTTY_SUCCESS)
+      continue;
+    if (ghostty_terminal_point_from_grid_ref(term, &selections[i].end, GHOSTTY_POINT_TAG_SCREEN,
+                                             &end) != GHOSTTY_SUCCESS)
+      continue;
+    if (count < cap) {
+      out[count].start_x = start.x;
+      out[count].start_y = (int32_t)start.y;
+      out[count].end_x = end.x;
+      out[count].end_y = (int32_t)end.y;
+    }
+    count++;
+  }
+  free(selections);
+  *out_len = count;
+  return count > cap ? GHOSTTY_OUT_OF_SPACE : GHOSTTY_SUCCESS;
+}
