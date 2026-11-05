@@ -176,22 +176,28 @@ vendor/libghostty/include/             ← ヘッダ
 macOSの `.dylib` と違い、**DLL本体は `lib/` ではなく `bin/` に出力される**点に注意。
 `src/bun/ghostty.ts` もWindowsでは `vendor/libghostty/bin` を探索する。
 
-### 3-3. shim をWindows向けにビルドする
+### 3-3. shim・ConPTYの中継exeをWindows向けにビルドする
 
 ```bash
 mise run build:native
 ```
 
 `build:native`は実行環境からターゲットを判別して振り分けるだけのタスクで、WSLでは
-`build:native:win`（`mise.toml`参照）が動く。中身は次のコマンド:
+`build:native:win`（コマンドの中身は`mise.toml`参照）が動く。`vendor/libghostty/bin/`に次のものが揃う。
 
-```bash
-mise exec zig@0.17.0 -- zig cc -target x86_64-windows-gnu -shared \
-  -Ivendor/libghostty/include \
-  src/native/shim.c \
-  -Lvendor/libghostty/lib -lghostty-vt \
-  -o vendor/libghostty/bin/niwashim.dll
-```
+| ファイル | 中身 |
+| --- | --- |
+| `niwashim.dll` | libghostty-vtのシム（`src/native/shim.c`） |
+| `niwawin.dll` | ウィンドウ透過ヘルパー（`src/native/winwindow.c`） |
+| `niwaterm-conpty.exe` | ConPTYの中継exe（`src/native/conptyrelay.c`） |
+| `conpty.dll`・`OpenConsole.exe` | 同梱する新しいConPTY。NuGetから取得する（`scripts/fetch-conpty.ts`） |
+
+`conpty.dll`と`OpenConsole.exe`は、`mise.toml`の`[vars]`にある`conpty_version`の版をダウンロードし、
+`conpty_sha256`と照らし合わせてから置く。取得済みの版と同じなら何もしない。版を上げるときは2つの値を一緒に書き換える。
+
+PTYは、この3ファイル（中継exe・`conpty.dll`・`OpenConsole.exe`）が揃っていれば中継exe経由で起動する。
+どれかが欠けているとOS標準のConPTY（`Bun.Terminal`）で起動し、OSC 133の位置ずれなどが起きる
+（[ADR 0009](/adr/0009-bundle-new-conpty-via-relay-process-on-windows.md)）。
 
 ## 4. 成果物をWindows側へコピーする
 
@@ -201,7 +207,7 @@ WSLからWindowsのファイルシステムは `/mnt/c/` で見える。
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 WIN_REPO="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME"
 mkdir -p "$WIN_REPO/vendor/libghostty/bin"
-cp vendor/libghostty/bin/*.dll "$WIN_REPO/vendor/libghostty/bin/"
+cp vendor/libghostty/bin/* "$WIN_REPO/vendor/libghostty/bin/"
 cp -r vendor/libghostty/include "$WIN_REPO/vendor/libghostty/"
 ```
 
@@ -503,6 +509,9 @@ WSL判定に該当しない限りTCPブリッジ側は使われない。
 
 - **アーキテクチャはx64のみ**（ElectrobunのWindows対応がx64のみ。ARM64はエミュレーションで動作）
 - **デフォルトシェルはPowerShell**（`powershell.exe -NoLogo`）。設定で変更できる
+- PTYはOS標準のConPTYではなく、同梱した新しいConPTY（`conpty.dll`＋`OpenConsole.exe`）を中継exe経由で使う。
+  OS標準のConPTYは子の出力を描き直すため、OSC 133の位置ずれやAPCの欠落が起きる
+  （[ADR 0009](/adr/0009-bundle-new-conpty-via-relay-process-on-windows.md)）
 - ConPTYの仕様上、入力の `\r` → `\n` 変換（POSIXのICRNL相当）が行われない
 - ConPTYは子プロセスの出力より前に短いVT初期化シーケンス（`\x1b[?9001h\x1b[?1004h...`）を出力する
 - Windowsにはプロセスグループもシグナルも無いため、macOSで行っているSIGINT/SIGWINCHの補完送出は行わない

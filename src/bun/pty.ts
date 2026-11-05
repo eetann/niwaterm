@@ -74,6 +74,54 @@ export function withPtyExec(cmd: string[], ptyExec: string | undefined): string[
 }
 
 /**
+ * Windowsで使うConPTYの中継exe（src/native/conptyrelay.c、`mise run build:native`で生成）と、
+ * 同じフォルダに置く新しいConPTY。OS標準のConPTYは子の出力を描き直すため、OSC 133の位置ずれや
+ * APCの欠落が起きる（ADR 0009）
+ */
+const CONPTY_RELAY_REL_PATH = "vendor/libghostty/bin/niwaterm-conpty.exe";
+const CONPTY_REL_PATHS = [
+  "vendor/libghostty/bin/conpty.dll",
+  "vendor/libghostty/bin/OpenConsole.exe",
+];
+
+let conptyRelayPathCache: string | undefined | typeof UNRESOLVED = UNRESOLVED;
+
+/** ConPTYの中継exeの絶対パス。Windows以外と、中継exe・conpty.dll・OpenConsole.exeのどれかが無いときはundefined */
+export function conptyRelayPath(): string | undefined {
+  if (!isWindows) return undefined;
+  if (conptyRelayPathCache === UNRESOLVED) {
+    const relay = findNativeArtifact(CONPTY_RELAY_REL_PATH);
+    conptyRelayPathCache =
+      relay && CONPTY_REL_PATHS.every((rel) => findNativeArtifact(rel) !== undefined)
+        ? relay
+        : undefined;
+  }
+  return conptyRelayPathCache;
+}
+
+const RELAY_FRAME_INPUT = 0;
+const RELAY_FRAME_RESIZE = 1;
+
+/** 中継exeの標準入力へ送る1フレーム。[種類 1バイト][長さ u32 LE][中身] */
+export function encodeRelayFrame(type: number, payload: Uint8Array): Uint8Array {
+  const frame = new Uint8Array(5 + payload.length);
+  const view = new DataView(frame.buffer);
+  view.setUint8(0, type);
+  view.setUint32(1, payload.length, true);
+  frame.set(payload, 5);
+  return frame;
+}
+
+/** リサイズのフレームの中身。cols・rowsをu16 LEで並べる */
+export function encodeRelayResize(cols: number, rows: number): Uint8Array {
+  const payload = new Uint8Array(4);
+  const view = new DataView(payload.buffer);
+  view.setUint16(0, cols, true);
+  view.setUint16(2, rows, true);
+  return encodeRelayFrame(RELAY_FRAME_RESIZE, payload);
+}
+
+/**
  * 起動するシェルのコマンドライン。
  * Windowsにはログインシェルの概念が無いため、プロファイル読み込みは各シェルの既定に任せる。
  * shellはスペース区切りで単純分割する（クォート・エスケープ非対応）。WSLディストロ起動
@@ -206,12 +254,122 @@ export function createPty(opts: PtyOptions): Pty {
   const spawnCwd = applyWslCdArg(cmd, opts.cwd);
   appendCommandArgs(cmd, opts.command, opts.captureStdoutTo);
 
+  const env = buildEnv(cmd, term, opts.env);
+  const relay = conptyRelayPath();
+  if (relay) return createRelayPty(relay, cmd, env, spawnCwd, opts.cols, opts.rows);
+  return createBunTerminalPty(cmd, env, spawnCwd, term, opts.cols, opts.rows);
+}
+
+/**
+ * Bun.spawnを呼び、cwdが原因の失敗ならホームディレクトリで再試行する。
+ * uv_spawnのENOENTはcwd不在・実行ファイル不在いずれでも発生し、エラー自体からは
+ * 区別できない（libuv/Windowsの既知の癖）。spawnCwdを明示指定していた場合は
+ * cwd起因（例: WSL側CLIから渡されたパスがWindows側に存在しない）を疑い、
+ * homedir()へフォールバックして再試行する。フォールバックでも失敗する場合は
+ * シェルコマンド自体の問題とみなしそのまま投げる
+ */
+function spawnWithCwdFallback<T>(spawn: (cwd: string) => T, spawnCwd: string | undefined): T {
+  try {
+    return spawn(spawnCwd ?? homedir());
+  } catch (err) {
+    if (spawnCwd === undefined) throw err;
+    console.log(
+      `[bun] failed to spawn pty with cwd=${spawnCwd}, falling back to home directory: ${String(err)}`,
+    );
+    return spawn(homedir());
+  }
+}
+
+/**
+ * Windowsで、同梱した新しいConPTYを中継exe経由で使うPTY（ADR 0009）。
+ * cwd・環境変数は中継exeに渡し、中継exeがそのままシェルへ引き継ぐ
+ */
+function createRelayPty(
+  relay: string,
+  cmd: string[],
+  env: Record<string, string>,
+  spawnCwd: string | undefined,
+  cols: number,
+  rows: number,
+): Pty {
+  let onDataFn: ((data: Uint8Array) => void) | null = null;
+  let onExitFn: ((code: number | null) => void) | null = null;
+
+  const proc = spawnWithCwdFallback(
+    (cwd) =>
+      Bun.spawn([relay, String(cols), String(rows), "--", ...cmd], {
+        env,
+        cwd,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+        windowsHide: true,
+      }),
+    spawnCwd,
+  );
+
+  async function pumpOutput(): Promise<void> {
+    for await (const chunk of proc.stdout) onDataFn?.(chunk);
+  }
+  async function logStderr(): Promise<void> {
+    const stderr = await new Response(proc.stderr).text();
+    if (stderr.trim() !== "") console.log(`[bun] niwaterm-conpty: ${stderr.trim()}`);
+  }
+  // 中継exeの終了はパイプに残った出力より先に届きうる。最後の出力（終了直前のエラーメッセージ等）を
+  // 描画し終えてから終了を伝えないと、受け手が端末を破棄した後に出力が来て捨てられる
+  async function notifyExit(output: Promise<void>): Promise<void> {
+    const code = await proc.exited;
+    await output.catch(() => {});
+    onExitFn?.(proc.signalCode ? null : code);
+  }
+  void notifyExit(pumpOutput());
+  void logStderr();
+
+  function send(frame: Uint8Array): void {
+    try {
+      proc.stdin.write(frame);
+      proc.stdin.flush();
+    } catch {
+      // 中継exeが既に終わっている。終了はonExitで伝わる
+    }
+  }
+
+  return {
+    pid: proc.pid,
+    onData(fn) {
+      onDataFn = fn;
+    },
+    onExit(fn) {
+      onExitFn = fn;
+    },
+    write(data) {
+      const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+      if (bytes.length > 0) send(encodeRelayFrame(RELAY_FRAME_INPUT, bytes));
+    },
+    resize(newCols, newRows) {
+      send(encodeRelayResize(newCols, newRows));
+    },
+    kill() {
+      // 中継exeはJobオブジェクトでシェルとOpenConsole.exeを道連れにするので、中継exeだけ止めればよい
+      proc.kill();
+    },
+  };
+}
+
+function createBunTerminalPty(
+  cmd: string[],
+  env: Record<string, string>,
+  spawnCwd: string | undefined,
+  term: string,
+  cols: number,
+  rows: number,
+): Pty {
   let onDataFn: ((data: Uint8Array) => void) | null = null;
   let onExitFn: ((code: number | null) => void) | null = null;
 
   const terminal = new Bun.Terminal({
-    cols: opts.cols,
-    rows: opts.rows,
+    cols,
+    rows,
     name: term,
     data(_terminal, data) {
       onDataFn?.(data);
@@ -220,7 +378,7 @@ export function createPty(opts: PtyOptions): Pty {
 
   const spawnOptions = {
     // TerminalOptions.nameはTERM環境変数を設定しないため明示的に渡す
-    env: buildEnv(cmd, term, opts.env),
+    env,
     terminal,
     onExit(_proc: Bun.Subprocess, exitCode: number | null) {
       onExitFn?.(exitCode);
@@ -231,21 +389,10 @@ export function createPty(opts: PtyOptions): Pty {
   // 先頭要素でシェル種別を判定している処理があるため、ラップは最後の最後に噛ませる
   const spawnArgv = withPtyExec(cmd, ptyExecPath());
 
-  let proc: Bun.Subprocess;
-  try {
-    proc = Bun.spawn(spawnArgv, { ...spawnOptions, cwd: spawnCwd ?? homedir() });
-  } catch (err) {
-    // uv_spawnのENOENTはcwd不在・実行ファイル不在いずれでも発生し、エラー自体からは
-    // 区別できない（libuv/Windowsの既知の癖）。spawnCwdを明示指定していた場合は
-    // cwd起因（例: WSL側CLIから渡されたパスがWindows側に存在しない）を疑い、
-    // homedir()へフォールバックして再試行する。フォールバックでも失敗する場合は
-    // シェルコマンド自体の問題とみなしそのまま投げる
-    if (spawnCwd === undefined) throw err;
-    console.log(
-      `[bun] failed to spawn pty with cwd=${spawnCwd}, falling back to home directory: ${String(err)}`,
-    );
-    proc = Bun.spawn(spawnArgv, { ...spawnOptions, cwd: homedir() });
-  }
+  const proc = spawnWithCwdFallback(
+    (cwd) => Bun.spawn(spawnArgv, { ...spawnOptions, cwd }),
+    spawnCwd,
+  );
 
   function onData(fn: (data: Uint8Array) => void): void {
     onDataFn = fn;

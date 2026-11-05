@@ -1,10 +1,10 @@
 ---
 type: Known Issue
-title: "Windows実機: ConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない"
-description: WindowsのPTY（ConPTY）は子プロセスの出力を自前の画面バッファで解釈し直してから再出力するため、APC（ESC _）で送られるKitty graphics protocolのシーケンスが丸ごと消える。WSLタブ・Windowsネイティブのシェルのどちらでも、niwatermへ届く時点で画像のデータが無い。macOSでは表示できる
+title: "Windows実機: OS標準のConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない"
+description: WindowsのOS標準のConPTYは子プロセスの出力を自前の画面バッファで解釈し直してから再出力するため、APC（ESC _）で送られるKitty graphics protocolのシーケンスが丸ごと消える。niwatermは同梱した新しいConPTYを使うため表示できるが、それが無い環境ではOS標準のConPTYへ戻り画像が出ない
 ---
 
-# Windows実機: ConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない
+# Windows実機: OS標準のConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない
 
 ## 症状
 
@@ -33,7 +33,9 @@ Windowsネイティブ（`bun kitty-demo.ts`）のどちらも0件で、前後�
 
 ## 対処
 
-現状は未対応。Windowsで画像を出すには、ConPTYを経由しない経路が要る。
+新しいConPTY（Windows Terminalが同梱する`conpty.dll`＋`OpenConsole.exe`）は子の出力を描き直さず、
+APCもそのまま流す。niwatermはこれを同梱し、中継exe経由でPTYを作るので、画像が表示される
+（[ADR 0009](/adr/0009-bundle-new-conpty-via-relay-process-on-windows.md)）。
 
-- WSLタブはLinux側でPTYを持ち、中身をパイプでniwatermへ運ぶ中継（wsltty の wslbridge と同じ方式）
-- ConPTY自体を素通しモードで動かす（OS標準のConPTYでは使えない）
+`mise run build:native`をまだ実行していないなど、中継exe・`conpty.dll`・`OpenConsole.exe`のどれかが
+無い環境では、OS標準のConPTYへ戻るため画像は出ない。

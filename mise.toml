@@ -37,6 +37,10 @@
 [vars]
 ghostty_ref = "v1.4.0"
 zig_version = "0.17.0"
+# Windowsで使う新しいConPTY（NuGetのMicrosoft.Windows.Console.ConPTY）の版と、nupkgのSHA-256。
+# 上げるときは両方を一緒に書き換える（ADR 0009）
+conpty_version = "1.25.260930003"
+conpty_sha256 = "02b07b349af66d801159bdf9e440d4a1ce78bb951f37fc8609731665afdae7ee"
 
 # ネイティブ成果物（libghostty-vtのシム・PTYの制御端末ラッパー）のビルド。何を作るかは
 # 実行環境で決まる（macOSはローカル向けの.dylib、WSLはzigでWindows向けの.dllへクロスビルド）ため、
@@ -72,7 +76,7 @@ cc -dynamiclib -fobjc-arc -framework Foundation -framework UserNotifications \
 # src/bun/ghostty.ts側の探索先もそれに合わせてbin/になっている
 [tasks."build:native:win"]
 hide = true
-description = "shimとウィンドウ透過ヘルパーをWindows向けにクロスビルドする（build:nativeから呼ばれる）"
+description = "shim・ウィンドウ透過ヘルパー・ConPTYの中継exeをWindows向けにクロスビルドし、同梱するConPTYを取得する（build:nativeから呼ばれる）"
 run = '''
 mise exec zig@{{vars.zig_version}} -- zig cc -target x86_64-windows-gnu -shared \
   -Ivendor/libghostty/include \
@@ -85,6 +89,13 @@ mise exec zig@{{vars.zig_version}} -- zig cc -target x86_64-windows-gnu -shared 
   src/native/winwindow.c \
   -ldwmapi -lgdi32 -luser32 \
   -o vendor/libghostty/bin/niwawin.dll
+# ConPTYの中継exe（ADR 0009）。GUIサブシステムにするのは、コンソールを持たせないため
+# （コンソールアプリだと起動のたびにコンソールが割り当てられる余地が残る）
+mise exec zig@{{vars.zig_version}} -- zig cc -target x86_64-windows-gnu -O2 -municode \
+  -Wl,--subsystem,windows \
+  src/native/conptyrelay.c \
+  -o vendor/libghostty/bin/niwaterm-conpty.exe
+bun scripts/fetch-conpty.ts {{vars.conpty_version}} {{vars.conpty_sha256}}
 '''
 
 # vendor（libghostty-vt本体）のビルドはシムと違い、libghostty-vtのバージョンを上げるときにしか

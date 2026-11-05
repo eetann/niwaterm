@@ -117,4 +117,4 @@ niwaterm (Bun)
 - microsoft/terminal PR #17510（ConPTYの作り直し）: https://github.com/microsoft/terminal/pull/17510
 - microsoft/terminal issue #1173（ConPTYの素通しモード）: https://github.com/microsoft/terminal/issues/1173
 - NuGet `Microsoft.Windows.Console.ConPTY`: https://www.nuget.org/packages/Microsoft.Windows.Console.ConPTY
-- [Windows実機: ConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない](/known-issues/windows-conpty-drops-kitty-graphics-apc.md)
+- [Windows実機: OS標準のConPTYがAPCシーケンスを捨てるため、Kitty graphicsの画像が表示されない](/known-issues/windows-conpty-drops-kitty-graphics-apc.md)

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { appendCommandArgs, buildEnv, withPtyExec } from "./pty";
+import {
+  appendCommandArgs,
+  buildEnv,
+  encodeRelayFrame,
+  encodeRelayResize,
+  withPtyExec,
+} from "./pty";
 
 describe("appendCommandArgs", () => {
   test("commandが未指定なら何もしない", () => {
@@ -173,5 +179,16 @@ describe("buildEnv", () => {
       const env = buildEnv(["/bin/zsh"], "xterm-256color", { NIWATERM_TAB_ID: "tab-1" });
       expect(env["NIWATERM_TAB_ID"]).toBe("tab-1");
     });
+  });
+});
+
+describe("encodeRelayFrame", () => {
+  test("種類1バイト・長さu32 LE・中身の順に並べる", () => {
+    const frame = encodeRelayFrame(0, new TextEncoder().encode("ls\r"));
+    expect([...frame]).toEqual([0, 3, 0, 0, 0, 0x6c, 0x73, 0x0d]);
+  });
+
+  test("リサイズはcols・rowsをu16 LEで並べる", () => {
+    expect([...encodeRelayResize(300, 40)]).toEqual([1, 4, 0, 0, 0, 0x2c, 0x01, 40, 0]);
   });
 });
