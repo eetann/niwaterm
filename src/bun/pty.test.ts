@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   appendCommandArgs,
   buildEnv,
+  createPty,
   encodeRelayFrame,
   encodeRelayResize,
+  ptyExecPath,
   withPtyExec,
 } from "./pty";
 
@@ -190,5 +192,33 @@ describe("encodeRelayFrame", () => {
 
   test("リサイズはcols・rowsをu16 LEで並べる", () => {
     expect([...encodeRelayResize(300, 40)]).toEqual([1, 4, 0, 0, 0, 0x2c, 0x01, 40, 0]);
+  });
+});
+
+// PTYを制御端末にするptyexecが要る。Windowsとbuild:native未実行の環境では走らない
+describe.skipIf(!ptyExecPath())("resizeのSIGWINCH", () => {
+  test("フォアグラウンドのジョブにだけ届き、それを待つシェルには届かない", async () => {
+    const child = `trap "echo CHILD_WINCH" WINCH; echo READY; sleep 1 & wait`;
+    const pty = createPty({
+      shell: "/bin/sh",
+      cols: 80,
+      rows: 24,
+      term: "xterm-256color",
+      command: `trap "echo SHELL_WINCH" WINCH; /bin/sh -c '${child}'; echo CHILD_DONE; sleep 0.2`,
+    });
+    let output = "";
+    const decoder = new TextDecoder();
+    const exited = new Promise<void>((resolve) => pty.onExit(() => resolve()));
+    pty.onData((data) => {
+      const before = output;
+      output += decoder.decode(data);
+      if (!before.includes("READY\r\n") && output.includes("READY\r\n")) pty.resize(100, 30);
+    });
+
+    await exited;
+
+    expect(output).toContain("CHILD_WINCH");
+    expect(output).toContain("CHILD_DONE");
+    expect(output).not.toContain("SHELL_WINCH");
   });
 });

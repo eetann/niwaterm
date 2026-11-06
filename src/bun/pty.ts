@@ -417,12 +417,14 @@ function createBunTerminalPty(
 
   function resize(cols: number, rows: number): void {
     terminal.resize(cols, rows);
-    // Bun.Terminal.resize()はwinsize（TIOCSWINSZ相当）は更新するが、
-    // SIGWINCHをフォアグラウンドプロセスグループへ送出しない。
-    // このためシェルの$COLUMNS等リサイズ通知に依存する値が更新されず、
-    // プロンプト側の罫線幅計算などが古いサイズのまま固着する。
+    // PTYが子の制御端末なら、kernelがwinsizeの変更時にフォアグラウンドのプロセスグループへ
+    // SIGWINCHを配る。ここから重ねて送ると、シェルがジョブを動かしている間にシェルのグループへ
+    // 届いてしまい、zshがZLE内から起動したnvim等から端末を奪ってジョブごと停止させる
+    // （詳細: docs/known-issues/pty-resize-sigwinch-to-shell-suspends-foreground-job.md）。
     // Windowsにはプロセスグループもシグナルも無く、ConPTY側がサイズ変更を子へ通知する。
-    if (isWindows) return;
+    if (isWindows || ptyExecPath()) return;
+    // ptyexecが無いとPTYが制御端末にならずkernelは配らないので、シェルの$COLUMNS等が
+    // 古いサイズのまま固着しないよう自前で送る
     try {
       process.kill(-proc.pid, "SIGWINCH");
     } catch {}
