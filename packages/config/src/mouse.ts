@@ -1,4 +1,4 @@
-// マウス操作の挙動設定。ドラッグ選択時の自動コピー・選択範囲の右クリックメニューを
+// マウス操作の挙動設定。ドラッグ選択時の自動コピー・コピーモードへの移行・選択範囲の右クリックメニューを
 // niwaterm.config.tsから変更できるようにする。
 // appearance.tsと同様、全フィールドoptionalの型を「ユーザーの部分上書き」と「マージ後の解決済み値」の両方に使い回す。
 
@@ -24,7 +24,7 @@ export interface SelectionMenuItem {
 /**
  * 選択範囲の右クリックメニューを組み立てる関数。右クリックのたびに呼ばれるため、
  * 拡張子・OS（process.platform）・cwdによる出し分けは素のif文で書ける。
- * 空配列を返せばniwaterm組み込みの項目（コピー）だけのメニューになる。
+ * 空配列を返せばniwaterm組み込みの項目（コピー・コピーモードで続ける）だけのメニューになる。
  */
 export type SelectionMenuFn = (
   selection: SelectionMenuContext,
@@ -34,6 +34,11 @@ export type SelectionMenuFn = (
 export interface MouseConfig {
   /** マウスでのテキスト選択が終わった時点で、選択範囲をクリップボードへ自動コピーする */
   copyOnSelect?: boolean;
+  /**
+   * マウスでのテキスト選択が終わった時点で、その範囲を選んだ状態のコピーモードへ入る。
+   * copyOnSelectと両方有効なら、コピーしてから入る
+   */
+  copyModeOnSelect?: boolean;
   /** 選択範囲を右クリックした時に出すメニューの項目を組み立てる */
   selectionMenu?: SelectionMenuFn;
 }
@@ -46,4 +51,5 @@ export type ResolvedMouseConfig = Required<Omit<MouseConfig, "selectionMenu">>;
 
 export const defaultMouseConfig: ResolvedMouseConfig = {
   copyOnSelect: false,
+  copyModeOnSelect: false,
 };

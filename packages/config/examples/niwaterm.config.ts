@@ -19,7 +19,7 @@ export default defineConfig({
   },
   mouse: {
     // 選択範囲を右クリックした時のメニュー項目。右クリックのたびに呼ばれるため、
-    // 拡張子・OSによる出し分けは素のif文で書ける（組み込みの「コピー」は常に先頭に出る）
+    // 拡張子・OSによる出し分けは素のif文で書ける（組み込みの「コピー」「コピーモードで続ける」は常に先頭に出る）
     selectionMenu: (selection, niwa) => {
       const path = selection.text.trim();
       const opener = process.platform === "win32" ? "explorer.exe" : "open";

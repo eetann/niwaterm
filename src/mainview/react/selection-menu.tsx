@@ -21,6 +21,8 @@ export interface SelectionMenuProps {
   y: number;
   items: SelectionMenuUserItem[];
   onCopy: () => void;
+  /** 選んでいる範囲を引き継いでコピーモードへ入る */
+  onCopyMode: () => void;
   onSelectItem: (id: string) => void;
   onClose: () => void;
 }
@@ -31,6 +33,7 @@ export function SelectionMenu({
   y,
   items,
   onCopy,
+  onCopyMode,
   onSelectItem,
   onClose,
 }: SelectionMenuProps) {
@@ -61,6 +64,7 @@ export function SelectionMenu({
         onKeyDown={(e) => e.stopPropagation()}
       >
         <DropdownMenuItem onSelect={onCopy}>コピー</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyMode}>コピーモードで続ける</DropdownMenuItem>
         {items.length > 0 && <DropdownMenuSeparator />}
         {items.map((item) => (
           <DropdownMenuItem key={item.id} onSelect={() => onSelectItem(item.id)}>

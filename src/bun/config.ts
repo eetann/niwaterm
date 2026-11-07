@@ -885,6 +885,14 @@ export function resolveMouse(
       defaultMouseConfig.copyOnSelect,
       isBoolean,
     ),
+    copyModeOnSelect: resolveField(
+      diag,
+      "mouse",
+      "copyModeOnSelect",
+      user?.copyModeOnSelect,
+      defaultMouseConfig.copyModeOnSelect,
+      isBoolean,
+    ),
   };
 }
 

@@ -9,7 +9,7 @@ import {
 } from "./persistence";
 import type { PopupGeometry } from "../shared/popup-geometry";
 import type { BoardId } from "./board";
-import type { CopyModeKeyPress } from "./copy-mode";
+import type { CopyModeInitialSelection, CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
 import {
@@ -740,8 +740,8 @@ export function createWorkspaceManager(opts: WorkspaceManagerOptions) {
     findOwnerByTabId(tabId)?.handleMouseEvent(tabId, ev);
   }
 
-  function enterCopyMode(tabId: TabId): void {
-    findOwnerByTabId(tabId)?.enterCopyMode(tabId);
+  function enterCopyMode(tabId: TabId, selection?: CopyModeInitialSelection): void {
+    findOwnerByTabId(tabId)?.enterCopyMode(tabId, selection);
   }
 
   function handleCopyModeKey(tabId: TabId, press: CopyModeKeyPress): boolean {

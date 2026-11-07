@@ -2,7 +2,7 @@
 // 1つのBoardが1本のTileツリーを保持する（ADR 0006）。workspace.tsがBoardを複数束ね、
 // bun/index.tsはworkspace-manager.ts経由でのみタイル・タブ・PTYを操作する。
 import type { BrowserRenderState, BrowserTabState } from "./browser-tab";
-import type { CopyModeKeyPress } from "./copy-mode";
+import type { CopyModeInitialSelection, CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { APP_VARIANT } from "./app-variant.generated";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
@@ -712,10 +712,10 @@ export function createBoard(opts: BoardOptions) {
   }
 
   // コピーモードはPTYを経由しないため、handleScrollと同じくonDirty()で再描画を促す必要がある
-  function enterCopyMode(tabId: TabId): void {
+  function enterCopyMode(tabId: TabId, selection?: CopyModeInitialSelection): void {
     const session = sessions.get(tabId);
     if (!session) return;
-    session.enterCopyMode();
+    session.enterCopyMode(selection);
     opts.onDirty();
   }
 
@@ -805,6 +805,7 @@ export function createBoard(opts: BoardOptions) {
         cursorVisible: false,
         cursorShape: "block",
         viewportPinned: true,
+        viewportOffset: 0,
         mouseTracking: false,
         mouseAnyMotion: false,
         copyMode: null,

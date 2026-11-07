@@ -239,7 +239,7 @@ describe("buildConfigSummary", () => {
   test("関数で指定する設定（mouse.selectionMenu）は含めない", () => {
     const summary = buildConfigSummary(input());
     const mouseKeys = summary.sections.find((s) => s.name === "mouse")?.entries.map((e) => e.key);
-    expect(mouseKeys).toEqual(["copyOnSelect"]);
+    expect(mouseKeys).toEqual(["copyOnSelect", "copyModeOnSelect"]);
   });
 
   test("terminal.scrollbackは行数と刈り込み単位の注記を添えて出す", () => {

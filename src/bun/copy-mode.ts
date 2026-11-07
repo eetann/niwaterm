@@ -488,6 +488,33 @@ export function clampCopyModeCursor(state: CopyModeState, ctx: CopyModeContext):
   return { ...state, cursor: { x, y } };
 }
 
+/** 外から与える選択範囲（マウスで選んだ範囲の引き継ぎ用）。どちらも画面座標で、両端のセルを含む */
+export interface CopyModeInitialSelection {
+  /** 選択の始点（ドラッグを始めた側） */
+  anchor: CopyModePoint;
+  /** 選択の終点（ドラッグを終えた側）。コピーモードのカーソルはここに置く */
+  cursor: CopyModePoint;
+}
+
+/**
+ * 与えた範囲を文字選択した状態にする。直前の検索（n/Nで繰り返す分）は残し、
+ * 打ちかけの連続キーと検索文字列の入力は捨てる
+ */
+export function selectCopyModeRange(
+  state: CopyModeState,
+  selection: CopyModeInitialSelection,
+): CopyModeState {
+  return {
+    ...state,
+    cursor: { ...selection.cursor },
+    anchor: { ...selection.anchor },
+    selectionMode: "char",
+    desiredX: selection.cursor.x,
+    pendingKeys: [],
+    searchInput: null,
+  };
+}
+
 // ---- キー処理 ----
 
 function withMotion(state: CopyModeState, motion: Motion): CopyModeState {

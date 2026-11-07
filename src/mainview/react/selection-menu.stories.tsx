@@ -10,6 +10,7 @@ const meta = {
     y: 40,
     items: [],
     onCopy: fn(),
+    onCopyMode: fn(),
     onSelectItem: fn(),
     onClose: fn(),
   },
@@ -20,7 +21,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
-/** 設定のmouse.selectionMenuで項目を足した状態。コピーとの間に区切り線が入る */
+/** 設定のmouse.selectionMenuで項目を足した状態。組み込みの項目との間に区切り線が入る */
 export const WithUserItems: Story = {
   args: {
     items: [

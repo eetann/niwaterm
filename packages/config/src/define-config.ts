@@ -90,8 +90,8 @@ export interface NiwatermConfig {
    */
   link?: LinkConfig;
   /**
-   * マウス操作の挙動設定。選択時の自動コピー（copyOnSelect）と、選択範囲の右クリックメニューに
-   * 並べる項目（selectionMenu）を指定する。未指定のフィールドはdefaultMouseConfigの値のまま有効。
+   * マウス操作の挙動設定。選択時の自動コピー（copyOnSelect）・コピーモードへの移行（copyModeOnSelect）と、
+   * 選択範囲の右クリックメニューに並べる項目（selectionMenu）を指定する。未指定のフィールドはdefaultMouseConfigの値のまま有効。
    * 例: { copyOnSelect: true }
    */
   mouse?: MouseConfig;

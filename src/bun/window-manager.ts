@@ -9,7 +9,7 @@
 //
 // BrowserWindowの生成・破棄はElectrobun依存のためここでは行わず、onWindowOpened/onWindowClosedで
 // bun/index.tsへ委ねる（このモジュールをElectrobun非依存に保ち、テストできるようにするため）。
-import type { CopyModeKeyPress } from "./copy-mode";
+import type { CopyModeInitialSelection, CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import type { PersistedBoardStartup, PersistedState } from "./persistence";
 import type { SplitOrientation, SplitPlacement, TabId, TileId } from "./tile-layout";
@@ -419,7 +419,8 @@ export function createWindowManager(opts: WindowManagerOptions) {
       byTab(tabId)?.setTabLayoutSlot(tabId, slot) ?? false,
     handleMouseEvent: (tabId: TabId, ev: MouseEventInput) =>
       byTab(tabId)?.handleMouseEvent(tabId, ev),
-    enterCopyMode: (tabId: TabId) => byTab(tabId)?.enterCopyMode(tabId),
+    enterCopyMode: (tabId: TabId, selection?: CopyModeInitialSelection) =>
+      byTab(tabId)?.enterCopyMode(tabId, selection),
     handleCopyModeKey: (tabId: TabId, press: CopyModeKeyPress) =>
       byTab(tabId)?.handleCopyModeKey(tabId, press) ?? false,
     handlePaste: (tabId: TabId, data: string) => byTab(tabId)?.handlePaste(tabId, data),

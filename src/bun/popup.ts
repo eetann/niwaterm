@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PopupGeometry } from "../shared/popup-geometry";
 import { clampPopupGeometry } from "../shared/popup-geometry";
-import type { CopyModeKeyPress } from "./copy-mode";
+import type { CopyModeInitialSelection, CopyModeKeyPress } from "./copy-mode";
 import type { MouseEventInput } from "./ghostty";
 import { APP_VARIANT } from "./app-variant.generated";
 import { getWslBridgePort, ipcSocketPath } from "./ipc-server";
@@ -298,9 +298,9 @@ export function createPopup(opts: PopupOptions) {
 
   // スクロールはPTYを経由しないため、呼び出し側で明示的にonDirty()し再描画をスケジュールする必要がある
   // コピーモードはPTYを経由しないため、handleScrollと同じくonDirty()で再描画を促す
-  function enterCopyMode(): void {
+  function enterCopyMode(selection?: CopyModeInitialSelection): void {
     if (!session) return;
-    session.enterCopyMode();
+    session.enterCopyMode(selection);
     opts.onDirty();
   }
 

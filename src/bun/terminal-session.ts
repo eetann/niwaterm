@@ -9,6 +9,8 @@ import {
   copyModeSelectionRows,
   copyModeMatchRows,
   createCopyModeState,
+  selectCopyModeRange,
+  type CopyModeInitialSelection,
   firstNonBlankColumn,
   isCaseSensitiveQuery,
   pickCopyModeMatch,
@@ -83,6 +85,12 @@ export interface TerminalRenderState {
   cursorShape: CursorShape;
   /** ビューポートが最新行に追従しているか。falseはスクロールバックを閲覧中 */
   viewportPinned: boolean;
+  /**
+   * htmlのビューポート先頭が画面座標（スクロールバックを含む絶対行）の何行目か。webviewが
+   * 表示中のHTML上の位置を画面座標へ直すのに使う（ドラッグ選択中は描画を保留するため、
+   * bun側の現在のビューポート位置とずれていることがある）
+   */
+  viewportOffset: number;
   /** アプリがマウスレポートを有効にしているか（trueならwebview側はマウス操作を転送する） */
   mouseTracking: boolean;
   /** ボタン非押下時の移動も報告が要るモード（DECSET 1003）か */
@@ -507,15 +515,21 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
 
   /**
    * コピーモードへ入る。ターミナルのカーソル位置から開始し、その時点のビューポートを
-   * 絶対行で固定する（固定しないと、閲覧中に新しい出力が来るたび画面が流れてしまう）
+   * 絶対行で固定する（固定しないと、閲覧中に新しい出力が来るたび画面が流れてしまう）。
+   * selectionを渡すとその範囲を選んだ状態で始める。既にコピーモード中なら選択だけを置き換える
    */
-  function enterCopyMode(): void {
-    if (copyMode) return;
-    const bar = term.scrollbar();
-    const cursor = term.cursor();
-    copyModeOffset = bar.offset;
-    term.scrollToRow(copyModeOffset);
-    copyMode = syncCopyModeViewport(createCopyModeState({ x: cursor.x, y: bar.offset + cursor.y }));
+  function enterCopyMode(selection?: CopyModeInitialSelection): void {
+    if (!copyMode) {
+      const bar = term.scrollbar();
+      const cursor = term.cursor();
+      copyModeOffset = bar.offset;
+      term.scrollToRow(copyModeOffset);
+      copyMode = createCopyModeState({ x: cursor.x, y: bar.offset + cursor.y });
+    } else if (!selection) {
+      return;
+    }
+    if (selection) copyMode = selectCopyModeRange(copyMode, selection);
+    copyMode = syncCopyModeViewport(copyMode);
   }
 
   /** コピーモードを抜けて最新行へ戻る */
@@ -676,6 +690,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       cursorVisible: cursor.visible,
       cursorShape: cursor.shape,
       viewportPinned: term.viewportPinned(),
+      viewportOffset: term.scrollbar().offset,
       mouseTracking: term.mouseTracking(),
       mouseAnyMotion: term.mouseAnyMotion(),
       copyMode: copyModeRenderState(),

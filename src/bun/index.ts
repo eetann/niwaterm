@@ -49,6 +49,7 @@ import { AGENT_STATUS_TAB_VAR } from "./board";
 import { applyAndBindStartupLayout } from "./board-startup";
 import { decideResumeCommand, isBoardResumeEnabled } from "./resume-command";
 import { isBuiltinLayoutName } from "./builtin-layouts";
+import type { CopyModeInitialSelection } from "./copy-mode";
 import { createBrowserBridge } from "./browser-bridge";
 import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
@@ -185,8 +186,11 @@ export type NiwaRPC = {
       paste: { tabId: TabId; data: string };
       /** マウスレポート有効時（TUIアプリ等）にwebviewから転送されるマウス操作 */
       mouseEvent: { tabId: TabId; event: MouseEventInput };
-      /** vi風コピーモードへ入る（キーバインド・コマンドパレットから） */
-      enterCopyMode: { tabId: TabId };
+      /**
+       * vi風コピーモードへ入る（キーバインド・コマンドパレット・選択範囲の右クリックメニュー・
+       * mouse.copyModeOnSelectから）。selectionはマウスで選んでいた範囲（画面座標）
+       */
+      enterCopyMode: { tabId: TabId; selection?: CopyModeInitialSelection };
       /** コピーモード中のキー入力。未割当キーはbun側で無視する */
       /** keysはキーをcanonicalizeParsed表記にした候補、textは検索文字列へ足す1文字（無ければnull） */
       copyModeKey: { tabId: TabId; keys: string[]; text: string | null };
@@ -1384,8 +1388,14 @@ function createWindowRpc(windowId: WindowId) {
         mouseEvent: ({ tabId, event }: { tabId: TabId; event: MouseEventInput }) => {
           windowManager.handleMouseEvent(tabId, event);
         },
-        enterCopyMode: ({ tabId }: { tabId: TabId }) => {
-          windowManager.enterCopyMode(tabId);
+        enterCopyMode: ({
+          tabId,
+          selection,
+        }: {
+          tabId: TabId;
+          selection?: CopyModeInitialSelection;
+        }) => {
+          windowManager.enterCopyMode(tabId, selection);
         },
         copyModeKey: ({
           tabId,

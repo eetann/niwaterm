@@ -29,6 +29,7 @@ import { createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
 import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
+import type { CopyModeInitialSelection } from "../bun/copy-mode";
 import type { CopyModeRenderState } from "../bun/terminal-session";
 import {
   applyKittyGraphics,
@@ -120,7 +121,7 @@ import {
   shadeAlphaPercent,
 } from "./cell-glyph";
 import { cellAt, type TermCell } from "./term-cells";
-import { remapSelection, type TextSelectionOffsets } from "./term-selection";
+import { remapSelection, selectionCells, type TextSelectionOffsets } from "./term-selection";
 import {
   clampPopupGeometry,
   type PopupDragMode,
@@ -693,6 +694,8 @@ let linkConfig: ResolvedLinkConfig = { rules: [], modifier: "ctrl", open: "exter
 let compiledLinkRules: CompiledLinkRule[] = [];
 /** 描画済みテキストの行分割のキャッシュ。.termのinnerHTML差し替えのたびに捨てる */
 const termLinesByTabId = new Map<TabId, string[]>();
+/** 表示中のHTMLのビューポート先頭の画面座標行（TerminalRenderState.viewportOffset）。描画保留中は保留前の値 */
+const termViewportOffsetByTabId = new Map<TabId, number>();
 /** 最後にマウスが居た位置と修飾キーの状態。打鍵・再描画からホバー表示を更新するために持つ */
 let lastMouseTarget: EventTarget | null = null;
 let lastMouseClientX = 0;
@@ -947,7 +950,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           storeKittyImages(renderState.kittyImages);
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
-          applyTermHtml(tabId, termEl, renderState.html);
+          applyTermHtml(tabId, termEl, renderState.html, renderState.viewportOffset);
           applyKittyGraphics(termEl, renderState.kittyPlacements, cellWidth, cellHeight);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
@@ -1377,7 +1380,7 @@ function fixGlyphs(root: HTMLElement) {
 // ボタンを押している間は差し替えを止め、その間に届いたHTMLは最新の1件だけ持っておく
 let selectionDragging = false;
 let selectionDragStartedAt = 0;
-const pendingTermHtmlByTabId = new Map<TabId, string>();
+const pendingTermHtmlByTabId = new Map<TabId, { html: string; viewportOffset: number }>();
 
 /**
  * 保留を続ける上限。これを超えたドラッグは終了イベントの取りこぼしとみなして打ち切る。
@@ -1389,7 +1392,12 @@ const pendingTermHtmlByTabId = new Map<TabId, string>();
  */
 const SELECTION_DRAG_MAX_MS = 2000;
 
-function setTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
+function setTermHtml(
+  tabId: TabId,
+  termEl: HTMLElement,
+  html: string,
+  viewportOffset: number,
+): void {
   const saved = saveTermSelection(termEl);
   const savedMenuRange = saveSelectionMenuRange(termEl);
   termEl.innerHTML = html;
@@ -1397,6 +1405,7 @@ function setTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
   if (saved) restoreTermSelection(termEl, saved);
   if (savedMenuRange) restoreSelectionMenuRange(termEl, savedMenuRange);
   termLinesByTabId.delete(tabId);
+  termViewportOffsetByTabId.set(tabId, viewportOffset);
   // 表示が変わればホバー中のリンクの位置もずれるので、下線を出しているときだけ取り直す
   if (linkModifierDown) refreshLinkHover();
 }
@@ -1469,6 +1478,27 @@ function remapTermRange(
   };
 }
 
+/**
+ * コピーモードへ入る。マウスで選んでいた範囲（saved）があれば、それを選んだ状態で始める。
+ * 範囲は表示中のHTML上の位置なので、そのHTMLのビューポート位置を足して画面座標で送る
+ */
+function enterCopyMode(tabId: TabId, saved: SavedTermSelection | null): void {
+  const cells = saved ? selectionCells(saved.text, saved.offsets) : null;
+  const offset = termViewportOffsetByTabId.get(tabId) ?? 0;
+  const selection: CopyModeInitialSelection | undefined = cells
+    ? {
+        anchor: { x: cells.anchor.x, y: cells.anchor.y + offset },
+        cursor: { x: cells.cursor.x, y: cells.cursor.y + offset },
+      }
+    : undefined;
+  sendMessage("enterCopyMode", { tabId, selection });
+  if (!selection) return;
+  // 以降はコピーモードのオーバーレイが選択を描くので、DOMの選択と二重に見えないよう消す。
+  // ドラッグ選択の後はフォーカスが外れたままなので、キー入力を受けられるようIME用の欄へ戻す
+  window.getSelection()?.removeAllRanges();
+  imeEl.focus({ preventScroll: true });
+}
+
 function restoreTermSelection(termEl: HTMLElement, saved: SavedTermSelection): void {
   const moved = remapTermRange(termEl, saved);
   if (!moved) return;
@@ -1493,22 +1523,27 @@ function applyPaletteCss(css: string | null): void {
 }
 
 /** ドラッグ選択中は反映を保留する（保留した分はドラッグ終了時にまとめて反映する） */
-function applyTermHtml(tabId: TabId, termEl: HTMLElement, html: string): void {
+function applyTermHtml(
+  tabId: TabId,
+  termEl: HTMLElement,
+  html: string,
+  viewportOffset: number,
+): void {
   if (selectionDragging) {
-    pendingTermHtmlByTabId.set(tabId, html);
+    pendingTermHtmlByTabId.set(tabId, { html, viewportOffset });
     if (performance.now() - selectionDragStartedAt < SELECTION_DRAG_MAX_MS) return;
     // mouseup由来の解除と違い、選択範囲を読む他のリスナーを待つ必要が無いのでその場で流す
     selectionDragging = false;
     flushPendingTermHtml();
     return;
   }
-  setTermHtml(tabId, termEl, html);
+  setTermHtml(tabId, termEl, html, viewportOffset);
 }
 
 function flushPendingTermHtml(): void {
-  for (const [tabId, html] of pendingTermHtmlByTabId) {
+  for (const [tabId, { html, viewportOffset }] of pendingTermHtmlByTabId) {
     const termEl = termElByTabId.get(tabId);
-    if (termEl) setTermHtml(tabId, termEl, html);
+    if (termEl) setTermHtml(tabId, termEl, html, viewportOffset);
   }
   pendingTermHtmlByTabId.clear();
 }
@@ -2023,6 +2058,7 @@ function teardownPopupContent(): void {
   if (termElByTabId.get(currentPopupTabId) === popupTermEl) {
     termElByTabId.delete(currentPopupTabId);
     termLinesByTabId.delete(currentPopupTabId);
+    termViewportOffsetByTabId.delete(currentPopupTabId);
   }
   if (cursorElByTabId.get(currentPopupTabId) === popupCursorEl) {
     cursorElByTabId.delete(currentPopupTabId);
@@ -2317,6 +2353,7 @@ function gcStale(
     tabContentElByTabId.delete(tabId);
     termElByTabId.delete(tabId);
     termLinesByTabId.delete(tabId);
+    termViewportOffsetByTabId.delete(tabId);
     termOffsetByTabId.delete(tabId);
     cursorElByTabId.delete(tabId);
     copyOverlayElByTabId.delete(tabId);
@@ -4189,10 +4226,12 @@ function handleTileCommand(cmd: TileCommand): void {
       if (text) sendMessage("copySelection", { text });
       break;
     }
-    case "copyMode":
+    case "copyMode": {
       if (!currentTabId) return;
-      sendMessage("enterCopyMode", { tabId: currentTabId });
+      const termEl = termElByTabId.get(currentTabId);
+      enterCopyMode(currentTabId, termEl ? saveTermSelection(termEl) : null);
       break;
+    }
     case "pasteClipboard":
       if (!currentTabId) return;
       sendMessage("pasteFromClipboard", { tabId: currentTabId });
@@ -4427,14 +4466,29 @@ document.addEventListener("mouseup", () => {
   if (text) sendMessage("copySelection", { text });
 });
 
+// mouse.copyModeOnSelect: ドラッグ選択を終えたらその範囲を選んだ状態でコピーモードへ入る。
+// copyOnSelectのリスナーより後に登録しているので、両方有効ならコピーしてから入る
+// （入るとDOMの選択を消すため、順序が逆だとコピーする選択が無くなる）
+document.addEventListener("mouseup", (e) => {
+  if (!mouseConfig.copyModeOnSelect || e.button !== 0) return;
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  const tabId = selectionTabId(null, selection);
+  const termEl = tabId === null ? undefined : termElByTabId.get(tabId);
+  if (tabId === null || !termEl) return;
+  const saved = saveTermSelection(termEl);
+  if (saved) enterCopyMode(tabId, saved);
+});
+
 // ---- 選択範囲の右クリックメニュー ----
-// 組み込みの「コピー」に加え、設定のmouse.selectionMenuが返した項目を並べる。
+// 組み込みの「コピー」「コピーモードで続ける」に加え、設定のmouse.selectionMenuが返した項目を並べる。
 // 項目の組み立てはbun側（ユーザーの関数）で走るため、RPCで問い合わせてから開く
 const selectionMenuRoot = createMemoRoot(selectionMenuRootEl, "selection-menu");
 let selectionMenuOpen = false;
 let selectionMenuX = 0;
 let selectionMenuY = 0;
 let selectionMenuText = "";
+let selectionMenuTabId: TabId | null = null;
 let selectionMenuItems: SelectionMenuUserItem[] = [];
 // 問い合わせ中に右クリックし直された・閉じられた場合に、遅れて届いた結果で開かないための世代番号
 let selectionMenuRequestId = 0;
@@ -4490,6 +4544,15 @@ function renderSelectionMenu(): void {
         if (selectionMenuText) sendMessage("copySelection", { text: selectionMenuText });
         closeSelectionMenu();
       },
+      onCopyMode: () => {
+        const tabId = selectionMenuTabId;
+        const termEl = tabId === null ? undefined : termElByTabId.get(tabId);
+        // 閉じると塗っている範囲を捨てるので、その前に控える。範囲は前→後ろに正規化されているため
+        // ドラッグの向きは失われ、カーソルはいつも後ろ側の端に置かれる
+        const saved = termEl ? saveSelectionMenuRange(termEl) : null;
+        closeSelectionMenu();
+        if (tabId !== null && saved) enterCopyMode(tabId, saved);
+      },
       onSelectItem: (id: string) => {
         sendMessage("runSelectionMenuItem", { id });
         closeSelectionMenu();
@@ -4527,6 +4590,7 @@ async function openSelectionMenu(tabId: TabId, text: string, x: number, y: numbe
   selectionMenuX = x;
   selectionMenuY = y;
   selectionMenuText = text;
+  selectionMenuTabId = tabId;
   selectionMenuItems = items;
   renderSelectionMenu();
 }

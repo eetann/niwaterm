@@ -412,7 +412,10 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
       },
       {
         name: "mouse",
-        entries: [{ key: "copyOnSelect", value: String(input.mouse.copyOnSelect) }],
+        entries: [
+          { key: "copyOnSelect", value: String(input.mouse.copyOnSelect) },
+          { key: "copyModeOnSelect", value: String(input.mouse.copyModeOnSelect) },
+        ],
       },
       {
         name: "link",

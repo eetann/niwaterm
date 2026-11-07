@@ -87,6 +87,7 @@ function createFakeSessionFactory() {
         cursorVisible: true,
         cursorShape: "block",
         viewportPinned: true,
+        viewportOffset: 0,
         mouseTracking: false,
         mouseAnyMotion: false,
         paletteCss: null,

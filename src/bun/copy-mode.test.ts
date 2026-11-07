@@ -12,6 +12,7 @@ import {
   isCaseSensitiveQuery,
   firstNonBlankColumn,
   pickCopyModeMatch,
+  selectCopyModeRange,
   type CopyModeMatch,
   type CopyModeContext,
   type CopyModeKey,
@@ -263,6 +264,35 @@ describe("選択", () => {
     const state = press(createCopyModeState({ x: 1, y: 0 }), ctx, "v", "j", "V");
     expect(state.selectionMode).toBe("line");
     expect(state.anchor).toEqual({ x: 1, y: 0 });
+  });
+
+  test("selectCopyModeRangeは与えた範囲の文字選択にし、カーソルを終点へ置く", () => {
+    const ctx = ctxOf(["abcdef", "ghijkl"], 10);
+    const state = selectCopyModeRange(createCopyModeState({ x: 0, y: 0 }), {
+      anchor: { x: 4, y: 1 },
+      cursor: { x: 1, y: 0 },
+    });
+    expect(state.cursor).toEqual({ x: 1, y: 0 });
+    expect(copyModeRange(state, ctx.cols)).toEqual({
+      start: { x: 1, y: 0 },
+      end: { x: 4, y: 1 },
+      mode: "char",
+    });
+    // 引き継いだ後もキーで端を動かせる
+    const moved = press(state, ctx, "h");
+    expect(copyModeRange(moved, ctx.cols)?.start).toEqual({ x: 0, y: 0 });
+  });
+
+  test("selectCopyModeRangeは検索入力を捨て、直前の検索は残す", () => {
+    const ctx = ctxOf(["abc"], 10);
+    const searching = press(createCopyModeState({ x: 0, y: 0 }), ctx, "/", "b", "Enter", "/");
+    expect(searching.searchInput).not.toBeNull();
+    const state = selectCopyModeRange(searching, {
+      anchor: { x: 0, y: 0 },
+      cursor: { x: 2, y: 0 },
+    });
+    expect(state.searchInput).toBeNull();
+    expect(state.lastSearch).toEqual(searching.lastSearch);
   });
 });
 

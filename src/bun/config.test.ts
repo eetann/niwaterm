@@ -72,6 +72,7 @@ function createTestNiwaApi(): NiwaApiHandle {
       cursorVisible: true,
       cursorShape: "block",
       viewportPinned: true,
+      viewportOffset: 0,
       mouseTracking: false,
       mouseAnyMotion: false,
       paletteCss: null,
@@ -1025,6 +1026,10 @@ describe("resolveMouse", () => {
 
   test("copyOnSelectを有効化できる", () => {
     expect(resolveMouse({ mouse: { copyOnSelect: true } }).copyOnSelect).toBe(true);
+  });
+
+  test("copyModeOnSelectを有効化できる", () => {
+    expect(resolveMouse({ mouse: { copyModeOnSelect: true } }).copyModeOnSelect).toBe(true);
   });
 
   test("不正な型のフィールドは警告付きでデフォルトにフォールバックする", () => {
