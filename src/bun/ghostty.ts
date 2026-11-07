@@ -263,6 +263,8 @@ const OPT_KITTY_IMAGE_STORAGE_LIMIT = 15;
 const OPT_KITTY_IMAGE_MEDIUM_FILE = 16;
 const OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE = 17;
 const OPT_SEMANTIC_PROMPT = 42;
+const OPT_MODE = 34;
+const OPT_RENDER_HOLD = 41;
 
 // GhosttySemanticPromptKind。未知の値（将来の追加分）は無視する
 const SEMANTIC_PROMPT_KINDS = {
@@ -319,6 +321,8 @@ function replyClipboardWrite(writePtr: Pointer, result: number): void {
 
 // GhosttyMode = uint16_t（bit0-14=値, bit15=ANSIフラグ。DEC privateなモードはフラグなし）
 const MODE_BRACKETED_PASTE = 2004;
+/** 同期出力（DEC 2026） */
+const MODE_SYNC_OUTPUT = 2026;
 // マウスレポートの有効化モード（トラッキング種別）と報告フォーマット。
 // libghostty-vt側ではどちらも単一のenumへ畳まれるため、ここでは
 // 「エンコーダの設定を取り直す必要があるか」の判定にだけ使う
@@ -607,6 +611,7 @@ export function createGhosttyTerminal(
   let pwdChangedCallback: JSCallback | null = null;
   let bellCallback: JSCallback | null = null;
   let semanticPromptCallback: JSCallback | null = null;
+  let renderHoldCallback: JSCallback | null = null;
   const writtenBuf = new BigUint64Array(1);
   // GhosttyTerminalScrollbar（uint64 x 3）の受け皿
   const scrollbarBuf = new Uint8Array(24);
@@ -899,10 +904,39 @@ export function createGhosttyTerminal(
     vt.symbols.ghostty_terminal_set(term, OPT_SEMANTIC_PROMPT, semanticPromptCallback.ptr);
   }
 
+  /**
+   * アプリが同期出力（DEC 2026）で描画の保留を始めた・終えたときに呼ばれるコールバックを登録する。
+   * 保留の開始時点の端末は、アプリが画面に残したい完成済みのフレームそのもの（同じ書き込みの
+   * 後続バイトはまだ処理されていない）なので、fnの中で画面を読めばそのフレームが取れる。
+   * 保留の終了はアプリの解除のほか、RIS・resizeでも通知される
+   */
+  function onRenderHold(fn: (held: boolean) => void): void {
+    renderHoldCallback = new JSCallback(
+      (_term: Pointer, _userdata: Pointer, held: boolean) => {
+        fn(held);
+      },
+      {
+        args: [FFIType.ptr, FFIType.ptr, FFIType.bool],
+        returns: FFIType.void,
+      },
+    );
+    vt.symbols.ghostty_terminal_set(term, OPT_RENDER_HOLD, renderHoldCallback.ptr);
+  }
+
   // GhosttyTerminalModeConfig { GhosttyMode mode(uint16); bool value; } のレイアウト（4バイト）。
   // modeを埋めてghostty_terminal_get(DATA_MODE)を呼ぶと、valueに現在値が返る
   const modeConfig = new Uint8Array(4);
   const modeConfigView = new DataView(modeConfig.buffer);
+
+  /**
+   * 同期出力モードをこちらから解除する。解除しないまま止まったアプリに画面を固められないための
+   * 打ち切り用。この経路ではonRenderHoldのコールバックは呼ばれない
+   */
+  function releaseSyncOutput(): void {
+    modeConfigView.setUint16(0, MODE_SYNC_OUTPUT, true);
+    modeConfig[2] = 0;
+    vt.symbols.ghostty_terminal_set(term, OPT_MODE, ptr(modeConfig));
+  }
 
   function modeEnabled(mode: number): boolean {
     modeConfigView.setUint16(0, mode, true);
@@ -1376,6 +1410,7 @@ export function createGhosttyTerminal(
     pwdChangedCallback?.close();
     bellCallback?.close();
     semanticPromptCallback?.close();
+    renderHoldCallback?.close();
     sizeCallback.close();
   }
 
@@ -1385,6 +1420,8 @@ export function createGhosttyTerminal(
     onPwdChanged,
     onBell,
     onSemanticPrompt,
+    onRenderHold,
+    releaseSyncOutput,
     bracketedPaste,
     encodePaste,
     mouseTracking,

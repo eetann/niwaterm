@@ -352,3 +352,36 @@ describe("searchMatches", () => {
     });
   });
 });
+
+describe("onRenderHold", () => {
+  test("同期出力の開始・終了を通知し、開始時点では後続の書きかけを処理していない", () => {
+    const term = createGhosttyTerminal(20, 3);
+    try {
+      const events: Array<{ held: boolean; text: string }> = [];
+      term.onRenderHold((held) => events.push({ held, text: term.dumpText().trim() }));
+      term.write(encoder.encode("frame1\x1b[?2026h\x1b[2J\x1b[Hhalf"));
+      expect(events).toEqual([{ held: true, text: "frame1" }]);
+      term.write(encoder.encode("\x1b[2J\x1b[Hframe2\x1b[?2026l"));
+      expect(events).toEqual([
+        { held: true, text: "frame1" },
+        { held: false, text: "frame2" },
+      ]);
+    } finally {
+      term.free();
+    }
+  });
+
+  test("releaseSyncOutputで解除すると通知せず、次の同期出力の開始をまた通知する", () => {
+    const term = createGhosttyTerminal(20, 3);
+    try {
+      const events: boolean[] = [];
+      term.onRenderHold((held) => events.push(held));
+      term.write(encoder.encode("\x1b[?2026h"));
+      term.releaseSyncOutput();
+      term.write(encoder.encode("\x1b[?2026h"));
+      expect(events).toEqual([true, true]);
+    } finally {
+      term.free();
+    }
+  });
+});

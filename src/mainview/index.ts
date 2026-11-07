@@ -950,7 +950,13 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
           storeKittyImages(renderState.kittyImages);
           const termEl = termElByTabId.get(tabId);
           if (!termEl) continue;
-          applyTermHtml(tabId, termEl, renderState.html, renderState.viewportOffset);
+          applyTermHtml(
+            tabId,
+            termEl,
+            renderState.html,
+            renderState.viewportOffset,
+            renderState.renderHeld,
+          );
           applyKittyGraphics(termEl, renderState.kittyPlacements, cellWidth, cellHeight);
           // スクロールバック閲覧中はhtmlがその位置の内容になり、cursorX/Yは
           // アクティブエリア（最新行）側の座標のまま非表示にする（対応する画面外のため）。
@@ -1393,6 +1399,9 @@ const pendingTermHtmlByTabId = new Map<TabId, { html: string; viewportOffset: nu
  */
 const SELECTION_DRAG_MAX_MS = 2000;
 
+/** .termへ最後に流し込んだHTML。ポップアップの.termは別のタブで使い回すのでtabIdも控える */
+const appliedTermHtmlByEl = new WeakMap<HTMLElement, { tabId: TabId; html: string }>();
+
 function setTermHtml(
   tabId: TabId,
   termEl: HTMLElement,
@@ -1402,6 +1411,7 @@ function setTermHtml(
   const saved = saveTermSelection(termEl);
   const savedMenuRange = saveSelectionMenuRange(termEl);
   termEl.innerHTML = html;
+  appliedTermHtmlByEl.set(termEl, { tabId, html });
   fixGlyphs(termEl);
   if (saved) restoreTermSelection(termEl, saved);
   if (savedMenuRange) restoreSelectionMenuRange(termEl, savedMenuRange);
@@ -1523,12 +1533,17 @@ function applyPaletteCss(css: string | null): void {
   paletteStyleEl.textContent = css;
 }
 
-/** ドラッグ選択中は反映を保留する（保留した分はドラッグ終了時にまとめて反映する） */
+/**
+ * ドラッグ選択中は反映を保留する（保留した分はドラッグ終了時にまとめて反映する）。
+ * アプリが同期出力で描画を保留している間は同じHTMLが繰り返し届くため、反映済みなら差し替えない。
+ * 差し替えるたびにテキストノードが作り直され、選択を復元し直すことになるため
+ */
 function applyTermHtml(
   tabId: TabId,
   termEl: HTMLElement,
   html: string,
   viewportOffset: number,
+  renderHeld: boolean,
 ): void {
   if (selectionDragging) {
     pendingTermHtmlByTabId.set(tabId, { html, viewportOffset });
@@ -1538,6 +1553,8 @@ function applyTermHtml(
     flushPendingTermHtml();
     return;
   }
+  const applied = appliedTermHtmlByEl.get(termEl);
+  if (renderHeld && applied?.tabId === tabId && applied.html === html) return;
   setTermHtml(tabId, termEl, html, viewportOffset);
 }
 
@@ -2076,6 +2093,7 @@ function teardownPopupContent(): void {
     mouseTrackingByTabId.delete(currentPopupTabId);
   }
   popupTermEl.innerHTML = "";
+  appliedTermHtmlByEl.delete(popupTermEl);
   clearKittyGraphics(popupTermEl);
   currentPopupTabId = null;
 }

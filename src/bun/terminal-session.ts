@@ -107,6 +107,11 @@ export interface TerminalRenderState {
    * 中身を省いたもの（index.tsのdropSentKittyImages）で、webviewは手元のキャッシュを使う
    */
   kittyImages: Array<Omit<KittyImage, "rgbaBase64"> & { rgbaBase64: string | null }>;
+  /**
+   * アプリが同期出力（DEC 2026）で描画を保留している間に、保留の開始時点のフレームを
+   * 返しているか。trueの間はhtmlが変わらないため、webviewは同じ内容の差し替えを省ける
+   */
+  renderHeld: boolean;
 }
 
 /**
@@ -129,6 +134,11 @@ const INITIAL_COMMAND_TIMEOUT_MS = 5000;
 const BRACKETED_PASTE_WAIT_MS = 1000;
 /** bracketed pasteが有効になったかを見直す間隔 */
 const BRACKETED_PASTE_RECHECK_MS = 50;
+/**
+ * 同期出力（DEC 2026）による描画の保留を打ち切るまでの時間。libghostty-vtは時計を持たず
+ * 保留を自分では終えないため、解除を送らずに止まったアプリが画面を固め続けないよう上限を設ける
+ */
+const RENDER_HOLD_TIMEOUT_MS = 1000;
 
 const PALETTE_STYLE_OPEN = "<style>";
 const PALETTE_STYLE_CLOSE = "</style>";
@@ -193,6 +203,9 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     onRunningCommandChanged: opts.onRunningCommandChanged,
   };
   let runningCommand: string | null = null;
+  /** 同期出力で描画を保留している間、保留の開始時点で控えたフレーム。保留中でなければnull */
+  let heldRenderState: TerminalRenderState | null = null;
+  let renderHoldTimer: ReturnType<typeof setTimeout> | null = null;
 
   // DSR等のクエリ応答（ESC[6n など）をPTYへ書き戻す
   term.onWritePty((data) => {
@@ -232,6 +245,16 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (next === runningCommand) return;
     runningCommand = next;
     callbacks.onRunningCommandChanged?.(next);
+  });
+
+  // TUIは同期出力の間に画面を消してから描き直すため、途中を描くと書きかけのフレームがちらつく。
+  // 保留の開始時点の端末はアプリが画面に残したい完成済みのフレームなので、その場で控えて
+  // 保留中の描画にはそれを使う。後で読むと、同じ書き込みに続く書きかけの分が混ざる
+  term.onRenderHold((held) => {
+    clearRenderHold();
+    if (!held) return;
+    heldRenderState = { ...liveRenderState(), renderHeld: true };
+    renderHoldTimer = setTimeout(expireRenderHold, RENDER_HOLD_TIMEOUT_MS);
   });
 
   // Windows実機ではPTYプロセスのonExit発火後にもdataコールバックが非同期に遅延発火することがあり、
@@ -681,6 +704,13 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
   }
 
   function renderState(): TerminalRenderState {
+    // スクロールバックの閲覧中とコピーモード中は、ユーザーの操作を即座に映すほうを優先して保留を無視する。
+    // 控えたものを複製して返すのは、index.tsが送信済みのパレット・画像を省くために書き換えるため
+    if (heldRenderState && !copyMode && term.viewportPinned()) return { ...heldRenderState };
+    return liveRenderState();
+  }
+
+  function liveRenderState(): TerminalRenderState {
     const cursor = term.cursor();
     const { paletteCss, body } = splitPaletteCss(term.dumpHtml());
     const kitty = term.kittyGraphics();
@@ -700,7 +730,23 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       copyMode: copyModeRenderState(),
       kittyPlacements: kitty.placements,
       kittyImages: kitty.images,
+      renderHeld: false,
     };
+  }
+
+  function clearRenderHold(): void {
+    heldRenderState = null;
+    if (renderHoldTimer !== null) clearTimeout(renderHoldTimer);
+    renderHoldTimer = null;
+  }
+
+  /** 保留が長引いたらこちらから同期出力を解除し、今の画面を描かせる */
+  function expireRenderHold(): void {
+    renderHoldTimer = null;
+    if (disposed || !heldRenderState) return;
+    term.releaseSyncOutput();
+    clearRenderHold();
+    callbacks.onOutput?.();
   }
 
   /** シェル統合が報告した、今実行中のコマンド行。無ければnull */
@@ -725,6 +771,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
     if (disposed) return;
     disposed = true;
     clearInitialCommandTimers();
+    clearRenderHold();
     pendingInitialCommands = [];
     try {
       pty.kill();
