@@ -808,6 +808,7 @@ export function createBoard(opts: BoardOptions) {
         viewportOffset: 0,
         mouseTracking: false,
         mouseAnyMotion: false,
+        mouseShape: "text",
         copyMode: null,
         kittyPlacements: [],
         kittyImages: [],

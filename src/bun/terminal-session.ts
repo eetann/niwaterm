@@ -28,6 +28,7 @@ import {
   type KittyImage,
   type KittyPlacement,
   type MouseEventInput,
+  type MouseShape,
   type PromptLocation,
 } from "./ghostty";
 import { createPty, type PtyOptions } from "./pty";
@@ -95,6 +96,8 @@ export interface TerminalRenderState {
   mouseTracking: boolean;
   /** ボタン非押下時の移動も報告が要るモード（DECSET 1003）か */
   mouseAnyMotion: boolean;
+  /** アプリがOSC 22で指定したマウスポインタの形（CSSのcursorの値） */
+  mouseShape: MouseShape;
   /** vi風コピーモード中の状態。コピーモードでなければnull */
   copyMode: CopyModeRenderState | null;
   /** Kitty graphics protocolで表示した画像の配置（ビューポートに掛かっているもののみ） */
@@ -693,6 +696,7 @@ export function createTerminalSession(opts: TerminalSessionOptions) {
       viewportOffset: term.scrollbar().offset,
       mouseTracking: term.mouseTracking(),
       mouseAnyMotion: term.mouseAnyMotion(),
+      mouseShape: term.mouseShape(),
       copyMode: copyModeRenderState(),
       kittyPlacements: kitty.placements,
       kittyImages: kitty.images,

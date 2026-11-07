@@ -337,6 +337,7 @@ const DATA_PWD = 13;
 /** GhosttyTerminalScrollbar { uint64 total; uint64 offset; uint64 len; } を書き出す */
 const DATA_SCROLLBAR = 9;
 const DATA_KITTY_GRAPHICS = 30;
+const DATA_MOUSE_SHAPE = 41;
 
 // GhosttyKittyGraphicsData
 const KITTY_DATA_PLACEMENT_ITERATOR = 1;
@@ -371,6 +372,46 @@ const RENDER_DATA_CURSOR_VISUAL_STYLE = 10;
 // GhosttyRenderStateCursorVisualStyle（インデックスがそのままenum値に対応する）
 const CURSOR_SHAPES = ["bar", "block", "underline", "block_hollow"] as const;
 export type CursorShape = (typeof CURSOR_SHAPES)[number];
+
+// GhosttyMouseShape（インデックスがそのままenum値に対応する）。値はCSSのcursorプロパティの名前で、
+// OSC 22で指定される名前もCSSのcursorと同じ語彙
+const MOUSE_SHAPES = [
+  "default",
+  "context-menu",
+  "help",
+  "pointer",
+  "progress",
+  "wait",
+  "cell",
+  "crosshair",
+  "text",
+  "vertical-text",
+  "alias",
+  "copy",
+  "move",
+  "no-drop",
+  "not-allowed",
+  "grab",
+  "grabbing",
+  "all-scroll",
+  "col-resize",
+  "row-resize",
+  "n-resize",
+  "e-resize",
+  "s-resize",
+  "w-resize",
+  "ne-resize",
+  "nw-resize",
+  "se-resize",
+  "sw-resize",
+  "ew-resize",
+  "ns-resize",
+  "nesw-resize",
+  "nwse-resize",
+  "zoom-in",
+  "zoom-out",
+] as const;
+export type MouseShape = (typeof MOUSE_SHAPES)[number];
 
 // GhosttyMouseEncoderOption
 const MOUSE_OPT_SIZE = 2;
@@ -964,6 +1005,13 @@ export function createGhosttyTerminal(
     return modeEnabled(MODE_MOUSE_ANY_EVENT);
   }
 
+  /** アプリがOSC 22で指定したマウスポインタの形。指定が無ければ"text" */
+  function mouseShape(): MouseShape {
+    const rc = vt.symbols.ghostty_terminal_get(term, DATA_MOUSE_SHAPE, ptr(i32Out));
+    if (rc !== 0) return "text";
+    return MOUSE_SHAPES[i32Out[0] ?? 0] ?? "text";
+  }
+
   function ensureMouseEncoder(): boolean {
     if (mouseEncoder && mouseEvent) return true;
     const encoderHandle = new BigUint64Array(1);
@@ -1341,6 +1389,7 @@ export function createGhosttyTerminal(
     encodePaste,
     mouseTracking,
     mouseAnyMotion,
+    mouseShape,
     encodeMouse,
     write,
     resize,

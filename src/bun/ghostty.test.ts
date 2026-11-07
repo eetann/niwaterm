@@ -171,6 +171,23 @@ describe("onClipboardWrite", () => {
   });
 });
 
+describe("mouseShape", () => {
+  test("OSC 22で指定された形をCSSのcursorの名前で返し、指定が無ければtextを返す", () => {
+    const term = createGhosttyTerminal(20, 5);
+    try {
+      expect(term.mouseShape()).toBe("text");
+      term.write(encoder.encode("\x1b]22;pointer\x07"));
+      expect(term.mouseShape()).toBe("pointer");
+      term.write(encoder.encode("\x1b]22;nwse-resize\x1b\\"));
+      expect(term.mouseShape()).toBe("nwse-resize");
+      term.write(encoder.encode("\x1b]22;default\x07"));
+      expect(term.mouseShape()).toBe("default");
+    } finally {
+      term.free();
+    }
+  });
+});
+
 describe("onSemanticPrompt", () => {
   function collect(chunks: string[]) {
     const term = createGhosttyTerminal(40, 5);

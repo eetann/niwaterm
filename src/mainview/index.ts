@@ -28,7 +28,7 @@ import {
 import { createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { NiwaRPC } from "../bun/index";
-import type { CursorShape, MouseAction, MouseButton } from "../bun/ghostty";
+import type { CursorShape, MouseAction, MouseButton, MouseShape } from "../bun/ghostty";
 import type { CopyModeInitialSelection } from "../bun/copy-mode";
 import type { CopyModeRenderState } from "../bun/terminal-session";
 import {
@@ -967,6 +967,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
             renderState.cursorShape,
           );
           updateCopyModeForTab(tabId, renderState.copyMode);
+          applyMouseShape(termEl, renderState.mouseShape);
           mouseTrackingByTabId.set(tabId, {
             tracking: renderState.mouseTracking,
             anyMotion: renderState.mouseAnyMotion,
@@ -3124,6 +3125,18 @@ function setCursorGlyph(cursorEl: HTMLDivElement, cell: TermCell | null): void {
 
 // DECSCUSRの視覚形状ごとにDOM要素のサイズ・位置を変える（bar=左端の縦線、underline=下端の横線、
 // block_hollow=枠線のみ）。libghostty-vtからshape不明値が来た場合も安全にblock扱いへフォールバックする
+/**
+ * アプリがOSC 22で指定したマウスポインタの形を反映する。.termだけでなく重なっている
+ * .cursor・.copy-overlayの上でも同じ形にするため、それらを包む親要素へ設定する
+ */
+function applyMouseShape(termEl: HTMLDivElement, shape: MouseShape): void {
+  const containerEl = termEl.parentElement;
+  if (!containerEl) return;
+  // 既定の"text"は#screenのcursor: textと同じなので、指定を外して継承に任せる
+  const value = shape === "text" ? "" : shape;
+  if (containerEl.style.cursor !== value) containerEl.style.cursor = value;
+}
+
 function updateCursorForTab(
   tabId: TabId,
   x: number,

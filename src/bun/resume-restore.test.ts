@@ -43,6 +43,7 @@ function createFakeSessionFactory() {
         viewportPinned: true,
         mouseTracking: false,
         mouseAnyMotion: false,
+        mouseShape: "text",
         paletteCss: null,
         copyMode: null,
         kittyPlacements: [],
