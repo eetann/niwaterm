@@ -90,6 +90,12 @@ niwa tab send-keys --tab tab-3 C-c
 
 使える特殊キーは`Enter`・`Escape`・`Tab`・`Space`・`BSpace`・`Up`・`Down`・`Left`・`Right`・`Home`・`End`・`Delete`・`PageUp`・`PageDown`と、`C-a`〜`C-z`（Ctrl + 英字）。`Up`〜`PageDown`には`C-`・`M-`（Alt）・`S-`（Shift）を前に付けられ、`C-End`や`C-S-Right`のように重ねてもよい。それ以外は文字列としてそのまま送る。
 
+`-`で始まる文字列は、そのまま書くとオプションとして読まれてしまう。tmuxと同じく`--`を挟めば、それより後ろはすべて送るキーとして扱う。
+
+```sh
+niwa tab send-keys --tab tab-3 -- '- foo' Enter
+```
+
 1回のコマンドで並べたキーは、その順に届く。一方で、**コマンドを分けて送ったキーは、順番どおりに届くとは限らない**。順番が大事なときは1回にまとめるか、前のコマンドが終わってから次を送る。
 
 ただし、codexのように、文字列と`Enter`が一度に届くと「改行を含む貼り付け」として扱い、送信しないアプリもある。その場合は、文字列を送り終えてから`Enter`だけを別に送る。

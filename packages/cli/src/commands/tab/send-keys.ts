@@ -16,11 +16,13 @@ export default define({
       type: "positional",
       multiple: true,
       description:
-        "送信するリテラル文字列・特殊キー名（Enter, C-c, Escape, Tab, Space, Up等）を並べる",
+        "送信するリテラル文字列・特殊キー名（Enter, C-c, Escape, Tab, Space, Up等）を並べる。-で始まる文字列は--の後ろに置く",
     },
   },
   run: async (ctx) => {
-    const keys = ctx.values.keys ?? [];
+    // gunshiは`--`より後ろの引数を位置引数に入れずctx.restへ分けるため、tmuxと同じく
+    // `--`の前後を続けて1列のキーとして扱う
+    const keys = [...(ctx.values.keys ?? []), ...ctx.rest];
     if (keys.length === 0) {
       failAndExit(
         "送信するキーを1つ以上指定してください（例: niwa tab send-keys --tab tab-3 'ls -la' Enter）",
