@@ -2,6 +2,7 @@ import { isAbsolute, resolve } from "node:path";
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { resolveIpcEndpoint } from "../../ipc-client";
+import { resolveWorkspaceQuery } from "../../resolve-workspace";
 import {
   isWorktreeOpenMode,
   resolveWorktreePlan,
@@ -188,7 +189,8 @@ export default define({
     workspace: {
       type: "string",
       short: "w",
-      description: "Boardの作成先workspaceId（省略時は現在アクティブなワークスペース）",
+      description:
+        "Boardの作成先ワークスペース（workspaceIdか名前の一部。省略時は現在アクティブなワークスペース）",
     },
     name: {
       type: "string",
@@ -208,6 +210,12 @@ export default define({
   },
   run: async (ctx) => {
     const cwd = ctx.values.cwd ?? process.cwd();
+    const endpoint = resolveIpcEndpoint();
+    // ワークスペースの指定ミスはワークツリーを作る前に弾く。作った後だと、開けないワークツリーだけが残る
+    const workspaceId =
+      ctx.values.workspace !== undefined
+        ? await resolveWorkspaceQuery(endpoint, "worktree new", ctx.values.workspace)
+        : undefined;
 
     const list = await listWorktrees(cwd);
     if (!list.ok) failAndExit(`worktree newに失敗しました: ${list.error}`);
@@ -303,14 +311,14 @@ export default define({
     if (!existing) await runCreateHooks(plan.onCreate, { repoRoot, worktreePath: path, branch });
 
     await openWorktree({
-      endpoint: resolveIpcEndpoint(),
+      endpoint,
       commandName: "worktree new",
       mode: openMode,
       repoRoot,
       path,
       branch,
       created: !existing,
-      ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+      ...(workspaceId !== undefined ? { workspaceId } : {}),
       ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
       boardSetup: {
         ...(ctx.values.layout !== undefined ? { explicitLayout: ctx.values.layout } : {}),

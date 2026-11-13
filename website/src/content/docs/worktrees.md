@@ -155,7 +155,7 @@ git config niwaterm.worktree.fetch false
 | `--open <mode>`          | 開き方（下の表）。デフォルトは設定の`worktree.open`、書いていなければ`board`                           |
 | `--name <name>`, `-n`    | Boardの名前。デフォルトはブランチ名                                                                    |
 | `--layout <name>`        | 新しく作ったBoardに当てる[レイアウトプリセット](/niwaterm/worktrees/hooks/#レイアウトプリセットの適用) |
-| `--workspace <id>`, `-w` | Boardを作るワークスペース。デフォルトは今のワークスペース                                              |
+| `--workspace <id>`, `-w` | Boardを作るワークスペース。名前の一部でもよい。デフォルトは今のワークスペース                          |
 | `--path <dir>`           | ワークツリーを作る場所                                                                                 |
 | `--from <ref>`           | 新しく作るブランチの分岐元。デフォルトはHEAD                                                           |
 | `--track <mode>`         | ブランチの探し方。`auto`（デフォルト。手元 → リモート → 新規）・`local`・`remote`・`new`               |

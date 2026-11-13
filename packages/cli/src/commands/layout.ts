@@ -10,6 +10,7 @@ import {
   resolveIpcEndpoint,
   type WorkspaceListEntry,
 } from "../ipc-client";
+import { resolveWorkspaceQuery } from "../resolve-workspace";
 
 const listCommand = define({
   name: "list",
@@ -114,7 +115,7 @@ const applyCommand = define({
       type: "string",
       short: "w",
       description:
-        "新規Boardの作成先workspaceId（--replace/--replace-force未指定時のみ有効。省略時は現在アクティブなワークスペース）",
+        "新規Boardの作成先ワークスペース（workspaceIdか名前の一部。--replace/--replace-force未指定時のみ有効。省略時は現在アクティブなワークスペース）",
     },
     board: {
       type: "string",
@@ -153,6 +154,10 @@ const applyCommand = define({
     const target = isReplace ? "replace" : "new-board";
     const cwd = ctx.values.cwd ?? process.cwd();
     const endpoint = resolveIpcEndpoint();
+    const workspaceId =
+      ctx.values.workspace !== undefined
+        ? await resolveWorkspaceQuery(endpoint, "layout apply", ctx.values.workspace)
+        : undefined;
 
     // trustの確認を--replaceの破壊的確認より先に取る。逆順だと「既存タブを全部閉じますか？」に
     // yと答えた直後に別の確認が出て、そこでnと答えると最初の確認が無駄になる。
@@ -191,7 +196,7 @@ const applyCommand = define({
       applyLayout(endpoint, ctx.values.name, {
         target,
         cwd,
-        workspaceId: ctx.values.workspace,
+        workspaceId,
         boardId: ctx.values.board,
         startup: ctx.values.startup,
         trust: t,

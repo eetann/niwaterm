@@ -11,7 +11,7 @@ export default define({
       type: "string",
       short: "w",
       description:
-        "移動するworkspaceId（niwaterm listで確認）。省略時はこのコマンドを実行したタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）",
+        "移動するワークスペース（workspaceIdか名前の一部。niwaterm listで確認）。省略時はこのコマンドを実行したタブが属するワークスペース（niwatermの外から実行した場合はアクティブなワークスペース）",
     },
     up: {
       type: "boolean",

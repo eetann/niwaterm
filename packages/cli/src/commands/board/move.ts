@@ -2,6 +2,7 @@ import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { moveBoard, moveBoardToWorkspace, resolveIpcEndpoint } from "../../ipc-client";
 import { createTargetResolver } from "../../resolve-target";
+import { resolveWorkspaceQuery } from "../../resolve-workspace";
 
 export default define({
   name: "move",
@@ -25,7 +26,7 @@ export default define({
     "to-workspace": {
       type: "string",
       description:
-        "移し先のworkspaceId（niwaterm listで確認）。そのワークスペースの末尾へ付く。--up/--downとは同時指定不可",
+        "移し先のワークスペース（workspaceIdか名前の一部。niwaterm listで確認）。そのワークスペースの末尾へ付く。--up/--downとは同時指定不可",
     },
   },
   run: async (ctx) => {
@@ -43,7 +44,11 @@ export default define({
     const endpoint = resolveIpcEndpoint();
     const target = createTargetResolver(endpoint, "board move", { boardId: ctx.values.board });
     if (toWorkspace !== undefined) {
-      const result = await moveBoardToWorkspace(endpoint, await target.boardId(), toWorkspace);
+      const result = await moveBoardToWorkspace(
+        endpoint,
+        await target.boardId(),
+        await resolveWorkspaceQuery(endpoint, "board move", toWorkspace),
+      );
       if (!result.ok) {
         failAndExit(`board moveに失敗しました: ${result.error}`);
       }

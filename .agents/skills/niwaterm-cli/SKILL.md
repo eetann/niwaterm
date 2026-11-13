@@ -22,6 +22,7 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
 コマンドは操作対象のリソース単位でグループ化されている（`niwaterm <resource> <verb>`。例外: `list`/`ping`/`init`/`notify`/`complete`はリソース単体に属さないためトップレベル）。
 
 **`--tile`/`--tab`/`--board`/`--workspace`は多くのコマンドで省略でき、省略するとそのコマンドを実行しているタブが対象になる**（niwatermの外から実行した場合はフォーカス中タイル・アクティブタブへフォールバック）。省略できないコマンド（`tab send-keys`・各`switch`・`browser *`等）と細かい規則は`niwa docs show cli`の「対象IDの省略」節を参照。
+`--workspace`・`--to-workspace`にはIDの代わりにワークスペース名の一部も渡せる（複数に当たると候補を出して止まる。`niwa docs show cli`の「ワークスペースを名前で指定する」節）。
 
 - `agent setup <codex-cli|claude-code>` — AIエージェントのhooksを追加・更新する（アプリの起動は不要）。詳細は`niwa docs show agents`の「エージェント統合」を参照。`_hook`はhooks専用の内部コマンドで、通常の操作では使わない
 - `claude prompt list` / `show` — そのタブで動いているClaude Codeのtranscript（jsonl）から、打ったプロンプトの一覧と、選んだプロンプトからのやりとりを読む。**Claude Codeはalternate screenで動くので`tab capture`では会話が取れない**（画面に出ている分すら読めない）代わりの手段で、コンテキスト圧縮で消えたやりとりも辿れる。エージェント統合のhooksが要る（未導入なら`--transcript <path>`で直接指定）。オプションは`niwa claude prompt list --help`・`show --help`を参照

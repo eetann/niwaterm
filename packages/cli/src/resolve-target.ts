@@ -8,6 +8,7 @@ import {
   type TileId,
   type WorkspaceId,
 } from "./ipc-client";
+import { resolveWorkspaceQuery } from "./resolve-workspace";
 
 /** コマンドラインで明示指定された対象ID。省略されたものはundefined */
 export interface ExplicitTargetIds {
@@ -31,7 +32,9 @@ export interface TargetResolver {
  *
  * 明示指定された値は決して上書きしない。存在しないIDを渡された時に解決結果のIDへ
  * すり替わって別のタイル・タブを壊すのを防ぐためで、誤ったIDはそのまま操作側へ渡り
- * 「tile/tab not found」で弾かれる。`--tab`が明示されている場合はそれを起点にするので、
+ * 「tile/tab not found」で弾かれる。ワークスペースだけは名前でも指定できるので、明示された値を
+ * resolveWorkspaceQueryでIDへ引き直す（一致しなければフォールバックせず終了する）。
+ * `--tab`が明示されている場合はそれを起点にするので、
  * `--tile`省略でも呼び出し元ではなく指定タブが居るタイルが埋まる。
  *
  * 問い合わせは実際に省略された項目を読んだ時だけ、1コマンドにつき1回だけ行う。
@@ -60,6 +63,9 @@ export function createTargetResolver(
     tileId: async () => explicit.tileId ?? (await fetchOnce()).tileId,
     tabId: async () => explicit.tabId ?? (await fetchOnce()).tabId,
     boardId: async () => explicit.boardId ?? (await fetchOnce()).boardId,
-    workspaceId: async () => explicit.workspaceId ?? (await fetchOnce()).workspaceId,
+    workspaceId: async () =>
+      explicit.workspaceId !== undefined
+        ? await resolveWorkspaceQuery(endpoint, commandName, explicit.workspaceId)
+        : (await fetchOnce()).workspaceId,
   };
 }

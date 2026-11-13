@@ -207,7 +207,7 @@ niwa layout apply <name> [--replace | --replace-force] [--board <boardId>] [--wo
 
 - `layout list` — プリセットを`名前<TAB>定義した場所<TAB>説明`の形で一覧する。定義した場所は`[project: <パス>]`・`[global]`・`[builtin]`のどれか
 - `layout apply` — プリセットを開き、作ったBoardのidを表示する
-  - `--workspace` — 新しいBoardを作るワークスペース。省略すると今のワークスペース
+  - `--workspace` — 新しいBoardを作るワークスペース。名前の一部でもよい。省略すると今のワークスペース
   - `--replace` / `--replace-force` — 既存のBoardを開き直す。対象は`--board`で選び、省略すると今のBoard。タイルもタブも1つだけのBoardなら、確認は出ない
   - `--cwd` — `cwd`を書いていないタブを開くディレクトリ。省略すると実行したディレクトリ
   - `--startup` — [起動時レイアウト](#起動時レイアウト)にする

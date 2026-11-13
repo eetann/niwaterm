@@ -1,6 +1,7 @@
 import { define } from "gunshi";
 import { failAndExit } from "../../cli-error";
 import { newBoard, resolveIpcEndpoint } from "../../ipc-client";
+import { resolveWorkspaceQuery } from "../../resolve-workspace";
 
 export default define({
   name: "new",
@@ -9,7 +10,8 @@ export default define({
     workspace: {
       type: "string",
       short: "w",
-      description: "作成先のworkspaceId（省略時は現在アクティブなワークスペース）",
+      description:
+        "作成先のワークスペース（workspaceIdか名前の一部。省略時は現在アクティブなワークスペース）",
     },
     cwd: {
       type: "string",
@@ -22,8 +24,12 @@ export default define({
     },
   },
   run: async (ctx) => {
-    const result = await newBoard(resolveIpcEndpoint(), {
-      ...(ctx.values.workspace !== undefined ? { workspaceId: ctx.values.workspace } : {}),
+    const endpoint = resolveIpcEndpoint();
+    const workspace = ctx.values.workspace;
+    const result = await newBoard(endpoint, {
+      ...(workspace !== undefined
+        ? { workspaceId: await resolveWorkspaceQuery(endpoint, "board new", workspace) }
+        : {}),
       ...(ctx.values.cwd !== undefined ? { cwd: ctx.values.cwd } : {}),
       ...(ctx.values.name !== undefined ? { name: ctx.values.name } : {}),
     });
