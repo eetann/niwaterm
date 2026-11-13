@@ -2,6 +2,7 @@
 	"name": "niwaterm",
 	"version": "0.0.1",
 	"description": "Terminal, multiplexer, and workspace integrated desktop app",
+	"license": "MIT",
 	"workspaces": ["packages/*"],
 	"scripts": {
 		"lint": "oxlint src packages .storybook website",
