@@ -45,7 +45,7 @@ describe("appendCommandArgs", () => {
     expect(cmd).toEqual(["/bin/bash", "-l", "-i", "-c", "fzf > '/tmp/out.txt'"]);
   });
 
-  test("wsl.exeはbash経由で$SHELLをログイン+インタラクティブモードでexecする（スペース分割しない）", () => {
+  test("wsl.exeは-eでbashを直接execし、$SHELLをログイン+インタラクティブモードでexecする（スペース分割しない）", () => {
     const cmd = ["wsl.exe", "-d", "NixOS"];
     appendCommandArgs(
       cmd,
@@ -56,10 +56,28 @@ describe("appendCommandArgs", () => {
       "wsl.exe",
       "-d",
       "NixOS",
-      "--",
+      "-e",
       "bash",
       "-c",
       "exec \"$SHELL\" -l -i -c 'node /abs/path/index.js open --editor nvim --target-pane tab-1'",
+    ]);
+  });
+
+  test("wsl.exeはcommand内の$展開・コマンド置換をシングルクォートで守ったまま内側のシェルへ渡す", () => {
+    const cmd = ["wsl.exe", "-d", "NixOS"];
+    appendCommandArgs(
+      cmd,
+      'target=$(niwa tab var find role claude); [ -n "$target" ] && ep "$@"',
+      undefined,
+    );
+    expect(cmd).toEqual([
+      "wsl.exe",
+      "-d",
+      "NixOS",
+      "-e",
+      "bash",
+      "-c",
+      `exec "$SHELL" -l -i -c 'target=$(niwa tab var find role claude); [ -n "$target" ] && ep "$@"'`,
     ]);
   });
 
@@ -70,7 +88,7 @@ describe("appendCommandArgs", () => {
       "wsl.exe",
       "-d",
       "NixOS",
-      "--",
+      "-e",
       "bash",
       "-c",
       `exec "$SHELL" -l -i -c 'fzf > '\\''/mnt/c/Users/foo/out.txt'\\'''`,
@@ -84,7 +102,7 @@ describe("appendCommandArgs", () => {
       "wsl.exe",
       "-d",
       "NixOS",
-      "--",
+      "-e",
       "bash",
       "-c",
       "exec \"$SHELL\" -l -i -c 'fzf'",
@@ -98,7 +116,7 @@ describe("appendCommandArgs", () => {
       "WSL.EXE",
       "-d",
       "NixOS",
-      "--",
+      "-e",
       "bash",
       "-c",
       "exec \"$SHELL\" -l -i -c 'fzf'",

@@ -147,8 +147,8 @@ function quoteForPosixShell(path: string): string {
 
 /**
  * cmd（シェル起動コマンド配列）へ、シェルの対話セッションの代わりにcommandを実行させる引数を追記する。
- * 必ずapplyWslCdArg（--cdの追記）より後に呼ぶこと: wsl.exeの`--`以降は全てLinux側でexecする
- * コマンドの引数として扱われるため、`--cd`は`--`より前に無ければならない。
+ * 必ずapplyWslCdArg（--cdの追記）より後に呼ぶこと: wsl.exeの`-e`以降は全てLinux側でexecする
+ * コマンドの引数として扱われるため、`--cd`は`-e`より前に無ければならない。
  */
 export function appendCommandArgs(
   cmd: string[],
@@ -165,7 +165,10 @@ export function appendCommandArgs(
     return;
   }
   if (head === "wsl.exe") {
-    // `--`以降を`bash -c 'exec "$SHELL" -l -i -c "<command>"'`という1コマンドに包んでexecする。
+    // `-e`（--exec）で`bash -c 'exec "$SHELL" -l -i -c "<command>"'`という1コマンドに包んでexecする。
+    // `--`は使わない: wsl.exeは`--`以降のコマンドラインをユーザーの既定シェルにもう一度解釈させるため、
+    // commandの`$var`・`$(...)`・`"$@"`がbashへ届く前に展開されてしまう
+    // （詳細: docs/known-issues/wsl-double-dash-reparses-command-in-default-shell.md）。
     // 外側のbashは$SHELL（ユーザーの実際のログインシェル）を展開してexecするだけのブートストラップ。
     // -l（ログイン）だけでは不十分: zsh/bashとも-cでコマンドを渡すと「非インタラクティブ」扱いになり、
     // インタラクティブシェル専用の初期化ファイル（.zshrc等。niwaterm CLI自身や、bun/cargo/pnpm/nvm等の
@@ -180,7 +183,7 @@ export function appendCommandArgs(
       if (wslPath) withCapture = `${command} > ${quoteForPosixShell(wslPath)}`;
     }
     const inner = `exec "$SHELL" -l -i -c ${quoteForPosixShell(withCapture)}`;
-    cmd.push("--", "bash", "-c", inner);
+    cmd.push("-e", "bash", "-c", inner);
     return;
   }
   // Unix系シェル(zsh/bash/fish等): -l（ログイン）だけでは不十分: -cでコマンドを渡すと
