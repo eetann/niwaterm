@@ -120,6 +120,8 @@ export interface AppearanceConfig {
   inactiveTileDim?: number;
   /** タイルに付ける影。CSSのbox-shadow値で、"none"で影を付けない */
   tileShadow?: string;
+  /** タイルを分割したとき、新しいタイルが広がっていくアニメーションを付けるかどうか */
+  tileAnimation?: boolean;
   /**
    * ターミナル本体以外のUIの配色。未指定のフィールドはthemeの値のまま有効。
    * サイドバー・ダイアログ・コマンドパレットの地と文字色はここではなく
@@ -152,6 +154,7 @@ export const defaultAppearance: ResolvedAppearanceConfig = {
   tileGap: 4,
   inactiveTileDim: 0,
   tileShadow: "none",
+  tileAnimation: true,
   ui: defaultUiColors,
 };
 

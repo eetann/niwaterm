@@ -179,6 +179,7 @@ function appearanceSection(
       { key: "tileGap", value: `${appearance.tileGap}px` },
       { key: "inactiveTileDim", value: String(appearance.inactiveTileDim) },
       { key: "tileShadow", value: appearance.tileShadow },
+      { key: "tileAnimation", value: String(appearance.tileAnimation) },
       ...uiColorEntries(appearance.ui),
     ],
   };

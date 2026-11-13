@@ -682,6 +682,14 @@ export function resolveAppearance(
       defaultAppearance.tileShadow,
       isNonEmptyString,
     ),
+    tileAnimation: resolveField(
+      diag,
+      "appearance",
+      "tileAnimation",
+      user?.tileAnimation,
+      defaultAppearance.tileAnimation,
+      isBoolean,
+    ),
     ui: resolveUiColors(user?.ui, themeColors.ui, diag),
   };
 }

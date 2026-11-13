@@ -48,6 +48,7 @@ import {
   type TabId,
   type TileId,
   type TileNode,
+  type TileSplit,
 } from "../bun/tile-layout";
 import type {
   AppRenderState,
@@ -679,6 +680,13 @@ let draggingSplitId: TileId | null = null;
 // bunのratioが確定値に追いつくまでローカルのratioを維持する（それまでの間、古いratioで
 // flexスタイルが巻き戻されてResizeObserverが誤ったcolsを送ってしまうのを防ぐ）
 let pendingSplitRatio: { splitId: TileId; ratio: number } | null = null;
+// appearance.tileAnimation。分割で新しいタイルが広がるアニメーションを付けるか
+let tileAnimationEnabled = defaultAppearance.tileAnimation;
+// 実行中の分割アニメーションの数。0より大きい間はタイルのResizeObserverがPTYへresizeを送らない
+let runningSplitAnimations = 0;
+const SPLIT_ANIMATION_MS = 150;
+// 分割アニメーションに巻き込まれたタイル。最後のアニメーションが終わったときに確定サイズを送る
+const splitAnimationResizeTargets = new Set<HTMLElement>();
 // bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする。
 // プラットフォーム別デフォルト（direct: Windowsのみコピー・ペーストを直接ショートカット化）の
 // 解決はbun側が行うため、ここではmacOS向けの値になる。configメッセージ到達時に正しいテーブルへ差し替わる
@@ -876,6 +884,7 @@ function applyAppearance(config: ResolvedAppearanceConfig) {
   applyAnsiPalette(config.ansiColors);
   applyTitleBarMode(config.titleBar);
   tabBarMode = config.tabBar;
+  tileAnimationEnabled = config.tileAnimation;
   // ツールバーの出し方が変わると.termの高さも変わる。popupのResizeObserverが実寸を送り直す
   popupBoxEl.classList.toggle("toolbar-hover", config.popupToolbar === "hover");
   // タブバーの出し方が変わると.tile-contentの高さも変わる。下のsendResizeが実寸を送り直す
@@ -1669,6 +1678,11 @@ function reconcile(
 
   seenSplitIds.add(node.id);
   let splitEl = splitElBySplitId.get(node.id);
+  // 子のDOMを作る前に判定する。片側だけが既存で、もう片側が新しいタイルなら「分割で生まれたsplit」
+  const openingSide =
+    !splitEl && tileAnimationEnabled && visible && zoomedTileId === null
+      ? splitOpeningSide(node)
+      : null;
   if (!splitEl) {
     splitEl = document.createElement("div");
     splitEl.className = "split";
@@ -1716,6 +1730,8 @@ function reconcile(
       const ratio = pendingSplitRatio?.splitId === node.id ? pendingSplitRatio.ratio : node.ratio;
       firstEl.style.flex = `${ratio} 0 0%`;
       secondEl.style.flex = `${1 - ratio} 0 0%`;
+      if (openingSide === "first") animateSplitOpen(secondEl, 1 - ratio, firstEl, ratio);
+      if (openingSide === "second") animateSplitOpen(firstEl, ratio, secondEl, 1 - ratio);
     }
   }
 
@@ -1730,6 +1746,63 @@ function reconcile(
   }
 
   return splitEl;
+}
+
+/**
+ * 新しく現れたsplitのうち、どちら側が分割で生まれたタイルか。片側が既にDOMにあり、もう片側が
+ * まだ無いleafのときだけ返す。Board切替や起動直後の復元のように両側とも新しいときはnull
+ */
+function splitOpeningSide(node: TileSplit): "first" | "second" | null {
+  const hasEl = (child: TileNode): boolean =>
+    child.kind === "leaf" ? tileElByTileId.has(child.id) : splitElBySplitId.has(child.id);
+  const firstExists = hasEl(node.first);
+  const secondExists = hasEl(node.second);
+  if (firstExists && !secondExists && node.second.kind === "leaf") return "second";
+  if (secondExists && !firstExists && node.first.kind === "leaf") return "first";
+  return null;
+}
+
+/**
+ * 既存タイルを1から、新しいタイルを0から、それぞれ最終的なflex-growまで動かす。両者の和が
+ * 常に1なので、途中も親の幅をちょうど分け合う。flexの値そのものはインラインstyleに書いたままで、
+ * アニメーションはその上に重なるだけなので、途中でrenderが来て書き直されても終わりの値は変わらない。
+ *
+ * 途中の大きさをPTYへ送ると、新しいタイルのシェルが細い幅で起動してしまう（bunは最初のresizeを
+ * PTY起動の合図にしている）。そのためアニメーション中はResizeObserverからの送信を止め、
+ * 終わったときに関わるタブへ確定サイズを1回だけ送る
+ */
+function animateSplitOpen(
+  existingEl: HTMLElement,
+  existingGrow: number,
+  newEl: HTMLElement,
+  newGrow: number,
+): void {
+  // ウィンドウが裏に回っている間はアニメーションの時計が進まないことがあるので、そもそも動かさない
+  if (document.hidden) return;
+  const options: KeyframeAnimationOptions = { duration: SPLIT_ANIMATION_MS, easing: "ease-out" };
+  const animations = [
+    existingEl.animate([{ flexGrow: 1 }, { flexGrow: existingGrow }], options),
+    newEl.animate([{ flexGrow: 0 }, { flexGrow: newGrow }], options),
+  ];
+  runningSplitAnimations++;
+  splitAnimationResizeTargets.add(existingEl);
+  splitAnimationResizeTargets.add(newEl);
+  // 終わりはfinishedではなくタイマーで決める。描画が止まっているとfinishedが解決せず、
+  // resizeの送信が止まったまま新しいタイルのシェルがいつまでも起動しなくなるため
+  setTimeout(() => {
+    for (const animation of animations) animation.finish();
+    runningSplitAnimations--;
+    if (runningSplitAnimations > 0) return;
+    // 入れ子の分割が続けて走ったときは、最後の1つが終わってからまとめて確定サイズを送る
+    for (const el of splitAnimationResizeTargets) {
+      if (!el.isConnected) continue;
+      for (const tabContentEl of el.querySelectorAll<HTMLElement>(".tab-content[data-tab-id]")) {
+        if (tabContentEl.style.display === "none") continue;
+        sendResize(tabContentEl.dataset["tabId"] as TabId);
+      }
+    }
+    splitAnimationResizeTargets.clear();
+  }, SPLIT_ANIMATION_MS + 50);
 }
 
 function getOrCreateDivider(splitId: TileId): HTMLDivElement {
@@ -1792,7 +1865,10 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
     // ドラッグ中・ドラッグ確定直後（bun側のratio確定待ち）はスキップ。
     // 非アクティブタブ（display:none）はcontent-boxが0になり誤って2x2等のresizeを
     // 送ってしまうため、表示中でない限りスキップする（再表示時に正しいサイズで発火し直す）
-    if (draggingSplitId || pendingSplitRatio || draggingSidebar) return;
+    // 分割アニメーション中も途中の大きさを送らず、終わったときにanimateSplitOpenが送る
+    if (draggingSplitId || pendingSplitRatio || draggingSidebar || runningSplitAnimations > 0) {
+      return;
+    }
     if (tabContentEl.style.display === "none") return;
     sendResize(tabId);
   });

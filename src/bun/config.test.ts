@@ -772,6 +772,21 @@ describe("resolveAppearance", () => {
     }
   });
 
+  test("tileAnimationは真偽値だけ受け付ける", () => {
+    expect(resolveAppearance(null).tileAnimation).toBe(true);
+    expect(resolveAppearance({ appearance: { tileAnimation: false } }).tileAnimation).toBe(false);
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const fallback = resolveAppearance({
+        appearance: { tileAnimation: "off" as unknown as boolean },
+      });
+      expect(fallback.tileAnimation).toBe(defaultAppearance.tileAnimation);
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   test('tabBarは"auto"/"always"だけ受け付ける', () => {
     expect(resolveAppearance({ appearance: { tabBar: "always" } }).tabBar).toBe("always");
     const logSpy = spyOn(console, "log").mockImplementation(() => {});
