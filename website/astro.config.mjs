@@ -47,7 +47,7 @@ export default defineConfig({
         },
         { label: "ワークツリー", items: ["worktrees", "worktrees/hooks"] },
         { label: "マウスとリンク", items: ["mouse-and-links", "browser"] },
-        { label: "拡張", items: ["custom-views", "hover-buttons", "bell"] },
+        { label: "拡張", items: ["custom-views", "hover-buttons", "command-templates", "bell"] },
         { label: "シェル", items: ["shell"] },
         { label: "AIエージェント", items: ["agents"] },
         { label: "CLI", items: ["cli", "cli/commands"] },

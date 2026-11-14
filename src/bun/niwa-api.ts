@@ -73,6 +73,12 @@ export interface CreateNiwaApiDeps {
   openLinkExternal: (url: string) => void;
   /** link.openの解決済みの値。ホットリロードでの変化を反映するため、呼び出し毎に評価する */
   getLinkOpen: () => LinkOpenTarget;
+  /**
+   * commandTemplatesのテンプレートを入力モーダルで開く実体。テンプレートの解決はniwa APIを作った後
+   * （config.ts）、モーダルを出すwebviewはindex.tsが持つため、どちらも呼び出し元から注入する。
+   * 省略時は常にfalse（該当なし）
+   */
+  openCommandTemplate?: (id: string) => boolean;
 }
 
 /** niwa.tile.resizeのamount省略時のratio増減幅 */
@@ -370,6 +376,11 @@ export function createNiwaApi(deps: CreateNiwaApiDeps): NiwaApiHandle {
       },
       openExternal(url) {
         deps.openLinkExternal(url);
+      },
+    },
+    commandTemplate: {
+      open(id) {
+        return deps.openCommandTemplate?.(id) ?? false;
       },
     },
     shell: {

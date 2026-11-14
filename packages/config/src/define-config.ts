@@ -1,6 +1,7 @@
 import type { AppearanceConfig } from "./appearance";
 import type { BoardConfig } from "./board";
 import type { BrowserConfig } from "./browser";
+import type { CommandTemplateConfig } from "./command-template";
 import type { CustomViewConfig } from "./custom-view";
 import type { HoverButtonConfig } from "./hover-button";
 import type { KeybindingsConfig } from "./keybindings";
@@ -61,6 +62,14 @@ export interface NiwatermConfig {
    * 例: [{ position: "bottom-right", items: (ctx, niwa) => [{ label: "git", run: () => niwa.popup.open({ command: "lazygit" }) }] }]
    */
   hoverButtons?: HoverButtonConfig[];
+  /**
+   * コマンドの一部だけを差し替えて使い回すテンプレート。commandの`{{name}}`の部分をモーダルで
+   * 入力・選択し、アクティブなタブへ入力するかクリップボードへコピーする。コマンドパレットに並ぶほか、
+   * キーバインド・ホバーボタンからはniwa.commandTemplate.open(id)で開く。
+   * 空配列・未指定なら機能自体がオフになる。
+   * 例: [{ name: "worktreeを作る", command: "niwa worktree new {{branch}} --workspace {{ws}}", fields: { ws: { options: "workspace" } } }]
+   */
+  commandTemplates?: CommandTemplateConfig[];
   /**
    * シェル設定。新規タブ作成時に使うデフォルトシェル・追加のシェルプロファイル（PowerShell・SSH先等）を変更できる。
    * defaultの未指定時はOS標準（macOS/Linux: /bin/zsh、Windows: powershell.exe）。

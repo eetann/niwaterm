@@ -23,6 +23,7 @@ function input(overrides: Partial<ConfigSummaryInput> = {}): ConfigSummaryInput 
     keybindings: { prefix: "ctrl+b", bindings: { d: "split-vertical" } },
     browser: defaultBrowserConfig,
     customViews: [],
+    commandTemplates: [],
     defaultShell: undefined,
     shellProfiles: [],
     layouts: {},
@@ -80,6 +81,7 @@ describe("buildConfigSummary", () => {
       "link",
       "statusBar",
       "customViews",
+      "commandTemplates",
     ]);
   });
 
@@ -236,6 +238,29 @@ describe("buildConfigSummary", () => {
     );
     expect(entry(summary, "customViews", "worktrees")?.note).toBe("handlers: list, open");
   });
+  test("commandTemplatesはidをキーに名前を並べ、commandをnoteへ添える", () => {
+    const summary = buildConfigSummary(
+      input({
+        commandTemplates: [
+          {
+            id: "worktree",
+            name: "worktreeを作る",
+            description: "",
+            command: "niwa worktree new {{b}}",
+          },
+        ],
+      }),
+    );
+    expect(entry(summary, "commandTemplates", "worktree")).toEqual({
+      key: "worktree",
+      value: "worktreeを作る",
+      note: "niwa worktree new {{b}}",
+    });
+    expect(entry(buildConfigSummary(input()), "commandTemplates", "templates")?.value).toBe(
+      "(未設定)",
+    );
+  });
+
   test("関数で指定する設定（mouse.selectionMenu）は含めない", () => {
     const summary = buildConfigSummary(input());
     const mouseKeys = summary.sections.find((s) => s.name === "mouse")?.entries.map((e) => e.key);

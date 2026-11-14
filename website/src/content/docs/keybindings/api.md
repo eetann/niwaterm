@@ -117,5 +117,6 @@ niwa.keybind(
 | `niwa.sleep(ms)`                                       | 指定したミリ秒だけ待つ                                                                                                                                                                  |
 | `niwa.reloadConfig()`                                  | 設定ファイルを読み込み直す。`await`すると読み込みが終わるまで待てる                                                                                                                     |
 | `niwa.list()`                                          | 今のウィンドウのワークスペース・Board・タイル・タブを返す。形は`niwa list --json`と同じ（[今の状態を見る](/niwaterm/cli/commands/#スクリプトから使う--json)）                           |
+| `niwa.commandTemplate.open(id)`                        | [コマンドテンプレート](/niwaterm/command-templates/)の入力画面を開く。`id`のテンプレートが無ければ`false`を返す                                                                         |
 
 キーバインドの設定に使う`niwa.keybind`・`niwa.unbind`・`niwa.prefix`・`niwa.repeatTimeout`は[キーバインド](/niwaterm/keybindings/)、ベルやリンクのクリックで動く処理を決める`niwa.on`は[ベル](/niwaterm/bell/)と[マウスとリンク](/niwaterm/mouse-and-links/#開く処理を差し替えるniwaonopen-link-)で説明している。

@@ -31,6 +31,7 @@ import {
   resolveAppearance,
   resolveBoard,
   resolveBrowser,
+  resolveCommandTemplates,
   resolveCustomViews,
   resolveHoverButtons,
   resolveKeybindings,
@@ -1239,6 +1240,103 @@ describe("resolveLayouts", () => {
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
+    }
+  });
+});
+
+describe("resolveCommandTemplates", () => {
+  test("未指定なら空（機能オフ）を返す", () => {
+    expect(resolveCommandTemplates(null)).toEqual([]);
+    expect(resolveCommandTemplates({})).toEqual([]);
+  });
+
+  test("欄はcommandに出てきた順に並び、fieldsに書かなかったnameは自由入力になる", () => {
+    const [def] = resolveCommandTemplates({
+      commandTemplates: [
+        {
+          name: "worktree",
+          command: "niwa worktree new {{branch}} --workspace {{ws}}",
+          fields: { ws: { label: "ワークスペース", options: "workspace" } },
+        },
+      ],
+    });
+    expect(def?.fields).toEqual([
+      { name: "branch", label: "branch", placeholder: "", options: null, default: "", quote: true },
+      {
+        name: "ws",
+        label: "ワークスペース",
+        placeholder: "",
+        options: "workspace",
+        default: "",
+        quote: true,
+      },
+    ]);
+    expect(def?.rememberLastValues).toBe(false);
+  });
+
+  test("idは明示指定かnameから作り、作れなければtemplateを素にして重複を避ける", () => {
+    const defs = resolveCommandTemplates({
+      commandTemplates: [
+        { id: "My Deploy", name: "a", command: "x" },
+        { name: "worktreeを作る", command: "x" },
+        { name: "日本語だけ", command: "x" },
+        { name: "日本語だけ", command: "y" },
+      ],
+    });
+    expect(defs.map((def) => def.id)).toEqual(["my-deploy", "worktree", "template", "template-2"]);
+  });
+
+  test("固定の選択肢は文字列をlabel=valueへ揃える", () => {
+    const [def] = resolveCommandTemplates({
+      commandTemplates: [
+        {
+          name: "a",
+          command: "x {{env}}",
+          fields: { env: { options: ["dev", { label: "本番", value: "prod" }] } },
+        },
+      ],
+    });
+    expect(def?.fields[0]?.options).toEqual([
+      { label: "dev", value: "dev" },
+      { label: "本番", value: "prod" },
+    ]);
+  });
+
+  test("不正な要素・項目は警告してその分だけ落とす", () => {
+    const { diag, restore } = captureDiagnostics();
+    try {
+      const defs = resolveCommandTemplates(
+        {
+          commandTemplates: [
+            "bad" as never,
+            { name: "", command: "x" },
+            { name: "a", command: 1 as never },
+            {
+              name: "b",
+              command: "x {{v}}",
+              fields: {
+                v: { options: "branch" as never, quote: "no" as never },
+                unused: { label: "u" },
+              },
+              rememberLastValues: "yes" as never,
+            },
+          ],
+        },
+        diag,
+      );
+      expect(defs.map((def) => def.name)).toEqual(["b"]);
+      expect(defs[0]?.fields[0]).toMatchObject({ options: null, quote: true });
+      expect(diag.list().map((entry) => entry.scope)).toEqual([
+        "commandTemplates[0]",
+        "commandTemplates[1].name",
+        "commandTemplates[2].command",
+        "commandTemplates[3].fields.unused",
+        "commandTemplates[3].rememberLastValues",
+        "commandTemplates[3].fields.v.options",
+        "commandTemplates[3].fields.v.quote",
+      ]);
+    } finally {
+      restore();
     }
   });
 });

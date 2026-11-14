@@ -42,6 +42,18 @@ export {
   type ResolvedCustomViewConfig,
   WORKSPACES_VIEW_ID,
 } from "./custom-view";
+export {
+  COMMAND_TEMPLATE_BUILTIN_OPTIONS,
+  type CommandTemplateBuiltinOptions,
+  type CommandTemplateConfig,
+  type CommandTemplateContext,
+  type CommandTemplateField,
+  type CommandTemplateOption,
+  type CommandTemplateOptionList,
+  type CommandTemplateOptionsFn,
+  isCommandTemplateBuiltinOptions,
+  type ResolvedCommandTemplateConfig,
+} from "./command-template";
 export { claudePromptJump, type ClaudePromptJumpOptions } from "./claude-prompt-jump";
 export { defineConfig, type KeybindingsFn, type NiwatermConfig } from "./define-config";
 export {
@@ -225,6 +237,7 @@ export {
   type NiwaBellEvent,
   type NiwaBellHandler,
   type NiwaClipboardApi,
+  type NiwaCommandTemplateApi,
   type NiwaLinkApi,
   type NiwaLinkEvent,
   type NiwaLinkHandler,
@@ -244,5 +257,6 @@ export {
   type NiwaTileApi,
   type NiwaTileInfo,
   type NiwaWorkspaceApi,
+  type NiwaWorkspaceInfo,
   type SplitOrientationValue,
 } from "./niwa";

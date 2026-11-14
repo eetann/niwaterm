@@ -30,6 +30,8 @@ const meta = {
     onSelectBoard: fn(),
     workspaces: [],
     onSelectWorkspace: fn(),
+    commandTemplates: [],
+    onSelectCommandTemplate: fn(),
     shortcutLabelFor: defaultShortcutLabel,
   },
 } satisfies Meta<typeof CommandPalette>;
@@ -67,4 +69,24 @@ export const WithDynamicItems: Story = {
 /** キーバインドが1つも割り当たっていない（prefix未設定）。右端のショートカット表示が消える */
 export const WithoutShortcuts: Story = {
   args: { shortcutLabelFor: () => undefined },
+};
+
+/** commandTemplatesを設定したとき。先頭の「テンプレート」に並ぶ */
+export const WithCommandTemplates: Story = {
+  args: {
+    commandTemplates: [
+      {
+        id: "worktree",
+        name: "worktreeを作る",
+        description: "",
+        command: "niwa worktree new {{branch}} --workspace {{workspace}}",
+      },
+      {
+        id: "report",
+        name: "期間を決めて集計",
+        description: "",
+        command: "foo --from {{from}} --to {{to}} --file {{file}}",
+      },
+    ],
+  },
 };

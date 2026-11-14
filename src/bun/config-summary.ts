@@ -13,6 +13,7 @@ import type {
   ResolvedAppearanceConfig,
   ResolvedBoardConfig,
   ResolvedBrowserConfig,
+  ResolvedCommandTemplateConfig,
   ResolvedCustomViewConfig,
   ResolvedLinkConfig,
   ResolvedMouseConfig,
@@ -76,6 +77,7 @@ export interface ConfigSummaryInput {
   keybindings: KeybindingsConfig;
   browser: ResolvedBrowserConfig;
   customViews: ResolvedCustomViewConfig[];
+  commandTemplates: ResolvedCommandTemplateConfig[];
   defaultShell: string | undefined;
   shellProfiles: ShellProfile[];
   layouts: LayoutsConfig;
@@ -271,6 +273,24 @@ function sidebarToolbarEntries(toolbar: SidebarToolbarDefinition): ConfigSummary
   }));
 }
 
+function commandTemplatesSection(templates: ResolvedCommandTemplateConfig[]): ConfigSummarySection {
+  if (templates.length === 0) {
+    return {
+      name: "commandTemplates",
+      entries: [{ key: "templates", value: UNSET, note: "1つも設定されていないため機能オフ" }],
+    };
+  }
+  // キーをidにするのは、niwa.commandTemplate.open(id)へ渡す値をここで確かめられるようにするため
+  return {
+    name: "commandTemplates",
+    entries: templates.map((template) => ({
+      key: template.id,
+      value: template.name,
+      note: template.command,
+    })),
+  };
+}
+
 function customViewsSection(customViews: ResolvedCustomViewConfig[]): ConfigSummarySection {
   if (customViews.length === 0) {
     return {
@@ -433,6 +453,7 @@ export function buildConfigSummary(input: ConfigSummaryInput): ConfigSummary {
       },
       statusBarSection(input.statusBar),
       customViewsSection(input.customViews),
+      commandTemplatesSection(input.commandTemplates),
     ],
   };
 }

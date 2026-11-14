@@ -10,6 +10,7 @@ import {
   type KeybindingsConfig,
   type ResolvedAppearanceConfig,
   type ResolvedBoardPhase,
+  type ResolvedCommandTemplateConfig,
   type ResolvedCustomViewConfig,
   type HoverButtonPosition,
   type ResolvedHoverButtonConfig,
@@ -83,6 +84,7 @@ import {
   type CommandPaletteWorkspaceItem,
   type NonPaletteKeybindAction,
 } from "./react/command-palette";
+import { CommandTemplateDialog } from "./react/command-template-dialog";
 import { ConfigDialog } from "./react/config-dialog";
 import { NoBoard } from "./react/no-board";
 import { ConfirmDialog } from "./react/confirm-dialog";
@@ -131,6 +133,7 @@ import {
   toPercentGeometry,
 } from "../shared/popup-geometry";
 import { isWideChar, splitCells } from "../shared/wide-char";
+import type { CommandTemplateAction, PreparedCommandTemplate } from "../shared/command-template";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
 const tileTreeEl = document.getElementById("tile-tree") as HTMLDivElement;
@@ -157,6 +160,9 @@ const sidebarToolbarEl = document.getElementById("sidebar-toolbar") as HTMLDivEl
 const commandPaletteRootEl = document.getElementById("command-palette-root") as HTMLDivElement;
 const confirmDialogRootEl = document.getElementById("confirm-dialog-root") as HTMLDivElement;
 const promptDialogRootEl = document.getElementById("prompt-dialog-root") as HTMLDivElement;
+const commandTemplateDialogRootEl = document.getElementById(
+  "command-template-dialog-root",
+) as HTMLDivElement;
 const configDialogRootEl = document.getElementById("config-dialog-root") as HTMLDivElement;
 const workspacePickerRootEl = document.getElementById("workspace-picker-root") as HTMLDivElement;
 const phasePickerRootEl = document.getElementById("phase-picker-root") as HTMLDivElement;
@@ -408,6 +414,8 @@ function renderCommandPalette(): void {
       onSelectBoard: switchToBoard,
       workspaces: commandPaletteWorkspaces(),
       onSelectWorkspace: activateSidebarWorkspace,
+      commandTemplates,
+      onSelectCommandTemplate: openCommandTemplateDialog,
       shortcutLabelFor: shortcutLabelForAction,
     }),
   );
@@ -511,6 +519,82 @@ function openPromptDialog(
   promptDialogOnSubmit = onSubmit;
   promptDialogOpen = true;
   renderPromptDialog();
+}
+
+// ---- コマンドテンプレートの入力モーダル: commandの{{name}}を埋めてアクティブなタブへ入力する ----
+const commandTemplateDialogRoot = createMemoRoot(
+  commandTemplateDialogRootEl,
+  "command-template-dialog",
+);
+let commandTemplateDialogOpen = false;
+/** 選択肢を取り寄せている間はnull */
+let commandTemplateDialogTemplate: PreparedCommandTemplate | null = null;
+/**
+ * 開いた時点のアクティブなタブ。貼る先はここで固定する（モーダルを開いている間に
+ * 描画でcurrentTabIdが動いても、開いたときに見ていたタブへ入れる）
+ */
+let commandTemplateDialogTabId: TabId | null = null;
+/** 取り寄せ中に開き直された・閉じられたとき、古い応答で中身を上書きしないための世代 */
+let commandTemplateDialogGeneration = 0;
+const modKeyLabel = navigator.userAgent.includes("Mac") ? "Cmd" : "Ctrl";
+
+function renderCommandTemplateDialog(): void {
+  updateWebviewOverlayVisibility();
+  commandTemplateDialogRoot.renderOnEvent(
+    createElement(CommandTemplateDialog, {
+      open: commandTemplateDialogOpen,
+      template: commandTemplateDialogTemplate,
+      modKeyLabel,
+      onSubmit: (values: Record<string, string>, action: CommandTemplateAction) => {
+        const template = commandTemplateDialogTemplate;
+        const tabId = commandTemplateDialogTabId;
+        closeCommandTemplateDialog();
+        if (!template) return;
+        sendMessage("submitCommandTemplate", {
+          templateId: template.id,
+          tabId,
+          values,
+          action,
+        });
+      },
+      onCancel: () => closeCommandTemplateDialog(),
+      onCloseAutoFocus: (event: Event) => {
+        event.preventDefault();
+        imeEl.focus({ preventScroll: true });
+      },
+    }),
+  );
+}
+
+function closeCommandTemplateDialog(): void {
+  commandTemplateDialogOpen = false;
+  commandTemplateDialogGeneration++;
+  renderCommandTemplateDialog();
+  imeEl.focus({ preventScroll: true });
+}
+
+async function openCommandTemplateDialog(templateId: string): Promise<void> {
+  const generation = ++commandTemplateDialogGeneration;
+  commandTemplateDialogTabId = currentTabId;
+  commandTemplateDialogTemplate = null;
+  commandTemplateDialogOpen = true;
+  renderCommandTemplateDialog();
+  let template: PreparedCommandTemplate | null = null;
+  try {
+    ({ template } = await rpc.request.prepareCommandTemplate({
+      templateId,
+      tabId: commandTemplateDialogTabId,
+    }));
+  } catch (err) {
+    sendMessage("log", { msg: `prepareCommandTemplate failed: ${String(err)}` });
+  }
+  if (generation !== commandTemplateDialogGeneration) return;
+  if (!template) {
+    closeCommandTemplateDialog();
+    return;
+  }
+  commandTemplateDialogTemplate = template;
+  renderCommandTemplateDialog();
 }
 
 // ---- 設定モーダル: 現在有効な設定値の一覧（CLIのniwaterm config showと同じ内容）----
@@ -695,6 +779,8 @@ let keybindResolver = createKeybindResolver(compileKeybindings(defaultKeybinding
 let lastWorkspaces: WorkspaceListEntry[] = [];
 // bun側で解決されたシェルプロファイル一覧（configメッセージで受信）。+ボタン横のドロップダウンに表示する
 let shellProfiles: ShellProfile[] = [];
+// コマンドパレットに並べるコマンドテンプレート（configメッセージで受信）
+let commandTemplates: ResolvedCommandTemplateConfig[] = [];
 // bun側で解決されたマウス設定（configメッセージで受信）。copy-on-selectの有効・無効に使う
 let mouseConfig: ResolvedMouseConfig = defaultMouseConfig;
 // リンク関連の状態。configが届くまでrulesは空なので、素のURLの検出は行われない
@@ -1003,6 +1089,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link,
         customViews: views,
         hoverButtons: hoverButtonConfigs,
+        commandTemplates: nextCommandTemplates,
         statusBar: statusBarConfig,
         sidebarToolbar: nextSidebarToolbarConfig,
         shellProfiles: profiles,
@@ -1016,6 +1103,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         link: ResolvedLinkConfig;
         customViews: ResolvedCustomViewConfig[];
         hoverButtons: ResolvedHoverButtonConfig[];
+        commandTemplates: ResolvedCommandTemplateConfig[];
         statusBar: ResolvedStatusBarConfig;
         sidebarToolbar: ResolvedSidebarToolbarConfig;
         shellProfiles: ShellProfile[];
@@ -1033,6 +1121,7 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         compiledLinkRules = compileLinkRules(link.rules);
         applyCustomViews(views);
         hoverButtons.setConfig(hoverButtonConfigs);
+        commandTemplates = nextCommandTemplates;
         statusBar.setConfig(statusBarConfig);
         sidebarToolbarConfig = nextSidebarToolbarConfig;
         renderSidebarToolbar();
@@ -1076,6 +1165,9 @@ const rpc = Electroview.defineRPC<NiwaRPC>({
         position: HoverButtonPosition | null;
       }) => {
         hoverButtons.pin(tabId, position);
+      },
+      openCommandTemplate: ({ templateId }: { templateId: string }) => {
+        void openCommandTemplateDialog(templateId);
       },
       copied: ({ chars, lines }: { chars: number; lines: number }) => {
         showCopiedBadge(chars, lines);
@@ -2069,6 +2161,7 @@ function htmlOverlayOpen(): boolean {
     commandPaletteOpen ||
     confirmDialogOpen ||
     promptDialogOpen ||
+    commandTemplateDialogOpen ||
     configDialogOpen ||
     workspacePickerOpen ||
     phasePickerOpen

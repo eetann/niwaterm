@@ -1,6 +1,11 @@
-import { FolderOpen, LayoutDashboard, Terminal } from "lucide-react";
+import { FolderOpen, LayoutDashboard, SquareTerminal, Terminal } from "lucide-react";
 import { useMemo } from "react";
-import type { KeybindAction, ResolvedBoardPhase, ShellProfile } from "@niwaterm/config";
+import type {
+  KeybindAction,
+  ResolvedBoardPhase,
+  ResolvedCommandTemplateConfig,
+  ShellProfile,
+} from "@niwaterm/config";
 import {
   CommandDialog,
   CommandEmpty,
@@ -55,6 +60,9 @@ export interface CommandPaletteProps {
   /** 切り替え先のワークスペース。boardsと同じくアクティブなもの自身は含まない */
   workspaces: readonly CommandPaletteWorkspaceItem[];
   onSelectWorkspace: (workspaceId: WorkspaceId) => void;
+  /** 設定のcommandTemplates。選ぶと入力モーダルを開く */
+  commandTemplates: readonly ResolvedCommandTemplateConfig[];
+  onSelectCommandTemplate: (templateId: string) => void;
   shortcutLabelFor: (action: NonPaletteKeybindAction) => string | undefined;
   /**
    * 閉じ切った直後のフォーカス戻し。既定ではRadixが開く前の要素へ戻すため、
@@ -128,6 +136,8 @@ export function CommandPalette({
   onSelectBoard,
   workspaces,
   onSelectWorkspace,
+  commandTemplates,
+  onSelectCommandTemplate,
   shortcutLabelFor,
   onCloseAutoFocus,
 }: CommandPaletteProps) {
@@ -149,6 +159,31 @@ export function CommandPalette({
       <CommandInput placeholder="コマンドを検索..." />
       <CommandList>
         <CommandEmpty>該当するコマンドがありません</CommandEmpty>
+        {/* 利用者が自分で用意したものなので、組み込みのコマンドより先に並べる */}
+        {commandTemplates.length > 0 && (
+          <CommandGroup heading="テンプレート">
+            {commandTemplates.map((template) => (
+              <CommandItem
+                key={`template:${template.id}`}
+                // テンプレート名は重複しうるのでidまで含めて一意にする（Board・ワークスペースと同じ）
+                value={`Template: ${template.name} ${template.id}`}
+                keywords={[template.command, template.description]}
+                onSelect={() => {
+                  onOpenChange(false);
+                  onSelectCommandTemplate(template.id);
+                }}
+              >
+                <SquareTerminal />
+                <div className="flex min-w-0 flex-col">
+                  <span>{template.name}</span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">
+                    {template.command}
+                  </span>
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
         {[...grouped.entries()].map(([category, items]) => (
           <CommandGroup key={category} heading={category}>
             {items.map((item) => {

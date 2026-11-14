@@ -367,6 +367,14 @@ export interface NiwaLinkApi {
   openExternal(url: string): void;
 }
 
+export interface NiwaCommandTemplateApi {
+  /**
+   * commandTemplatesのテンプレートを入力モーダルで開く。idはテンプレートのid（省略時はnameから
+   * 作ったもの。`niwa config show`で確かめられる）。該当するテンプレートが無い場合はfalse
+   */
+  open(id: string): boolean;
+}
+
 export interface KeybindOptions {
   /** trueならprefix不要で即時発火する（directと同じ扱い。cmd/ctrl/altのいずれかを含むKeyBindingStringのみ有効） */
   noPrefix?: boolean;
@@ -470,4 +478,5 @@ export interface Niwa {
   workspace: NiwaWorkspaceApi;
   clipboard: NiwaClipboardApi;
   shell: NiwaShellApi;
+  commandTemplate: NiwaCommandTemplateApi;
 }

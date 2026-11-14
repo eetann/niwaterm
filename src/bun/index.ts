@@ -23,6 +23,8 @@ import {
   type ResolvedBoardConfig,
   type ResolvedBoardPhase,
   type ResolvedBrowserConfig,
+  type ResolvedCommandTemplateConfig,
+  type CommandTemplateContext,
   type HoverButtonContext,
   type HoverButtonPosition,
   type ResolvedCustomViewConfig,
@@ -65,6 +67,12 @@ import { watchConfigFile } from "./config-watcher";
 import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-view-handlers";
 import { createDirExistenceCache, dirExistsSync } from "./dir-existence";
 import type { MouseEventInput } from "./ghostty";
+import type { CommandTemplateAction, PreparedCommandTemplate } from "../shared/command-template";
+import {
+  type CommandTemplatesHandle,
+  createFileRememberedValuesStore,
+  rememberedValuesFilePath,
+} from "./command-templates";
 import type { HoverButtonEntry, HoverButtonsHandle } from "./hover-buttons";
 import {
   createIpcServer,
@@ -177,6 +185,15 @@ export type NiwaRPC = {
       hoverButtonItems: {
         params: { tabId: TabId; buttonId: string };
         response: { items: HoverButtonEntry[] };
+      };
+      /**
+       * コマンドテンプレートの入力モーダルに出す内容。optionsの関数はbun側に残るため、
+       * 開くたびに評価済みの選択肢を返す。tabIdはアクティブなタブで、無ければnull。
+       * 未知のテンプレートならtemplateがnull
+       */
+      prepareCommandTemplate: {
+        params: { templateId: string; tabId: TabId | null };
+        response: { template: PreparedCommandTemplate | null };
       };
     };
     messages: {
@@ -293,6 +310,17 @@ export type NiwaRPC = {
       runSelectionMenuItem: { id: string };
       /** ホバーボタンで押された項目。idはhoverButtonItemsで返したもの */
       runHoverButtonItem: { tabId: TabId; buttonId: string; id: string };
+      /**
+       * コマンドテンプレートの入力モーダルで送られた値。pasteはEnterを押さずにtabIdのタブへ入力し、
+       * runは入力してEnterまで送る。copyはクリップボードへ入れるだけ。
+       * 空の欄が無いかはwebview側で止めているが、bun側でも組み立て時に確かめる
+       */
+      submitCommandTemplate: {
+        templateId: string;
+        tabId: TabId | null;
+        values: Record<string, string>;
+        action: CommandTemplateAction;
+      };
       /** ステータスバーで押された部品。idはconfigのstatusBarで配ったもの */
       runStatusBarItem: { id: string };
       /** サイドバーのツールバーで押された部品のうちrunを持つもの。idはconfigのsidebarToolbarで配ったもの */
@@ -344,6 +372,8 @@ export type NiwaRPC = {
         customViews: ResolvedCustomViewConfig[];
         /** タブの端に出るホバーボタンの定義。どのタブへ帯を張るかはhoverButtonTabsで別に配る */
         hoverButtons: ResolvedHoverButtonConfig[];
+        /** コマンドパレットに並べるコマンドテンプレート。選択肢はprepareCommandTemplateで開くたびに取る */
+        commandTemplates: ResolvedCommandTemplateConfig[];
         /** ウィンドウ下端のステータスバーの部品の並び。値はstatusBarValuesで別に配る */
         statusBar: ResolvedStatusBarConfig;
         /** サイドバー上端のツールバーの部品の並び。値はsidebarToolbarValuesで別に配る */
@@ -379,6 +409,8 @@ export type NiwaRPC = {
        */
       revealHoverButton: { tabId: TabId; position: HoverButtonPosition | null };
       copied: { chars: number; lines: number };
+      /** niwa.commandTemplate.open(id)（キーバインド・ホバーボタン）からの、入力モーダルを開く要求 */
+      openCommandTemplate: { templateId: string };
       /**
        * サイドバーに出すビューの指定（CLIの`niwa sidebar switch`から）。viewIdは
        * customViewのidかワークスペース一覧のid。存在確認はIPCサーバー側で済んでいる
@@ -572,6 +604,39 @@ function hoverButtonContextOf(tabId: TabId): HoverButtonContext {
   };
 }
 
+function commandTemplateContextOf(tabId: TabId | null): CommandTemplateContext {
+  if (tabId === null) return { tabId: undefined, cwd: undefined, vars: {} };
+  const vars = windowManager.listTabVars(tabId) ?? {};
+  return { tabId, cwd: vars["cwd"], vars };
+}
+
+/**
+ * 入力モーダルで送られた値でコマンドを組み立てて送る。手で貼り付けたときと同じ経路で入れるため、
+ * シェルがブラケットペーストを有効にしていればその囲みも付く。runのEnterは囲みの外から別に送るので、
+ * 貼った行がそのまま実行される
+ */
+function submitCommandTemplate(
+  windowId: WindowId,
+  templateId: string,
+  tabId: TabId | null,
+  values: Record<string, string>,
+  action: CommandTemplateAction,
+): void {
+  const result = commandTemplates.submit(templateId, values);
+  if (!result.ok) {
+    console.log(`[bun] command template ${templateId}: ${result.error}`);
+    return;
+  }
+  if (action === "copy") {
+    writeClipboardText(result.text);
+    rpcSendOf(windowId)?.copied({ chars: result.text.length, lines: 1 });
+    return;
+  }
+  if (tabId === null) return;
+  windowManager.handlePaste(tabId, result.text);
+  if (action === "run") windowManager.handleInput(tabId, "\r");
+}
+
 /** 設定はアプリ全体で共通なので、windowId省略時は全ウィンドウへ送る */
 function sendConfig(windowId?: WindowId) {
   const targets = windowId !== undefined ? [windowId] : [...views.keys()];
@@ -585,6 +650,7 @@ function sendConfig(windowId?: WindowId) {
       link: linkConfig,
       customViews,
       hoverButtons,
+      commandTemplates: commandTemplates.resolved(),
       statusBar: statusBarHandle?.resolved() ?? HIDDEN_STATUS_BAR,
       sidebarToolbar: sidebarToolbarHandle?.resolved() ?? HIDDEN_SIDEBAR_TOOLBAR,
       shellProfiles,
@@ -866,6 +932,9 @@ let customViews: ResolvedCustomViewConfig[];
 let customViewHandlers: CustomViewHandlersHandle;
 let hoverButtons: ResolvedHoverButtonConfig[];
 let hoverButtonsHandle: HoverButtonsHandle;
+let commandTemplates: CommandTemplatesHandle;
+/** rememberLastValuesの値。設定のホットリロードをまたいで覚えておくため、ここで1つだけ作る */
+const rememberedCommandTemplateValues = createFileRememberedValuesStore(rememberedValuesFilePath());
 /** 設定の初回読み込み前はnull。読み込み前にwebviewへ設定を送ることは無いが、描画は先に走りうる */
 let statusBarHandle: StatusBarHandle | null = null;
 /** config showで部品のidを引けるよう、関数を含む解決結果をそのまま持つ */
@@ -1074,6 +1143,7 @@ function currentConfigSummary(): ConfigSummary {
     keybindings,
     browser,
     customViews,
+    commandTemplates: commandTemplates.resolved(),
     defaultShell,
     shellProfiles,
     layouts,
@@ -1107,6 +1177,9 @@ async function refreshConfig(): Promise<void> {
     sendNotification,
     () => handleConfigFileChanged(),
     (url) => Utils.openExternal(url),
+    rememberedCommandTemplateValues,
+    (templateId) =>
+      rpcSendOf(windowManager.getFocusedWindowId())?.openCommandTemplate({ templateId }),
   );
   const outcome = decideConfigLoadOutcome({
     configFile: configFilePath(),
@@ -1134,6 +1207,7 @@ async function refreshConfig(): Promise<void> {
     customViewHandlers,
     hoverButtons,
     hoverButtonsHandle,
+    commandTemplates,
     defaultShell,
     shellProfiles,
     layouts,
@@ -1363,6 +1437,15 @@ function createWindowRpc(windowId: WindowId) {
         hoverButtonItems: async ({ tabId, buttonId }: { tabId: TabId; buttonId: string }) => ({
           items: await hoverButtonsHandle.build(hoverButtonContextOf(tabId), buttonId),
         }),
+        prepareCommandTemplate: async ({
+          templateId,
+          tabId,
+        }: {
+          templateId: string;
+          tabId: TabId | null;
+        }) => ({
+          template: await commandTemplates.prepare(templateId, commandTemplateContextOf(tabId)),
+        }),
       },
       messages: {
         log: ({ msg }: { msg: string }) => {
@@ -1430,6 +1513,19 @@ function createWindowRpc(windowId: WindowId) {
         },
         copySelection: ({ text }: { text: string }) => {
           writeClipboardText(text);
+        },
+        submitCommandTemplate: ({
+          templateId,
+          tabId,
+          values,
+          action,
+        }: {
+          templateId: string;
+          tabId: TabId | null;
+          values: Record<string, string>;
+          action: CommandTemplateAction;
+        }) => {
+          submitCommandTemplate(windowId, templateId, tabId, values, action);
         },
         pasteFromClipboard: ({ tabId }: { tabId: TabId }) => {
           readClipboardText().then((text) => {

@@ -11,6 +11,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   type AppearanceConfig,
+  type CommandTemplateConfig,
+  type CommandTemplateField,
+  isCommandTemplateBuiltinOptions,
   defaultAppearance,
   defaultBoardConfig,
   defaultResumeConfig,
@@ -105,6 +108,16 @@ import {
   type CustomViewHandlersById,
   type CustomViewHandlersHandle,
 } from "./custom-view-handlers";
+import { fieldNamesOf, parseCommandTemplate } from "../shared/command-template";
+import {
+  type CommandTemplateDef,
+  type CommandTemplateFieldDef,
+  type CommandTemplatesHandle,
+  createCommandTemplates,
+  createMemoryRememberedValuesStore,
+  normalizeOptions,
+  type RememberedValuesStore,
+} from "./command-templates";
 import {
   createHoverButtons,
   type HoverButtonGroup,
@@ -151,6 +164,9 @@ function isNiwatermConfig(value: unknown): value is NiwatermConfig {
   }
   if ("hoverButtons" in v) {
     if (!Array.isArray(v["hoverButtons"])) return false;
+  }
+  if ("commandTemplates" in v) {
+    if (!Array.isArray(v["commandTemplates"])) return false;
   }
   if ("shell" in v) {
     const sh = v["shell"];
@@ -1168,6 +1184,140 @@ export function resolveHoverButtons(
   return groups;
 }
 
+/** commandTemplates[].fieldsの1つを解決する。不正な項目はその項目だけ既定値へ落とす */
+function resolveCommandTemplateField(
+  name: string,
+  user: unknown,
+  scope: string,
+  diag: ConfigDiagnostics,
+): CommandTemplateFieldDef {
+  const field: CommandTemplateField =
+    typeof user === "object" && user !== null ? (user as CommandTemplateField) : {};
+  if (user !== undefined && field !== user) {
+    diag.warn(scope, `オブジェクトではないため自由入力の欄にします: ${describeValue(user)}`);
+  }
+  const label = resolveOptionalString(field.label, `${scope}.label`, diag);
+  let options: CommandTemplateFieldDef["options"] = null;
+  const rawOptions: unknown = field.options;
+  if (typeof rawOptions === "function") {
+    options = rawOptions as CommandTemplateFieldDef["options"];
+  } else if (isCommandTemplateBuiltinOptions(rawOptions)) {
+    options = rawOptions;
+  } else if (Array.isArray(rawOptions)) {
+    options = normalizeOptions(rawOptions, `${scope}.options`);
+  } else if (rawOptions !== undefined) {
+    diag.warn(
+      `${scope}.options`,
+      `配列・関数・"workspace"のいずれでもないため自由入力の欄にします: ${describeValue(rawOptions)}`,
+    );
+  }
+  let quote = true;
+  if (field.quote !== undefined) {
+    if (typeof field.quote === "boolean") quote = field.quote;
+    else
+      diag.warn(
+        `${scope}.quote`,
+        `真偽値ではないためクォートします: ${describeValue(field.quote)}`,
+      );
+  }
+  return {
+    name,
+    label: label === "" ? name : label,
+    placeholder: resolveOptionalString(field.placeholder, `${scope}.placeholder`, diag),
+    options,
+    default: resolveOptionalString(field.default, `${scope}.default`, diag),
+    quote,
+  };
+}
+
+/**
+ * コマンドテンプレートを解決する。name・commandが文字列でない要素は警告して飛ばす。
+ * idは明示指定 > nameから作ったものの順で決め、重複はサフィックスで一意にする
+ * （niwa.commandTemplate.open(id)から指す唯一の手がかりのため）。nameが日本語だけで
+ * idを作れないときは"template"を素にする
+ */
+export function resolveCommandTemplates(
+  userConfig: NiwatermConfig | null,
+  diag: ConfigDiagnostics = createConfigDiagnostics(),
+): CommandTemplateDef[] {
+  const list = userConfig?.commandTemplates;
+  if (!Array.isArray(list)) return [];
+
+  const defs: CommandTemplateDef[] = [];
+  const usedIds = new Set<string>();
+  for (const [index, user] of list.entries()) {
+    const scope = `commandTemplates[${index}]`;
+    if (typeof user !== "object" || user === null) {
+      diag.warn(scope, `オブジェクトではないためこの要素だけ無視します: ${describeValue(user)}`);
+      continue;
+    }
+    const entry = user as CommandTemplateConfig;
+    if (!isNonEmptyString(entry.name)) {
+      diag.warn(
+        `${scope}.name`,
+        `空でない文字列ではないためこの要素だけ無視します: ${describeValue(entry.name)}`,
+      );
+      continue;
+    }
+    if (!isNonEmptyString(entry.command)) {
+      diag.warn(
+        `${scope}.command`,
+        `空でない文字列ではないためこの要素だけ無視します: ${describeValue(entry.command)}`,
+      );
+      continue;
+    }
+    const preferredId = slugifyViewId(isNonEmptyString(entry.id) ? entry.id : entry.name);
+    const id = uniqueViewId(preferredId === "" ? "template" : preferredId, usedIds);
+    usedIds.add(id);
+
+    const segments = parseCommandTemplate(entry.command);
+    const names = fieldNamesOf(segments);
+    let userFields: Record<string, unknown> = {};
+    if (entry.fields !== undefined) {
+      if (
+        typeof entry.fields === "object" &&
+        entry.fields !== null &&
+        !Array.isArray(entry.fields)
+      ) {
+        userFields = entry.fields as Record<string, unknown>;
+      } else {
+        diag.warn(
+          `${scope}.fields`,
+          `オブジェクトではないため無視します: ${describeValue(entry.fields)}`,
+        );
+      }
+    }
+    for (const key of Object.keys(userFields)) {
+      if (!names.includes(key)) {
+        diag.warn(`${scope}.fields.${key}`, `commandに{{${key}}}が無いため無視します`);
+      }
+    }
+    let rememberLastValues = false;
+    if (entry.rememberLastValues !== undefined) {
+      if (typeof entry.rememberLastValues === "boolean")
+        rememberLastValues = entry.rememberLastValues;
+      else {
+        diag.warn(
+          `${scope}.rememberLastValues`,
+          `真偽値ではないため覚えません: ${describeValue(entry.rememberLastValues)}`,
+        );
+      }
+    }
+    defs.push({
+      id,
+      name: entry.name,
+      description: resolveOptionalString(entry.description, `${scope}.description`, diag),
+      command: entry.command,
+      segments,
+      fields: names.map((name) =>
+        resolveCommandTemplateField(name, userFields[name], `${scope}.fields.${name}`, diag),
+      ),
+      rememberLastValues,
+    });
+  }
+  return defs;
+}
+
 /** 文字列フィールド。未指定は空文字列、文字列でなければ警告して空文字列へ落とす */
 function resolveOptionalString(value: unknown, scope: string, diag: ConfigDiagnostics): string {
   if (value === undefined) return "";
@@ -1647,6 +1797,8 @@ export async function loadAndResolveConfig(
   sendNotification: (opts: NiwaNotifyOptions) => void = () => {},
   reloadConfig: () => Promise<void> = async () => {},
   openLinkExternal: (url: string) => void = () => {},
+  rememberedValues: RememberedValuesStore = createMemoryRememberedValuesStore(),
+  openCommandTemplate: (id: string) => void = () => {},
 ): Promise<{
   /** 設定ファイルを読み込めたか。falseならファイル不在か読み込み失敗で、全項目が既定値 */
   userConfigLoaded: boolean;
@@ -1675,6 +1827,8 @@ export async function loadAndResolveConfig(
   hoverButtons: ResolvedHoverButtonConfig[];
   /** ホバーボタンの帯を張る判定と、項目の組み立て・実行 */
   hoverButtonsHandle: HoverButtonsHandle;
+  /** コマンドテンプレートの入力モーダルへ渡す内容の組み立てと、送る文字列の確定 */
+  commandTemplates: CommandTemplatesHandle;
   /**
    * ステータスバーの部品。intervalのタイマーを持つハンドルは、この解決結果を適用すると
    * 決めてから呼び出し元がniwaと合わせて作る（捨てる解決結果からタイマーが漏れないように）
@@ -1715,6 +1869,7 @@ export async function loadAndResolveConfig(
   // niwa.link.defaultが開き先の判断に使うため、niwaApiを作る前に確定させる
   const link = resolveLink(userConfig, diag);
   // niwa.tab.createのshellProfile解決に使うため、resolveKeybindingsより先にshellProfilesを確定させる
+  let commandTemplates: CommandTemplatesHandle | null = null;
   const niwaApi = createNiwaApi({
     workspaceManager,
     getShellProfiles: () => shellProfiles,
@@ -1728,6 +1883,12 @@ export async function loadAndResolveConfig(
     reloadConfig,
     openLinkExternal,
     getLinkOpen: () => link.open,
+    // テンプレートの解決はniwa APIを作った後なので、呼ばれた時点の解決結果を引く
+    openCommandTemplate: (id) => {
+      if (!commandTemplates?.has(id)) return false;
+      openCommandTemplate(id);
+      return true;
+    },
   });
   // niwa.keybind/niwa.onの登録はどちらもconfigファイルの実行（resolveKeybindings内）で起きる。
   // 登録内容の取り出しはその後でなければならない
@@ -1736,6 +1897,11 @@ export async function loadAndResolveConfig(
   const hoverButtonsHandle = createHoverButtons(
     resolveHoverButtons(userConfig, diag),
     niwaApi.niwa,
+  );
+  commandTemplates = createCommandTemplates(
+    resolveCommandTemplates(userConfig, diag),
+    niwaApi.niwa,
+    rememberedValues,
   );
   return {
     userConfigLoaded: userConfig !== null,
@@ -1752,6 +1918,7 @@ export async function loadAndResolveConfig(
     customViewHandlers: createCustomViewHandlers(customViews.handlersById, niwaApi.niwa),
     hoverButtons: hoverButtonsHandle.resolved(),
     hoverButtonsHandle,
+    commandTemplates,
     statusBar: resolveStatusBar(userConfig, diag),
     sidebarToolbar: resolveSidebarToolbar(userConfig, diag),
     niwa: niwaApi.niwa,
