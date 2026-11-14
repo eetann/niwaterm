@@ -46,7 +46,7 @@ niwa.keybind(
 
 ```ts
 niwa.keybind(
-  "l",
+  "g",
   async () => {
     const created = niwa.tab.create();
     if (!created) return;

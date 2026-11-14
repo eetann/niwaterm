@@ -172,6 +172,11 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   down: "focus-down",
   left: "focus-left",
   right: "focus-right",
+  // vimのhjklで矢印キーと同じ方向へ動かせるようにする
+  h: "focus-left",
+  j: "focus-down",
+  k: "focus-up",
+  l: "focus-right",
   // tmux標準のbind-key z resize-pane -Zを踏襲する
   z: "toggle-zoom",
   // tmuxのbind-key c new-window相当（Boardはtmuxのwindowに対応する）
@@ -179,7 +184,7 @@ const commonBindings: Partial<Record<SecondKeyString, KeybindAction>> = {
   // Tabの頭文字。shift+tのブラウザタブと対で覚えられる
   t: "new-tab",
   "shift+t": "new-browser-tab",
-  // ブラウザのCmd+L相当だが、lはhjklでのタイル移動に充てるユーザーが多いため避け、
+  // ブラウザのCmd+L相当だが、lはhjklでのタイル移動に使っているため避け、
   // URLの頭文字を取る
   u: "focus-url-bar",
   n: "next-tab",

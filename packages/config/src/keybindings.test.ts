@@ -279,9 +279,10 @@ describe("defaultKeybindings", () => {
     expect(defaultKeybindings.prefix).toBe("ctrl+b");
   });
 
-  test("UNASSIGNED_BINDING_ACTIONS以外の36個のアクションに1つずつ割り当てられている", () => {
+  // フォーカス移動だけは矢印キーとhjklの2通りを持つため、キー数はアクション数より4つ多い
+  test("UNASSIGNED_BINDING_ACTIONS以外の36個のアクションすべてにキーが割り当てられている", () => {
     const actions = Object.values(defaultKeybindings.bindings ?? {});
-    expect(actions.length).toBe(36);
+    expect(actions.length).toBe(40);
     expect(new Set(actions).size).toBe(36);
     for (const action of KEYBIND_ACTIONS) {
       if (UNASSIGNED_BINDING_ACTIONS.includes(action)) continue;
@@ -412,17 +413,17 @@ describe("compileKeybindings", () => {
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultKeybindingsはprefix1件・bindings36件・directなしでコンパイルできる", () => {
+  test("defaultKeybindingsはprefix1件・bindings40件・directなしでコンパイルできる", () => {
     const compiled = compileKeybindings(defaultKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(36);
+    expect(compiled.bindings.size).toBe(40);
     expect(compiled.direct.size).toBe(0);
   });
 
-  test("defaultWindowsKeybindingsはprefix1件・bindings36件・direct2件でコンパイルできる", () => {
+  test("defaultWindowsKeybindingsはprefix1件・bindings40件・direct2件でコンパイルできる", () => {
     const compiled = compileKeybindings(defaultWindowsKeybindings);
     expect(compiled.prefix).not.toBeNull();
-    expect(compiled.bindings.size).toBe(36);
+    expect(compiled.bindings.size).toBe(40);
     expect(compiled.direct.size).toBe(2);
   });
 

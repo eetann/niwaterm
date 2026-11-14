@@ -11,32 +11,32 @@ niwatermのキー操作は**prefix方式**で行う。prefixキー（デフォ�
 
 prefixキーのあとに押すキーの一覧。キーが割り当てられていない操作も、prefix + `:`で開くコマンドパレットから名前で探して実行できる。
 
-| キー                             | 動作                                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `d` / `shift+d`                  | タイルを左右 / 上下に分割する                                                                     |
-| `w`                              | フォーカス中のタブを閉じる（最後のタブならタイルごと閉じる）                                      |
-| `up` / `down` / `left` / `right` | 隣のタイルへフォーカスを移す                                                                      |
-| `z`                              | フォーカス中のタイルだけを画面いっぱいに広げる。もう一度押すと戻る                                |
-| `t` / `shift+t`                  | ターミナル / [ブラウザ](/niwaterm/browser/)のタブを開く                                           |
-| `n` / `p`                        | 次 / 前のタブへ切り替える                                                                         |
-| `r`                              | タブの名前を変える                                                                                |
-| `u`                              | ブラウザタブのURL欄へフォーカスする                                                               |
-| `c`                              | [Board](/niwaterm/boards/)を追加する                                                              |
-| `,`                              | Boardの名前を変える                                                                               |
-| `shift+n`                        | ワークスペースを追加する                                                                          |
-| `]` / `[`                        | 次 / 前のワークスペースへ切り替える                                                               |
-| `shift+w`                        | 新しいウィンドウを開く                                                                            |
-| `b`                              | サイドバーを表示する / 隠す                                                                       |
-| `shift+b`                        | サイドバーに出す[カスタムビュー](/niwaterm/custom-views/)を切り替える                             |
-| `` ` ``                          | ポップアップを開く / 閉じる                                                                       |
-| `f`                              | [ジャンプヒント](/niwaterm/jump-and-copy/#ジャンプヒント)を出す                                   |
-| `v`                              | [コピーモード](/niwaterm/jump-and-copy/#コピーモードvi風のキーボード選択)に入る                   |
-| `shift+up` / `shift+down`        | 前 / 次のプロンプトへ飛ぶ（[シェル統合](/niwaterm/shell-integration/)が必要）                     |
-| `pageup` / `pagedown`            | 1ページ分スクロールする                                                                           |
-| `home` / `end`                   | スクロールバックの先頭 / 最新の行へ飛ぶ                                                           |
-| `=` / `-` / `0`                  | 文字を大きく / 小さく / 元の大きさにする                                                          |
-| `:`                              | コマンドパレットを開く                                                                            |
-| `i`                              | 今の設定を表示する（[現在の設定値を確認する](/niwaterm/getting-started/#現在の設定値を確認する)） |
+| キー                                                    | 動作                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `d` / `shift+d`                                         | タイルを左右 / 上下に分割する                                                                     |
+| `w`                                                     | フォーカス中のタブを閉じる（最後のタブならタイルごと閉じる）                                      |
+| `h` / `j` / `k` / `l`、`up` / `down` / `left` / `right` | 隣のタイルへフォーカスを移す                                                                      |
+| `z`                                                     | フォーカス中のタイルだけを画面いっぱいに広げる。もう一度押すと戻る                                |
+| `t` / `shift+t`                                         | ターミナル / [ブラウザ](/niwaterm/browser/)のタブを開く                                           |
+| `n` / `p`                                               | 次 / 前のタブへ切り替える                                                                         |
+| `r`                                                     | タブの名前を変える                                                                                |
+| `u`                                                     | ブラウザタブのURL欄へフォーカスする                                                               |
+| `c`                                                     | [Board](/niwaterm/boards/)を追加する                                                              |
+| `,`                                                     | Boardの名前を変える                                                                               |
+| `shift+n`                                               | ワークスペースを追加する                                                                          |
+| `]` / `[`                                               | 次 / 前のワークスペースへ切り替える                                                               |
+| `shift+w`                                               | 新しいウィンドウを開く                                                                            |
+| `b`                                                     | サイドバーを表示する / 隠す                                                                       |
+| `shift+b`                                               | サイドバーに出す[カスタムビュー](/niwaterm/custom-views/)を切り替える                             |
+| `` ` ``                                                 | ポップアップを開く / 閉じる                                                                       |
+| `f`                                                     | [ジャンプヒント](/niwaterm/jump-and-copy/#ジャンプヒント)を出す                                   |
+| `v`                                                     | [コピーモード](/niwaterm/jump-and-copy/#コピーモードvi風のキーボード選択)に入る                   |
+| `shift+up` / `shift+down`                               | 前 / 次のプロンプトへ飛ぶ（[シェル統合](/niwaterm/shell-integration/)が必要）                     |
+| `pageup` / `pagedown`                                   | 1ページ分スクロールする                                                                           |
+| `home` / `end`                                          | スクロールバックの先頭 / 最新の行へ飛ぶ                                                           |
+| `=` / `-` / `0`                                         | 文字を大きく / 小さく / 元の大きさにする                                                          |
+| `:`                                                     | コマンドパレットを開く                                                                            |
+| `i`                                                     | 今の設定を表示する（[現在の設定値を確認する](/niwaterm/getting-started/#現在の設定値を確認する)） |
 
 今の割り当ては`niwa keybind list`で一覧できる。
 
@@ -95,14 +95,14 @@ niwa.keybind("alt+h", "focus-left", { noPrefix: true });
 
 ```ts
 keybindings: (niwa) => {
-  niwa.keybind("h", "resize-left", { repeat: true });
-  niwa.keybind("j", "resize-down", { repeat: true });
-  niwa.keybind("k", "resize-up", { repeat: true });
-  niwa.keybind("l", "resize-right", { repeat: true });
+  niwa.keybind("shift+h", "resize-left", { repeat: true });
+  niwa.keybind("shift+j", "resize-down", { repeat: true });
+  niwa.keybind("shift+k", "resize-up", { repeat: true });
+  niwa.keybind("shift+l", "resize-right", { repeat: true });
 },
 ```
 
-この例なら、`ctrl+b`→`h`→`h`→`j`のように続けて押せる。`repeat`を付けたキーどうしなら、別のキーに移っても続けられる。続けて押せる時間はデフォルトで500ミリ秒で、`niwa.repeatTimeout(300)`のように変えられる。
+この例なら、`ctrl+b`→`shift+h`→`shift+h`→`shift+j`のように続けて押せる。`repeat`を付けたキーどうしなら、別のキーに移っても続けられる。続けて押せる時間はデフォルトで500ミリ秒で、`niwa.repeatTimeout(300)`のように変えられる。
 
 ### コピーモードのキーを変える
 
