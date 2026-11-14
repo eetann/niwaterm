@@ -1,5 +1,7 @@
 // コマンドテンプレート（commandTemplates）の入力モーダル。上にでき上がるコマンドのプレビュー、
-// 下に`{{name}}`ごとの入力欄を並べ、Enterで貼る・Ctrl+Enterで貼って実行・Ctrl+Shift+Cでコピーする。
+// 下に`{{name}}`ごとの入力欄を並べ、Ctrl+Enterで貼る・Ctrl+Shift+Enterで貼って実行・Ctrl+Shift+Cでコピーする。
+// 素のEnterでは送らない。入力フォームのEnterは選択肢の一覧を開く・ボタンを押すといった欄ごとの
+// 操作に使われるもので、送る操作に充てると選び終える前に誤送信しやすいため。
 // 選択肢の欄は候補が多くても探せるよう、コマンドパレットと同じ絞り込み付きの一覧にする。
 import { Check, ChevronsUpDown, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -122,14 +124,9 @@ export function CommandTemplateDialog({
           e.stopPropagation();
           if (e.nativeEvent.isComposing || openPicker !== null) return;
           const mod = e.ctrlKey || e.metaKey;
-          // フォーカス中のボタン（コピー・閉じる等）でのEnterはそのボタンを押す操作として通す。
-          // 選択肢の欄のボタンだけは入力欄と同じ扱いにし、一覧はSpace・↓で開く
-          const target = e.target as HTMLElement;
-          const onPlainButton =
-            target.tagName === "BUTTON" && target.getAttribute("role") !== "combobox";
-          if (e.key === "Enter" && !e.shiftKey && !e.altKey && !(onPlainButton && !mod)) {
+          if (mod && e.key === "Enter" && !e.altKey) {
             e.preventDefault();
-            submit(mod ? "run" : "paste");
+            submit(e.shiftKey ? "run" : "paste");
           } else if (mod && e.shiftKey && e.key.toLowerCase() === "c") {
             e.preventDefault();
             submit("copy");
@@ -219,7 +216,7 @@ export function CommandTemplateDialog({
             disabled={template === null}
             onClick={() => submit("copy")}
           >
-            コピーして閉じる
+            コピー
             <Kbd>{modKeyLabel}+Shift+C</Kbd>
           </Button>
           <Button
@@ -229,11 +226,13 @@ export function CommandTemplateDialog({
             onClick={() => submit("run")}
           >
             貼って実行
-            <Kbd>{modKeyLabel}+Enter</Kbd>
+            <Kbd>{modKeyLabel}+Shift+Enter</Kbd>
           </Button>
           <Button size="sm" disabled={template === null} onClick={() => submit("paste")}>
             貼る
-            <Kbd className="bg-primary-foreground/20 text-primary-foreground">Enter</Kbd>
+            <Kbd className="bg-primary-foreground/20 text-primary-foreground">
+              {modKeyLabel}+Enter
+            </Kbd>
           </Button>
         </div>
       </DialogContent>
@@ -384,7 +383,21 @@ function OptionPicker({
         // グローバルkeydownリスナーへ届いてPTYへ入力が漏れる
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <Command>
+        <Command
+          // Tab・Shift+Tabで候補を上下に移す。一覧の中のフォーカスは絞り込み欄に留まったまま、
+          // cmdkが↑↓キーで選択中の候補を切り替える作りのため、同じキーイベントを送り直して任せる
+          onKeyDown={(e) => {
+            if (e.key !== "Tab" || e.nativeEvent.isComposing || e.ctrlKey || e.altKey || e.metaKey)
+              return;
+            e.preventDefault();
+            e.target.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: e.shiftKey ? "ArrowUp" : "ArrowDown",
+                bubbles: true,
+              }),
+            );
+          }}
+        >
           <CommandInput placeholder="絞り込む…" />
           <CommandList>
             <CommandEmpty>見つかりません</CommandEmpty>
