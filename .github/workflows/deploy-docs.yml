@@ -1,0 +1,50 @@
+# ドキュメントサイト（website/）をビルドしてGitHub Pagesへ公開する。
+# mainから出すのは、devで直した説明がリリース前のアプリと食い違ったまま公開されるのを避けるため
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      # ロゴをwebsite/の外（docs/brand/）から読んでいるので、差し替えたときも再デプロイする
+      - "docs/brand/**"
+      - ".github/workflows/deploy-docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開中のデプロイを途中で止めると壊れた状態が残りうるので、後続は待たせて先行分を完走させる
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: actions/configure-pages@v6.0.0
+      - name: Install dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
+      - name: Build
+        working-directory: website
+        run: bun run build
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
