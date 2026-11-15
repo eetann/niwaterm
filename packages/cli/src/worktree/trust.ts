@@ -27,9 +27,23 @@ import { createInterface } from "node:readline/promises";
 /** プロジェクトルート直下に置く設定ディレクトリ名（src/bun/project-config.tsと同じ値） */
 export const PROJECT_CONFIG_DIR_NAME = ".niwaterm";
 
-/** 承認記録の既定の置き場所 */
-export function defaultTrustDirPath(): string {
-  return join(homedir(), ".config", "niwaterm", "trusted-projects");
+/**
+ * 承認記録の既定の置き場所。ユーザーが書く設定ディレクトリ（~/.config/niwaterm/、dotfilesで
+ * 管理されうる）とは分け、CLIの状態の置き場所へ置く。アプリの永続化先（appSupportDir）を
+ * 使わないのは、WSLで動くCLIからはWindows側のアプリのディレクトリが見えないのと、
+ * アプリ名（wip/daily）ごとに分かれて承認を聞き直すことになるため
+ */
+export function defaultTrustDirPath(
+  env: Record<string, string | undefined> = process.env,
+  platform: NodeJS.Platform = process.platform,
+  home: string = homedir(),
+): string {
+  if (platform === "win32") {
+    const localAppData = env["LOCALAPPDATA"] || join(home, "AppData", "Local");
+    return join(localAppData, "niwaterm", "trusted-projects");
+  }
+  const stateHome = env["XDG_STATE_HOME"] || join(home, ".local", "state");
+  return join(stateHome, "niwaterm", "trusted-projects");
 }
 
 /** ディレクトリ配下のファイルを相対パス昇順で集める。node_modulesは巨大になりうるので見ない */

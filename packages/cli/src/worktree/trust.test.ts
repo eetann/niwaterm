@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureProjectTrust, projectTrustKey } from "./trust";
+import { defaultTrustDirPath, ensureProjectTrust, projectTrustKey } from "./trust";
 
 // 承認ストアの既定はhomedir()配下。homedir()はHOME環境変数を見ないため、環境変数では差し替えられない。
 // テストからは必ずtrustDirを明示して実ホームを汚さないようにする
@@ -102,5 +102,25 @@ describe("ensureProjectTrust", () => {
   test("未承認かつ非対話ならdeclined（ハングさせない）", async () => {
     await writeProjectConfig("export default {};\n");
     expect(await ensureProjectTrust(repoRoot, { assumeTrusted: false, trustDir })).toBe("declined");
+  });
+});
+
+describe("defaultTrustDirPath", () => {
+  test("Linux・macOSはXDG_STATE_HOME配下", () => {
+    expect(defaultTrustDirPath({ XDG_STATE_HOME: "/state" }, "linux", "/home/u")).toBe(
+      join("/state", "niwaterm", "trusted-projects"),
+    );
+  });
+
+  test("XDG_STATE_HOMEが無ければ~/.local/state配下", () => {
+    expect(defaultTrustDirPath({}, "darwin", "/Users/u")).toBe(
+      join("/Users/u", ".local", "state", "niwaterm", "trusted-projects"),
+    );
+  });
+
+  test("WindowsはLOCALAPPDATA配下", () => {
+    expect(
+      defaultTrustDirPath({ LOCALAPPDATA: "C:/Users/u/AppData/Local" }, "win32", "C:/Users/u"),
+    ).toBe(join("C:/Users/u/AppData/Local", "niwaterm", "trusted-projects"));
   });
 });
