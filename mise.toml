@@ -12,7 +12,7 @@
 # NIWATERM_WIP_CONFIG_DIRはniwaterm-wipにだけ読ませる設定ディレクトリ(niwaterm.config.ts等の置き場)。
 # 普段遣いの設定を書き換えずに設定まわりを検証するための口で、未設定なら従来どおり
 # 両方が~/.config/niwaterm/を読む。アプリはWindows実機で動くためWindows側のパスで書き、
-# 中身はniwaterm.config.ts・node_modules込みで一式必要(`niwa init`で雛形を作れる)。
+# 中身はniwaterm.config.tsがあればよい(`niwa init`で雛形を作れる)。
 #
 # niwaterm-wip（開発中ビルド）はgtrで作成した追加のgit worktree（devブランチ）で、
 # niwaterm-daily（普段遣いビルド）はこのリポジトリ本体（mainブランチ、gitの
@@ -180,7 +180,7 @@ fi
 WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
 TARGET="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME"
 rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude 'build' --exclude 'vendor' \
-  --exclude '.hutch' --exclude '.tailwind-build' \
+  --exclude '.hutch' --exclude '.tailwind-build' --exclude '.config-types-build' \
   ./ "$TARGET/"
 echo "synced to $TARGET"
 # vendor/はghosttyソース全体(数百MB)を含むため丸ごとの同期対象からは除外しているが、

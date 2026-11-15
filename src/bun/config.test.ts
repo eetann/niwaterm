@@ -305,6 +305,51 @@ describe("loadUserConfig", () => {
     expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 18 } });
   });
 
+  test("@niwaterm/configはnode_modulesが無くてもアプリ自身のモジュールへ解決される", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    await writeFile(
+      join(dir, "keys.ts"),
+      `export { defaultAppearance } from "@niwaterm/config";\n`,
+    );
+    await writeFile(
+      entryPath,
+      [
+        `import { defineConfig } from "@niwaterm/config";`,
+        `import { defaultAppearance } from "./keys.ts";`,
+        `export default defineConfig({ appearance: { fontSize: defaultAppearance.fontSize + 1 } });`,
+      ].join("\n"),
+    );
+    expect((await loadUserConfig(entryPath)).config).toEqual({
+      appearance: { fontSize: defaultAppearance.fontSize + 1 },
+    });
+  });
+
+  test("ユーザー側のnode_modulesに古い@niwaterm/configがあってもアプリ自身のモジュールが優先される", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    const pkgDir = join(dir, "node_modules", "@niwaterm", "config");
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "@niwaterm/config", main: "index.ts" }),
+    );
+    await writeFile(
+      join(pkgDir, "index.ts"),
+      `export const defineConfig = () => ({ stale: true });\n`,
+    );
+    await writeFile(
+      entryPath,
+      `import { defineConfig } from "@niwaterm/config";\nexport default defineConfig({ appearance: { fontSize: 15 } });\n`,
+    );
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 15 } });
+  });
+
+  test("設定ディレクトリにリンク切れのシンボリックリンクがあっても読み込める", async () => {
+    const entryPath = join(dir, "niwaterm.config.ts");
+    await symlink(join(dir, "missing.json"), join(dir, "package.json"));
+    await writeFile(entryPath, `export default { appearance: { fontSize: 19 } };\n`);
+    expect((await loadUserConfig(entryPath)).config).toEqual({ appearance: { fontSize: 19 } });
+  });
+
   test("エントリファイル自体がシンボリックリンクでも解決できる（dotfiles管理でniwaterm.config.ts等をリンクしている場合）", async () => {
     const realPath = join(dir, "real.config.ts");
     const entryPath = join(dir, "niwaterm.config.ts");

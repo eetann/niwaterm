@@ -57,11 +57,13 @@ import { captureUrlScreenshot } from "./browser-screenshot";
 import { readClipboardText, setClipboardWriteListener, writeClipboardText } from "./clipboard";
 import {
   cleanupConfigImportDir,
+  configDirPath,
   configFilePath,
   decideConfigLoadOutcome,
   loadAndResolveConfig,
 } from "./config";
 import type { ConfigDiagnostic } from "./config-diagnostics";
+import { findConfigTypesBuildDir, syncConfigTypes } from "./config-module";
 import { buildConfigSummary, type ConfigSummary } from "./config-summary";
 import { watchConfigFile } from "./config-watcher";
 import type { CustomViewCallResult, CustomViewHandlersHandle } from "./custom-view-handlers";
@@ -1243,7 +1245,24 @@ async function refreshConfig(): Promise<void> {
   windowManager.refreshBoardAutoNames();
 }
 
+// エディタ向けの型の同期は設定の読み込みに関係しないので、起動を待たせない
+void syncConfigTypesOnStartup();
 await refreshConfig();
+
+async function syncConfigTypesOnStartup(): Promise<void> {
+  const buildDir = findConfigTypesBuildDir();
+  if (!buildDir) {
+    console.log("[bun] config types not found, skipped syncing (run preBuild)");
+    return;
+  }
+  try {
+    if (await syncConfigTypes(configDirPath(), buildDir)) {
+      console.log("[bun] config types synced");
+    }
+  } catch (err) {
+    console.log(`[bun] failed to sync config types: ${String(err)}`);
+  }
+}
 
 /**
  * 起動時レイアウト。restoreMode: "layout"のBoardは、保存した骨格ではなく

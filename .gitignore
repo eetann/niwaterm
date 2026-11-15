@@ -31,3 +31,6 @@ storybook-static/
 
 # ドキュメントサイト（Astro）が生成する型定義・キャッシュ。ビルド成果物のwebsite/dist/は上のdist/で除外済み
 /website/.astro/
+
+# scripts/build-config-types.ts(preBuild)が生成する、ユーザー設定ファイル向けの型定義
+/.config-types-build/

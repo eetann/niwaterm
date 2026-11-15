@@ -42,6 +42,10 @@ describe("shouldTriggerReload", () => {
       shouldTriggerReload("node_modules/@niwaterm/config/index.ts", "niwaterm.config.ts"),
     ).toBe(false);
   });
+
+  test("アプリが書き出す型定義ディレクトリ配下の変更はfalse", () => {
+    expect(shouldTriggerReload(".niwaterm-types/niwaterm.d.ts", "niwaterm.config.ts")).toBe(false);
+  });
 });
 
 describe("watchConfigFile", () => {

@@ -1,8 +1,0 @@
-{
-  "name": "niwaterm-user-config",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@niwaterm/config": "file:/path/to/niwaterm/packages/config"
-  }
-}

@@ -5,6 +5,7 @@
 
 import { watch } from "node:fs";
 import { basename, dirname } from "node:path";
+import { CONFIG_TYPES_DIR_NAME } from "./config-module";
 
 export interface ConfigWatcher {
   close(): void;
@@ -24,6 +25,8 @@ export function shouldTriggerReload(filename: string | null, target: string): bo
   if (filename === target) return true;
   const segments = filename.split(/[/\\]/);
   if (segments.includes("node_modules")) return false;
+  // アプリ自身が書き出す型定義。拾うと書き出すたびに設定の再読み込みが走る
+  if (segments.includes(CONFIG_TYPES_DIR_NAME)) return false;
   return CONFIG_SOURCE_EXTENSIONS.some((ext) => filename.endsWith(ext));
 }
 

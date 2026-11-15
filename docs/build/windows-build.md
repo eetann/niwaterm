@@ -313,22 +313,15 @@ NIWATERM_WIP_CONFIG_DIR = 'C:\Users\<ユーザー名>\.config\niwaterm-wip'
 アプリはWindows実機で動くためWSL側のパスは見えず、`\\wsl.localhost\...`を指すリンクを置いても
 ファイル監視が変更を拾えずホットリロードが効かない。
 
-中身はWindows側で用意する。`%USERPROFILE%\.config\niwaterm\`の丸ごとコピーでは済まない
-（`node_modules\@niwaterm\config`はリポジトリの`packages/config`を指すジャンクションのため）ので、
-同じ実体を指すジャンクションを張り直す。
+中身はWindows側で用意する。`NIWATERM_CONFIG_DIR`を付けて`niwa init`を実行すると、
+`niwaterm.config.ts`・`tsconfig.json`の雛形と補完用の型定義（`.niwaterm-types/`）ができる。
+`node_modules`は要らない（`@niwaterm/config`はアプリ自身が解決する）。
 
 ```powershell
-# ジャンクションの現在の向き先を確認してからTargetに使う
-Get-ChildItem $env:USERPROFILE\.config\niwaterm\node_modules\@niwaterm | Select-Object Name,Target
-
-$dst = "$env:USERPROFILE\.config\niwaterm-wip"
-New-Item -ItemType Directory -Force -Path "$dst\node_modules\@niwaterm"
-Copy-Item "$env:USERPROFILE\.config\niwaterm\package.json" $dst
-Copy-Item "$env:USERPROFILE\.config\niwaterm\tsconfig.json" $dst
-New-Item -ItemType Junction -Path "$dst\node_modules\@niwaterm\config" -Target <上で確認した向き先>
+$env:NIWATERM_CONFIG_DIR = "$env:USERPROFILE\.config\niwaterm-wip"; niwa init
 ```
 
-あとは`niwaterm.config.ts`を置けば起動時に読まれる。実際に読まれている設定ディレクトリは
+あとは`niwaterm.config.ts`を書き換えれば起動時に読まれる。実際に読まれている設定ディレクトリは
 `niwa-dev config show`の先頭行（`config: <パス>`）で確認できる。
 
 ### タスクバーから起動する

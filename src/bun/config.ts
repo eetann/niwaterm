@@ -97,6 +97,7 @@ import {
 } from "@niwaterm/config";
 import { APP_VARIANT } from "./app-variant.generated";
 import { resolveBackgroundImage } from "./background-image";
+import { CONFIG_TYPES_DIR_NAME, registerConfigModule } from "./config-module";
 import {
   type ConfigDiagnostic,
   type ConfigDiagnostics,
@@ -210,6 +211,7 @@ const previousImportDirs = new Map<string, string>();
 export async function importFreshConfig(path: string): Promise<unknown> {
   const dir = dirname(path);
   const entryName = basename(path);
+  registerConfigModule();
   const importDir = await mkdtemp(join(tmpdir(), "niwaterm-config-"));
   try {
     await copyConfigSources(dir, importDir);
@@ -238,13 +240,16 @@ async function copyConfigSources(srcDir: string, destDir: string): Promise<void>
     entries.map(async (entry) => {
       const srcPath = join(srcDir, entry.name);
       const destPath = join(destDir, entry.name);
+      if (entry.name === CONFIG_TYPES_DIR_NAME) return;
       if (entry.name === "node_modules") {
         await symlink(srcPath, destPath, "dir");
         return;
       }
-      const isDir = entry.isSymbolicLink()
-        ? (await stat(srcPath)).isDirectory()
-        : entry.isDirectory();
+      // リンク切れ（設定と無関係なファイルのリンク先が消えた場合など）は読み飛ばす。
+      // 1つでもstatで例外を投げると、設定全体が読めなくなるため
+      const linkTarget = entry.isSymbolicLink() ? await stat(srcPath).catch(() => null) : null;
+      if (entry.isSymbolicLink() && !linkTarget) return;
+      const isDir = linkTarget ? linkTarget.isDirectory() : entry.isDirectory();
       if (isDir) {
         await mkdir(destPath, { recursive: true });
         await copyConfigSources(srcPath, destPath);

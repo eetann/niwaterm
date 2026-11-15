@@ -39,7 +39,9 @@ niwatermの設定は`~/.config/niwaterm/niwaterm.config.ts`にTypeScriptで書�
 niwa init
 ```
 
-`~/.config/niwaterm/`に`niwaterm.config.ts`と、補完に必要な`package.json`・`tsconfig.json`ができ、必要なパッケージのインストールまで済む。すでにあるファイルは上書きしないので、何度実行しても大丈夫。
+`~/.config/niwaterm/`に`niwaterm.config.ts`と`tsconfig.json`ができる。すでにあるファイルは上書きしないので、何度実行しても大丈夫。
+
+補完に使う型定義は、niwatermが`.niwaterm-types/`に置く。niwatermを更新すると、次に起動したときに型定義も新しくなる。`process.platform`のようなBunやNode.jsのAPIにも補完が出る。`package.json`を作ったり、パッケージをインストールしたりする必要はない。
 
 できた`niwaterm.config.ts`には、キーバインドと見た目の設定例が入っている（抜粋）。
 
@@ -66,13 +68,23 @@ export default defineConfig({
 
 この例では、prefixキー（デフォルトは`ctrl+b`）のあとに`d`でタイルを上下に分割し、`g`でlazygitをポップアップで開く。フォントサイズと文字色・背景色も変えている。書ける内容は[キーバインド](/niwaterm/keybindings/)や[見た目](/niwaterm/appearance/)などの各ページで説明している。
 
-設定ディレクトリをdotfilesで管理する場合、`node_modules/`はGitの管理から外しておく。
+設定ディレクトリをdotfilesで管理していても、`.niwaterm-types/`はGitの管理から外れるようにしてあるので、除外の設定は必要ない。
+
+### `package.json`がある設定ディレクトリから移る
+
+以前の`niwa init`で作った設定ディレクトリには、`package.json`と`node_modules/`がある。これらはもう使わないので消してよい。`tsconfig.json`は、次の1行に書き換える。
+
+```json
+{ "extends": "./.niwaterm-types/tsconfig.json" }
+```
+
+ほかのnpmパッケージを設定ファイルからimportしている場合は、`package.json`と`node_modules/`を残しておく。
 
 ### 別のディレクトリの設定で起動する
 
 環境変数`NIWATERM_CONFIG_DIR`に絶対パスを入れて起動すると、`~/.config/niwaterm/`の代わりにそのディレクトリの設定を読む。普段の設定を変えずに別の設定を試したいときに使う。
 
-ディレクトリごと切り替わるので、`niwaterm.config.ts`だけでなく`package.json`や`node_modules/`も一式そろえる。雛形は`NIWATERM_CONFIG_DIR=<パス> niwa init`で作れる。この環境変数は、niwatermが開いたタブのシェルには引き継がれない。
+雛形は`NIWATERM_CONFIG_DIR=<パス> niwa init`で作れる。この環境変数は、niwatermが開いたタブのシェルには引き継がれない。
 
 ## ホットリロード
 

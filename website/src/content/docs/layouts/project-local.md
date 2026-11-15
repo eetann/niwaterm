@@ -30,11 +30,22 @@ export default {
 
 プリセットの書き方は、`niwaterm.config.ts`の`layouts`と同じ。違うのは次の3点。
 
-- `defineConfig`は使わず、オブジェクトをそのまま`export default`する。`import type`の行は補完のためのもので、リポジトリに`@niwaterm/config`を入れていなくても動く
+- `defineConfig`は使わず、オブジェクトをそのまま`export default`する。`@niwaterm/config`からのimportは、リポジトリにパッケージを入れていなくても動く
 - タブの`cwd`は、リポジトリの一番上（`.niwaterm/`がある場所）からの相対パスで書ける。`cwd`を省略したタブも、そこで開く
 - `niwaterm.config.ts`に同じ名前のプリセットがあるときは、`.niwaterm/config.ts`のほうが使われる
 
 どちらのプリセットが使われるかは、`niwa layout list`の2列目で確かめられる。`[project: <パス>]`ならリポジトリの、`[global]`なら`niwaterm.config.ts`のプリセット。
+
+## 補完を使う
+
+エディタで補完を使うには、ファイルの先頭に、設定ディレクトリの型定義を指す1行を書く。パスは絶対パスにする。`~`は使えない。
+
+```ts
+/// <reference path="/home/<ユーザー名>/.config/niwaterm/.niwaterm-types/niwaterm.d.ts" />
+import type { NiwatermProjectConfig } from "@niwaterm/config";
+```
+
+型定義は設定ディレクトリの`.niwaterm-types/`にある。niwatermを起動したときと、`niwa init`を実行したときに置かれる。
 
 ## どこの`.niwaterm/`が使われるか
 
@@ -46,6 +57,6 @@ gitのワークツリーで作業しているときに、そのワークツリ�
 
 ## 信頼の確認
 
-プロジェクトローカルのプリセットを[起動時レイアウト](/niwaterm/layouts/#起動時レイアウト)にするときは、確認が出る。起動時レイアウトにすると、niwatermを起動するたびにそのリポジトリの`.niwaterm/config.ts`が読み込まれ、プリセットの`command`が実行される。cloneしてきたリポジトリなら、書かれているコマンドが勝手に動くことになるので、信頼できるリポジトリでだけ許可する。
+プロジェクトローカルのプリセットを[起動時レイアウト](/niwaterm/layouts/#起動時レイアウト)にするときは、確認が出る。起動時レイアウトにすると、niwatermを起動するたびにそのリポジトリの`.niwaterm/config.ts`が読み込まれ、プリセットの`command`が実行される。cloneしてきたリポジトリなら、書かれているコマンドが勝手に動く。信頼できるリポジトリでだけ許可する。
 
 `worktree new` / `worktree open`の`--layout`で開いたときは、ここの確認は出ない。代わりにワークツリー側の確認（[プロジェクトローカル設定の承認](/niwaterm/worktrees/hooks/#プロジェクトローカル設定の承認)）が出る。
