@@ -9,9 +9,6 @@ description: ドキュメントサイト・README・告知画像などアプリ�
 アプリの外側（ドキュメントサイト・README・スクリーンショット・告知画像）で niwaterm を見せるときの決まりごと。
 アプリ内のターミナル配色はユーザーが設定で変えるものなので、このガイドの対象外。
 
-同じ内容を色見本・カバー付きで見られる Design System（Claude の Artifact、非公開）もある:
-https://claude.ai/artifact/Vzde6qLySoJFHncz7Kb1qo
-
 ## コンセプト
 
 niwa は「庭」。ワークスペース・タイル・タブを自分で区切り、TypeScript の設定で育てていく環境を、手入れの行き届いた庭に重ねている。
