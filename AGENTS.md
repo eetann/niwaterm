@@ -79,5 +79,5 @@ docs/build/windows-build.md、既知の不具合は docs/known-issues/ 参照。
 
 ## 既知の未対応（roadmap参照）
 
-- 描画後のHTMLはsrc/mainview/index.ts fixGlyphsで補正している。全角文字は `<span class="wide">` ラップで2セル幅を強制（絵文字のグラフェムクラスタ＝結合絵文字は未対応）、罫線・ブロック文字は `<span class="cell-glyph">` ラップ＋transformで行の高さいっぱいへ引き伸ばす（フォントのグリフのままだと行間の分だけ上下に隙間ができるため。判定と変換の計算はsrc/mainview/cell-glyph.ts）
+- 描画後のHTMLはsrc/mainview/index.ts fixGlyphsで補正している。全角文字やZWJ連結の絵文字は `<span class="wide">` ラップで2セル幅を強制（セルの区切りはsrc/shared/wide-char.tsのsplitCellsがlibghostty-vtのグラフェムクラスタモードに合わせて決める）、罫線・ブロック文字は `<span class="cell-glyph">` ラップ＋transformで行の高さいっぱいへ引き伸ばす（フォントのグリフのままだと行間の分だけ上下に隙間ができるため。判定と変換の計算はsrc/mainview/cell-glyph.ts）
 - 描画中（連続出力中）のinnerHTML置換でマウス選択が消える（アイドル時の選択コピーは動く）

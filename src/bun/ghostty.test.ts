@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createGhosttyTerminal, type SemanticPromptEvent } from "./ghostty";
+import { splitCells } from "../shared/wide-char";
 
 const encoder = new TextEncoder();
 
@@ -380,6 +381,42 @@ describe("onRenderHold", () => {
       term.releaseSyncOutput();
       term.write(encoder.encode("\x1b[?2026h"));
       expect(events).toEqual([true, true]);
+    } finally {
+      term.free();
+    }
+  });
+});
+
+describe("グラフェムクラスタ", () => {
+  // webview側のsplitCellsがlibghostty-vtのセル割り当てと同じ桁数を数えるかを、
+  // 行頭の"a"の後ろに置いたときのカーソル位置で確かめる
+  test.each([
+    ["ZWJ連結", "🙇‍♂️"],
+    ["家族のZWJ連結", "👨‍👩‍👧"],
+    ["VS16で絵文字表示にした記号", "❤️"],
+    ["VS15でテキスト表示にした絵文字", "☺︎"],
+    ["肌の色の修飾子", "👍🏽"],
+    ["国旗", "🇯🇵"],
+    ["キーキャップ", "1️⃣"],
+    ["サブディビジョン旗", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
+    ["NFDの濁点", "ディ"],
+    ["結合アクセント", "é"],
+  ])("%s（%s）の桁数がsplitCellsと一致する", (_, text) => {
+    const term = createGhosttyTerminal(40, 3);
+    try {
+      term.write(encoder.encode(`a${text}`));
+      const width = splitCells(text).reduce((sum, cell) => sum + cell.width, 0);
+      expect(term.cursor().x).toBe(1 + width);
+    } finally {
+      term.free();
+    }
+  });
+
+  test("RISの後もZWJ連結を1つのセルに収める", () => {
+    const term = createGhosttyTerminal(40, 3);
+    try {
+      term.write(encoder.encode("\x1bca🙇‍♂️"));
+      expect(term.cursor().x).toBe(3);
     } finally {
       term.free();
     }

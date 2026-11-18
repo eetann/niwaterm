@@ -132,7 +132,7 @@ import {
   resolvePopupDrag,
   toPercentGeometry,
 } from "../shared/popup-geometry";
-import { isWideChar, splitCells } from "../shared/wide-char";
+import { isCellJoiner, isWideChar, splitCells } from "../shared/wide-char";
 import type { CommandTemplateAction, PreparedCommandTemplate } from "../shared/command-template";
 
 const screenEl = document.getElementById("screen") as HTMLDivElement;
@@ -1400,6 +1400,7 @@ function fixGlyphs(root: HTMLElement) {
   // シェード文字は網掛けグリフをベタ塗りへ差し替えるのが目的なので、行の高さとは無関係に常に要る
   const needsFix = (cp: number) =>
     isWideChar(cp) ||
+    isCellJoiner(cp) ||
     shadeAlphaPercent(cp) !== null ||
     (fillCellGlyphs && isCellGlyphChar(cp)) ||
     isCellWidthMismatch(cp);
@@ -1442,8 +1443,9 @@ function fixGlyphs(root: HTMLElement) {
       frag.appendChild(span);
       shadeRun = "";
     };
-    // 結合文字（濁点等）は基底文字と同じspanへ入れる。別に分けると.wideの2セル幅の外へはみ出す
-    for (const { text: ch } of splitCells(node.data)) {
+    // 結合文字（濁点等）やZWJで連なる絵文字は基底文字と同じspanへ入れる。別に分けると
+    // .wideの2セル幅の外へはみ出し、ZWJ連結は合字にならず部品の絵文字が並んで見える
+    for (const { text: ch, width } of splitCells(node.data)) {
       const cp = ch.codePointAt(0) ?? 0;
       const alpha = shadeAlphaPercent(cp);
       if (alpha !== null) {
@@ -1462,7 +1464,7 @@ function fixGlyphs(root: HTMLElement) {
         continue;
       }
       flushCellRun();
-      if (isWideChar(cp)) {
+      if (width === 2) {
         flushNarrow();
         const span = document.createElement("span");
         span.className = "wide";

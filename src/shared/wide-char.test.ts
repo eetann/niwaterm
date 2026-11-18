@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { charWidth, isWideChar, splitCells } from "./wide-char";
+import { isWideChar, splitCells } from "./wide-char";
 
 describe("isWideChar", () => {
   test.each([
@@ -54,18 +54,6 @@ describe("isWideChar", () => {
   });
 });
 
-describe("charWidth", () => {
-  test.each([
-    ["a", 1],
-    ["あ", 2],
-    ["゙", 0],
-    ["́", 0],
-    ["️", 0],
-  ])("charWidth(%p) -> %p", (ch, expected) => {
-    expect(charWidth(ch)).toBe(expected as 0 | 1 | 2);
-  });
-});
-
 describe("splitCells", () => {
   test("NFDの濁点は基底文字と同じセルにまとめる", () => {
     expect(splitCells("ディスプレイ")).toEqual([
@@ -90,5 +78,31 @@ describe("splitCells", () => {
       { text: "゙", width: 1 },
       { text: "a", width: 1 },
     ]);
+  });
+
+  test("ZWJで連なる絵文字は1つの幅2のセルにまとめる", () => {
+    expect(splitCells("🙇‍♂️a")).toEqual([
+      { text: "🙇‍♂️", width: 2 },
+      { text: "a", width: 1 },
+    ]);
+  });
+
+  test("VS16が付いた記号は幅2、VS15が付いた絵文字は幅1にする", () => {
+    expect(splitCells("❤️☺︎")).toEqual([
+      { text: "❤️", width: 2 },
+      { text: "☺︎", width: 1 },
+    ]);
+  });
+
+  test("地域指示記号は2つずつ国旗としてまとめる", () => {
+    expect(splitCells("🇯🇵🇺🇸🇯")).toEqual([
+      { text: "🇯🇵", width: 2 },
+      { text: "🇺🇸", width: 2 },
+      { text: "🇯", width: 1 },
+    ]);
+  });
+
+  test("肌の色の修飾子は直前の絵文字と同じセルにまとめる", () => {
+    expect(splitCells("👍🏽")).toEqual([{ text: "👍🏽", width: 2 }]);
   });
 });

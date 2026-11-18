@@ -6,7 +6,7 @@
 // 位置の情報だけをこちらで持ちオーバーレイとして重ねる（copy-overlayと同じ発想）。
 
 import type { ResolvedLinkRule } from "@niwaterm/config";
-import { charWidth } from "../shared/wide-char";
+import { splitCells } from "../shared/wide-char";
 
 export interface CompiledLinkRule {
   /** gフラグ付きの正規表現。execを繰り返して行内の全マッチを列挙する */
@@ -49,12 +49,12 @@ function columnByIndex(line: string): number[] {
   const cols: number[] = Array.from({ length: line.length + 1 }, () => 0);
   let index = 0;
   let col = 0;
-  for (const char of line) {
-    // サロゲートペアの後半も先頭と同じ桁にしておく（マッチ境界がペアの途中へ来ることはないが、
-    // 添字が欠けると以降の参照がundefinedになるため埋める）
-    for (let k = 0; k < char.length; k++) cols[index + k] = col;
-    index += char.length;
-    col += charWidth(char);
+  for (const { text, width } of splitCells(line)) {
+    // セル内の後続の文字（サロゲートペアの後半・結合文字・ZWJ連結の残り）も先頭と同じ桁にしておく
+    // （添字が欠けると以降の参照がundefinedになるため埋める）
+    for (let k = 0; k < text.length; k++) cols[index + k] = col;
+    index += text.length;
+    col += width;
   }
   cols[line.length] = col;
   return cols;

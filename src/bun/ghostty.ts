@@ -263,6 +263,7 @@ const OPT_KITTY_IMAGE_STORAGE_LIMIT = 15;
 const OPT_KITTY_IMAGE_MEDIUM_FILE = 16;
 const OPT_KITTY_IMAGE_MEDIUM_TEMP_FILE = 17;
 const OPT_SEMANTIC_PROMPT = 42;
+const OPT_MODE_DEFAULT = 33;
 const OPT_MODE = 34;
 const OPT_RENDER_HOLD = 41;
 
@@ -323,6 +324,8 @@ function replyClipboardWrite(writePtr: Pointer, result: number): void {
 const MODE_BRACKETED_PASTE = 2004;
 /** 同期出力（DEC 2026） */
 const MODE_SYNC_OUTPUT = 2026;
+/** グラフェムクラスタ単位でのセル割り当て（DEC 2027） */
+const MODE_GRAPHEME_CLUSTER = 2027;
 // マウスレポートの有効化モード（トラッキング種別）と報告フォーマット。
 // libghostty-vt側ではどちらも単一のenumへ畳まれるため、ここでは
 // 「エンコーダの設定を取り直す必要があるか」の判定にだけ使う
@@ -593,6 +596,16 @@ export function createGhosttyTerminal(
   // 頭打ちになる（詳細: docs/known-issues/libghostty-vt-scrollback-byte-limit.md）
   vt.symbols.ghostty_terminal_set(term, OPT_SCROLLBACK_MAX_BYTES, null);
   setScrollbackMaxLines(maxScrollback);
+
+  // 🙇‍♂️のようなZWJ連結や❤️（異体字セレクタ付き）を1つのセルへ収める。libghostty-vtの既定はオフで、
+  // オフのままだとコードポイントごとにセルを割り当てるため、グラフェム単位で幅を数えるTUIと
+  // 桁がずれる。RIS・DECSTRで戻らないよう現在値ではなく既定値として設定する（既定値の設定は
+  // 現在値も書き換える）。webview側のセル分割（src/shared/wide-char.tsのsplitCells）は
+  // この割り当てを前提にしている
+  const graphemeModeConfig = new Uint8Array(4);
+  new DataView(graphemeModeConfig.buffer).setUint16(0, MODE_GRAPHEME_CLUSTER, true);
+  graphemeModeConfig[2] = 1;
+  vt.symbols.ghostty_terminal_set(term, OPT_MODE_DEFAULT, ptr(graphemeModeConfig));
 
   // カーソル形状（DECSCUSR）読み取り専用のrender state。行データ等は一切使わない
   const renderStateHandle = new BigUint64Array(1);
