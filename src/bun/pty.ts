@@ -3,6 +3,7 @@
 // WindowsではBun 1.3.14+が必要（ConPTY実装がそのバージョンから入った）。
 
 import { homedir } from "node:os";
+import { defaultMacLang, fillMissingLocale } from "./macos-locale";
 import { findNativeArtifact } from "./native-artifacts";
 import { applyWslCdArg, windowsPathToWslMountPath } from "./wsl-cwd";
 
@@ -245,6 +246,7 @@ export function buildEnv(
   const env: Record<string, string> = { ...process.env, TERM: term, TERM_PROGRAM: "niwaterm" };
   for (const key of INHERITED_TERMINAL_ENV_KEYS) delete env[key];
   Object.assign(env, extraEnv);
+  if (process.platform === "darwin") fillMissingLocale(env, defaultMacLang());
   if (isWindows && extraEnv && cmd[0]?.toLowerCase() === "wsl.exe") {
     const existing = env["WSLENV"]?.split(":").filter((v) => v.length > 0) ?? [];
     env["WSLENV"] = [...new Set([...existing, ...Object.keys(extraEnv)])].join(":");
