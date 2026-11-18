@@ -119,6 +119,54 @@ function countFocusedTabs(node: LayoutNodeConfig): number {
   return countFocusedTabs(node.first) + countFocusedTabs(node.second);
 }
 
+const TAB_REF_NAME = /^[A-Za-z0-9_-]+$/;
+const TAB_REF_PLACEHOLDER = /\{\{tab:([^}]*)\}\}/g;
+
+/** commandに書かれた`{{tab:<ref>}}`のref一覧 */
+function tabRefsIn(command: string | undefined): string[] {
+  if (command === undefined) return [];
+  return [...command.matchAll(TAB_REF_PLACEHOLDER)].map((match) => match[1] ?? "");
+}
+
+/** プリセット内の全タブを、buildNodeがタブを作る順（first→second、tabsは添字順）で並べる */
+function listTabsInBuildOrder(
+  node: LayoutNodeConfig,
+  path: string,
+): { path: string; tab: LayoutTabConfig }[] {
+  if (node.kind === "tile") {
+    return node.tabs.map((tab, i) => ({ path: `${path}.tabs[${i}]`, tab }));
+  }
+  return [
+    ...listTabsInBuildOrder(node.first, `${path}.first`),
+    ...listTabsInBuildOrder(node.second, `${path}.second`),
+  ];
+}
+
+// `{{tab:<ref>}}`はタブを作った時点で置き換えるため、参照先は作る順で先にあるタブに限る。
+// closeOnExitのタブは作る前にcommandを確定させる必要があり、後ろのタブや自分自身のtabIdは
+// まだ存在しない
+function validateTabRefs(layout: LayoutNodeConfig): string | null {
+  const tabs = listTabsInBuildOrder(layout, "layout");
+  const allRefs = new Set(tabs.flatMap(({ tab }) => (tab.ref === undefined ? [] : [tab.ref])));
+  const definedRefs = new Set<string>();
+  for (const { path, tab } of tabs) {
+    for (const ref of tabRefsIn(tab.command)) {
+      if (definedRefs.has(ref)) continue;
+      if (allRefs.has(ref)) {
+        return `${path}: {{tab:${ref}}} must refer to a tab defined earlier in the preset`;
+      }
+      return `${path}: {{tab:${ref}}} refers to an undefined ref`;
+    }
+    if (tab.ref === undefined) continue;
+    if (!TAB_REF_NAME.test(tab.ref)) {
+      return `${path}: ref may contain only letters, digits, "-" and "_"`;
+    }
+    if (definedRefs.has(tab.ref)) return `${path}: duplicate ref "${tab.ref}"`;
+    definedRefs.add(tab.ref);
+  }
+  return null;
+}
+
 /** 検証のみ行い、ワークスペースには一切触れない。エラーメッセージ、問題なければnullを返す */
 export function validateLayoutPreset(
   preset: LayoutPreset,
@@ -129,7 +177,7 @@ export function validateLayoutPreset(
   if (countFocusedTabs(preset.layout) > 1) {
     return "at most 1 tab may set focus:true";
   }
-  return null;
+  return validateTabRefs(preset.layout);
 }
 
 // ---- 組み立て ----
@@ -141,6 +189,8 @@ interface BuildContext {
   focusTarget: { tileId: TileId; tabId: TabId } | null;
   presetResume: boolean | undefined;
   resume: LayoutResumeContext | undefined;
+  /** 作成済みタブのref→tabId。commandの`{{tab:<ref>}}`の置き換えに使う */
+  tabRefs: Map<string, TabId>;
   /**
    * tabConfig.cwd未指定時のデフォルトであり、相対cwdの解決基準。
    * プロジェクトローカル由来のプリセットならprojectRoot、そうでなければ
@@ -200,6 +250,15 @@ function slotPath(nodePath: string, tabIndex: number): string {
   return `${nodePath}tabs.${tabIndex}`;
 }
 
+/** commandの`{{tab:<ref>}}`を、作成済みタブのtabIdへ置き換える */
+function resolveTabRefs(ctx: BuildContext, command: string): string {
+  return command.replace(TAB_REF_PLACEHOLDER, (_, ref: string) => {
+    const tabId = ctx.tabRefs.get(ref);
+    if (tabId === undefined) throw new Error(`internal error: tab ref not resolved: ${ref}`);
+    return tabId;
+  });
+}
+
 /** そのタブで前回実行中だったコマンドを、commandの代わりに打ち直すならそのコマンド */
 function resumeCommandFor(
   ctx: BuildContext,
@@ -209,6 +268,9 @@ function resumeCommandFor(
   const resume = ctx.resume;
   const previous = resume?.commands[slot];
   if (resume === undefined || previous === undefined) return null;
+  // 前回のコマンドには前回のtabIdが埋め込まれている。組み直すとtabIdは振り直されるため、
+  // 打ち直すと存在しない（または別の）タブを指してしまう
+  if (tabRefsIn(tabConfig.command).length > 0) return null;
   if (!isLayoutTabResumeEnabled(resume.override, tabConfig.resume, ctx.presetResume)) return null;
   const decision = decideResumeCommand(previous, resume.allow);
   return decision.ok ? decision.command : null;
@@ -223,8 +285,8 @@ function directCommandFor(
   slot: string,
   tabConfig: LayoutTabConfig,
 ): string | undefined {
-  if (!tabConfig.closeOnExit) return undefined;
-  return resumeCommandFor(ctx, slot, tabConfig) ?? tabConfig.command;
+  if (!tabConfig.closeOnExit || tabConfig.command === undefined) return undefined;
+  return resumeCommandFor(ctx, slot, tabConfig) ?? resolveTabRefs(ctx, tabConfig.command);
 }
 
 function configureTab(
@@ -235,6 +297,7 @@ function configureTab(
   slot: string,
 ): void {
   ctx.workspaceManager.setTabLayoutSlot(tabId, slot);
+  if (tabConfig.ref !== undefined) ctx.tabRefs.set(tabConfig.ref, tabId);
   if (tabConfig.name) ctx.workspaceManager.setTabName(tabId, tabConfig.name);
 
   if (tabConfig.vars) {
@@ -257,7 +320,7 @@ function configureTab(
       ctx.workspaceManager.sendResumeCommand(tabId, resumed);
     }
   } else if (tabConfig.command) {
-    const command = tabConfig.command;
+    const command = resolveTabRefs(ctx, tabConfig.command);
     const delay = tabConfig.delay ?? 0;
     // handleInputではなくsendInitialCommandを使う: 分割で作ったタイルのタブはPTY起動が
     // 実測cols/rows到達まで保留されており、handleInputだと黙って捨てられる
@@ -395,6 +458,7 @@ export function applyLayoutPreset(
     focusTarget: null,
     presetResume: preset.resume,
     resume: options.resume,
+    tabRefs: new Map(),
     // プロジェクトローカル由来のプリセットはprojectRootを基準にする。リポジトリへコミットした
     // プリセットが「どこから実行されたか」に左右されず、同じ構成を再現できるようにするため。
     // tabBaseCwdはこれを打ち消す（開く場所が指定されているワークツリーのBoard向け）

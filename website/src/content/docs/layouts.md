@@ -50,6 +50,7 @@ niwa layout apply dev
 | `command`      | タブを開いたあとに実行するコマンド。改行を入れると1行ずつ実行する                                                                                                                                             |
 | `cwd`          | タブを開くディレクトリ。省略すると`niwa layout apply`を実行したディレクトリ                                                                                                                                   |
 | `shellProfile` | 使う[シェル](/niwaterm/shell/)のid。省略するとデフォルトのシェル                                                                                                                                              |
+| `ref`          | ほかのタブの`command`からこのタブを指すための名前（[別のタブにコマンドを送る](#別のタブにコマンドを送る)）                                                                                                    |
 | `vars`         | [タブ変数](/niwaterm/cli/commands/#タブ変数tab-var)。`{ role: "editor" }`のように書く                                                                                                                         |
 | `focus`        | `true`にしたタブに、開いたあとフォーカスが移る。プリセット全体で1つだけ                                                                                                                                       |
 | `delay`        | `command`を実行する前に待つ時間（ミリ秒）。シェルの準備ができるのを待ってから実行するので、ふだんは要らない                                                                                                   |
@@ -83,7 +84,7 @@ tabs: [
 
 ### 別のタブにコマンドを送る
 
-同じプリセットの中の別のタブへ、コマンドから何かを送りたいときは、送り先のタブに`vars`で目印を付けておき、`niwa tab var find`で探す。
+同じプリセットの中の別のタブへ、コマンドから何かを送りたいときは、送り先のタブに`ref`で名前を付けておく。あとに書いたタブの`command`で`{{tab:<ref>}}`と書くと、開いたときにそのタブのid（`tab-12`のような値）に置き換わる。
 
 ```ts
 layout: {
@@ -91,16 +92,14 @@ layout: {
   orientation: "vertical",
   first: {
     kind: "tile",
-    tabs: [{ name: "claude", command: "claude", vars: { role: "claude" } }],
+    tabs: [{ name: "claude", ref: "claude", command: "claude" }],
   },
   second: {
     kind: "tile",
     tabs: [
       {
         name: "editprompt",
-        command:
-          'target=$(niwa tab var find role claude | head -n1); ' +
-          '[ -n "$target" ] && editprompt open --editor nvim --target-pane "$target"',
+        command: "editprompt open --editor nvim --target-pane {{tab:claude}}",
         focus: true,
       },
     ],
@@ -108,7 +107,11 @@ layout: {
 },
 ```
 
-`tab var find`は同じBoardの中だけを探すので、同じプリセットを何度開いても、別のBoardのタブと取り違えない。`vars`は`command`より先に付くので、先に書いたタブの目印は、あとに書いたタブの`command`から見つけられる。
+タブのidは開くたびに変わるが、`{{tab:<ref>}}`ならそのとき開いたタブを指す。同じプリセットをいくつものBoardで開いても、それぞれのBoardのタブに置き換わる。
+
+参照できるのは、プリセットの中で先に書いたタブだけ。先に書いたかどうかは、`first`が`second`より先、`tabs`の中は上から順に数える。存在しない`ref`やあとに書いたタブを参照すると、プリセットを開くときにエラーになる。
+
+`{{tab:<ref>}}`を含むタブは、`resume`を付けても前回のコマンドを再実行せず、`command`を実行する。前回のコマンドには、前回開いたときのタブのidが入っているため。
 
 ## 開く
 

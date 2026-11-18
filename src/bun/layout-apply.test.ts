@@ -167,6 +167,116 @@ describe("validateLayoutPreset", () => {
   });
 });
 
+describe("validateLayoutPreset (ref)", () => {
+  function presetWith(first: LayoutPreset["layout"], second: LayoutPreset["layout"]): LayoutPreset {
+    return { layout: { kind: "split", orientation: "vertical", first, second } };
+  }
+
+  test("先に書いたタブのrefを参照するのは有効", () => {
+    const preset = presetWith(
+      { kind: "tile", tabs: [{ ref: "claude" }] },
+      { kind: "tile", tabs: [{ command: "ep --target-pane {{tab:claude}}" }] },
+    );
+    expect(validateLayoutPreset(preset, [])).toBeNull();
+  });
+
+  test("未定義のrefを参照するとエラーを返す", () => {
+    const preset: LayoutPreset = {
+      layout: { kind: "tile", tabs: [{ command: "echo {{tab:nope}}" }] },
+    };
+    expect(validateLayoutPreset(preset, [])).toContain("refers to an undefined ref");
+  });
+
+  test("後に書いたタブのrefを参照するとエラーを返す", () => {
+    const preset = presetWith(
+      { kind: "tile", tabs: [{ command: "echo {{tab:later}}" }] },
+      { kind: "tile", tabs: [{ ref: "later" }] },
+    );
+    expect(validateLayoutPreset(preset, [])).toContain("defined earlier");
+  });
+
+  test("自分自身のrefを参照するとエラーを返す", () => {
+    const preset: LayoutPreset = {
+      layout: { kind: "tile", tabs: [{ ref: "self", command: "echo {{tab:self}}" }] },
+    };
+    expect(validateLayoutPreset(preset, [])).toContain("defined earlier");
+  });
+
+  test("refが重複するとエラーを返す", () => {
+    const preset = presetWith(
+      { kind: "tile", tabs: [{ ref: "dup" }] },
+      { kind: "tile", tabs: [{ ref: "dup" }] },
+    );
+    expect(validateLayoutPreset(preset, [])).toContain('duplicate ref "dup"');
+  });
+
+  test("refに使えない文字を含むとエラーを返す", () => {
+    const preset: LayoutPreset = { layout: { kind: "tile", tabs: [{ ref: "a b" }] } };
+    expect(validateLayoutPreset(preset, [])).toContain("ref may contain only");
+  });
+});
+
+describe("applyLayoutPreset (ref)", () => {
+  test("commandの{{tab:<ref>}}を参照先タブのtabIdへ置き換える", () => {
+    const { mgr, writes, sessionOpts } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const preset: LayoutPreset = {
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ name: "claude", ref: "claude" }] },
+        second: {
+          kind: "tile",
+          tabs: [
+            { name: "typed", command: "ep --target-pane {{tab:claude}}" },
+            { name: "direct", command: "ep -t {{tab:claude}}", closeOnExit: true },
+          ],
+        },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId);
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    const board = findBoardEntry(mgr, boardId);
+    const claudeTabId = Object.entries(board?.tabNames ?? {}).find(
+      ([, name]) => name === "claude",
+    )?.[0];
+    expect(claudeTabId).toBeDefined();
+    expect(writes.flat()).toContain(`ep --target-pane ${claudeTabId}`);
+    expect(sessionOpts.map((o) => o.command)).toContain(`ep -t ${claudeTabId}`);
+  });
+
+  test("{{tab:<ref>}}を含むタブは、resumeでも前回のコマンドを打ち直さない", () => {
+    const { mgr, writes } = createTestWorkspaceManager();
+    const boardId = newBoardInActiveWorkspace(mgr);
+    const preset: LayoutPreset = {
+      resume: true,
+      layout: {
+        kind: "split",
+        orientation: "vertical",
+        first: { kind: "tile", tabs: [{ ref: "claude" }] },
+        second: { kind: "tile", tabs: [{ command: "ep --target-pane {{tab:claude}}" }] },
+      },
+    };
+
+    const result = applyLayoutPreset(mgr, [], preset, "new-board", boardId, {
+      resume: {
+        commands: { "second.tabs.0": "ep --target-pane tab-999" },
+        override: null,
+        allow: ["ep"],
+      },
+    });
+    resolvePending(mgr);
+
+    expect(result.ok).toBe(true);
+    const flat = writes.flat().map(String);
+    expect(flat.some((w) => w.includes("tab-999"))).toBe(false);
+    expect(flat.some((w) => /^ep --target-pane tab-\d+$/.test(w))).toBe(true);
+  });
+});
+
 describe("applyLayoutPreset (closeOnExit)", () => {
   test("commandを入力せず、セッションの起動コマンドとして渡す", () => {
     const { mgr, writes, sessionOpts } = createTestWorkspaceManager();

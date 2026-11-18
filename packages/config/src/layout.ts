@@ -12,7 +12,15 @@ export interface LayoutTabConfig {
   shellProfile?: string;
   /** 作業ディレクトリ。省略時はホームディレクトリ */
   cwd?: string;
-  /** タブ作成後に流し込むコマンド（末尾に自動でEnterを送信する）。複数行なら1行ずつ実行される */
+  /**
+   * プリセット内でこのタブを指す名前（英数字・`-`・`_`）。プリセット内で一意にする。
+   * このタブより後に書いたタブのcommandで`{{tab:<ref>}}`と書くと、このタブのtabIdに置き換わる
+   */
+  ref?: string;
+  /**
+   * タブ作成後に流し込むコマンド（末尾に自動でEnterを送信する）。複数行なら1行ずつ実行される。
+   * `{{tab:<ref>}}`は、refを付けた先行タブのtabIdに置き換わる
+   */
   command?: string;
   /** commandを送信するまでの待ち時間(ms)。シェル起動直後の取りこぼし防止用。省略時は0 */
   delay?: number;
