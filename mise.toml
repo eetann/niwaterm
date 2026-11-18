@@ -220,6 +220,41 @@ nohup powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encodi
 disown
 echo "起動しました（バックグラウンド、$APP_NAME）。ログ: $LOG_FILE"
 echo "停止するには: mise run win:stop:mine"
+# electrobun devはバックグラウンドで動くため、ビルドの終わりをここでは待てない。preBuildが
+# 型定義を書き直すのを別プロセスで待ってから取り戻す（取り戻す理由はwin:pull-config-typesのコメント参照）。
+# stampは生成の最後に書かれるので、起動前に作った目印より新しくなった時点で生成は終わっている
+MARKER=$(mktemp)
+STAMP="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME/.config-types-build/stamp"
+TYPES_LOG_FILE="/tmp/niwaterm-win-${APP_NAME#niwaterm-}-config-types.log"
+nohup sh -c '
+  i=0
+  while [ "$i" -lt 300 ]; do
+    if [ "$1" -nt "$2" ]; then mise run win:pull-config-types; break; fi
+    sleep 2
+    i=$((i + 1))
+  done
+  rm -f "$2"
+' _ "$STAMP" "$MARKER" > "$TYPES_LOG_FILE" 2>&1 &
+disown
+'''
+
+# 設定ファイル向けの型定義（.config-types-build/）はpreBuildが生成するため、Windows側の
+# 同期先にしかできない。WSL側の`niwa init`はWSL側の作業ディレクトリの.config-types-build/を
+# 設定ディレクトリへコピーするので、取り戻さないとWSLの設定ディレクトリの型定義が古いまま残る。
+# win:syncは.config-types-build/を同期対象から外しているので、取り戻したものが送り返されることはない
+[tasks."win:pull-config-types"]
+hide = true
+description = "Windows側のビルドで生成した型定義（.config-types-build/）をWSL側の作業ディレクトリへ取り戻す"
+run = '''
+WORKTREE_NAME=$(basename "$(git rev-parse --show-toplevel)")
+SRC="$NIWATERM_WIN_WORKTREES_ROOT/$WORKTREE_NAME/.config-types-build"
+if [ ! -f "$SRC/stamp" ]; then
+  echo "型定義がまだ生成されていません: $SRC" >&2
+  exit 1
+fi
+# DrvFs上のファイルは全て777に見える。そのまま持ち帰るとniwa initが設定ディレクトリへ実行権限付きで置くため揃える
+rsync -rt --delete --perms --chmod=D755,F644 "$SRC/" ./.config-types-build/
+echo "型定義を取り戻しました: $SRC -> ./.config-types-build/（設定ディレクトリへ置くには niwa init）"
 '''
 
 # electrobun 2.0.1のHutchは`~/.hutch/state/locks/graph.lock`という
@@ -333,6 +368,7 @@ if [ "${RUNNING:-0}" != "0" ]; then
 fi
 # HUTCH_HOMEを分ける理由はstartタスクのコメント参照（WSL側のexportは伝わらないため明示的に渡す）
 powershell.exe -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8; \$env:PATH=[Environment]::GetEnvironmentVariable('PATH','User')+';'+[Environment]::GetEnvironmentVariable('PATH','Machine'); \$env:NIWATERM_APP_NAME='$APP_NAME'; \$env:HUTCH_HOME=\$env:USERPROFILE + '\.hutch-$HUTCH_SUFFIX'; cd \$env:USERPROFILE\niwaterm-worktrees\\$WORKTREE_NAME; bun x electrobun build --env=dev"
+mise run win:pull-config-types
 echo "ビルドしました（$APP_NAME、起動はしていない）。タスクバー等のショートカットから起動すると反映されています"
 '''
 

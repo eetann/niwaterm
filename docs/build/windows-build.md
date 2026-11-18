@@ -415,6 +415,13 @@ WSL側のソースを直接指すので、`niwa-dev`はワークツリーを更�
 （`niwa`側は`mise run daily:merge-dev`でmainへ取り込んだ時点で反映される）。
 `niwa --version` / `niwa-dev --version`で疎通確認する。
 
+WSL側の設定ディレクトリ（`~/.config/niwaterm`）の補完用型定義（`.niwaterm-types/`）は、アプリの起動時には
+更新されない（アプリが同期するのはWindows側の設定ディレクトリだけ）。WSL側で`niwa init` / `niwa-dev init`を
+実行すると、そのワークツリーの`.config-types-build/`からコピーされる。`.config-types-build/`はWindows側の
+ビルド（preBuild）で生成されるもので、`win:start`（`mise run start`）と`win:build`（`daily:merge-dev`）が
+ビルド後に`win:pull-config-types`でWSL側へ取り戻している。niwatermを更新して設定ファイルで型エラーが
+出たら、取り込み・ビルドのあとに`niwa init`を実行し直す。
+
 ### 6-2. WSL→WindowsはTCPブリッジ経由で接続する
 
 WSLディストロからは、Windows側アプリが`Bun.serve({unix})`で開いているUnix domain socketへ
