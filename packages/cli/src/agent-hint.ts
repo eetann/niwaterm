@@ -11,7 +11,7 @@ export function cliName(): string {
 /** ドキュメントコマンドへの導線。helpのフッター・--version・エラー時に出す */
 export function docsHintLine(): string {
   const name = cliName();
-  return `ドキュメント: "${name} docs list" で一覧、"${name} docs show <name>" で詳細を読めます。`;
+  return `ドキュメント: "${name} docs list" で一覧、"${name} docs search <keyword>" で検索、"${name} docs show <name>" で詳細を読めます。`;
 }
 
 /** AIエージェントから実行されているか（gunshiがAI_AGENT・CLAUDECODE等の環境変数で判定する） */

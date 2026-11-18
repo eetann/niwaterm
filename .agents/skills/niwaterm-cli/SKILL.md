@@ -1,5 +1,7 @@
 ---
 name: niwaterm-cli
+metadata:
+  internal: true
 description: |
   niwatermターミナルアプリをniwaterm CLI経由で操作する（OSウィンドウの作成・一覧、ワークスペース/タイル/タブの一覧確認、タブへのキー送信、タイル分割・タブ作成などのレイアウト操作、ワークスペースの作成・切替・削除・名前変更、タブごとの変数、ブラウザタブのURL遷移・内容取得・スクリーンショット、目視確認用のタブ表示、OSデスクトップ通知の送信、gitワークツリーの一覧・作成・削除）。
   トリガー: "niwaterm", "niwa", "niwatermを操作", "niwaterm CLI", "タイルを分割して", "タブにキー送信", "niwatermのブラウザタブを操作", "niwatermで確認したい"
@@ -10,6 +12,8 @@ allowed-tools: Bash(niwa:*), Bash(niwa-dev:*)
 # niwaterm CLI
 
 niwatermアプリ（ターミナル・マルチプレクサ・ワークスペース統合デスクトップアプリ）を`niwa` CLI経由で操作するためのスキル。
+
+利用者向けに配っているスキルは`skills/niwaterm/SKILL.md`（`npx skills add`等で入れる。よく使うコマンドと調べ方だけを載せる）。このスキルはその開発者向け版で、devワークツリーの`niwa-dev`の使い分けと全コマンドの概要を足している。
 
 ## 前提確認
 
@@ -69,6 +73,8 @@ niwatermアプリ（ターミナル・マルチプレクサ・ワークスペー
     niwa docs show resume           # 起動時にコマンドを再実行（設定・board resume）
     niwa docs show worktrees        # ワークツリー管理（置き場所・Boardとの紐づけ）
     niwa docs show agents           # エージェント統合
+
+探したい語が分かっていれば`niwa docs search <keyword...>`で全ページからキーワードを含む行をページ名・見出し付きで出せる（複数語は全部を含むページだけ）。
 
 トピック一覧の確認は`niwa docs list`（`--json`でパース向けの出力）、個別コマンドのオプション確認は`niwaterm <command> --help`でも可能。トピックはドキュメントサイトのページ（`website/src/content/docs/`）から自動で列挙されるので、ここに挙げた以外が増えていることもある。サブディレクトリ内のページは`keybindings/api`のように`/`区切りのトピック名になる。ドキュメントは機能ごとのページに分かれていて、その機能の設定とCLIコマンドは同じページにある。どのページか分からなければ、まず`docs list`で説明を見て選ぶ。
 

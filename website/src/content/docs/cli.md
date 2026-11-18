@@ -43,7 +43,7 @@ niwatermは、`niwa`コマンド（CLI）からも操作できる。タイルを
 | `agent setup`                                               | Codex CLI・Claude Codeのhooksを入れる                               | [AIエージェント連携](/niwaterm/agents/)                                      |
 | `claude prompt list` / `show`                               | Claude Codeの会話記録を読む                                         | [ホバーボタン](/niwaterm/hover-buttons/#claude-codeのプロンプトの目次を出す) |
 | `complete <shell>`                                          | シェルの補完スクリプトを出す                                        | [シェル統合と補完](/niwaterm/shell-integration/#シェル補完)                  |
-| `docs list` / `show`                                        | このドキュメントをターミナルで読む                                  | [このページ](#ヘルプとドキュメント)                                          |
+| `docs list` / `show` / `search`                             | このドキュメントをターミナルで読む・検索する                        | [このページ](#ヘルプとドキュメント)                                          |
 
 ## 対象IDの省略
 
@@ -75,8 +75,21 @@ niwa ping --help
 ```sh
 niwa docs list [--json]
 niwa docs show <name>
+niwa docs search <keyword...> [--json]
 ```
 
 このドキュメントサイトの各ページは、ターミナルでも読める。`niwa docs list`でページの一覧を`name<TAB>description`の形で出し、`niwa docs show <name>`でそのページを出す。AIエージェントにniwatermを操作させるとき、CLIだけでドキュメントを読ませられる。`--json`を付けると、一覧をJSONで出す。
+
+`niwa docs search`は、全ページからキーワードを含む行を探す。大文字と小文字は区別しない。キーワードを複数並べると、すべてを含むページだけに絞る（同じ行になくてもよい）。結果はキーワードが多く出てくるページから順に、ページ名・見出し・行番号付きで出る。1ページにつき5行までで、残りは件数だけを出す。
+
+```
+$ niwa docs search send-keys
+cli/commands	ウィンドウ・タブ・ポップアップなどを操作するコマンドのうち、--helpだけでは分かりにくい使い方と挙動
+    82: ## キーを送る（`tab send-keys`）
+    84: `tab send-keys`で、ほかのタブへ文字やキーを送れる。文字列と特殊キーの名前は、混ぜて並べられる。
+    ...
+```
+
+`--json`を付けると、キーワードを含む行を省かずにJSONで出す。1件も見つからなければ終了コード1で終わる。`--json`のように`-`で始まる語を探すときは、`niwa docs search -- --json`と`--`の後ろに置く。
 
 `name`は、ドキュメントサイトのURLのうち`/niwaterm/`より後ろの部分と同じ（`/niwaterm/keybindings/api/`なら`keybindings/api`）。トップページは一覧に出ない。

@@ -108,7 +108,7 @@ gunshiの`subCommands`でネストする（実装は既存の`commands/tab/index
 
 - `website/src/content/docs/cli.md` — 全コマンドの索引。コマンドを足したら表へ1行足し、説明を載せたページへリンクする
 - そのコマンドを説明するページ — 機能に属するコマンドはその機能のページ（`layouts.md`・`worktrees.md`など）、どの機能にも属さないものは`cli/commands.md`。同じ機能の設定とCLIの説明は1ページに置く（別々のページにすると、読み手がどちらを読めばよいか迷う）
-- `.agents/skills/niwaterm-cli/SKILL.md`・`packages/cli/README.md` — AIエージェント・利用者が最初に読む案内。詳細は書き写さず`niwa docs show <topic>`への導線に留める（書き写すとドキュメントを直したときに古い説明が残る）
+- `skills/niwaterm/SKILL.md`・`.agents/skills/niwaterm-cli/SKILL.md`・`packages/cli/README.md` — AIエージェント・利用者が最初に読む案内。`skills/niwaterm/`は利用者へ配るのでよく使うコマンドだけに絞り、`niwa-dev`など開発者向けの話を入れない。詳細は書き写さず`niwa docs show <topic>`への導線に留める（書き写すとドキュメントを直したときに古い説明が残る）
 - `contrib/shell-integration/*` — シェル統合スクリプト（`niwa tab var set branch`を呼ぶ）
 - `contrib/agent-integration/**/*.json` — エージェントのhooks設定（`niwa tab var set agent_status`を呼ぶ）
 

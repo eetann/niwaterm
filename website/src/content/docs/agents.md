@@ -1,9 +1,25 @@
 ---
 title: AIエージェント連携
-description: Codex CLI・Claude Codeのhooksを入れてサイドバーに状態を出す方法と、Claude Codeの会話記録を読むコマンド
+description: AIエージェントにniwatermを操作させるスキル、Codex CLI・Claude Codeのhooksを入れてサイドバーに状態を出す方法、Claude Codeの会話記録を読むコマンド
 ---
 
 Codex CLIやClaude Codeが動いているタブの状態（作業中・応答待ちなど）を、サイドバーに出せる。複数のBoardでエージェントを並行して動かしていても、どれが手を止めて待っているかを一覧で見分けられる。hooksを入れておけば、Claude Codeの会話記録をCLIから読むこともできる。
+
+スキルを入れれば、エージェントがniwatermを操作できるようになる。別のタブでサーバーを起動して出力を読む、といった作業を任せられる。
+
+## エージェントにniwatermを操作させる
+
+niwatermのリポジトリの`skills/niwaterm/`に、エージェント向けのスキル（`SKILL.md`）を置いている。入れておくと、エージェントは`niwa`コマンドでタブを作り、コマンドを送り、画面の内容を読めるようになる。
+
+[skills](https://github.com/vercel-labs/skills)で入れる場合は、次のように実行する。
+
+```sh
+npx skills add eetann/niwaterm --skill niwaterm
+```
+
+[agent-skills-nix](https://github.com/Kyure-A/agent-skills-nix)で管理する場合は、niwatermのリポジトリをflakeのinputに加え、`subdir = "skills"`のソースから`niwaterm`を有効にする。
+
+スキルに書いてあるのは、よく使うコマンドと、使い方の調べ方だけ。それ以外はエージェントが`niwa docs search`と`niwa docs show`でこのドキュメントを読んで調べる（[ヘルプとドキュメント](/niwaterm/cli/#ヘルプとドキュメント)）。niwatermを更新するとドキュメントも新しくなるので、スキルを入れ直さなくても新しいコマンドを使える。
 
 ## エージェント統合
 

@@ -1,5 +1,7 @@
 ---
 name: doc-writer
+metadata:
+  internal: true
 description: |
   niwatermのdocs/配下（ADR含む）をGoogleのOpen Knowledge Format (OKF)に従って書く・チェックするスキル。frontmatter(type/title/description)の付与、niwaterm独自のtype語彙の割り当て、クロスリンクのバンドル相対パス化を行う。ルールの正本はADR 0002（docs/adr/0002-adopt-okf-for-documentation.md）。
   トリガー: "ドキュメントを書いて", "docsに追加して", "OKF形式で", "frontmatterを付けて", "ドキュメントのルール"

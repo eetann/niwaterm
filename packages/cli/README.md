@@ -24,12 +24,13 @@ niwa worktree list     # gitのワークツリー一覧（アプリ未起動で�
 niwa worktree open dev # 既存ワークツリーをBoardとして開く
 niwa docs list         # 利用可能なドキュメントトピックの一覧（--jsonでパース向けの出力）
 niwa docs show cli     # 全コマンドの一覧と、説明のあるページ
+niwa docs search send-keys  # 全ページをキーワードで検索
 niwa complete zsh      # シェルの補完スクリプトを出力（設置手順はdocs show shell-integrationの「シェル補完」）
 ```
 
 オプションは`niwaterm <command> --help`で確かめられる。使い方の説明は`niwa docs show cli`（リポジトリ内なら[website/src/content/docs/cli.md](../../website/src/content/docs/cli.md)）の表から、各コマンドを説明したページへたどる。
 
-AIエージェント向けの操作ガイドは[.agents/skills/niwaterm-cli/SKILL.md](../../.agents/skills/niwaterm-cli/SKILL.md)を参照。
+AIエージェントに入れるスキルは[skills/niwaterm/SKILL.md](../../skills/niwaterm/SKILL.md)（入れ方は`niwa docs show agents`）。このリポジトリの開発者向けの操作ガイドは[.agents/skills/niwaterm-cli/SKILL.md](../../.agents/skills/niwaterm-cli/SKILL.md)。
 
 ## fzf-niwa
 

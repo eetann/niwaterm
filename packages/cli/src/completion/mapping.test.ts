@@ -33,6 +33,7 @@ const FREE_INPUT_ARGS = new Set([
   "claude prompt list label",
   "claude prompt show prompt",
   "claude prompt show max-result",
+  "docs search keywords",
 ]);
 
 describe("argSource", () => {

@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type DocTopic,
+  formatSearchLines,
   formatTopicLines,
   formatTopicsJson,
   loadTopics,
   parseFrontmatterDescription,
+  searchTopicText,
 } from "./docs";
 
 const TOPICS: DocTopic[] = [
@@ -100,5 +102,70 @@ describe("loadTopics（サブディレクトリ）", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("searchTopicText", () => {
+  const topic = { name: "cli", description: "CLIの使い方" };
+  const text = [
+    "---",
+    "title: CLI",
+    "description: CLIの使い方",
+    "---",
+    "",
+    "冒頭の説明 Send-Keys",
+    "## タブ操作",
+    "```sh",
+    "# send-keysの例",
+    "niwa tab send-keys --tab tab-3 Enter",
+    "```",
+    "captureでも取れる",
+  ].join("\n");
+
+  test("大文字小文字を区別せず、本文のキーワードを含む行を見出し付きで返す", () => {
+    const result = searchTopicText(topic, text, ["SEND-KEYS"]);
+    expect(result?.matches).toEqual([
+      { line: 6, heading: "", text: "冒頭の説明 Send-Keys", isHeading: false },
+      { line: 9, heading: "タブ操作", text: "# send-keysの例", isHeading: false },
+      {
+        line: 10,
+        heading: "タブ操作",
+        text: "niwa tab send-keys --tab tab-3 Enter",
+        isHeading: false,
+      },
+    ]);
+    expect(result?.hits).toBe(3);
+  });
+
+  test("複数キーワードは別々の行にあってもよいが、1つでも無ければ結果に出ない", () => {
+    expect(searchTopicText(topic, text, ["send-keys", "capture"])?.hits).toBe(4);
+    expect(searchTopicText(topic, text, ["send-keys", "popup"])).toBeNull();
+  });
+
+  test("frontmatterの語だけでもページは結果に出るが、frontmatterの行は返さない", () => {
+    const result = searchTopicText(topic, text, ["使い方"]);
+    expect(result?.matches).toEqual([]);
+  });
+});
+
+describe("formatSearchLines", () => {
+  test("見出しが変わるところで区切り、多すぎる行は件数だけ出す", () => {
+    const matches = Array.from({ length: 7 }, (_, i) => ({
+      line: i + 10,
+      heading: i === 0 ? "" : "節",
+      text: `行${i}`,
+      isHeading: false,
+    }));
+    const lines = formatSearchLines([{ name: "cli", description: "説明", hits: 7, matches }]);
+    expect(lines).toEqual([
+      "cli\t説明",
+      "    10: 行0",
+      "  ## 節",
+      "    11: 行1",
+      "    12: 行2",
+      "    13: 行3",
+      "    14: 行4",
+      "    （ほか2行）",
+    ]);
   });
 });

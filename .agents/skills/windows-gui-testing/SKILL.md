@@ -1,5 +1,7 @@
 ---
 name: windows-gui-testing
+metadata:
+  internal: true
 description: |
   niwatermのWindows実機（ElectrobunアプリのGUI）をAIがWSLから起動・操作・動作確認するノウハウ。
   トリガー: Windows実機での動作確認、NixOS(WSL)タブの動作確認、「Windowsで確認して」「実機で試して」

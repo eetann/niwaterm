@@ -16,6 +16,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
 
 - 開発ルールの正本は `AGENTS.md`。`CLAUDE.md` はこのファイルへのシンボリックリンク。
 - 共通スキルは `.agents/skills/`、共通ルールは `.agents/rules/` で管理する。`.claude/skills`・`.claude/rules` はそれぞれ正本へのシンボリックリンク。
+- リポジトリ直下の`skills/`は利用者のAIエージェントへ配るスキル（`npx skills add eetann/niwaterm`等が拾う）。`.agents/skills/`の開発用スキルが配布対象に混ざらないよう、frontmatterに`metadata.internal: true`を付ける（スキルを足すときも同じ）
 - スキルを自動検出しないエージェントも、作業に応じて `.agents/skills/*/SKILL.md` を読む。ドキュメント編集は `doc-writer`（ドキュメントサイトのページの中身は `user-doc-writer`）、アプリのCLI操作は `niwaterm-cli`、Windows実機のGUI確認は `windows-gui-testing` を参照する。
 - ソースコードを編集したら `bun run lint` と `bun run format:check` を実行し、変更に応じたテストを行う。`.claude/hooks/` の自動整形はClaude専用のため、他のエージェントでは必要に応じて変更ファイルを整形する。
 - CodexのFull Access設定は `.codex/config.toml` に置く。プロジェクト設定は信頼済みのリポジトリでのみ読み込まれ、起動オプションや管理者側の制約が優先される。
@@ -49,7 +50,7 @@ PTY(Bun.Terminal) → libghostty-vt(bun:ffi) → formatter(HTML) → RPC → web
 - src/bun/terminal-session.ts — PTY+GhosttyTerminalを束ねる薄い層。index.tsはこれ経由でのみターミナルを扱う
 - src/bun/index.ts — メインプロセス。RPCスキーマ(NiwaRPC)もここ
 - src/bun/ipc-server.ts — CLI(`niwa`コマンド)からの接続を受け付けるunix socket IPCサーバー（`Bun.serve({unix, fetch})` + Hono、createIpcServerファクトリ関数）。ソケットパスはアプリ名(APP_VARIANT)別に分かれ、macOSが`~/Library/Application Support/<APP_VARIANT>/niwaterm.sock`、Windowsが`%APPDATA%\<APP_VARIANT>\niwaterm.sock`（src/bun/app-paths.tsで解決）。**APP_VARIANTはappフォルダ名(`niwaterm-wip-dev`)ではなくelectrobun.config.tsのapp.nameそのもの(`niwaterm-wip`/`niwaterm-daily`)で、"-dev"は付かない**。このパス解決はpackages/cli/src/ipc-client.tsに**意図的に重複**しているので、変更時は両方揃えること
-- packages/cli（`@niwaterm/cli`） — `niwa` CLI本体。gunshiのsubCommands構成（詳細: website/src/content/docs/cli.md、CLIからも`niwa docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
+- packages/cli（`@niwaterm/cli`） — `niwa` CLI本体。gunshiのsubCommands構成（詳細: website/src/content/docs/cli.md、CLIからも`niwa docs show cli`で参照可能。AIエージェント向け操作ガイドは.agents/skills/niwaterm-cli/SKILL.md、利用者へ配るスキルはskills/niwaterm/SKILL.md）。コマンドの命名規則は.agents/rules/cli-command-naming.md参照（コマンド追加・変更時は必読）
 - src/mainview/ — webview側（描画・キー入力・セル計測）
 - libghostty-vt APIリファレンス: https://libghostty.tip.ghostty.org/ （APIは未安定。ヘッダは vendor/libghostty/include/ghostty/vt/）
 

@@ -1,5 +1,7 @@
 ---
 name: user-doc-writer
+metadata:
+  internal: true
 description: |
   niwatermのユーザー向けドキュメントサイト（website/src/content/docs/）のページを書く・直すスキル。機能と使い方を先に書き、内部実装は書かない。文章はnatural-japaneseスキルで整える。
   トリガー: "ユーザー向けドキュメント", "ドキュメントサイトを書いて", "websiteのページを直して", "使い方のページを書いて"
