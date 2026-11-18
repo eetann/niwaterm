@@ -33,6 +33,7 @@ import {
   type PreparedCommandTemplateField,
   quoteShellArg,
 } from "../../shared/command-template";
+import { moveTabFocus } from "../tab-focus";
 
 export interface CommandTemplateDialogProps {
   open: boolean;
@@ -120,6 +121,16 @@ export function CommandTemplateDialog({
         onCloseAutoFocus={onCloseAutoFocus}
         // documentまでbubbleするとmainview/index.tsのグローバルkeydownリスナーへ二重に届き、
         // PTYへ入力が漏れる（ConfirmDialog・PromptDialogと同じ）
+        // Tabの移動は自前で行う（理由はtab-focus.ts）。キャプチャ段階で止めるのは、同じ要素に
+        // 付くRadixのフォーカストラップが移動後のフォーカスを端と見なし、反対の端へ飛ばし直すため。
+        // 一覧を開いている間のTabは候補の移動に使うので触らない
+        onKeyDownCapture={(e) => {
+          if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.nativeEvent.isComposing || openPicker !== null) return;
+          if (!moveTabFocus(e.currentTarget, e.shiftKey)) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.nativeEvent.isComposing || openPicker !== null) return;

@@ -92,6 +92,18 @@ export const TextFieldsOnly: Story = {
 };
 
 /** 選択肢の関数が失敗した・候補が無い欄 */
+/** 選択肢の欄がまだ選ばれていないとき */
+export const OptionUnselected: Story = {
+  args: {
+    template: {
+      ...worktreeTemplate,
+      fields: worktreeTemplate.fields.map((field) =>
+        field.options === null ? field : { ...field, initial: "" },
+      ),
+    },
+  },
+};
+
 export const OptionErrors: Story = {
   args: {
     template: {
