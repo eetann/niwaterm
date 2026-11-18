@@ -210,6 +210,10 @@ export function appendCommandArgs(
  *    アプリ名が採用され、wipのつもりでdailyを組んでしまう。
  * 3. 起動中インスタンスの設定ディレクトリ（NIWATERM_CONFIG_DIR）。タブ内から起動した別インスタンスや
  *    `niwa init`が、そのタブを開いているインスタンス用の設定ディレクトリを引き継いでしまう。
+ * 4. 起動元タブのNIWATERM_TAB_ID。niwatermのタブ内からniwatermを起動すると残り、タブIDを注入しない
+ *    `niwa.shell.run`の子シェルがタブ内だと誤認する。シェル統合がOSC 7をstdoutへ書いて結果を汚し、
+ *    `niwa tab var set`は無関係な起動元のタブへ書き込む。タブ・ポップアップは自分のIDを明示的に注入する。
+ *    WSLENVに名前が残っていても、値が無い変数はWSL側へ渡らない。
  */
 const INHERITED_TERMINAL_ENV_KEYS = [
   "TMUX",
@@ -224,6 +228,7 @@ const INHERITED_TERMINAL_ENV_KEYS = [
   // タブ側が参照するアプリ名はAPP_VARIANT（board.ts・popup.tsが明示的に注入する）
   "NIWATERM_APP_NAME",
   "NIWATERM_CONFIG_DIR",
+  "NIWATERM_TAB_ID",
 ];
 
 /**

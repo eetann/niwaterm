@@ -194,6 +194,15 @@ describe("buildEnv", () => {
     });
   });
 
+  test("起動元タブのNIWATERM_TAB_IDは引き継がない", () => {
+    withProcessEnv({ NIWATERM_TAB_ID: "tab-old" }, () => {
+      const env = buildEnv(["/bin/zsh"], "xterm-256color", {
+        NIWATERM_SOCKET: "/tmp/niwaterm.sock",
+      });
+      expect(env["NIWATERM_TAB_ID"]).toBeUndefined();
+    });
+  });
+
   test("extraEnvはprocess.envより優先される", () => {
     withProcessEnv({ NIWATERM_TAB_ID: "tab-old" }, () => {
       const env = buildEnv(["/bin/zsh"], "xterm-256color", { NIWATERM_TAB_ID: "tab-1" });
