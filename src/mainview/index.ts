@@ -769,8 +769,11 @@ let tileAnimationEnabled = defaultAppearance.tileAnimation;
 // 実行中の分割アニメーションの数。0より大きい間はタイルのResizeObserverがPTYへresizeを送らない
 let runningSplitAnimations = 0;
 const SPLIT_ANIMATION_MS = 150;
-// 分割アニメーションに巻き込まれたタイル。最後のアニメーションが終わったときに確定サイズを送る
-const splitAnimationResizeTargets = new Set<HTMLElement>();
+// 分割アニメーション中にResizeObserverが送信を見送ったタブ。最後のアニメーションが終わったときに
+// 確定サイズを送る。見送られるのはアニメーションするタイルだけではなく、同じrenderで生まれた
+// 別の分割のタイルも含む（レイアウトプリセットは複数の分割を1回のrenderで届ける）ため、
+// タイルではなく見送った事実で拾う。拾い漏らすとbun側のPTY起動保留が解けず、そのタブは起動しない
+const splitAnimationDeferredTabIds = new Set<TabId>();
 // bun側からのkeybindingsメッセージ到達前はデフォルトキーバインドにフォールバックする。
 // プラットフォーム別デフォルト（direct: Windowsのみコピー・ペーストを直接ショートカット化）の
 // 解決はbun側が行うため、ここではmacOS向けの値になる。configメッセージ到達時に正しいテーブルへ差し替わる
@@ -1877,8 +1880,6 @@ function animateSplitOpen(
     newEl.animate([{ flexGrow: 0 }, { flexGrow: newGrow }], options),
   ];
   runningSplitAnimations++;
-  splitAnimationResizeTargets.add(existingEl);
-  splitAnimationResizeTargets.add(newEl);
   // 終わりはfinishedではなくタイマーで決める。描画が止まっているとfinishedが解決せず、
   // resizeの送信が止まったまま新しいタイルのシェルがいつまでも起動しなくなるため
   setTimeout(() => {
@@ -1886,14 +1887,12 @@ function animateSplitOpen(
     runningSplitAnimations--;
     if (runningSplitAnimations > 0) return;
     // 入れ子の分割が続けて走ったときは、最後の1つが終わってからまとめて確定サイズを送る
-    for (const el of splitAnimationResizeTargets) {
-      if (!el.isConnected) continue;
-      for (const tabContentEl of el.querySelectorAll<HTMLElement>(".tab-content[data-tab-id]")) {
-        if (tabContentEl.style.display === "none") continue;
-        sendResize(tabContentEl.dataset["tabId"] as TabId);
-      }
+    for (const tabId of splitAnimationDeferredTabIds) {
+      const tabContentEl = tabContentElByTabId.get(tabId);
+      if (!tabContentEl?.isConnected || tabContentEl.style.display === "none") continue;
+      sendResize(tabId);
     }
-    splitAnimationResizeTargets.clear();
+    splitAnimationDeferredTabIds.clear();
   }, SPLIT_ANIMATION_MS + 50);
 }
 
@@ -1958,10 +1957,12 @@ function ensureTerminalTabContent(tabId: TabId, tileContentEl: HTMLDivElement): 
     // 非アクティブタブ（display:none）はcontent-boxが0になり誤って2x2等のresizeを
     // 送ってしまうため、表示中でない限りスキップする（再表示時に正しいサイズで発火し直す）
     // 分割アニメーション中も途中の大きさを送らず、終わったときにanimateSplitOpenが送る
-    if (draggingSplitId || pendingSplitRatio || draggingSidebar || runningSplitAnimations > 0) {
+    if (draggingSplitId || pendingSplitRatio || draggingSidebar) return;
+    if (tabContentEl.style.display === "none") return;
+    if (runningSplitAnimations > 0) {
+      splitAnimationDeferredTabIds.add(tabId);
       return;
     }
-    if (tabContentEl.style.display === "none") return;
     sendResize(tabId);
   });
   ro.observe(termEl);
