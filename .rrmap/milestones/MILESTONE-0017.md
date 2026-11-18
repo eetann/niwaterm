@@ -1,11 +1,9 @@
 ---
 id: MILESTONE-0017
 title: ユーザー向けドキュメントサイト
-status: planned
-hidden: false
+status: completed
+hidden: true
 ---
-
-
 開発者向けツールによくある形のドキュメントサイトを作る。トップページで機能を紹介し、導入方法・設定ファイルの書き方などを内容ごとのページに分けて載せる。
 
 ## 決めたこと
