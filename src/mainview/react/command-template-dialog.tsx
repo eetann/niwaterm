@@ -54,6 +54,29 @@ function initialValues(template: PreparedCommandTemplate | null): Record<string,
   return Object.fromEntries((template?.fields ?? []).map((field) => [field.name, field.initial]));
 }
 
+/** 開いた時点でフォーカスする欄。focusの欄が無ければ先頭の欄 */
+function initialFocusName(template: PreparedCommandTemplate | null): string | null {
+  const fields = template?.fields ?? [];
+  return (fields.find((field) => field.focus) ?? fields[0])?.name ?? null;
+}
+
+/**
+ * プレビューの地の文を、空白で区切った語ごとのinline-blockへ分ける。inline-blockは折り返しの
+ * 単位として割られないため、行末で`board-switch`の途中や`--`の直後が切れず語の切れ目で折り返る。
+ * 1行に収まらない長さの語だけはbreak-allでその語の中で折る
+ */
+function PreviewText({ text }: { text: string }) {
+  return text.split(/(\s+)/).map((part, index) =>
+    part === "" ? null : /^\s+$/.test(part) ? (
+      part
+    ) : (
+      <span key={index} className="inline-block max-w-full break-all">
+        {part}
+      </span>
+    ),
+  );
+}
+
 export function CommandTemplateDialog({
   open,
   template,
@@ -75,7 +98,7 @@ export function CommandTemplateDialog({
   useEffect(() => {
     if (!open) return;
     setValues(initialValues(template));
-    setFocused(template?.fields[0]?.name ?? null);
+    setFocused(initialFocusName(template));
     setAttempted(false);
     setOpenPicker(null);
   }, [open, template]);
@@ -165,10 +188,10 @@ export function CommandTemplateDialog({
           <>
             <div
               aria-label="送るコマンド"
-              className="mx-5 rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-sm leading-relaxed break-all whitespace-pre-wrap text-muted-foreground"
+              className="mx-5 rounded-md border bg-muted/40 px-3 py-2.5 font-mono text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground"
             >
               {segments.map((segment, index) => {
-                if (segment.kind === "text") return <span key={index}>{segment.text}</span>;
+                if (segment.kind === "text") return <PreviewText key={index} text={segment.text} />;
                 const field = fieldByName.get(segment.name);
                 const value = values[segment.name] ?? "";
                 const shown =
@@ -181,7 +204,8 @@ export function CommandTemplateDialog({
                   <span
                     key={index}
                     className={cn(
-                      "rounded-xs px-1",
+                      // 値も1つの引数として地の文の語と同じく塊で折り返す
+                      "inline-block max-w-full rounded-xs px-1 break-all",
                       focused === segment.name
                         ? "bg-primary/20 text-foreground ring-1 ring-primary/60"
                         : value === ""
@@ -196,13 +220,13 @@ export function CommandTemplateDialog({
             </div>
 
             <div className="flex flex-col gap-4 px-5 pt-4 pb-2">
-              {template.fields.map((field, index) => (
+              {template.fields.map((field) => (
                 <FieldRow
                   key={field.name}
                   field={field}
                   value={values[field.name] ?? ""}
                   invalid={attempted && (values[field.name] ?? "") === ""}
-                  autoFocus={index === 0}
+                  autoFocus={field.name === initialFocusName(template)}
                   pickerOpen={openPicker === field.name}
                   onPickerOpenChange={(next) => setOpenPicker(next ? field.name : null)}
                   onChange={(value) => setValue(field.name, value)}

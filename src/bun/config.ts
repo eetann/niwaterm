@@ -1225,13 +1225,23 @@ function resolveCommandTemplateField(
         `真偽値ではないためクォートします: ${describeValue(field.quote)}`,
       );
   }
+  let focus = false;
+  if (field.focus !== undefined) {
+    if (typeof field.focus === "boolean") focus = field.focus;
+    else diag.warn(`${scope}.focus`, `真偽値ではないため無視します: ${describeValue(field.focus)}`);
+  }
+  const rawDefault: unknown = field.default;
   return {
     name,
     label: label === "" ? name : label,
     placeholder: resolveOptionalString(field.placeholder, `${scope}.placeholder`, diag),
     options,
-    default: resolveOptionalString(field.default, `${scope}.default`, diag),
+    default:
+      typeof rawDefault === "function"
+        ? (rawDefault as CommandTemplateFieldDef["default"])
+        : resolveOptionalString(rawDefault, `${scope}.default`, diag),
     quote,
+    focus,
   };
 }
 

@@ -54,6 +54,16 @@ export type CommandTemplateOptionsFn = (
   niwa: Niwa,
 ) => CommandTemplateOptionList | Promise<CommandTemplateOptionList>;
 
+/**
+ * モーダルを開くたびに呼ばれ、その時点の初期値を返す関数。クリップボードの中身を見て
+ * 初期値にするといった、状況で変わる初期値をniwa.clipboard.read等で作れる。
+ * undefinedを返すと初期値なしとして扱う
+ */
+export type CommandTemplateDefaultFn = (
+  ctx: CommandTemplateContext,
+  niwa: Niwa,
+) => string | undefined | Promise<string | undefined>;
+
 export interface CommandTemplateField {
   /** 入力欄の見出し。省略時は`{{name}}`のname */
   label?: string;
@@ -64,8 +74,13 @@ export interface CommandTemplateField {
    * （CommandTemplateBuiltinOptions）でniwatermが用意する候補、関数で開くたびに作る候補を指定する
    */
   options?: CommandTemplateOptionList | CommandTemplateBuiltinOptions | CommandTemplateOptionsFn;
-  /** 開いた時点で入れておく値。選択肢の欄ではいずれかのvalueと一致するときだけ使う */
-  default?: string;
+  /**
+   * 開いた時点で入れておく値。関数なら開くたびに呼んで決める。
+   * 選択肢の欄ではいずれかのvalueと一致するときだけ使う
+   */
+  default?: string | CommandTemplateDefaultFn;
+  /** trueなら開いた時点でこの欄にフォーカスする。複数あれば最初の欄。省略時は先頭の欄 */
+  focus?: boolean;
   /**
    * 値をシェル用にクォートするか。省略時はtrueで、空白や記号を含む値だけを`'...'`で囲む。
    * 値にオプションや複数の引数をまとめて入れたいときはfalseにする

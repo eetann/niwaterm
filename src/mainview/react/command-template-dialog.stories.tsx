@@ -14,6 +14,7 @@ const worktreeTemplate: PreparedCommandTemplate = {
       label: "ブランチ名",
       placeholder: "feat/...",
       quote: true,
+      focus: false,
       options: null,
       error: null,
       initial: "",
@@ -23,6 +24,7 @@ const worktreeTemplate: PreparedCommandTemplate = {
       label: "ワークスペース",
       placeholder: "",
       quote: true,
+      focus: false,
       options: [
         { label: "🌱 niwaterm", value: "ws-8c1e", description: "今のワークスペース" },
         { label: "📝 blog", value: "ws-2a74" },
@@ -64,6 +66,7 @@ export const TextFieldsOnly: Story = {
           label: "from",
           placeholder: "2026-09-20",
           quote: true,
+          focus: false,
           options: null,
           error: null,
           initial: "2026-09-20",
@@ -73,6 +76,7 @@ export const TextFieldsOnly: Story = {
           label: "to",
           placeholder: "2026-09-24",
           quote: true,
+          focus: false,
           options: null,
           error: null,
           initial: "2026-09-24",
@@ -82,6 +86,7 @@ export const TextFieldsOnly: Story = {
           label: "file",
           placeholder: "",
           quote: true,
+          focus: false,
           options: null,
           error: null,
           initial: "project red 92.csv",
@@ -114,6 +119,7 @@ export const OptionErrors: Story = {
           label: "ブランチ",
           placeholder: "",
           quote: true,
+          focus: false,
           options: [],
           error: "候補を作れませんでした: not a git repository",
           initial: "",
@@ -123,6 +129,7 @@ export const OptionErrors: Story = {
           label: "ワークスペース",
           placeholder: "",
           quote: true,
+          focus: false,
           options: [],
           error: null,
           initial: "",
@@ -155,6 +162,7 @@ export const LongOptions: Story = {
           label: "branch",
           placeholder: "",
           quote: true,
+          focus: false,
           options: [
             {
               label:
@@ -167,6 +175,50 @@ export const LongOptions: Story = {
           error: null,
           initial:
             "feature/very-long-branch-name-that-keeps-going-and-going-past-the-edge-of-the-dialog",
+        },
+      ],
+    },
+  },
+};
+
+/** focusの欄（2つ目の欄）へ最初にフォーカスし、長いコマンドは語の切れ目で折り返す */
+export const FocusAndLongCommand: Story = {
+  args: {
+    template: {
+      id: "worktree-remote",
+      name: "リモートのブランチからワークツリーを作る",
+      description: "リモートのブランチを選んでワークツリーを作る",
+      command:
+        "niwa worktree new --open board-switch -w review --layout {{layout}} --trust {{branch}}",
+      fields: [
+        {
+          name: "layout",
+          label: "レイアウト",
+          placeholder: "",
+          quote: true,
+          focus: false,
+          options: [
+            { label: "work-dev", value: "work-dev" },
+            { label: "review", value: "review" },
+          ],
+          error: null,
+          initial: "work-dev",
+        },
+        {
+          name: "branch",
+          label: "リモートのブランチ",
+          placeholder: "",
+          quote: true,
+          focus: true,
+          options: [
+            { label: "origin/main", value: "origin/main" },
+            {
+              label: "origin/feature/add-command-template-focus-option",
+              value: "origin/feature/add-command-template-focus-option",
+            },
+          ],
+          error: null,
+          initial: "origin/feature/add-command-template-focus-option",
         },
       ],
     },

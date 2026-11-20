@@ -47,6 +47,7 @@ export {
   type CommandTemplateBuiltinOptions,
   type CommandTemplateConfig,
   type CommandTemplateContext,
+  type CommandTemplateDefaultFn,
   type CommandTemplateField,
   type CommandTemplateOption,
   type CommandTemplateOptionList,

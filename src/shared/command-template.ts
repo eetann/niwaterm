@@ -16,6 +16,8 @@ export interface PreparedCommandTemplateField {
   error: string | null;
   /** 開いた時点で入れておく値 */
   initial: string;
+  /** 開いた時点でフォーカスする欄か。trueの欄が無ければ先頭の欄へフォーカスする */
+  focus: boolean;
 }
 
 /** モーダル1回ぶんの内容 */

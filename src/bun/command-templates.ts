@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import type {
   CommandTemplateBuiltinOptions,
   CommandTemplateContext,
+  CommandTemplateDefaultFn,
   CommandTemplateOption,
   CommandTemplateOptionsFn,
   Niwa,
@@ -34,9 +35,10 @@ export interface CommandTemplateFieldDef {
     | CommandTemplateBuiltinOptions
     | CommandTemplateOptionsFn
     | null;
-  /** 未指定は空文字列 */
-  default: string;
+  /** 未指定は空文字列。関数ならモーダルを開くたびに呼ぶ */
+  default: string | CommandTemplateDefaultFn;
   quote: boolean;
+  focus: boolean;
 }
 
 /** 関数を含む解決済みのテンプレート1つ。webviewへ渡せない部分をbun側に残すための型 */
@@ -119,6 +121,25 @@ export function normalizeOptions(list: unknown, scope: string): CommandTemplateO
   return options;
 }
 
+/** defaultを値へ直す。空文字列・関数の失敗・文字列以外の戻り値は初期値なしとして扱う */
+async function resolveDefault(
+  field: CommandTemplateFieldDef,
+  ctx: CommandTemplateContext,
+  niwa: Niwa,
+  scope: string,
+): Promise<string | undefined> {
+  if (typeof field.default === "string") return field.default === "" ? undefined : field.default;
+  try {
+    const value: unknown = await field.default(ctx, niwa);
+    if (value === undefined || typeof value === "string") return value;
+    console.log(`[bun] ${scope}: ignoring non-string default: ${String(value)}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`[bun] ${scope}: failed to build default: ${message}`);
+  }
+  return undefined;
+}
+
 async function prepareField(
   field: CommandTemplateFieldDef,
   remembered: string | undefined,
@@ -131,16 +152,20 @@ async function prepareField(
     label: field.label,
     placeholder: field.placeholder,
     quote: field.quote,
+    focus: field.focus,
   };
+  const defaultScope = `${scope}.default`;
+  const optionsScope = `${scope}.options`;
   if (field.options === null) {
-    return { ...base, options: null, error: null, initial: remembered ?? field.default };
+    const initial = remembered ?? (await resolveDefault(field, ctx, niwa, defaultScope)) ?? "";
+    return { ...base, options: null, error: null, initial };
   }
 
   let options: CommandTemplateOption[];
   let preferred: string | undefined;
   try {
     if (typeof field.options === "function") {
-      options = normalizeOptions(await field.options(ctx, niwa), scope);
+      options = normalizeOptions(await field.options(ctx, niwa), optionsScope);
     } else if (typeof field.options === "string") {
       ({ options, preferred } = builtinOptions(field.options, niwa));
     } else {
@@ -148,14 +173,16 @@ async function prepareField(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.log(`[bun] ${scope}: failed to build options: ${message}`);
+    console.log(`[bun] ${optionsScope}: failed to build options: ${message}`);
     return { ...base, options: [], error: `候補を作れませんでした: ${message}`, initial: "" };
   }
 
-  // 選択肢の欄は選べる値しか入れない。前回の値・defaultが今の候補から消えていたら次の手へ回す
+  // 選択肢の欄は選べる値しか入れない。前回の値・defaultが今の候補から消えていたら次の手へ回す。
+  // defaultの関数は候補を作り終えてから呼ぶ（候補の関数がgit fetch等で状態を変えた後を見られるように）
   const values = new Set(options.map((option) => option.value));
+  const defaultValue = await resolveDefault(field, ctx, niwa, defaultScope);
   const initial =
-    [remembered, field.default, preferred].find(
+    [remembered, defaultValue, preferred].find(
       (value): value is string => value !== undefined && values.has(value),
     ) ??
     options[0]?.value ??
@@ -193,7 +220,7 @@ export function createCommandTemplates(
             remembered?.[field.name],
             ctx,
             niwa,
-            `commandTemplates.${id}.fields.${field.name}.options`,
+            `commandTemplates.${id}.fields.${field.name}`,
           ),
         ),
       );

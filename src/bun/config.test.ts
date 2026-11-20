@@ -1306,7 +1306,15 @@ describe("resolveCommandTemplates", () => {
       ],
     });
     expect(def?.fields).toEqual([
-      { name: "branch", label: "branch", placeholder: "", options: null, default: "", quote: true },
+      {
+        name: "branch",
+        label: "branch",
+        placeholder: "",
+        options: null,
+        default: "",
+        quote: true,
+        focus: false,
+      },
       {
         name: "ws",
         label: "ワークスペース",
@@ -1314,6 +1322,7 @@ describe("resolveCommandTemplates", () => {
         options: "workspace",
         default: "",
         quote: true,
+        focus: false,
       },
     ]);
     expect(def?.rememberLastValues).toBe(false);
@@ -1347,6 +1356,21 @@ describe("resolveCommandTemplates", () => {
     ]);
   });
 
+  test("focusとdefaultの関数をそのまま持つ", () => {
+    const defaultFn = () => "main";
+    const [def] = resolveCommandTemplates({
+      commandTemplates: [
+        {
+          name: "a",
+          command: "x {{a}} {{b}}",
+          fields: { b: { focus: true, default: defaultFn } },
+        },
+      ],
+    });
+    expect(def?.fields.map((field) => field.focus)).toEqual([false, true]);
+    expect(def?.fields[1]?.default).toBe(defaultFn);
+  });
+
   test("不正な要素・項目は警告してその分だけ落とす", () => {
     const { diag, restore } = captureDiagnostics();
     try {
@@ -1360,7 +1384,7 @@ describe("resolveCommandTemplates", () => {
               name: "b",
               command: "x {{v}}",
               fields: {
-                v: { options: "branch" as never, quote: "no" as never },
+                v: { options: "branch" as never, quote: "no" as never, focus: "yes" as never },
                 unused: { label: "u" },
               },
               rememberLastValues: "yes" as never,
@@ -1370,7 +1394,7 @@ describe("resolveCommandTemplates", () => {
         diag,
       );
       expect(defs.map((def) => def.name)).toEqual(["b"]);
-      expect(defs[0]?.fields[0]).toMatchObject({ options: null, quote: true });
+      expect(defs[0]?.fields[0]).toMatchObject({ options: null, quote: true, focus: false });
       expect(diag.list().map((entry) => entry.scope)).toEqual([
         "commandTemplates[0]",
         "commandTemplates[1].name",
@@ -1379,6 +1403,7 @@ describe("resolveCommandTemplates", () => {
         "commandTemplates[3].rememberLastValues",
         "commandTemplates[3].fields.v.options",
         "commandTemplates[3].fields.v.quote",
+        "commandTemplates[3].fields.v.focus",
       ]);
     } finally {
       restore();

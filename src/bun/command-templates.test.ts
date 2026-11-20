@@ -26,6 +26,7 @@ function field(name: string, overrides: Partial<CommandTemplateFieldDef> = {}) {
     options: null,
     default: "",
     quote: true,
+    focus: false,
     ...overrides,
   } satisfies CommandTemplateFieldDef;
 }
@@ -66,11 +67,100 @@ describe("prepare", () => {
         label: "a",
         placeholder: "例",
         quote: true,
+        focus: false,
         options: null,
         error: null,
         initial: "hi",
       },
     ]);
+  });
+
+  test("focusを欄ごとにそのまま渡す", async () => {
+    const handle = createCommandTemplates(
+      [def("x {{a}} {{b}}", [field("a"), field("b", { focus: true })])],
+      fakeNiwa(),
+      createMemoryRememberedValuesStore(),
+    );
+    const prepared = await handle.prepare("t", CTX);
+    expect(prepared?.fields.map((f) => f.focus)).toEqual([false, true]);
+  });
+
+  test("defaultの関数はctxとniwaを受け取り、戻り値を初期値にする", async () => {
+    const niwa = fakeNiwa();
+    let received: [CommandTemplateContext, Niwa] | undefined;
+    const handle = createCommandTemplates(
+      [
+        def("echo {{a}}", [
+          field("a", {
+            default: async (ctx, n) => {
+              received = [ctx, n];
+              return "from-fn";
+            },
+          }),
+        ]),
+      ],
+      niwa,
+      createMemoryRememberedValuesStore(),
+    );
+    expect((await handle.prepare("t", CTX))?.fields[0]?.initial).toBe("from-fn");
+    expect(received?.[0]).toEqual(CTX);
+    expect(received?.[1]).toBe(niwa);
+  });
+
+  test("選択肢の欄のdefaultの関数は、候補を作った後に呼ばれ、候補に無い値なら先頭へ落とす", async () => {
+    const calls: string[] = [];
+    const handle = createCommandTemplates(
+      [
+        def("x {{a}} {{b}}", [
+          field("a", {
+            options: () => {
+              calls.push("options");
+              return ["main", "origin/feat/x"];
+            },
+            default: () => {
+              calls.push("default");
+              return "origin/feat/x";
+            },
+          }),
+          field("b", {
+            options: [
+              { label: "main", value: "main" },
+              { label: "dev", value: "dev" },
+            ],
+            default: () => "nope",
+          }),
+        ]),
+      ],
+      fakeNiwa(),
+      createMemoryRememberedValuesStore(),
+    );
+    const prepared = await handle.prepare("t", CTX);
+    expect(calls).toEqual(["options", "default"]);
+    expect(prepared?.fields.map((f) => f.initial)).toEqual(["origin/feat/x", "main"]);
+  });
+
+  test("defaultの関数が失敗した・undefinedを返したときは初期値なしとして扱う", async () => {
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const handle = createCommandTemplates(
+        [
+          def("x {{a}} {{b}}", [
+            field("a", {
+              default: () => {
+                throw new Error("boom");
+              },
+            }),
+            field("b", { default: () => undefined }),
+          ]),
+        ],
+        fakeNiwa(),
+        createMemoryRememberedValuesStore(),
+      );
+      const prepared = await handle.prepare("t", CTX);
+      expect(prepared?.fields.map((f) => f.initial)).toEqual(["", ""]);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   test("固定の選択肢はdefaultが候補にあればそれ、無ければ先頭を初期値にする", async () => {
