@@ -461,13 +461,9 @@ niwaterm固有の問題ではない。
   そちらがAPP_VARIANTによる解決より先に使われる**。そのため普段遣いビルドのタブ内から
   `NIWATERM_APP_VARIANT=niwaterm-wip`だけ付けても、接続先はそのタブのインスタンスのまま
   変わらない。別インスタンスへ繋ぐときは注入された変数をunsetする（タブ変数を扱うなら
-  自タブ扱いを避けるため`NIWATERM_TAB_ID`も外す）:
-
-  ```bash
-  env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID \
-    NIWATERM_APP_VARIANT=niwaterm-wip niwa-dev ping
-  ```
-
+  自タブ扱いを避けるため`NIWATERM_TAB_ID`も外す）。
+  `niwa-dev`のラッパー（`mise run cli:link`が生成）は、wip以外のタブ内から叩かれたとき
+  これらを自動で外して必ずniwaterm-wipへ繋ぐので、dailyのタブ内からでも`niwa-dev ping`だけでよい。
   実際にどちらへ繋がったかは、`ping`が返すpidをWindows側のプロセス一覧
   （`Get-Process`の`MainWindowTitle`が`niwaterm-wip`/`niwaterm-daily`）と突き合わせて確認する
 

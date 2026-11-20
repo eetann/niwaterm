@@ -122,11 +122,11 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
   `niwa tab switch --tile tile-4 -d next`
 - WSLディストロ等のシェルプロファイルIDは`niwa shell-profile list`で確認してから
   `niwa tab new -t <tileId> -s <shellProfileId>`で作成する
-- **daily（普段遣い）のタブ内で作業している場合、`niwa-dev`でもdailyに繋がる**。
-  タブへ注入された`NIWATERM_BRIDGE_PORT`が接続先の解決で先に使われるため、
-  `NIWATERM_APP_VARIANT=niwaterm-wip`を付けても効かない。wipを触るときは注入分をunsetする:
-  `env -u NIWATERM_BRIDGE_PORT -u NIWATERM_SOCKET -u NIWATERM_TAB_ID NIWATERM_APP_VARIANT=niwaterm-wip niwa-dev ping`。
-  返ってきたpidがwipのプロセスか必ず確認すること。確実なのは実行パスでの突き合わせで、
+- **`niwa-dev`はdaily（普段遣い）のタブ内から叩いても必ずwipへ繋がる**。ラッパーがdaily由来の
+  注入変数（`NIWATERM_BRIDGE_PORT`等）を外すため、`env -u ...`は要らない。逆に`niwa`は
+  dailyのタブ内では常にdailyへ繋がるので、wipの確認に使わない。
+  ラッパーが古いまま（`~/.bun/bin/niwa-dev`に`unset NIWATERM_SOCKET`の行が無い）なら
+  `mise run cli:link`で作り直す。返ってきたpidがwipのプロセスかは引き続き確認すること。確実なのは実行パスでの突き合わせで、
   ウィンドウが出る前・ヘルパープロセスでも効く（`MainWindowTitle`はウィンドウが出るまで空）:
   `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'bun.exe' } | Select-Object ProcessId,ExecutablePath | Format-List"`。
   パスに`niwaterm-wip`が入っていればwip、`niwaterm-daily`ならdaily。

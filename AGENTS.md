@@ -28,7 +28,7 @@ Electrobun + libghostty-vt (bun:ffi) + 自前描画(webview) 構成。
   - wip/dailyの同時起動の制約・停止・daily側への取り込み手順の詳細: docs/build/windows-build.md
 - `mise run cli:link` — 現在のワークツリーのniwaterm CLIをリンクする。**`main`（daily側）なら`niwa`、それ以外（devワークツリー＝wip）なら`niwa-dev`**という別名になる
   - **wipの動作確認では必ず`niwa-dev`を使う**。`niwa`はdaily側のソースを指すため、devブランチでCLIを直しても反映されない（`bun link`はパッケージ名が同じで`niwa`を奪い合うので、別名のラッパーで棲み分けている）
-  - `niwa-dev`は接続先もniwaterm-wipが既定。タブ内から叩く場合はアプリが注入した自インスタンスが優先される
+  - `niwa-dev`の接続先は常にniwaterm-wip（dailyのタブ内から叩いても、注入されたdaily宛ての変数をラッパーが外す）
 - `mise run build:native` — Cシム（src/native/shim.c）・PTYの制御端末ラッパー（src/native/ptyexec.c、macOS専用）・通知ヘルパー（src/native/macnotify.m、macOS専用）・ウィンドウ透過ヘルパー（src/native/winwindow.c、Windows専用）・ConPTYの中継exe（src/native/conptyrelay.c、Windows専用）を現在の環境向けにビルド（macOSはローカル向け、WSLはWindows向けクロスビルド）。Windows向けでは同梱する新しいConPTY（conpty.dll＋OpenConsole.exe）もNuGetから取得する（ADR 0009）
 - `mise run build:vendor:mac` / `mise run build:vendor:win` — libghostty-vt本体をビルド（vendor更新時のみ。詳細: docs/build/macos-build.md、docs/build/windows-build.md）
   - **`-Doptimize=ReleaseFast`必須**。Debugビルドはスクロール1行あたり約700µsかかり、PTY読み取りのイベントループごと止まる（docs/known-issues/libghostty-vt-debug-build-makes-scrolling-slow.md）

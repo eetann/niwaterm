@@ -431,9 +431,13 @@ else
   cat > "$BIN" <<EOF
 #!/bin/sh
 # mise run cli:link が生成。直接編集しない。
-# 接続先はniwaterm-wipを既定にする。niwatermのタブ内から叩いた場合はアプリが注入した
-# 自インスタンスのNIWATERM_APP_VARIANTが優先されるため、他インスタンスを奪うことはない
-exec env NIWATERM_APP_VARIANT="\${NIWATERM_APP_VARIANT:-niwaterm-wip}" NIWATERM_CLI_NAME="niwa-dev" bun "$ENTRY" "\$@"
+# 接続先は常にniwaterm-wip。wipのタブ内から叩いた場合だけ、アプリが注入した自タブの値
+# （NIWATERM_TAB_ID等）をそのまま使う。dailyのタブ内で注入された値はdaily宛てなので捨てる。
+# 捨てないとNIWATERM_BRIDGE_PORT/NIWATERM_SOCKETが接続先の解決で先に使われ、dailyへ繋がる
+if [ "\${NIWATERM_APP_VARIANT:-}" != "niwaterm-wip" ]; then
+  unset NIWATERM_SOCKET NIWATERM_BRIDGE_PORT NIWATERM_TAB_ID
+fi
+exec env NIWATERM_APP_VARIANT="niwaterm-wip" NIWATERM_CLI_NAME="niwa-dev" bun "$ENTRY" "\$@"
 EOF
   chmod +x "$BIN"
   echo "niwa-dev をリンクしました: $ENTRY"
