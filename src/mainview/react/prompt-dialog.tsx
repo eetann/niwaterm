@@ -2,7 +2,7 @@
 // サイドバーのインライン編集はサイドバーを開いていないと使えないため、キーバインド・
 // コマンドパレット起点の名前変更はこのダイアログで受ける。
 // Enterで確定、Escape（およびダイアログ外クリック）でキャンセル。
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,12 +33,15 @@ export function PromptDialog({
   onCancel,
 }: PromptDialogProps) {
   const [value, setValue] = useState(initialValue);
+  const [synced, setSynced] = useState({ open, initialValue });
 
   // このReact rootは開閉のたび同じコンポーネントをrenderし直すだけでunmountされないため、
-  // 開いたタイミングで明示的に入れ直さないと前回の入力値が残る
-  useEffect(() => {
+  // 開いたタイミングで明示的に入れ直さないと前回の入力値が残る。effectで入れ直すと
+  // 古い値で一度描画されるので、propsの変化をrender中に検知して入れ直す
+  if (synced.open !== open || synced.initialValue !== initialValue) {
+    setSynced({ open, initialValue });
     if (open) setValue(initialValue);
-  }, [open, initialValue]);
+  }
 
   return (
     <Dialog

@@ -4,7 +4,7 @@
 // 操作に使われるもので、送る操作に充てると選び終える前に誤送信しやすいため。
 // 選択肢の欄は候補が多くても探せるよう、コマンドパレットと同じ絞り込み付きの一覧にする。
 import { Check, ChevronsUpDown, SquareTerminal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -92,16 +92,20 @@ export function CommandTemplateDialog({
   // 開いている選択肢の一覧。開いている間のEnterは候補を選ぶキーなので、送る操作へ回さない
   const [openPicker, setOpenPicker] = useState<string | null>(null);
   const fieldRefs = useRef(new Map<string, HTMLElement>());
+  const [synced, setSynced] = useState({ open, template });
 
   // このReact rootは開閉のたび同じコンポーネントをrenderし直すだけでunmountされないため、
-  // 別のテンプレートを開いた・開き直したタイミングで明示的に入れ直さないと前回の入力値が残る
-  useEffect(() => {
-    if (!open) return;
-    setValues(initialValues(template));
-    setFocused(initialFocusName(template));
-    setAttempted(false);
-    setOpenPicker(null);
-  }, [open, template]);
+  // 別のテンプレートを開いた・開き直したタイミングで明示的に入れ直さないと前回の入力値が残る。
+  // effectで入れ直すと古い値で一度描画されるので、propsの変化をrender中に検知して入れ直す
+  if (synced.open !== open || synced.template !== template) {
+    setSynced({ open, template });
+    if (open) {
+      setValues(initialValues(template));
+      setFocused(initialFocusName(template));
+      setAttempted(false);
+      setOpenPicker(null);
+    }
+  }
 
   const segments = useMemo(() => parseCommandTemplate(template?.command ?? ""), [template]);
   const fieldByName = useMemo(

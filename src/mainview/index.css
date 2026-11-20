@@ -738,16 +738,16 @@ html.has-status-bar {
   height: var(--hover-handle-size);
 }
 .hover-handle[data-style="edge"][data-shape="rect"]:is(
-  [data-position="left"],
-  [data-position="right"]
-) {
+    [data-position="left"],
+    [data-position="right"]
+  ) {
   width: calc(var(--hover-handle-size) / 2);
   height: calc(var(--hover-handle-size) * 3);
 }
 .hover-handle[data-style="edge"][data-shape="rect"]:is(
-  [data-position="top"],
-  [data-position="bottom"]
-) {
+    [data-position="top"],
+    [data-position="bottom"]
+  ) {
   width: calc(var(--hover-handle-size) * 3);
   height: calc(var(--hover-handle-size) / 2);
 }
@@ -782,9 +782,9 @@ html.has-status-bar {
   height: calc(var(--hover-handle-size) * 1.5);
 }
 .hover-handle[data-style="edge"][data-shape="rect"]:is(
-  [data-position$="-left"],
-  [data-position$="-right"]
-) {
+    [data-position$="-left"],
+    [data-position$="-right"]
+  ) {
   width: var(--hover-handle-size);
   height: var(--hover-handle-size);
 }
