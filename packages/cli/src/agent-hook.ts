@@ -59,8 +59,20 @@ export function agentState(agent: Agent, input: unknown): AgentState | null {
       break;
     case "PostToolUseFailure":
       if (agent !== "claude-code") return null;
+      // Claude Codeには中断専用のhookが無く、中断してもStopも発火しない。ツール実行中の
+      // 中断だけはこのhookがis_interrupt付きで届くので、ここで待機中へ戻す
+      if (payload["is_interrupt"] === true) {
+        status = "idle";
+        break;
+      }
       status = "working";
       summary = toolText(payload);
+      break;
+    case "StopFailure":
+      // APIエラーでターンが終わるとStopの代わりにこちらが届く
+      if (agent !== "claude-code") return null;
+      status = "idle";
+      summary = text(payload["error"]);
       break;
     case "PermissionRequest":
       if (agent !== "codex-cli") return null;

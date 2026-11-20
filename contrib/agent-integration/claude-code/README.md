@@ -23,7 +23,9 @@ wipでは`niwa-dev agent setup claude-code`を使う。
 | `SessionStart` | `idle` | クリア |
 | `UserPromptSubmit` | `working` | クリア |
 | `PreToolUse` / `PostToolUse` / `PostToolUseFailure` | `working` | ツール名と引数 |
+| `PostToolUseFailure`（`is_interrupt`が`true`） | `idle` | クリア |
 | `Stop` | `idle` | 最後の応答の抜粋 |
+| `StopFailure` | `idle` | エラーの種類 |
 | `Notification`（`permission_prompt`） | `blocked` | 確認メッセージ |
 | `SessionEnd` | 空文字列 | 種別・状態・要約をクリア |
 
@@ -42,6 +44,10 @@ Claude Codeはalternate screenで動き会話がniwatermのスクロールバッ
 `Stop`の要約に使う`last_assistant_message`はClaude Code v2.1.196以降が必要。
 未対応のバージョンでは要約を空にして状態だけ更新する。
 入力フィールドの詳細は[公式Hooks Reference](https://code.claude.com/docs/en/hooks.md)を参照。
+
+Claude Codeには中断専用のhookが無く、Esc・Ctrl+Cで中断しても`Stop`は届かない。
+ツール実行中の中断は`PostToolUseFailure`の`is_interrupt`で`idle`へ戻すが、
+応答の生成中に中断すると届くhookが無いため、次のプロンプト送信まで`working`のまま残る。
 
 表示されなければ、`NIWATERM_TAB_ID`とCLIのPATH、設定先が正しいかを確認する。
 強制終了では終了hookが走らず表示が残る場合がある。

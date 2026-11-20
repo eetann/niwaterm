@@ -127,6 +127,20 @@ describe("agent hooks", () => {
       "working",
     );
   });
+  test("Claude Codeの中断とAPIエラーで待機中へ戻す", () => {
+    expect(
+      agentState("claude-code", {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "Bash",
+        tool_input: { command: "sleep 100" },
+        is_interrupt: true,
+      }),
+    ).toEqual({ agent: "claude-code", agent_status: "idle", agent_status_text: "" });
+    expect(
+      agentState("claude-code", { hook_event_name: "StopFailure", error: "rate_limit" }),
+    ).toEqual({ agent: "claude-code", agent_status: "idle", agent_status_text: "rate_limit" });
+    expect(agentState("codex-cli", { hook_event_name: "StopFailure" })).toBeNull();
+  });
   test("未知・他エージェント専用のイベントと圧縮時の開始を無視する", () => {
     expect(agentState("codex-cli", null)).toBeNull();
     expect(
