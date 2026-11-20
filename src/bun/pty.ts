@@ -337,8 +337,8 @@ function createRelayPty(
 
   function send(frame: Uint8Array): void {
     try {
-      proc.stdin.write(frame);
-      proc.stdin.flush();
+      void proc.stdin.write(frame);
+      void proc.stdin.flush();
     } catch {
       // 中継exeが既に終わっている。終了はonExitで伝わる
     }

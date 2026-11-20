@@ -455,7 +455,7 @@ const views = new Map<WindowId, WindowView>();
  * そのウィンドウのwebviewへメッセージを送る口。ウィンドウ生成直後はまだrpcが立っておらず、
  * PTYの初回出力等からの描画要求が先に来ることがあるため、都度引き直してnullチェックする
  */
-function rpcSendOf(windowId: WindowId): any | null {
+function rpcSendOf(windowId: WindowId): any {
   const view = views.get(windowId);
   if (!view || view.closed) return null;
   return (view.browserWindow.webview.rpc as any)?.send ?? null;
@@ -1547,7 +1547,7 @@ function createWindowRpc(windowId: WindowId) {
           submitCommandTemplate(windowId, templateId, tabId, values, action);
         },
         pasteFromClipboard: ({ tabId }: { tabId: TabId }) => {
-          readClipboardText().then((text) => {
+          void readClipboardText().then((text) => {
             if (text) windowManager.handlePaste(tabId, text);
           });
         },

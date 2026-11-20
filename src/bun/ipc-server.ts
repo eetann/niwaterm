@@ -765,7 +765,7 @@ function parseNotifyBody(body: unknown): NotifyRequestBody | null {
 }
 
 /** JSONボディをパースする。不正なJSONの場合はundefinedを返す */
-async function readJsonBody(c: Context): Promise<unknown | undefined> {
+async function readJsonBody(c: Context): Promise<unknown> {
   try {
     return await c.req.json();
   } catch {
@@ -2032,8 +2032,8 @@ export async function createIpcServer(
       if (closed) return;
       closed = true;
       wslBridgePort = null;
-      server.stop();
-      for (const tcpServer of tcpServers) tcpServer.stop();
+      void server.stop();
+      for (const tcpServer of tcpServers) void tcpServer.stop();
       removeFileIfExists(portFile);
       removeFileIfExists(path);
     },

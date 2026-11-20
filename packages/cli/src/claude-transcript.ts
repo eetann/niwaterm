@@ -294,7 +294,11 @@ function rowBlocks(row: TranscriptRow, maxResultChars: number): TurnBlock[] {
     ) {
       blocks.push({ kind: "thinking", text: block.thinking });
     } else if (block.type === "tool_use") {
-      blocks.push({ kind: "tool", name: String(block.name ?? ""), input: toolInput(block.input) });
+      blocks.push({
+        kind: "tool",
+        name: typeof block.name === "string" ? block.name : "",
+        input: toolInput(block.input),
+      });
     }
   }
   return blocks;

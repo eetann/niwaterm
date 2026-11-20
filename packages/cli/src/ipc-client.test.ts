@@ -99,7 +99,7 @@ describe("pingNiwaterm", () => {
         pid: 1,
       });
     } finally {
-      server.stop(true);
+      await server.stop(true);
     }
   });
 });

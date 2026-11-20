@@ -35,7 +35,7 @@ export function compileLinkRules(rules: ResolvedLinkRule[]): CompiledLinkRule[] 
     try {
       compiled.push({ re: new RegExp(rule.source, `${rule.flags}g`), format: rule.format });
     } catch (e) {
-      console.log(`[mainview] invalid link rule: /${rule.source}/${rule.flags} (${e})`);
+      console.log(`[mainview] invalid link rule: /${rule.source}/${rule.flags} (${String(e)})`);
     }
   }
   return compiled;

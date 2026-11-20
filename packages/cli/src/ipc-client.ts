@@ -230,7 +230,9 @@ function ipcUrl(endpoint: IpcEndpoint, path: string): string {
 function withScopeHeader(init: RequestInit): RequestInit {
   const tabId = process.env["NIWATERM_TAB_ID"];
   if (!tabId) return init;
-  return { ...init, headers: { ...init.headers, "x-niwaterm-tab-id": tabId } };
+  const headers = new Headers(init.headers);
+  headers.set("x-niwaterm-tab-id", tabId);
+  return { ...init, headers };
 }
 
 /** BunのfetchはWeb標準のRequestInitにない`unix`を追加でサポートするため、その分だけ型を広げる */
@@ -1717,7 +1719,7 @@ export async function findTabsByVar(
     else if (scope.scopeTabId) query.set("scopeTabId", scope.scopeTabId);
     const res = await ipcFetch(
       endpoint,
-      ipcUrl(endpoint, `/find-vars?${query}`),
+      ipcUrl(endpoint, `/find-vars?${query.toString()}`),
       ipcFetchInit(endpoint),
     );
     const body = (await res.json().catch(() => null)) as {

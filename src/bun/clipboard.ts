@@ -57,8 +57,8 @@ function writeToOs(text: string): void {
       ],
       { stdin: "pipe", stderr: "ignore", windowsHide: true },
     );
-    proc.stdin.write(text);
-    proc.stdin.end();
+    void proc.stdin.write(text);
+    void proc.stdin.end();
     return;
   }
   Bun.spawn(["pbcopy"], { stdin: new TextEncoder().encode(text), env: macClipboardEnv });

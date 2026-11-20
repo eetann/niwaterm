@@ -97,7 +97,7 @@ async function startFakeApp(
     endpoint: { kind: "unix", path: socketPath },
     requests,
     stop: () => {
-      server.stop(true);
+      void server.stop(true);
     },
   };
 }

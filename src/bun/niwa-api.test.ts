@@ -38,7 +38,9 @@ function resolvePending(mgr: WorkspaceManager, cols = 80, rows = 24): void {
 function customHandlerId(config: KeybindingsConfig, key: string): string {
   const target = config.bindings?.[key];
   if (!isCustomBindingRef(target)) {
-    throw new Error(`expected a custom BindingTarget for key "${key}", got: ${String(target)}`);
+    throw new Error(
+      `expected a custom BindingTarget for key "${key}", got: ${JSON.stringify(target)}`,
+    );
   }
   return target.id;
 }

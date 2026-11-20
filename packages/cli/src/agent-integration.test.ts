@@ -57,7 +57,7 @@ async function startIpcStub(
     return {
       env: { NIWATERM_BRIDGE_PORT: String(server.port), NIWATERM_APP_VARIANT: "niwaterm-test" },
       stop: async () => {
-        server.stop(true);
+        await server.stop(true);
       },
     };
   }
@@ -67,7 +67,7 @@ async function startIpcStub(
   return {
     env: { NIWATERM_SOCKET: socketPath },
     stop: async () => {
-      server.stop(true);
+      await server.stop(true);
       await rm(dir, { recursive: true, force: true });
     },
   };

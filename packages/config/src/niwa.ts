@@ -7,7 +7,7 @@
 // （このパッケージはmainview側からもimportされるため）。
 
 import type { CopyModeAction, CopyModeSearchAction } from "./copy-mode-keybindings";
-import type { KeyBindingString, KeybindAction, SecondKeyString } from "./keybindings";
+import type { KeyBindingString, KeybindAction } from "./keybindings";
 
 export type FocusDirection = "up" | "down" | "left" | "right";
 export type SplitOrientationValue = "horizontal" | "vertical";
@@ -421,11 +421,7 @@ export interface Niwa {
    * keyはnoPrefix未指定ならprefix入力後の2打目キー表記（SecondKeyString）、
    * noPrefix:trueならKeyBindingString表記（cmd/ctrl/altのいずれか必須）
    */
-  keybind(
-    key: SecondKeyString | KeyBindingString,
-    action: KeybindAction | KeybindHandler,
-    opts?: KeybindOptions,
-  ): void;
+  keybind(key: string, action: KeybindAction | KeybindHandler, opts?: KeybindOptions): void;
   /** コピーモード中のキーにコピーモードのアクション（`copy-`で始まる名前）か関数ハンドラを割り当てる */
   keybind(
     key: string,
@@ -438,11 +434,8 @@ export interface Niwa {
     action: CopyModeSearchAction | KeybindHandler,
     opts: CopyModeKeybindOptions & { mode: "copy-search" },
   ): void;
-  /** keybindで割り当てたバインドを解除する */
-  unbind(
-    key: SecondKeyString | KeyBindingString,
-    opts?: KeybindOptions | Pick<CopyModeKeybindOptions, "mode">,
-  ): void;
+  /** keybindで割り当てたバインドを解除する。keyの表記はkeybindと同じ */
+  unbind(key: string, opts?: KeybindOptions | Pick<CopyModeKeybindOptions, "mode">): void;
   /**
    * ターミナル側で起きた出来事に対する処理を登録する。同じイベントへ複数回呼ぶと後勝ちで上書きされる。
    * ハンドラを登録するとそのイベントの既定の処理は走らなくなるため、既定の挙動を残したい場合は

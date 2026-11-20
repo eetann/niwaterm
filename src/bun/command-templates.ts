@@ -132,7 +132,7 @@ async function resolveDefault(
   try {
     const value: unknown = await field.default(ctx, niwa);
     if (value === undefined || typeof value === "string") return value;
-    console.log(`[bun] ${scope}: ignoring non-string default: ${String(value)}`);
+    console.log(`[bun] ${scope}: ignoring non-string default: ${JSON.stringify(value)}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.log(`[bun] ${scope}: failed to build default: ${message}`);

@@ -37,7 +37,7 @@ describe("createTargetResolver", () => {
   });
 
   afterEach(async () => {
-    server?.stop(true);
+    await server?.stop(true);
     if (originalEnvTabId === undefined) delete process.env["NIWATERM_TAB_ID"];
     else process.env["NIWATERM_TAB_ID"] = originalEnvTabId;
     await rm(dir, { recursive: true, force: true });
