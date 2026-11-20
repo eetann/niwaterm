@@ -125,7 +125,10 @@ powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object
 - **`niwa-dev`はdaily（普段遣い）のタブ内から叩いても必ずwipへ繋がる**。ラッパーがdaily由来の
   注入変数（`NIWATERM_BRIDGE_PORT`等）を外すため、`env -u ...`は要らない。逆に`niwa`は
   dailyのタブ内では常にdailyへ繋がるので、wipの確認に使わない。
-  ラッパーが古いまま（`~/.bun/bin/niwa-dev`に`unset NIWATERM_SOCKET`の行が無い）なら
+  wipのタブを自タブ扱いさせたいとき（`NIWATERM_TAB_ID`を見るコマンドの確認など）は
+  `env -u NIWATERM_SOCKET NIWATERM_TAB_ID=<wipのtabId> niwa-dev ...`。`NIWATERM_SOCKET`が無ければ
+  ラッパーは渡した`NIWATERM_TAB_ID`を残す。`NIWATERM_APP_VARIANT`を手で付けても判定には効かない。
+  ラッパーが古いまま（`~/.bun/bin/niwa-dev`に`case "${NIWATERM_SOCKET:-}"`の行が無い）なら
   `mise run cli:link`で作り直す。返ってきたpidがwipのプロセスかは引き続き確認すること。確実なのは実行パスでの突き合わせで、
   ウィンドウが出る前・ヘルパープロセスでも効く（`MainWindowTitle`はウィンドウが出るまで空）:
   `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'bun.exe' } | Select-Object ProcessId,ExecutablePath | Format-List"`。

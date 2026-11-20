@@ -63,6 +63,13 @@ const SCOPE_TAB_HEADER = "x-niwaterm-tab-id";
  */
 const APP_VARIANT_HEADER = "x-niwaterm-app-variant";
 
+/**
+ * CLIが狙っているインスタンスのアプリ名。自分と違えば処理せず421を返す。応答のアプリ名を
+ * CLI側で確かめるだけだと、弾いた時点でリクエストは別インスタンスで処理済みになっているため
+ * （packages/cli/src/ipc-client.tsのEXPECTED_APP_VARIANT_HEADERと揃えること）
+ */
+const EXPECTED_APP_VARIANT_HEADER = "x-niwaterm-expected-app-variant";
+
 /** ウィンドウが1つしか無い前提の既定実装（テスト・単体利用向け） */
 function singleWindowOps(workspaceManager: WorkspaceManager): WindowOps {
   return {
@@ -836,6 +843,11 @@ function buildApp(
   const app = new Hono();
 
   app.use(async (c, next) => {
+    const expected = c.req.header(EXPECTED_APP_VARIANT_HEADER);
+    if (expected !== undefined && expected !== APP_VARIANT) {
+      c.header(APP_VARIANT_HEADER, APP_VARIANT);
+      return c.json({ ok: false, error: `this is ${APP_VARIANT}, not ${expected}` }, 421);
+    }
     await next();
     c.header(APP_VARIANT_HEADER, APP_VARIANT);
   });

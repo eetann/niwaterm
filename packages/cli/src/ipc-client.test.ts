@@ -75,14 +75,17 @@ describe("verifyAppVariant", () => {
 
 describe("pingNiwaterm", () => {
   test("ポートを別インスタンスが掴んでいたら接続失敗にする", async () => {
+    const expectedHeaders: (string | null)[] = [];
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
-      fetch: () =>
-        Response.json(
+      fetch: (req) => {
+        expectedHeaders.push(req.headers.get("x-niwaterm-expected-app-variant"));
+        return Response.json(
           { ok: true, pid: 1 },
           { headers: { "x-niwaterm-app-variant": "niwaterm-daily" } },
-        ),
+        );
+      },
     });
     try {
       const endpoint: IpcEndpoint = {
@@ -98,6 +101,8 @@ describe("pingNiwaterm", () => {
         ok: true,
         pid: 1,
       });
+      // サーバー側で処理前に断れるよう、狙っているアプリ名を毎回送る
+      expect(expectedHeaders).toEqual(["niwaterm-wip", "niwaterm-daily"]);
     } finally {
       await server.stop(true);
     }

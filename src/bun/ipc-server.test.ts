@@ -144,6 +144,31 @@ describe("createIpcServer", () => {
     expect(res.headers.get("x-niwaterm-app-variant")).toBe(APP_VARIANT);
   });
 
+  test("狙っているアプリ名が自インスタンスと違えば処理せず421を返す", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const before = mgr.listWorkspaces().length;
+    const res = await fetch("http://localhost/new-workspace", {
+      unix: socketPath,
+      method: "POST",
+      headers: { "x-niwaterm-expected-app-variant": `not-${APP_VARIANT}` },
+      body: "{}",
+    });
+    expect(res.status).toBe(421);
+    expect(res.headers.get("x-niwaterm-app-variant")).toBe(APP_VARIANT);
+    expect(mgr.listWorkspaces()).toHaveLength(before);
+  });
+
+  test("狙っているアプリ名が自インスタンスと同じなら通常どおり処理する", async () => {
+    const { mgr } = createTestWorkspaceManager();
+    server = await createIpcServer(socketPath, mgr);
+    const res = await fetch("http://localhost/ping", {
+      unix: socketPath,
+      headers: { "x-niwaterm-expected-app-variant": APP_VARIANT },
+    });
+    expect(res.status).toBe(200);
+  });
+
   test("close()後はソケットファイルが消える", async () => {
     const { mgr } = createTestWorkspaceManager();
     server = await createIpcServer(socketPath, mgr);

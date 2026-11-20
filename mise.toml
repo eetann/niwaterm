@@ -431,12 +431,17 @@ else
   cat > "$BIN" <<EOF
 #!/bin/sh
 # mise run cli:link が生成。直接編集しない。
-# 接続先は常にniwaterm-wip。wipのタブ内から叩いた場合だけ、アプリが注入した自タブの値
-# （NIWATERM_TAB_ID等）をそのまま使う。dailyのタブ内で注入された値はdaily宛てなので捨てる。
-# 捨てないとNIWATERM_BRIDGE_PORT/NIWATERM_SOCKETが接続先の解決で先に使われ、dailyへ繋がる
-if [ "\${NIWATERM_APP_VARIANT:-}" != "niwaterm-wip" ]; then
-  unset NIWATERM_SOCKET NIWATERM_BRIDGE_PORT NIWATERM_TAB_ID
-fi
+# 接続先は常にniwaterm-wip。どのインスタンスのタブ内かは、パスにアプリ名を含むNIWATERM_SOCKETで
+# 見分ける（NIWATERM_APP_VARIANTは接続先を選ぶために手で付けられることがあり、判定に使えない）。
+# - wipのタブ内: 注入された自タブの値（NIWATERM_TAB_ID等）をそのまま使う
+# - 他インスタンスのタブ内: 注入された値はそちら宛てなので全部捨てる。捨てないと
+#   NIWATERM_BRIDGE_PORT/NIWATERM_SOCKETが接続先の解決で先に使われ、そちらへ繋がる
+# - NIWATERM_SOCKETが無い（タブ外、または手で外した）: 明示されたNIWATERM_TAB_IDは活かす
+case "\${NIWATERM_SOCKET:-}" in
+  *niwaterm-wip*) ;;
+  "") unset NIWATERM_BRIDGE_PORT ;;
+  *) unset NIWATERM_SOCKET NIWATERM_BRIDGE_PORT NIWATERM_TAB_ID ;;
+esac
 exec env NIWATERM_APP_VARIANT="niwaterm-wip" NIWATERM_CLI_NAME="niwa-dev" bun "$ENTRY" "\$@"
 EOF
   chmod +x "$BIN"

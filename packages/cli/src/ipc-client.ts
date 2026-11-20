@@ -263,6 +263,20 @@ const IPC_TIMEOUT_MS = 10_000;
 /** 応答元インスタンスのアプリ名を載せるヘッダ（src/bun/ipc-server.tsのAPP_VARIANT_HEADERと揃えること） */
 const APP_VARIANT_HEADER = "x-niwaterm-app-variant";
 
+/** 狙っているインスタンスのアプリ名を伝えるヘッダ（src/bun/ipc-server.tsのEXPECTED_APP_VARIANT_HEADERと揃えること） */
+const EXPECTED_APP_VARIANT_HEADER = "x-niwaterm-expected-app-variant";
+
+/**
+ * 狙っているインスタンスのアプリ名をヘッダへ載せる。応答を見てからverifyAppVariantで弾くだけだと、
+ * 別インスタンスでリクエストが処理された後になるため、サーバー側で処理前に断らせる
+ */
+function withExpectedAppVariant(endpoint: IpcEndpoint, init: RequestInit): RequestInit {
+  if (endpoint.kind !== "tcp" || endpoint.appVariant === undefined) return init;
+  const headers = new Headers(init.headers);
+  headers.set(EXPECTED_APP_VARIANT_HEADER, endpoint.appVariant);
+  return { ...init, headers };
+}
+
 /** 応答元が狙ったインスタンスでなかったことを表す。describeErrorで文言を組み立てる */
 export class AppVariantMismatchError extends Error {
   constructor(
@@ -305,11 +319,12 @@ async function ipcFetch(
   timeoutMs: number | null = ipcTimeoutMs,
 ): Promise<Response> {
   if (endpoint.kind === "unavailable") throw new Error(endpoint.reason);
+  const requestInit = { ...init, ...withExpectedAppVariant(endpoint, init) };
   // 候補を順に試すため、AbortSignalはホストごとに作り直す（使い回すと2つ目に渡る時点で
   // 1つ目の待ち時間を消化済みになる）
   const timeoutSignal = () => (timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs));
   if (endpoint.kind === "unix" || endpoint.hosts.length <= 1) {
-    const res = await fetch(url, { ...init, signal: timeoutSignal() });
+    const res = await fetch(url, { ...requestInit, signal: timeoutSignal() });
     verifyAppVariant(endpoint, res);
     return res;
   }
@@ -320,7 +335,7 @@ async function ipcFetch(
     let res: Response;
     try {
       res = await fetch(target.toString(), {
-        ...init,
+        ...requestInit,
         signal: timeoutSignal(),
       });
     } catch (err) {

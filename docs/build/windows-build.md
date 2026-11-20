@@ -464,6 +464,12 @@ niwaterm固有の問題ではない。
   自タブ扱いを避けるため`NIWATERM_TAB_ID`も外す）。
   `niwa-dev`のラッパー（`mise run cli:link`が生成）は、wip以外のタブ内から叩かれたとき
   これらを自動で外して必ずniwaterm-wipへ繋ぐので、dailyのタブ内からでも`niwa-dev ping`だけでよい。
+  どのインスタンスのタブ内かは`NIWATERM_SOCKET`のパス（アプリ名を含む）で見分ける。
+  `NIWATERM_APP_VARIANT`は接続先を選ぶために手で付けられることがあるので、判定には使わない。
+  wipのタブIDを明示して叩くときは`env -u NIWATERM_SOCKET NIWATERM_TAB_ID=<wipのtabId> niwa-dev ...`
+  （`NIWATERM_SOCKET`が無ければ、渡した`NIWATERM_TAB_ID`は外さずに残す）。
+  さらにCLIはTCPブリッジ越しのリクエストに狙っているアプリ名を載せ、別インスタンスは処理せずに断る
+  （`x-niwaterm-expected-app-variant`ヘッダ。応答のアプリ名だけを確かめると、弾いた時点で別インスタンスが処理済みになるため）。
   実際にどちらへ繋がったかは、`ping`が返すpidをWindows側のプロセス一覧
   （`Get-Process`の`MainWindowTitle`が`niwaterm-wip`/`niwaterm-daily`）と突き合わせて確認する
 
